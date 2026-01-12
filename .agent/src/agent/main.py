@@ -5,6 +5,7 @@ from agent.commands import story, plan, adr
 from agent.commands import list as list_cmd
 from agent.commands import check, workflow
 from agent.commands import runbook, implement, match
+from agent.sync import sync
 
 app = typer.Typer(
     name="agent",
@@ -30,13 +31,11 @@ app.command(name="run-ui-tests")(check.run_ui_tests)
 app.command(name="match-story")(match.match_story)
 
 app.command(name="pr")(workflow.pr)
-app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
 
 # Sync integration using Typer
 # Since sync.py uses argparse, we'll wrap it or just use subprocess for now 
 # TO keep it clean, let's just make a shim here.
-from agent.sync import sync
 @app.command(name="sync", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def sync_cmd(ctx: typer.Context):
     """

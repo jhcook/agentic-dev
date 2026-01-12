@@ -9,9 +9,7 @@ import json
 import csv
 import yaml
 from io import StringIO
-from typing import Any, List, Dict, Optional
-from rich.console import Console
-from rich.table import Table
+from typing import Any, List, Dict
 
 
 def format_data(format_name: str, data: List[Dict[str, Any]]) -> str:

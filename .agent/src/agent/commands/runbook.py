@@ -1,7 +1,5 @@
 import typer
 from rich.console import Console
-from rich.markdown import Markdown
-from typing import Optional
 
 from agent.core.config import config
 from agent.core.utils import find_story_file, load_governance_context, scrub_sensitive_data

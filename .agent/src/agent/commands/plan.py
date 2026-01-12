@@ -1,12 +1,10 @@
 import typer
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.prompt import Prompt, IntPrompt
 from typing import Optional
 
 from agent.core.config import config
-from agent.core.utils import get_next_id, sanitize_title, find_story_file, load_governance_context, scrub_sensitive_data
-from agent.core.ai import ai_service
+from agent.core.utils import get_next_id, sanitize_title
 from agent.db.client import upsert_artifact
 
 console = Console()
@@ -38,10 +36,14 @@ def new_plan(
     
     # Determine scope from ID
     scope = "MISC"
-    if plan_id.startswith("INFRA-"): scope = "INFRA"
-    elif plan_id.startswith("WEB-"): scope = "WEB"
-    elif plan_id.startswith("MOBILE-"): scope = "MOBILE"
-    elif plan_id.startswith("BACKEND-"): scope = "BACKEND"
+    if plan_id.startswith("INFRA-"):
+        scope = "INFRA"
+    elif plan_id.startswith("WEB-"):
+        scope = "WEB"
+    elif plan_id.startswith("MOBILE-"):
+        scope = "MOBILE"
+    elif plan_id.startswith("BACKEND-"):
+        scope = "BACKEND"
     
     scope_dir = config.plans_dir / scope
     scope_dir.mkdir(parents=True, exist_ok=True)

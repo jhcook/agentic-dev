@@ -1,12 +1,10 @@
 import typer
 from rich.console import Console
-from rich.markdown import Markdown
 from pathlib import Path
 from typing import Optional
 import subprocess
 
 from agent.core.config import config
-from agent.commands.list import get_title # Reuse or move to core?
 from agent.core.utils import infer_story_id, load_governance_context, scrub_sensitive_data
 from agent.core.ai import ai_service
 
@@ -80,7 +78,7 @@ def preflight(
         provider: Force a specific AI provider (gh, gemini, openai).
         report_file: Path to save the preflight report as JSON.
     """
-    console.print(f"[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
+    console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
 
     # Data collection for JSON report
     json_report = {

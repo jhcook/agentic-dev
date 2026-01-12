@@ -1,8 +1,6 @@
 import typer
-import shutil
 from rich.console import Console
 from rich.prompt import Prompt, IntPrompt
-from pathlib import Path
 from typing import Optional
 
 from agent.core.config import config
@@ -40,10 +38,14 @@ def new_story(
     
     # Determine scope from ID
     scope = "MISC"
-    if story_id.startswith("INFRA-"): scope = "INFRA"
-    elif story_id.startswith("WEB-"): scope = "WEB"
-    elif story_id.startswith("MOBILE-"): scope = "MOBILE"
-    elif story_id.startswith("BACKEND-"): scope = "BACKEND"
+    if story_id.startswith("INFRA-"):
+        scope = "INFRA"
+    elif story_id.startswith("WEB-"):
+        scope = "WEB"
+    elif story_id.startswith("MOBILE-"):
+        scope = "MOBILE"
+    elif story_id.startswith("BACKEND-"):
+        scope = "BACKEND"
     
     scope_dir = config.stories_dir / scope
     scope_dir.mkdir(parents=True, exist_ok=True)

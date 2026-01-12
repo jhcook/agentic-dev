@@ -1,6 +1,5 @@
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +43,6 @@ class TokenManager:
             return len(text) // 4
 
     def _count_openai(self, text: str, model_name: str) -> int:
-        try:
-            import tiktoken
-        except ImportError:
-            logger.warning("tiktoken not installed, falling back to heuristic.")
-            return len(text) // 4
-
         try:
             # Map common names to encodings if needed, or rely on tiktoken's auto-detect
             # for 'gpt-4o', tiktoken usually knows it.

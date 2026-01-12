@@ -1,10 +1,8 @@
 import typer
 import subprocess
-import re
 from rich.console import Console
 from rich.prompt import Prompt
 from typing import Optional
-from agent.core.config import config
 from agent.core.utils import infer_story_id
 from agent.commands.check import preflight # Verify import works or move core logic
 
@@ -58,8 +56,10 @@ def pr(
     )
     
     gh_args = ["gh", "pr", "create", "--title", title, "--body", body, "--base", target_branch]
-    if web: gh_args.append("--web")
-    if draft: gh_args.append("--draft")
+    if web:
+        gh_args.append("--web")
+    if draft:
+        gh_args.append("--draft")
     
     try:
         subprocess.run(gh_args, check=True)

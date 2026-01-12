@@ -1,7 +1,7 @@
 
 import yaml
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 from agent.core.config import config

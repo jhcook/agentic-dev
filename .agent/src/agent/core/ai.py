@@ -4,10 +4,9 @@ import subprocess
 import logging
 import time
 from rich.console import Console
+from agent.core.router import router
 
 console = Console()
-
-from agent.core.router import router
 
 class AIService:
     """

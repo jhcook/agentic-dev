@@ -189,10 +189,12 @@ def find_best_matching_story(files: str) -> Optional[str]:
              # Fast read headers
              content = file_path.read_text(errors="ignore")
              t_match = re.search(r"^#\s*[^:]+:\s*(.*)$", content, re.MULTILINE)
-             if t_match: title = t_match.group(1).strip()
+             if t_match:
+                 title = t_match.group(1).strip()
              s_match = re.search(r"^## State\s*\n+([A-Z]+)", content, re.MULTILINE)
-             if s_match: state = s_match.group(1).strip()
-        except:
+             if s_match:
+                 state = s_match.group(1).strip()
+        except Exception:
             pass
         stories_context += f"Story: {file_path.stem} | Title: {title} | State: {state}\n"
 

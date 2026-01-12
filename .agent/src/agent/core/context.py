@@ -1,6 +1,5 @@
 
 import yaml
-from pathlib import Path
 from agent.core.config import config
 from agent.core.utils import scrub_sensitive_data
 
