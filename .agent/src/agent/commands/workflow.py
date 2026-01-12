@@ -34,7 +34,7 @@ def pr(
              # Better to extract shared logic. But for now, let's call it.
              # `preflight` takes (story_id, ai, base, provider).
              # We must pass all args to avoid Typer OptionInfo defaults being treated as values.
-             preflight(story_id=story_id, base=target_branch, ai=False, provider=None)
+             preflight(story_id=story_id, base=target_branch, ai=False, provider=None, report_file=None)
         except typer.Exit as e:
             if e.exit_code != 0:
                 console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")
