@@ -74,6 +74,7 @@ def pr(
 def commit(
     story_id: Optional[str] = typer.Option(None, "--story", help="Story ID."),
     runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Runbook ID."),
+    message: Optional[str] = typer.Option(None, "--message", "-m", help="Commit message."),
     ai: bool = typer.Option(False, "--ai", help="Enable AI to infer story and generate commit message."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
 ):
@@ -113,8 +114,10 @@ def commit(
          raise typer.Exit(code=1)
          
     # 2. Generate or Ask for Message
-    message = ""
-    if ai:
+    # 2. Generate or Ask for Message
+    is_interactive = message is None
+
+    if not message and ai:
         console.print("[dim]🤖 AI is generating a commit message...[/dim]")
         try:
              diff_content = subprocess.check_output(["git", "diff", "--cached"], text=True)
@@ -133,10 +136,12 @@ def commit(
         except Exception as e:
              console.print(f"[yellow]⚠️  AI commit message generation failed: {e}[/yellow]")
 
-    if message:
-        message = Prompt.ask("Commit message", default=message)
-    else:
-        message = Prompt.ask("Enter commit message") 
+    if is_interactive:
+        message = Prompt.ask("Commit message", default=message or "")
+    
+    if not message:
+         console.print("[bold red]❌ Commit message is required.[/bold red]")
+         raise typer.Exit(code=1)
         
     full_message = f"[{story_id}] {message}"
     

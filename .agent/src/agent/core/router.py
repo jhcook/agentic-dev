@@ -15,7 +15,7 @@ class SmartRouter:
     complexity (tier), context window checks, and cost.
     """
     def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = config_path or (config.agent_dir / "router.yaml")
+        self.config_path = config_path or (config.etc_dir / "router.yaml")
         self.config = self._load_config()
         self.models = self.config.get("models", {})
         self.settings = self.config.get("settings", {})

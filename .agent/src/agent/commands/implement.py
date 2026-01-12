@@ -24,6 +24,11 @@ def implement(
     console.print(f"🛈 Implementing Runbook {runbook_id}...")
     runbook_content = scrub_sensitive_data(runbook_file.read_text())
 
+    # 1.1 Enforce Runbook State
+    if "Status: ACCEPTED" not in runbook_content:
+        console.print(f"[bold red]❌ Runbook {runbook_id} is not ACCEPTED. Please review and update status to ACCEPTED before implementing.[/bold red]")
+        raise typer.Exit(code=1)
+
     # 2. Load Guide
     guide_path = config.agent_dir / "workflows/implement.md"
     guide_content = ""
@@ -32,6 +37,12 @@ def implement(
     
     # 3. Load Rules
     rules_content = scrub_sensitive_data(load_governance_context())
+
+    # 3.1 Optimize Context for GitHub CLI
+    if ai_service.provider == "gh":
+         console.print("[yellow]⚠️  Using GitHub CLI (limited context): Truncating guides and rules.[/yellow]")
+         guide_content = guide_content[:4000] # Cap guide at 4k chars
+         rules_content = rules_content[:2000] # Cap rules at 2k chars
 
     # 4. Prompt
     system_prompt = """You are an Implementation Agent.

@@ -386,7 +386,7 @@ def panel(
     """
     # Stub
     console.print(f"🛈 [panel] Convening the Governance Panel for {story_id}...")
-    agents_file = config.agent_dir / "agents.yaml"
+    agents_file = config.etc_dir / "agents.yaml"
     if not agents_file.exists():
         console.print("[yellow]⚠️  No agents.yaml found.[/yellow]")
         return

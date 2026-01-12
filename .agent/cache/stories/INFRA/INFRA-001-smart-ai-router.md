@@ -1,4 +1,7 @@
-# INFRA-005: Smart AI Router and Python Rewrite
+# INFRA-001: Smart AI Router and Python Rewrite
+
+## Status
+COMMITTED
 
 ## Problem Statement
 The current agent architecture lacks intelligent model routing and relies on legacy dependencies. We need to implement a Smart AI Router to optimize cost and performance, and rewrite core components in Python for better maintainability.
@@ -27,5 +30,5 @@ As a developer, I want the agent to automatically select the best AI model for a
 - Legacy test suite verification.
 
 ## Rollback Plan
-- Revert commit `INFRA-005-smart-ai-router` branch.
+- Revert commit `INFRA-001-smart-ai-router` branch.
 - Downgrade dependencies in `pyproject.toml`.

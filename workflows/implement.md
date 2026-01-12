@@ -190,7 +190,7 @@ User provides a requirement. You must:
 
 ### PHASE 3: SECURITY REVIEW
 
-**@Sentinel** leads this phase:
+**@Security** leads this phase:
 
 1. **Security Scan**
    - [ ] No secrets in code (API keys, passwords, tokens)
@@ -372,7 +372,7 @@ After all phases complete:
 
 1. **No shortcuts** - All phases must complete
 2. **Surgical changes only** - Minimal edits to achieve goal
-3. **Security first** - @Sentinel veto power
+3. **Security first** - @Security veto power
 4. **Quality gate** - @QA validates all code changes
 5. **Documentation** - @Scribe ensures auditability
 6. **Fail fast** - Stop at first BLOCK, report clearly

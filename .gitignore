@@ -1,1 +1,38 @@
-**/__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.egg
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# Logs
+*.log
+logs/
+.agent/logs/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agentic Dev specific (if any temp files arise, add here)
+# Keeping .agent/cache/ as it contains Stories/Plans/Runbooks which seem to be committed artifacts.

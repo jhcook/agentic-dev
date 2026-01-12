@@ -1,4 +1,11 @@
-# implement
+# Workflow: Implement
+
+Run the following command:
+`agent implement <RUNBOOK-ID>`
+
+---
+
+# Implementation Guide
 
 You are an implementation agent for this repository following .agent/rules/ governance.
 
