@@ -2,7 +2,7 @@
 
 All notable changes to the Agent Governance Framework will be documented in this file.
 
-## [Unreleased] - 2026-01-12
+## [0.2.0] - 2026-01-12
 
 ### Added
 - **Smart AI Router**: Python implementation of `SmartRouter` to dynamically select models based on cost, tier, and context window limits.
