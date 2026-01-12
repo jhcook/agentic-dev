@@ -9,7 +9,7 @@ team:
     governance_checks:
       - "Do ADRs exist for major changes?"
       - "Are architectural boundaries respected?"
-    instruction: "Consult the .agent/instructions/architect/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/architect/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: qa
     name: "Quality Assurance"
@@ -21,7 +21,7 @@ team:
     governance_checks:
       - "Are there new tests for new features?"
       - "Is the Test Strategy section in the Story comprehensive?"
-    instruction: "Consult the .agent/instructions/qa/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/qa/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: security
     name: "Security & Compliance Officer"
@@ -34,7 +34,7 @@ team:
       - "No PII in logs"
       - "No secrets in code"
       - "Compliance docs checked if applicable"
-    instruction: "Consult the .agent/instructions/security/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/security/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: product
     name: "Product Owner"
@@ -46,7 +46,7 @@ team:
     governance_checks:
       - "Are Acceptance Criteria clear and testable?"
       - "Is the Impact Analysis complete?"
-    instruction: "Consult the .agent/instructions/product/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/product/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: observability
     name: "SRE / Observability Lead"
@@ -57,7 +57,7 @@ team:
     governance_checks:
       - "Is OpenTelemetry added for new flows?"
       - "Are logs structured and governed?"
-    instruction: "Consult the .agent/instructions/observability/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/observability/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: docs
     name: "Tech Writer"
@@ -69,7 +69,7 @@ team:
     governance_checks:
       - "Did you edit code without editing docs?"
       - "Is the new feature documented?"
-    instruction: "Consult the .agent/instructions/docs/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/docs/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: compliance
     name: "Compliance Officer"
@@ -82,7 +82,7 @@ team:
       - "No PII in logs"
       - "No secrets in code"
       - "Compliance docs checked if applicable"
-    instruction: "Consult the .agent/instructions/compliance/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/compliance/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: mobile
     name: "Mobile Lead"
@@ -94,7 +94,7 @@ team:
     governance_checks:
       - "Is the navigation state handled correctly?"
       - "Are mobile-specific ADRs followed?"
-    instruction: "Consult the .agent/instructions/mobile/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/mobile/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: web
     name: "Frontend Lead"
@@ -106,7 +106,7 @@ team:
     governance_checks:
       - "Are Server Components used where appropriate?"
       - "Is SEO metadata present?"
-    instruction: "Consult the .agent/instructions/web/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/web/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."
 
   - role: backend
     name: "Backend Lead"
@@ -118,4 +118,4 @@ team:
     governance_checks:
       - "Are types strictly enforced?"
       - "Is the API documentation (OpenAPI) accurate?"
-    instruction: "Consult the .agent/instructions/backend/ directory for additional context and checklists."
+    instruction: "Consult the .agent/instructions/backend/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/ and compliance standards in .agent/compliance/."

@@ -1,6 +1,6 @@
 # Agentic Development Instructions
 
-You are an intelligent agent working in the `agentic-dev` repository. This repository uses a strict "Agentic Workflow" where logic is encapsulated in Python CLI commands, and you (the agent) are responsible for high-level reasoning and executing those commands.
+You are an intelligent agent. This repository uses a strict "Agentic Workflow" where logic is encapsulated in Python CLI commands, and you (the agent) are responsible for high-level reasoning and executing those commands.
 
 ## Core Philosophy
 1.  **Workflows are Wrappers**: The markdown files in `.agent/workflows/` are simple pointers. You should execute the CLI command they denote (e.g., `agent pr`, `agent commit`). Do not try to manually "simulate" the workflow steps; just run the tool.
@@ -10,7 +10,7 @@ You are an intelligent agent working in the `agentic-dev` repository. This repos
 ## Folder Structure
 - **`.agent/workflows/`**: Executable wrappers. e.g. `pr.md` -> `agent pr`.
 - **`.agent/templates/`**: Markdown templates for Stories, Plans, and Runbooks.
-- **`.agent/etc/`**: Configuration files (`agents.yaml`, `router.yaml`). (Moved from root).
+- **`.agent/etc/`**: Configuration files (`agents.yaml`, `router.yaml`).
 - **`.agent/src/`**: The core Python application (`agent` CLI).
 - **`.agent/cache/`**: Where you store generated artifacts (Stories, Plans, Runbooks).
 

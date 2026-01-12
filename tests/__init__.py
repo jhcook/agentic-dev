@@ -1,3 +1,0 @@
-"""
-Agent tests package.
-"""

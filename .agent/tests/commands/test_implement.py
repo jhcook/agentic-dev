@@ -30,7 +30,7 @@ def test_implement_success(clean_env, app):
     # Setup Runbook
     runbook_id = "INFRA-001"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("# Runbook Content")
+    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content")
     
     # Setup Guide
     guide_file = clean_env / ".agent" / "workflows" / "implement.md"
@@ -52,7 +52,7 @@ def test_implement_runbook_not_found(clean_env, app):
 def test_implement_scrubbing(clean_env, app):
     runbook_id = "SEC-001"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("Context with api_key: sk-1234567890abcdef1234567890abcdef")
+    runbook_file.write_text("Status: ACCEPTED\nContext with api_key: sk-1234567890abcdef1234567890abcdef")
     
     with patch("agent.core.ai.ai_service.complete") as mock_complete:
         mock_complete.return_value = "Safe output"

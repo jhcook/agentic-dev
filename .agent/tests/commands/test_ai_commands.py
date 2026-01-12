@@ -19,7 +19,7 @@ def mock_deps(tmp_path):
     
     # Create dummy story in subfolder for correct scoping
     story_file = agent_dir / "stories" / "INFRA" / "STORY-123-test.md"
-    story_file.write_text("# Test Story\nContext here.")
+    story_file.write_text("State: COMMITTED\n# Test Story\nContext here.")
     
     # Create dummy rule
     rule_file = agent_dir / "rules" / "rule1.mdc"

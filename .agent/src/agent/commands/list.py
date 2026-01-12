@@ -2,17 +2,21 @@ import typer
 import re
 from rich.console import Console
 from rich.table import Table
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 from agent.core.config import config
+from agent.core.formatters import format_data
+from agent.core.logger import get_logger
+from agent.core.utils import scrub_sensitive_data
 
 console = Console()
+logger = get_logger("commands.list")
 
 def get_file_state(file_path: Path) -> str:
     """
     Extracts the state from a markdown file.
-    Looks for certain patterns like `## State\n\nACCEPTED`.
+    Looks for certain patterns like `## State\\n\\nACCEPTED`.
     """
     content = file_path.read_text(errors="ignore")
     
@@ -47,21 +51,48 @@ def get_title(file_path: Path) -> tuple[str, str]:
     except Exception:
          return file_path.stem, "(Error reading file)"
 
+def write_output(content: str, output_file: str):
+    """
+    Write formatted output to a file.
+    
+    Args:
+        content: The formatted content to write
+        output_file: Path to output file
+        
+    Raises:
+        typer.Exit: On write failure
+    """
+    try:
+        output_path = Path(output_file)
+        # Create parent directories if they don't exist
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Write to file
+        output_path.write_text(content)
+        console.print(f"[green]✅ Output written to {output_file}[/green]")
+        logger.info(f"Successfully wrote output to {output_file}")
+    except PermissionError:
+        error_msg = f"Permission denied: Cannot write to {output_file}"
+        console.print(f"[red]❌ {error_msg}[/red]")
+        logger.error(error_msg)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        error_msg = f"Failed to write to {output_file}: {e}"
+        console.print(f"[red]❌ {error_msg}[/red]")
+        logger.error(error_msg)
+        raise typer.Exit(code=1)
+
 def list_stories(
     state: Optional[str] = typer.Argument(None, help="Filter by state (e.g. DRAFT, COMMITTED)."),
     plan_id: Optional[str] = typer.Option(None, "--plan", help="Filter stories linked to this plan."),
-    runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Filter stories linked to this runbook.")
+    runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Filter stories linked to this runbook."),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file instead of stdout")
 ):
     """
     List all stories in .agent/cache/stories.
     """
-    table = Table(title="📂 Stories")
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Title", style="white")
-    table.add_column("State", style="magenta")
-    table.add_column("Path", style="dim")
-
-    stories_found = False
+    logger.info(f"Listing stories (format={output_format}, output={output_file})")
+    stories_data: List[Dict[str, Any]] = []
     
     # Walk through stories dir
     for file_path in config.stories_dir.rglob("*.md"):
@@ -79,27 +110,52 @@ def list_stories(
             
         id_val, title_val = get_title(file_path)
         
-        table.add_row(id_val, title_val, file_state, str(file_path.relative_to(config.repo_root)))
-        stories_found = True
+        stories_data.append({
+            "ID": scrub_sensitive_data(id_val),
+            "Title": scrub_sensitive_data(title_val),
+            "State": file_state,
+            "Path": str(file_path.relative_to(config.repo_root))
+        })
 
-    if stories_found:
-        console.print(table)
+    # Handle output formatting
+    if output_format == "pretty" and not output_file:
+        # Use Rich table for pretty console output
+        table = Table(title="📂 Stories")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("State", style="magenta")
+        table.add_column("Path", style="dim")
+        
+        for story in stories_data:
+            table.add_row(story["ID"], story["Title"], story["State"], story["Path"])
+        
+        if stories_data:
+            console.print(table)
+        else:
+            console.print("  (No stories found matching criteria)")
     else:
-        console.print("  (No stories found matching criteria)")
+        # Use formatter for other formats
+        try:
+            formatted_output = format_data(output_format, stories_data)
+            
+            if output_file:
+                write_output(formatted_output, output_file)
+            else:
+                print(formatted_output)
+        except ValueError as e:
+            console.print(f"[red]❌ {e}[/red]")
+            raise typer.Exit(code=1)
 
 def list_plans(
-    state: Optional[str] = typer.Argument(None, help="Filter by state.")
+    state: Optional[str] = typer.Argument(None, help="Filter by state."),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file instead of stdout")
 ):
     """
     List all implementation plans in .agent/cache/plans.
     """
-    table = Table(title="📂 Implementation Plans")
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Title", style="white")
-    table.add_column("State", style="magenta")
-    table.add_column("Path", style="dim")
-
-    found = False
+    logger.info(f"Listing plans (format={output_format}, output={output_file})")
+    plans_data: List[Dict[str, Any]] = []
     
     for file_path in config.plans_dir.rglob("*.md"):
         file_state = get_file_state(file_path)
@@ -108,28 +164,53 @@ def list_plans(
             
         id_val, title_val = get_title(file_path)
         
-        table.add_row(id_val, title_val, file_state, str(file_path.relative_to(config.repo_root)))
-        found = True
+        plans_data.append({
+            "ID": scrub_sensitive_data(id_val),
+            "Title": scrub_sensitive_data(title_val),
+            "State": file_state,
+            "Path": str(file_path.relative_to(config.repo_root))
+        })
 
-    if found:
-        console.print(table)
+    # Handle output formatting
+    if output_format == "pretty" and not output_file:
+        # Use Rich table for pretty console output
+        table = Table(title="📂 Implementation Plans")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("State", style="magenta")
+        table.add_column("Path", style="dim")
+        
+        for plan in plans_data:
+            table.add_row(plan["ID"], plan["Title"], plan["State"], plan["Path"])
+        
+        if plans_data:
+            console.print(table)
+        else:
+            console.print("  (No plans found)")
     else:
-        console.print("  (No plans found)")
+        # Use formatter for other formats
+        try:
+            formatted_output = format_data(output_format, plans_data)
+            
+            if output_file:
+                write_output(formatted_output, output_file)
+            else:
+                print(formatted_output)
+        except ValueError as e:
+            console.print(f"[red]❌ {e}[/red]")
+            raise typer.Exit(code=1)
 
 def list_runbooks(
     state: Optional[str] = typer.Argument(None, help="Filter by state."),
-    story_id: Optional[str] = typer.Option(None, "--story", help="Filter runbooks for this story.")
+    story_id: Optional[str] = typer.Option(None, "--story", help="Filter runbooks for this story."),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file instead of stdout")
 ):
     """
     List all runbooks in .agent/cache/runbooks.
     """
-    table = Table(title="📂 Runbooks")
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Title", style="white") # Runbooks might not have standardized title, often just ID
-    table.add_column("State", style="magenta")
-    table.add_column("Path", style="dim")
-
-    found = False
+    logger.info(f"Listing runbooks (format={output_format}, output={output_file})")
+    runbooks_data: List[Dict[str, Any]] = []
     
     for file_path in config.runbooks_dir.rglob("*.md"):
         file_stem = file_path.stem
@@ -146,10 +227,38 @@ def list_runbooks(
         # Runbooks often don't have the same header format, but let's try
         id_val, title_val = get_title(file_path)
         
-        table.add_row(id_val, title_val, file_state, str(file_path.relative_to(config.repo_root)))
-        found = True
+        runbooks_data.append({
+            "ID": scrub_sensitive_data(id_val),
+            "Title": scrub_sensitive_data(title_val),
+            "State": file_state,
+            "Path": str(file_path.relative_to(config.repo_root))
+        })
 
-    if found:
-        console.print(table)
+    # Handle output formatting
+    if output_format == "pretty" and not output_file:
+        # Use Rich table for pretty console output
+        table = Table(title="📂 Runbooks")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("State", style="magenta")
+        table.add_column("Path", style="dim")
+        
+        for runbook in runbooks_data:
+            table.add_row(runbook["ID"], runbook["Title"], runbook["State"], runbook["Path"])
+        
+        if runbooks_data:
+            console.print(table)
+        else:
+            console.print("  (No runbooks found)")
     else:
-        console.print("  (No runbooks found)")
+        # Use formatter for other formats
+        try:
+            formatted_output = format_data(output_format, runbooks_data)
+            
+            if output_file:
+                write_output(formatted_output, output_file)
+            else:
+                print(formatted_output)
+        except ValueError as e:
+            console.print(f"[red]❌ {e}[/red]")
+            raise typer.Exit(code=1)

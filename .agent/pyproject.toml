@@ -3,7 +3,7 @@ name = "agent"
 version = "0.1.0"
 description = "Governed workflow CLI for the Inspected application"
 authors = [
-    {name = "Justin Cook", email = "justin@example.com"},
+    {name = "Justin Cook", email = "jhcook@secnix.com"},
 ]
 dependencies = [
     "typer>=0.21.1",

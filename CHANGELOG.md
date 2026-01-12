@@ -15,6 +15,16 @@ All notable changes to the Agent Governance Framework will be documented in this
 - **Story Workflow**: Added `workflows/story.md` for creating stories from conversation context.
 - **Governance Enforcement**: Implemented strict state transitions (Plan: APPROVED -> Story: COMMITTED -> Runbook: ACCEPTED) to ensure quality gates are respected.
 - **Smart Commit**: Added `agent commit --ai` to auto-generate conventional commit messages and infer story IDs.
+- **Comprehensive Documentation**: Created `/docs` directory with 9 detailed guides (~4,700 lines):
+  - `getting_started.md` - Installation and first workflows
+  - `commands.md` - Complete CLI reference with examples
+  - `governance.md` - AI panel roles and review process
+  - `workflows.md` - Story-driven development patterns
+  - `configuration.md` - Customization and CI/CD integration
+  - `ai_integration.md` - Provider setup and token optimization
+  - `rules_and_instructions.md` - Creating custom governance rules
+  - `troubleshooting.md` - Common issues and solutions
+  - `README.md` - Documentation index and navigation
 
 ### Changed
 - **Config Relocation**: Moved `agents.yaml` and `router.yaml` to `.agent/etc/` for better organization.
@@ -22,12 +32,16 @@ All notable changes to the Agent Governance Framework will be documented in this
 - **Dependency Update**: Updated `openai`, `typer`, `rich`, `pydantic`, `tiktoken`, and `google-genai` to latest stable versions.
 - **Documentation**: Updated `SMART_AI_ROUTER.md` to reflect the actual Python implementation.
 - **Project Structure**: Updated `.gitignore` to track agent artifacts while ignoring system files.
+- **README.md**: Completely rewritten root README with quick start guide and links to comprehensive documentation.
+- **Installation**: Corrected all documentation to use `pip install -e .agent/` with `pyproject.toml` instead of non-existent `requirements.txt`.
+
+### Removed
+- **Breaking Change**: Removed `agent plan` command - it had backwards workflow (tried to generate plans FROM stories instead of stories FROM plans).
 
 ## [0.1.0] - 2026-01-11
 
 ### Added
 - **Native Python AI Integration**: Ported all AI logic from legacy Bash scripts to `src/agent/core/ai.py`.
-- **New Command**: `agent plan <story_id>` - Generates implementation plans using AI.
 - **New Command**: `agent new-runbook <story_id>` - Generates structured runbooks using AI.
 - **New Command**: `agent implement <runbook_id>` - AI-driven implementation assistant.
 - **New Command**: `agent match-story --files ...` - AI-powered story matching for atomic commits.

@@ -17,7 +17,8 @@ def test_app_version():
     # If using Typer's version flag, it should exit(0). 
     # If result.exit_code is 2, it might be "Missing command" if invoke_without_command is not set?
     # But --version raises Exit which short-circuits.
-    result = runner.invoke(app, ["--version"])
+    with patch("subprocess.check_output", side_effect=Exception("No git")):
+        result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0, f"Output: {result.stdout}"
     assert "Agent CLI v0.1.0" in result.stdout
 

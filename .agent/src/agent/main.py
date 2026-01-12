@@ -14,7 +14,6 @@ app = typer.Typer(
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)
-app.command(name="plan")(plan.plan)
 app.command(name="new-adr")(adr.new_adr)
 app.command(name="new-runbook")(runbook.new_runbook)
 app.command(name="implement")(implement.implement)

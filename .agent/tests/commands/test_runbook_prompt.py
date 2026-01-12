@@ -29,7 +29,7 @@ team:
 """)
     
     story_file = agent_dir / "stories" / "INFRA" / "STORY-PROMPT.md"
-    story_file.write_text("# Story for Prompt Test")
+    story_file.write_text("State: COMMITTED\n# Story for Prompt Test")
     
     return {"root": tmp_path, "story": story_file}
 

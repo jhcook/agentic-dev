@@ -1,4 +1,3 @@
-```markdown
 # INFRA-001: Smart AI Router and Python Rewrite
 
 Status: PROPOSED
