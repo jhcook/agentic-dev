@@ -1,0 +1,13 @@
+---
+description: Standards for Architecture Decision Records (ADRs)
+globs: .agent/adrs/*.md
+---
+
+# ADR Standards
+
+All ADRs in this repository must follow these rules:
+
+1. **Immutability of Logic**: Once an ADR is "Accepted", its core decision logic should not change without a new ADR superseding it.
+2. **Change Logging**: If minor updates or clarifications are made to an existing ADR, you **MUST** add a `## Changes` section at the bottom of the file.
+    - The section should list changes in **descending chronological order** (most recent first).
+    - Format: `- **YYYY-MM-DD**: <Description of change>`

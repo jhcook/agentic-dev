@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Agent CLI Shim
+#
+# Author: Justin Cook
+
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+AGENT_DIR="$ROOT_DIR/.agent"
+
+# Python Shim
+# Checks if dependencies exist.
+
+if python3 -c "import typer; import rich; import pydantic" &>/dev/null; then
+    export PYTHONPATH="$AGENT_DIR/src"
+    
+    # Translate 'help' to '--help' for compatibility
+    args=("$@")
+    new_args=()
+    if [[ "${#args[@]}" -gt 0 ]]; then
+        for arg in "${args[@]}"; do
+            if [[ "$arg" == "help" ]]; then
+                new_args+=("--help")
+            else
+                new_args+=("$arg")
+            fi
+        done
+        exec python3 -m agent.main "${new_args[@]}"
+    else
+        exec python3 -m agent.main --help
+    fi
+else
+    echo "❌ Command requires Python dependencies that are not installed." >&2
+    echo "   Please install them with: pip install typer rich pydantic google-generativeai openai" >&2
+    exit 1
+fi

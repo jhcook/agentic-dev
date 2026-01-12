@@ -1,0 +1,30 @@
+hardware_profiles:
+  low_spec_intel:
+    chip_family: intel
+    max_cores: 2
+    max_ram_gb: 4
+    enforce: monolith
+  low_spec_apple_silicon:
+    chip_family: apple_silicon
+    max_cores: 4
+    max_ram_gb: 8
+    enforce: monolith
+  high_spec_xeon:
+    chip_family: intel_xeon
+    min_cores: 8
+    min_ram_gb: 32
+    allow: services
+  high_spec_apple_m_series:
+    chip_family: apple_silicon
+    min_cores: 8
+    min_ram_gb: 16
+    allow: services
+rules:
+  - id: ADR_REQUIRED
+    description: "All architecture decisions must be recorded as ADRs in .agent/adrs/"
+  - id: LIBRARY_ALLOWLIST
+    allowlist: [express, fastapi, flask, spring-boot, postgresql, redis]
+    denylist: [outdated-crypto-lib]
+outputs:
+  adr_dir: .agent/adrs
+  arch_spec: .agent/adrs/arch-spec.md
