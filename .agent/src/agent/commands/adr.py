@@ -5,6 +5,7 @@ from typing import Optional
 
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title
+from agent.db.client import upsert_artifact
 
 console = Console()
 
@@ -53,3 +54,9 @@ The architectural decision.
 
     file_path.write_text(content)
     console.print(f"[bold green]✅ Created ADR: {file_path}[/bold green]")
+    
+    # Auto-sync
+    if upsert_artifact(adr_id, "adr", content, author="agent"):
+        console.print("[bold green]🔄 Synced to local cache[/bold green]")
+    else:
+        console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")

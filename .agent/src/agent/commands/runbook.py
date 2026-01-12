@@ -6,6 +6,7 @@ from typing import Optional
 from agent.core.config import config
 from agent.core.utils import find_story_file, load_governance_context, scrub_sensitive_data
 from agent.core.ai import ai_service
+from agent.db.client import upsert_artifact
 
 app = typer.Typer()
 console = Console()
@@ -23,8 +24,12 @@ def new_runbook(
          raise typer.Exit(code=1)
 
     # 1.1 Enforce Story State
+    import re
     story_text = story_file.read_text()
-    if "State: COMMITTED" not in story_text and "Status: COMMITTED" not in story_text:
+    
+    # Check for both formats: "State: COMMITTED" (inline) and "## State\nCOMMITTED" (multiline)
+    state_pattern = r"(?:^State:\s*COMMITTED|^## State\s*\n+COMMITTED|^Status:\s*COMMITTED)"
+    if not re.search(state_pattern, story_text, re.MULTILINE):
         console.print(f"[bold red]❌ Story {story_id} is not COMMITTED. Please commit the story before creating a runbook.[/bold red]")
         raise typer.Exit(code=1)
 
@@ -42,7 +47,10 @@ def new_runbook(
     # 3. Context
     console.print(f"🛈 invoking AI Governance Panel for {story_id}...")
     story_content = scrub_sensitive_data(story_file.read_text())
-    rules_content = scrub_sensitive_data(load_governance_context())
+    rules_full = scrub_sensitive_data(load_governance_context())
+    
+    # Truncate rules to avoid token limits (GitHub CLI has 8000 token max)
+    rules_content = rules_full[:3000] + "\n\n[...truncated for token limits...]" if len(rules_full) > 3000 else rules_full
     
 
     # 4. Prompt
@@ -85,7 +93,7 @@ INPUTS:
 2. Governance Rules (Compliance constraints)
 
 OUTPUT FORMAT:
-Markdown file content ONLY.
+Raw Markdown content ONLY. Do NOT wrap the output in code fences (```markdown).
 The content MUST start with 'Status: PROPOSED'.
 
 STRUCTURE:
@@ -153,4 +161,12 @@ GOVERNANCE RULES:
     # 5. Write
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
+    
+    # Auto-sync
+    runbook_id = f"{story_id}" # Using Story ID for Runbook ID as well, with type='runbook'
+    if upsert_artifact(runbook_id, "runbook", content, author="agent"):
+         console.print("[bold green]🔄 Synced to local cache[/bold green]")
+    else:
+         console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
+
     console.print("[yellow]⚠️  ACTION REQUIRED: Review and change 'Status: PROPOSED' to 'Status: ACCEPTED'.[/yellow]")
