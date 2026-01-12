@@ -89,6 +89,117 @@ def status(args):
     except Exception as e:
         print(f"Error checking status: {e}")
 
+def scan(args):
+    """Scans local directories and ingests artifacts into SQLite."""
+    # We need to import upsert_artifact. 
+    # Since we are running as a script, we might need to adjust path or use relative imports if module
+    try:
+        sys.path.append(str(Path(__file__).resolve().parent.parent.parent)) # Add src to path
+        from agent.db.client import upsert_artifact
+    except ImportError as e:
+        print(f"Error importing client: {e}")
+        return
+
+    repo_root = Path.cwd() # Assuming run from root
+    
+    # Define mapping of Directory -> Type
+    # Note: Stories are in .agent/cache/stories/<SCOPE>/<ID>.md
+    # Plans: .agent/cache/plans/<SCOPE>/<ID>.md (or just flat?)
+    # Runbooks: .agent/cache/runbooks/<SCOPE>/<ID>.md
+    # ADRs: .agent/adrs/<ID>.md
+    
+    dirs_to_scan = [
+        (repo_root / ".agent/adrs", "adr"),
+        (repo_root / ".agent/cache/stories", "story"),
+        (repo_root / ".agent/cache/plans", "plan"),
+        (repo_root / ".agent/cache/runbooks", "runbook")
+    ]
+    
+    count = 0
+    print("Scanning for artifacts...")
+    
+    for dir_path, artifact_type in dirs_to_scan:
+        if not dir_path.exists():
+            continue
+            
+        # Recursive glob for markdown files
+        for file_path in dir_path.rglob("*.md"):
+            if file_path.name.startswith("template"):
+                continue
+                
+            try:
+                content = file_path.read_text(errors="ignore")
+                
+                # Extract ID from filename. 
+                # Expected: ID-description.md or ID.md
+                # e.g. INFRA-004-blah.md -> INFRA-004
+                # ADR-001-blah.md -> ADR-001
+                stem = file_path.stem
+                if "-" in stem:
+                    # Attempt to grab prefix-number e.g. INFRA-123
+                    import re
+                    match = re.search(r'^([A-Z]+-\d+)', stem)
+                    if match:
+                        art_id = match.group(1)
+                    else:
+                        art_id = stem # Fallback
+                else:
+                    art_id = stem
+                    
+                print(f"Ingesting {artifact_type.upper()}: {art_id}")
+                upsert_artifact(art_id, artifact_type, content, author="scanner")
+                count += 1
+            except Exception as e:
+                print(f"Failed to ingest {file_path}: {e}")
+                
+    print(f"Scan complete. Ingested {count} artifacts.")
+
+def delete(args):
+    """Deletes an artifact from the local database."""
+    try:
+        conn = get_db_connection()
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+        
+        # Determine strictness
+        # If type is provided, use it. If not, check for ambiguity or delete all matching ID.
+        if args.type:
+            cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = ?", (args.id, args.type))
+            if not cursor.fetchone():
+                print(f"Artifact {args.id} (type={args.type}) not found.")
+                conn.close()
+                return
+
+            print(f"Deleting {args.id} ({args.type})...")
+            # Manual cascade (safe)
+            cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (args.id, args.type))
+            cursor.execute("DELETE FROM links WHERE target_id = ? AND target_type = ?", (args.id, args.type))
+            cursor.execute("DELETE FROM history WHERE artifact_id = ? AND artifact_type = ?", (args.id, args.type))
+            cursor.execute("DELETE FROM artifacts WHERE id = ? AND type = ?", (args.id, args.type))
+        else:
+            # Delete all types with this ID
+            cursor.execute("SELECT type FROM artifacts WHERE id = ?", (args.id,))
+            rows = cursor.fetchall()
+            if not rows:
+                print(f"Artifact {args.id} not found.")
+                conn.close()
+                return
+                
+            for row in rows:
+                art_type = row[0]
+                print(f"Deleting {args.id} ({art_type})...")
+                cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (args.id, art_type))
+                cursor.execute("DELETE FROM links WHERE target_id = ? AND target_type = ?", (args.id, art_type))
+                cursor.execute("DELETE FROM history WHERE artifact_id = ? AND artifact_type = ?", (args.id, art_type))
+                cursor.execute("DELETE FROM artifacts WHERE id = ? AND type = ?", (args.id, art_type))
+
+        conn.commit()
+        conn.close()
+        print("Delete successful.")
+        
+    except Exception as e:
+        print(f"Error deleting artifact: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description="Agent Sync Tool")
     subparsers = parser.add_subparsers(dest="command")
@@ -96,6 +207,11 @@ def main():
     push_parser = subparsers.add_parser("push", help="Push changes to remote")
     pull_parser = subparsers.add_parser("pull", help="Pull changes from remote")
     status_parser = subparsers.add_parser("status", help="Show sync status")
+    scan_parser = subparsers.add_parser("scan", help="Scan and ingest local artifacts")
+    
+    delete_parser = subparsers.add_parser("delete", help="Delete artifact from local DB")
+    delete_parser.add_argument("id", help="Artifact ID to delete")
+    delete_parser.add_argument("--type", help="Specific artifact type (story, plan, runbook, adr)")
     
     args = parser.parse_args()
     
@@ -105,6 +221,10 @@ def main():
         pull(args)
     elif args.command == "status":
         status(args)
+    elif args.command == "scan":
+        scan(args)
+    elif args.command == "delete":
+        delete(args)
     else:
         parser.print_help()
 

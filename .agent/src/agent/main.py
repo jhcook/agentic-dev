@@ -30,7 +30,35 @@ app.command(name="run-ui-tests")(check.run_ui_tests)
 app.command(name="match-story")(match.match_story)
 
 app.command(name="pr")(workflow.pr)
+app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
+
+# Sync integration using Typer
+# Since sync.py uses argparse, we'll wrap it or just use subprocess for now 
+# TO keep it clean, let's just make a shim here.
+from agent.sync import sync
+@app.command(name="sync", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def sync_cmd(ctx: typer.Context):
+    """
+    Distributed synchronization (push, pull, status, scan).
+    """
+    # Forward arguments to sync.main
+    # Sys.argv hack or just call logic?
+    # sync.main() uses argparse which reads sys.argv.
+    # We need to reconstruct sys.argv for the sync tool.
+    import sys
+    # sys.argv will be ['agent', 'sync', 'status', ...]
+    # sync.main expects ['...sync.py', 'status'] or just the args.
+    # Let's adjust sys.argv to strip 'agent' and 'sync' prefix for the parser relative 
+    
+    # Actually simpler: sync.py uses argparse which parses sys.argv[1:] by default?
+    # If we call main(), it parses existing sys.argv.
+    # existing sys.argv: ['.../main...py', 'sync', 'status']
+    # sync.py expects: ['script', 'status']
+    
+    # Let's fake it.
+    sys.argv = ["agent-sync"] + ctx.args
+    sync.main()
 
 console = Console()
 

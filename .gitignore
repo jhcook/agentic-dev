@@ -39,3 +39,4 @@ Thumbs.db
 
 # Secrets
 .agent/secrets/
+.agent/cache/agent.db

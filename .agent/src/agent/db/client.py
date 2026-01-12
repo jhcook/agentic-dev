@@ -15,10 +15,18 @@ def get_connection():
 
 def extract_state(content: str) -> str:
     """Extracts state from markdown content."""
-    # Look for "Status: OPEN" or "State: DRAFT"
-    match = re.search(r'^(?:Status|State):\s*(\w+)', content, re.MULTILINE)
+    # 1. Look for Key: Value pair ("Status: OPEN" or "State: DRAFT")
+    match = re.search(r'^(?:Status|State):\s*(\w+)', content, re.MULTILINE | re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        return match.group(1).strip().upper()
+        
+    # 2. Look for Header based status (Common in ADRs)
+    # ## Status
+    # Proposed
+    match = re.search(r'^##\s*(?:Status|State)\s*\n+([A-Za-z]+)', content, re.MULTILINE)
+    if match:
+        return match.group(1).strip().upper()
+        
     return "UNKNOWN"
 
 def extract_related_stories(content: str) -> Set[str]:

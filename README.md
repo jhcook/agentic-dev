@@ -76,6 +76,10 @@ agent new-runbook INFRA-001
 # 2a. Check Sync Status
 python .agent/src/agent/sync/sync.py status
 
+# 2b. Ingest Existing Artifacts
+python .agent/src/agent/sync/sync.py scan
+# (Scans .agent/ directories and populates local cache)
+
 # 3. Run preflight checks
 agent preflight --story INFRA-001 --ai
 

@@ -592,6 +592,55 @@ export AGENT_LOG_LEVEL="DEBUG"  # DEBUG, INFO, WARNING, ERROR
 
 ---
 
+## Distributed Synchronization
+
+### `agent sync scan`
+Ingest existing artifacts (Stories, Plans, Runbooks, ADRs) from the file system into the local SQLite cache.
+
+**Prerequisites:**
+- Run `python .agent/src/agent/db/init.py` (only needed once for initial setup).
+
+**What it does:**
+- Scans `.agent/cache/` for Stories, Plans, Runbooks.
+- Scans `.agent/adrs/` for ADRs.
+- Parses ID, Type, Content, and State (from headers or metadata).
+- Upserts them into `.agent/cache/agent.db`.
+- Extracts and creates links between artifacts (Plan->Story, Story->ADR).
+
+**Example:**
+```bash
+agent sync scan
+```
+
+### `agent sync status`
+Show the current state of the local artifact database.
+
+**Output:**
+- Table showing ID, Type, Version, and State of all indexed artifacts.
+
+**Example:**
+```bash
+agent sync status
+```
+
+### `agent sync delete <ID> [--type <TYPE>]`
+Remove an artifact from the local database.
+
+**Arguments:**
+- `ID`: The artifact ID (e.g., `INFRA-001`).
+- `--type` (optional): `story`, `runbook`, `plan`, `adr`. If omitted, deletes ALL artifacts with that ID (e.g. both Story and Runbook).
+
+**Example:**
+```bash
+# Delete all artifacts with ID INFRA-999
+agent sync delete INFRA-999
+
+# Delete only the runbook
+agent sync delete INFRA-004 --type runbook
+```
+
+---
+
 ## Exit Codes
 
 All commands follow standard Unix exit code conventions:
