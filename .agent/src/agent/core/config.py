@@ -20,6 +20,7 @@ class Config:
         self.templates_dir = self.agent_dir / "templates"
         self.rules_dir = self.agent_dir / "rules"
         self.instructions_dir = self.agent_dir / "instructions"
+        self.etc_dir = self.agent_dir / "etc"
 
     def _find_repo_root(self) -> Path:
         """Finds the git repository root."""

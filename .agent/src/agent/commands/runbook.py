@@ -22,6 +22,12 @@ def new_runbook(
          console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
          raise typer.Exit(code=1)
 
+    # 1.1 Enforce Story State
+    story_text = story_file.read_text()
+    if "State: COMMITTED" not in story_text and "Status: COMMITTED" not in story_text:
+        console.print(f"[bold red]❌ Story {story_id} is not COMMITTED. Please commit the story before creating a runbook.[/bold red]")
+        raise typer.Exit(code=1)
+
     # 2. Check Paths
     scope = story_file.parent.name
     runbook_dir = config.runbooks_dir / scope

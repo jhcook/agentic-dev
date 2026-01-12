@@ -9,11 +9,19 @@ All notable changes to the Agent Governance Framework will be documented in this
 - **Router Configuration**: New `.agent/router.yaml` file for defining model tiers and pricing.
 - **Token Management**: `TokenManager` class with `tiktoken` support for accurate accounting.
 - **Unit Tests**: comprehensive testing suite for routing logic (`tests/core/test_router.py`).
+- **Workflow Optimization**: Refactored workflows to be simple wrappers around Python CLI commands, reducing token usage and ensuring logic parity.
+- **Runbook Template**: Extracted runbook structure to `.agent/templates/runbook-template.md`.
+- **System Instructions**: Added `GEMINI.md` and `.github/copilot-instructions.md` for AI agent guidance.
+- **Story Workflow**: Added `workflows/story.md` for creating stories from conversation context.
+- **Governance Enforcement**: Implemented strict state transitions (Plan: APPROVED -> Story: COMMITTED -> Runbook: ACCEPTED) to ensure quality gates are respected.
+- **Smart Commit**: Added `agent commit --ai` to auto-generate conventional commit messages and infer story IDs.
 
 ### Changed
+- **Config Relocation**: Moved `agents.yaml` and `router.yaml` to `.agent/etc/` for better organization.
 - **SDK Migration**: Migrated from deprecated `google-generativeai` to modern `google-genai` SDK.
 - **Dependency Update**: Updated `openai`, `typer`, `rich`, `pydantic`, `tiktoken`, and `google-genai` to latest stable versions.
 - **Documentation**: Updated `SMART_AI_ROUTER.md` to reflect the actual Python implementation.
+- **Project Structure**: Updated `.gitignore` to track agent artifacts while ignoring system files.
 
 ## [0.1.0] - 2026-01-11
 
