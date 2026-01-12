@@ -1,0 +1,3 @@
+supabase_url: "https://xyz.supabase.co"
+supabase_table: "artifacts"
+# NOTE: supabase_api_key MUST be set in SUPABASE_SERVICE_ROLE_KEY environment variable

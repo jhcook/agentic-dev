@@ -1,191 +1,226 @@
-# Agent Governance Framework
+# Agent CLI - AI-Powered Governance Framework
 
-This directory contains the governance framework for the `inspected-app` monorepo. It is designed to ensure strict adherence to architectural standards, compliance (SOC2/GDPR), and quality assurance through a "Governance by Code" approach.
+> **Governance by Code**: Enforce architectural standards, compliance (SOC2/GDPR), and quality assurance through an intelligent CLI that acts as your development team's governance layer.
+
+## What is Agent?
+
+**Agent** is an AI-powered CLI tool that automates governance, compliance, and quality checks for software development teams. It replaces manual code reviews with a systematic, AI-assisted workflow that ensures every change meets your team's standards before it reaches production.
+
+Think of it as your **virtual governance team** that:
+- ✅ Reviews code for architecture violations
+- ✅ Enforces compliance (GDPR, SOC2)
+- ✅ Validates test coverage and documentation
+- ✅ Generates implementation plans and runbooks
+- ✅ Automates preflight checks before commits
+
+## Key Features
+
+### 🤖 AI-Powered Workflows
+- **Smart Planning**: Generate implementation plans from stories
+- **Runbook Generation**: Create step-by-step execution guides
+- **Code Implementation**: AI-assisted code generation
+- **Story Matching**: Automatically link commits to stories
+
+### 🛡️ Governance Enforcement
+- **9-Role Governance Panel**: Architect, QA, Security, Product, Observability, Docs, Compliance, Mobile, Web, Backend
+- **State Management**: Enforced transitions (Plan → Story → Runbook → Implementation)
+- **Compliance Checks**: SOC2, GDPR, PII detection, secrets scanning
+- **Architectural Reviews**: ADR validation, boundary enforcement
+
+### 🚀 Developer Experience
+- **Interactive CLI**: Guided workflows with smart defaults
+- **Multi-Provider AI**: Google Gemini, OpenAI, GitHub CLI
+- **Smart Routing**: Automatic model selection based on task complexity
+- **Token Optimization**: Efficient context management
+
+### 🔄 Distributed Synchronization
+- **SQLite Local Cache**: Efficient offline access to stories and plans
+- **Supabase Cloud Sync**: Real-time collaboration with remote teams
+- **Bi-Directional Sync**: Seamlessly push and pull changes
+- **Auto-Linking**: Automatically links Plans, Stories, and ADRs
+- **Conflict Resolution**: Composite key architecture to prevent collisions
+
+## Quick Start
+
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <your-repo>
+cd <your-repo>
+
+# Install dependencies
+pip install -r .agent/requirements.txt
+
+# Add to PATH (or use full path ./.agent/bin/agent)
+export PATH="$PATH:$(pwd)/.agent/bin"
+
+# Initialize Sync Database
+python .agent/src/agent/db/init.py
+
+# Configure Supabase Key (Secure)
+echo "your-service-role-key" > .agent/secrets/supabase_key
+```
+
+### Basic Workflow
+
+```bash
+# 1. Create a new story
+agent new-story
+
+# 2. Generate a runbook
+agent new-runbook INFRA-001
+# (Runbook is auto-synced to local cache)
+
+# 2a. Check Sync Status
+python .agent/src/agent/sync/sync.py status
+
+# 3. Run preflight checks
+agent preflight --story INFRA-001 --ai
+
+# 4. Commit with governance
+agent commit --story INFRA-001
+
+# 5. Create a pull request
+agent pr --story INFRA-001
+```
+
+## Documentation
+
+📚 **Comprehensive guides available in `/docs`:**
+
+- **[Getting Started](docs/getting_started.md)** - Installation, configuration, first steps
+- **[Commands Reference](docs/commands.md)** - Complete CLI command documentation
+- **[Governance System](docs/governance.md)** - Understanding roles, rules, and compliance
+- **[Workflows](docs/workflows.md)** - Story-driven development process
+- **[Configuration](docs/configuration.md)** - Customizing the agent for your team
+- **[AI Integration](docs/ai_integration.md)** - Provider setup, model selection, token management
+- **[Rules & Instructions](docs/rules_and_instructions.md)** - Creating custom governance rules
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 
 ## Core Concepts
 
-### 1. The "Agent" CLI
-The `agent` CLI (`.agent/bin/agent`) is the primary interface for this framework. It automates:
-*   **Creation**: Scaffolding new Stories, ADRs, and Plans.
-*   **Validation**: Checking content against schemas.
-*   **Preflight**: Running heuristics (compliance, security, arch) before you commit.
-*   **Governance Panel**: Simulating a multi-role review (Architect, QA, Security, Product, SRE).
+### Story-Driven Development
 
-### 2. Workflow
-We follow a strict **Story-Driven Development** workflow:
+Agent enforces a structured development workflow:
 
-1.  **Plan (Optional)**: `agent new-plan` for complex Epics breaking down into multiple stories.
-2.  **Draft a Story**: `agent new-story` (Prompts for logical category: INFRA, WEB, MOBILE, BACKEND).
-3.  **Draft a Runbook**: `agent new-runbook` (Prompts for logical category: INFRA, WEB, MOBILE, BACKEND).
-4.  **Implement**: `agent implement --story WEB-123` (Prompts for logical category: INFRA, WEB, MOBILE, BACKEND).
-5.  **Preflight**: `agent preflight --story WEB-123` (Must pass before commit).
-6.  **Commit**: `agent commit --story WEB-123` (Enforces commit message standards).
-
-### 3. Governance States
-To proceed with any code changes or architectural updates, the respective documents must be in specific states:
-
-*   **Plan**: `PROPOSED` → `APPROVED` (Required for major architectural changes)
-*   **Story**: `DRAFT` → `OPEN` → `COMMITTED` (Required for code generation)
-*   **Runbook**: `PROPOSED` → `ACCEPTED` (Required for implementation execution)
-
-### 4. Directory Structure
-
-*   `bin/`: The CLI executable.
-*   `lib/`: The CLI library.
-*   `agents.yaml`: Definitions of the "Governance Panel" roles.
-*   `adrs/`: Architecture Decision Records (immutable design documents).
-*   `workflows/`: Workflow files for Agent instructions.
-*   `cache/`: Cache for agent plans, stories, and runbooks.
-*   `templates/`: Template files for agent stories, runbooks, and plans.
-*   `rules/`: Global rules for the agent.
-*   `instructions/<agent>/`: Instructions for the agent.
-
-## Usage Guide
-
-For detailed instructions, see the "Available Commands" table below.
-
-### Quick Start
-
-**1. Create a Story**
-```bash
-./.agent/bin/agent new-story
+```
+Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementation
 ```
 
-**2. Generate a Plan (AI)**
-```bash
-./.agent/bin/agent plan STORY-ID
+1. **Plans** - High-level epics that contain multiple stories
+2. **Stories** - Individual tasks with acceptance criteria
+3. **Runbooks** - Step-by-step implementation guides
+4. **Implementation** - AI-assisted code generation
+
+### Governance Panel
+
+The AI Governance Panel consists of 9 specialized roles that review your code:
+
+| Role | Focus Area |
+|------|-----------|
+| **Architect** | System design, ADR compliance, boundaries |
+| **QA** | Test coverage, testing strategies |
+| **Security** | Secrets, vulnerabilities, security posture |
+| **Product** | Acceptance criteria, user value |
+| **Observability** | Metrics, tracing, logging |
+| **Docs** | Documentation synchronization |
+| **Compliance** | SOC2, GDPR enforcement |
+| **Mobile** | React Native, Expo patterns |
+| **Web** | Next.js, SEO, accessibility |
+| **Backend** | FastAPI, Python, API contracts |
+
+### Directory Structure
+
+```
+.agent/
+├── bin/agent              # CLI executable
+├── src/                   # Python implementation
+│   ├── agent/
+│   │   ├── commands/      # CLI commands
+│   │   └── core/          # Core logic (AI, routing, config)
+├── cache/                 # Generated artifacts
+│   ├── stories/           # Story files (INFRA/, WEB/, MOBILE/, BACKEND/)
+│   ├── plans/             # Plan files
+│   └── runbooks/          # Runbook files
+├── templates/             # Templates for stories, plans, runbooks, ADRs
+├── rules/                 # Global governance rules
+├── instructions/          # Role-specific instructions
+├── compliance/            # SOC2, GDPR documentation
+├── workflows/             # Workflow definitions
+└── etc/                   # Configuration (agents.yaml, router.yaml)
 ```
 
-**3. Generate a Runbook (AI)**
-```bash
-./.agent/bin/agent new-runbook STORY-ID
-```
+## AI Providers
 
-**4. Implement Changes (AI)**
-```bash
-./.agent/bin/agent implement RUNBOOK-ID
-```
+Agent supports multiple AI providers with automatic fallback:
 
-**5. Preflight & Commit**
-```bash
-./.agent/bin/agent preflight --story STORY-ID
-./.agent/bin/agent commit --story STORY-ID
-```
+1. **Google Gemini** (Recommended)
+   - Set `GEMINI_API_KEY` or `GOOGLE_GEMINI_API_KEY`
+   - Uses `gemini-1.5-pro` with large context windows
 
-### Available Commands (Reference)
+2. **OpenAI**
+   - Set `OPENAI_API_KEY`
+   - Uses `gpt-4o` for complex tasks
 
-| Command | Description | Usage / Arguments |
-| :--- | :--- | :--- |
-| **`preflight`** | Run governance preflight checks (Lint, Tests, AI). | `preflight [--story <ID>] [--ai] [--base <BRANCH>] [--provider <gh/gemini/openai>]` |
-| **`commit`** | Commit changes with a governed message format. | `commit [--story <ID>] [--runbook <ID>]` |
-| **`pr`** | Open a GitHub Pull Request (runs preflight first). | `pr [--story <ID>] [--web] [--draft]` |
-| **`new-story`** | Interactive prompt to create a new Story. | `new-story [STORY_ID]` |
-| **`new-adr`** | Create a new Architectural Decision Record (ADR). | `new-adr [TITLE]` |
-| **`new-plan`** | Create a new implementation plan manually. | `new-plan [PLAN_ID]` |
-| **`new-runbook`** | Generate an implementation runbook using AI Panel. | `new-runbook <STORY_ID>` |
-| **`plan`** | Generate an implementation plan using AI. | `plan <STORY_ID>` |
-| **`implement`** | Execute an implementation runbook using AI (Coder). | `implement <RUNBOOK_ID>` |
-| **`match-story`** | Identify the best Story for a set of changed files. | `match-story --files "<file1> <file2>..."` |
-| **`validate-story`** | Validate the schema of a story file. | `validate-story <STORY_ID>` |
-| **`list-stories`** | List all stories in `.agent/cache/stories`. | `list-stories` |
-| **`list-plans`** | List all plans in `.agent/cache/plans`. | `list-plans` |
-| **`list-runbooks`** | List all runbooks in `.agent/cache/runbooks`. | `list-runbooks` |
-| **`impact`** | Run impact analysis for a story (Stub). | `impact <STORY_ID>` |
-| **`panel`** | Simulate a governance panel review (Stub). | `panel <STORY_ID>` |
-| **`run-ui-tests`** | Run UI journey tests (Stub). | `run-ui-tests <STORY_ID>` |
-| **`help`** | Show help message for the CLI. | `help [COMMAND]` |
+3. **GitHub CLI** (Fallback)
+   - No API key required
+   - Uses `gh models run` with limited context
 
-### The Governance Panel
-The `preflight` command convenes a panel of virtual agents defined in `.agent/agents.yaml`.
-*   **Architect**: Checks for ADR compliance.
-*   **QA**: Checks for Test Strategy.
-*   **Security**: Scans for secrets and PII.
-*   **Product**: Validates Acceptance Criteria.
-*   **SRE**: Checks for OpenTelemetry instrumentation.
-*   **Tech Writer**: Ensures matching documentation updates.
-
-## Best Practices
-*   **Monorepo Scoping**: Stories are now scoped (e.g., `WEB-xxx`, `MOBILE-xxx`). Use the correct prefix.
-*   **Documentation**: If you change logic, you *must* update docs (README, ADRs), or the Tech Writer agent will complain.
-*   **Compliance**: If your Story description mentions "GDPR" or "PII", the Security agent will strictly enforce checklist review.
-
-## AI-Powered Capabilities
-
-
-the Agent CLI now features native Python-based AI integration, supporting robust governance workflows.
-
-> [!NOTE]
-> **Data Privacy**: For details on how data is handled by external AI providers, please refer to [ADR 016](.agent/adrs/ADR-016-openai-data-processor.md).
-> All context (Stories, Plans, Code Diffs) is **automatically scrubbed** of PII and Secrets (Emails, IPs, API Keys) before transmission.
-
-
-### Supported Providers
-1.  **Google Gemini** (Recommended): `GEMINI_API_KEY` (or `GOOGLE_GEMINI_API_KEY`). Uses `gemini-1.5-pro` with large context window.
-2.  **OpenAI**: `OPENAI_API_KEY`. Uses `gpt-4o` with large context window.
-3.  **GitHub CLI**: Fallback if no keys present. Uses `gh models run`. Note: Restricted context (8k tokens) requires aggressive chunking.
-
-### AI Commands
-
-**1. Generate Implementation Plan**
-Analyze a Story and generate a step-by-step technical plan.
-```bash
-./.agent/bin/agent plan STORY-ID
-```
-
-**2. Generate Runbook**
-Create a detailed, executable runbook from a Story or Plan, reviewed by the Governance Panel.
-```bash
-./.agent/bin/agent new-runbook STORY-ID
-```
-
-**3. Implement Code**
-Execute a Runbook step-by-step, generating code edits and verifying compliance.
-```bash
-./.agent/bin/agent implement RUNBOOK-ID
-```
-
-**4. Match Story**
-Identify the best existing Story for a set of changed files (useful for `commit` workflow).
-```bash
-./.agent/bin/agent match-story --files "src/foo.py src/bar.py"
-```
-
-### AI-Powered Governance (Preflight)
-
-The `preflight --ai` command convenes a **Full Governance Council** of 9 specialized agents (Architect, Security, Compliance, QA, Docs, Observability, Backyard, Mobile, Web) to review your changes.
-
-**Key Features:**
-*   **Full Council**: 9 distinct roles with specialized prompts.
-*   **Smart Chunking**: Large diffs are automatically split into chunks (default 6000 chars) to ensure 100% code coverage.
-*   **Resilience**: Automatic retries for rate limits and context window management.
-*   **Reporting**: Full detailed reports are saved to `.agent/logs/`.
+## Example: Creating a Feature
 
 ```bash
-# Run AI Governance Council on staged changes
-./.agent/bin/agent preflight --story STORY-ID --ai
+# 1. Create a story for your feature
+$ agent new-story
+Select Story Category:
+1. INFRA (Governance, CI/CD)
+2. WEB (Frontend)
+3. MOBILE (React Native)
+4. BACKEND (FastAPI)
+Choice: 2
 
-# Run against a base branch
-./.agent/bin/agent preflight --story STORY-ID --ai --base main
+Enter Story Title: Add dark mode toggle
+✅ Created Story: .agent/cache/stories/WEB/WEB-001-add-dark-mode-toggle.md
+
+# 2. Generate an implementation runbook
+$ agent new-runbook WEB-001
+🤖 AI is thinking...
+✅ Runbook generated at: .agent/cache/runbooks/WEB/WEB-001-runbook.md
+
+# 3. Run preflight with AI governance panel
+$ agent preflight --story WEB-001 --ai
+🔍 Running preflight checks for WEB-001...
+✅ @Architect: No architectural violations
+✅ @Security: No secrets or PII detected
+✅ @QA: Test coverage adequate
+⚠️  @Docs: Missing CHANGELOG entry
+❌ PREFLIGHT FAILED
+
+# 4. Fix issues and commit
+$ agent commit --story WEB-001 --ai
+🤖 Generating commit message...
+✅ feat(web): add dark mode toggle component [WEB-001]
+
+# 5. Create pull request
+$ agent pr --story WEB-001
+✅ Pull request created: https://github.com/...
 ```
-## Development & Testing
 
-To run the agent's test suite locally:
+## Contributing
 
-1.  **Install Test Dependencies**:
-    ```bash
-    pip install pytest pytest-mock typer rich
-    ```
+See [docs/contributing.md](docs/contributing.md) for development setup and guidelines.
 
-2.  **Run All Tests**:
-    ```bash
-    PYTHONPATH=.agent/src pytest .agent/tests/
-    ```
+## License
 
-3.  **Run Specific Suites**:
-    ```bash
-    # Core logic tests
-    PYTHONPATH=.agent/src pytest .agent/tests/core/
-    
-    # Command integration tests
-    PYTHONPATH=.agent/src pytest .agent/tests/commands/
-    ```
+[Your License Here]
+
+## Support
+
+- **Documentation**: `/docs` directory
+- **Issues**: GitHub Issues
+- **Discussions**: GitHub Discussions
+
+---
+
+**Built with ❤️ for developers who care about quality**

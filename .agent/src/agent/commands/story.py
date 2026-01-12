@@ -7,6 +7,7 @@ from typing import Optional
 
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title
+from agent.db.client import upsert_artifact
 
 app = typer.Typer()
 console = Console()
@@ -99,3 +100,9 @@ How do we revert safely?
 
     file_path.write_text(content)
     console.print(f"[bold green]✅ Created story: {file_path}[/bold green]")
+    
+    # Auto-sync
+    if upsert_artifact(story_id, "story", content, author="agent"):
+        console.print("[bold green]🔄 Synced to local cache[/bold green]")
+    else:
+        console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")

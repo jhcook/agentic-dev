@@ -7,6 +7,7 @@ from typing import Optional
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title, find_story_file, load_governance_context, scrub_sensitive_data
 from agent.core.ai import ai_service
+from agent.db.client import upsert_artifact
 
 console = Console()
 
@@ -79,88 +80,11 @@ How we will confirm the plan was successful.
 
     file_path.write_text(content)
     console.print(f"[bold green]✅ Created Plan: {file_path}[/bold green]")
-
-def plan(
-    story_id: str = typer.Argument(..., help="The ID of the story to plan."),
-):
-    """
-    Generate an implementation plan using AI.
-    """
-    # 1. Find Story
-    story_file = find_story_file(story_id)
-    if not story_file:
-         console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
-         raise typer.Exit(code=1)
-         
-    # 2. Check if Plan exists
-    # Determine scope from subdirectory name of story
-    scope = story_file.parent.name # e.g. INFRA
-    plan_dir = config.plans_dir / scope
-    plan_dir.mkdir(parents=True, exist_ok=True)
-    plan_file = plan_dir / f"{story_id}-impl-plan.md"
     
-    if plan_file.exists():
-        console.print(f"[yellow]⚠️  Plan already exists at {plan_file}[/yellow]")
-        if not typer.confirm("Overwrite?"):
-            raise typer.Exit(code=0)
+    # Auto-sync
+    if upsert_artifact(plan_id, "plan", content, author="agent"):
+        console.print("[bold green]🔄 Synced to local cache[/bold green]")
+    else:
+        console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
 
-    # 3. Gather Context
-    console.print(f"🛈 Generating Plan for {story_id}...")
-    story_content = scrub_sensitive_data(story_file.read_text())
-    rules_content = scrub_sensitive_data(load_governance_context())
-    
-    # 4. Prompt AI
-    system_prompt = """You are an Implementation Planning Agent.
-Your goal is to create a detailed Step-by-Step Implementation Plan for a software engineering task.
 
-INPUTS:
-1. User Story (Requirements)
-2. Governance Rules (Compliance constraints)
-
-OUTPUT FORMAT:
-Markdown file content ONLY. content must start with 'Status: PROPOSED'.
-
-STRUCTURE:
-# STROY-ID: <Title>
-
-Status: PROPOSED
-
-## Goal Description
-<Short summary>
-
-## Compliance Checklist
-- [ ] @Security approved?
-- [ ] @Architect approved?
-- [ ] No PII leaks?
-
-## Proposed Changes
-### [Component]
-- [NEW] path/to/file
-- [MODIFY] path/to/file
-  - Description of change...
-
-## Verification Plan
-### Automated Tests
-- Command to run...
-
-### Manual Verification
-- Steps...
-"""
-
-    user_prompt = f"""STORY CONTENT:
-{story_content}
-
-GOVERNANCE RULES:
-{rules_content}
-"""
-
-    with console.status("[bold green]🤖 AI is thinking...[/bold green]"):
-        content = ai_service.complete(system_prompt, user_prompt)
-        
-    if not content:
-        console.print("[bold red]❌ AI returned empty response.[/bold red]")
-        raise typer.Exit(code=1)
-        
-    # 5. Write File
-    plan_file.write_text(content)
-    console.print(f"[bold green]✅ Plan generated at: {plan_file}[/bold green]")
