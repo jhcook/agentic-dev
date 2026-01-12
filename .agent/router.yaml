@@ -1,0 +1,50 @@
+version: 1.0
+
+models:
+  # --- OpenAI Models ---
+  gpt-4o:
+    provider: "openai"
+    deployment_id: "gpt-4o"
+    tier: "advanced"
+    context_window: 128000
+    cost_per_1k_input: 0.0025
+    cost_per_1k_output: 0.0100
+    supports_vision: true
+
+  gpt-4o-mini:
+    provider: "openai"
+    deployment_id: "gpt-4o-mini"
+    tier: "light"
+    context_window: 128000
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.00060
+
+  # --- Gemini Models ---
+  gemini-1.5-pro:
+    provider: "gemini"
+    deployment_id: "gemini-1.5-pro-latest"
+    tier: "advanced"
+    context_window: 2000000
+    cost_per_1k_input: 0.00125
+    cost_per_1k_output: 0.00500
+
+  gemini-1.5-flash:
+    provider: "gemini"
+    deployment_id: "gemini-1.5-flash-latest"
+    tier: "standard"
+    context_window: 1000000
+    cost_per_1k_input: 0.000075
+    cost_per_1k_output: 0.000300
+
+  # --- GitHub CLI ---
+  gh-copilot:
+    provider: "gh"
+    deployment_id: "gpt-4o"
+    tier: "standard"
+    context_window: 8000
+    cost_per_1k_input: 0.0000
+    cost_per_1k_output: 0.0000
+
+settings:
+  default_tier: "standard"
+  provider_priority: ["gemini", "openai", "gh"]

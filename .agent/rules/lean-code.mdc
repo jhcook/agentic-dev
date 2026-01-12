@@ -1,0 +1,64 @@
+---
+alwaysApply: true
+---
+
+# Lean Code Rules
+
+## General Principles
+- Always prefer clarity and brevity over cleverness.
+- Avoid unnecessary abstractions, layers, or indirection.
+- Do not introduce dependencies unless absolutely required.
+- Remove unused imports, variables, and functions.
+- Keep functions and components small, focused, and testable.
+
+---
+
+## Python Rules (Backend)
+- **Stack**: FastAPI, Pydantic V2, Poetry, Python 3.14+.
+- Use the Python standard library whenever possible before adding third-party packages.
+- Functions should generally be ≤ 50 lines; split larger logic into smaller helpers.
+- Avoid deeply nested conditionals; prefer early returns and guard clauses.
+- Use type hints for clarity, but keep them concise.
+- Do not generate boilerplate classes if a simple function suffices.
+- Follow PEP8 style, with `black` and `isort` formatting enforced.
+- Ensure docstrings are one-liners unless more detail is essential.
+- Prefer list/dict comprehensions over verbose loops when readability is maintained.
+
+---
+
+## React Native + Expo Rules (Mobile)
+- **Stack**: Expo (Managed Workflow), Expo Router, NativeWind.
+- Components should be functional components with hooks, not class components.
+- Keep components ≤ 200 lines; split into smaller components when needed.
+- Avoid unnecessary wrappers or context providers unless justified.
+- Use React Native core APIs and Expo modules before adding external libraries.
+- Keep state local unless it must be shared; avoid global state unless necessary.
+- Remove unused styles, props, and imports.
+- Use `nativewind` for styling; avoid inline styles unless trivial.
+- Keep navigation definitions simple via file-based routing (Expo Router).
+- Ensure props are typed with TypeScript or PropTypes for clarity.
+- Do not scaffold unused screens or components.
+
+---
+
+## Next.js Rules (Web)
+- **Stack**: Next.js (App Router), TailwindCSS, React Server Components.
+- default to Server Components; add `'use client'` only when interactivity is needed.
+- Use `eslint-config-next` rules.
+- Avoid `useEffect` chains; prefer Server Actions or Event Handlers.
+
+---
+
+## Shared Rules
+- Always write minimal, targeted unit tests for new code.
+- Do not auto-generate placeholder code (e.g., “TODO” stubs) unless explicitly requested.
+- Keep configuration files (`package.json`, `pyproject.toml`) free of unused dependencies.
+- Ensure error handling is concise and avoids redundant logging.
+- Prefer explicitness over magic — avoid hidden side effects.
+
+---
+
+## Enforcement
+- Agents must refactor bloated code when flagged.
+- Agents must justify any new dependency in comments.
+- Agents must explain design choices if code exceeds recommended size limits.

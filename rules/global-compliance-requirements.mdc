@@ -1,0 +1,165 @@
+---
+alwaysApply: true
+---
+
+# Global Compliance: SOC 2 + GDPR
+
+These requirements apply to ALL code, ALL agents, and ALL commits.
+Any violation may result in VERDICT: BLOCK during review.
+
+---
+
+## 1. Security, Availability & Processing Integrity (SOC 2)
+
+### Secrets & Credentials
+- No secrets may be committed:
+  - API keys, tokens, passwords, private keys, connection strings.
+- All secrets must come from:
+  - Environment variables
+  - Secret managers
+- Any value that resembles a credential is treated as REAL unless clearly marked as a mock.
+
+### Transport & Storage Security
+- All network communication involving sensitive data must use HTTPS/TLS.
+- Sensitive data must not be written to:
+  - Unencrypted local disk
+  - Client-side storage without explicit justification
+- Debug flags, insecure TLS bypasses, or hard-coded backdoors are prohibited.
+
+### Access Control & Least Privilege
+- Follow least-privilege for:
+  - API scopes
+  - IAM roles
+  - Database access
+- Wildcard permissions (“*”) are prohibited unless explicitly justified and documented.
+
+### Logging & Observability
+- Logs must not contain:
+  - Secrets
+  - Tokens
+  - Full request bodies with sensitive fields
+- Errors should be:
+  - Actionable for operators
+  - Non-revealing of internal structure or sensitive data
+
+### Availability & Resilience
+- New features must not introduce:
+  - Single points of failure
+  - Unbounded retries or loops
+  - Long synchronous chains across services
+- Remote calls must have:
+  - Timeouts
+  - Failure handling
+
+---
+
+## 2. Privacy & Data Protection (GDPR)
+
+### Definition of Personal Data
+Personal Data includes any information that can directly or indirectly identify a person, including but not limited to:
+- Name, email, phone number
+- IP address, device ID, location
+- User IDs when linked to accounts
+- Biometrics and behavioral data
+
+### Lawful Processing
+- All personal data must have a clear lawful basis:
+  - Consent
+  - Contractual necessity
+  - Legal obligation
+  - Legitimate interest (must be justifiable)
+- If the lawful basis is unclear, processing is NOT allowed.
+
+### Data Minimization & Purpose Limitation
+- Collect only data that is strictly necessary.
+- Do not reuse personal data for new purposes without documentation and justification.
+- “Just in case” data collection is prohibited.
+
+### Storage Limitation & Retention
+- Personal data must not be stored indefinitely.
+- All personal data must have:
+  - A defined retention period
+  - A defined deletion mechanism
+
+### User Rights
+Systems must support, or not block the ability to support:
+- Access (export)
+- Rectification
+- Erasure (“right to be forgotten”)
+- Restriction of processing
+
+### Third-Party & Cross-Border Transfers
+- Any external service receiving personal data must be:
+  - Documented
+  - Justified
+- Silent data transfer to undocumented third parties is prohibited.
+
+### Prohibited Actions
+- Logging raw personal data in production.
+- Storing personal data in client-side storage without protection and justification.
+- Sending personal data to analytics or telemetry without anonymization or consent.
+
+---
+
+## 3. Build, Lint & Code Quality (SOC 2 Processing Integrity)
+
+- All code must pass the project’s:
+  - Linting
+  - Formatting
+  - Type checks
+- New logic must include appropriate tests unless clearly trivial.
+- No:
+  - Unused variables
+  - Dead code
+  - Commented-out production code
+- Follow existing project conventions for:
+  - Naming
+  - Imports
+  - Folder structure
+
+---
+
+## 4. Documentation & Auditability (SOC 2 + GDPR Evidence)
+
+- Security- or privacy-sensitive changes MUST be documented:
+  - Authentication / authorization changes
+  - New personal data fields
+  - New data processors or third parties
+  - New retention or deletion behavior
+- Documentation must include:
+  - Purpose of data collection
+  - Lawful basis (GDPR)
+  - Retention & deletion strategy
+- Commit and PR messages must explain:
+  - Intent
+  - Risk
+  - Impact
+- Logs and error messages must be explicitly PII-safe.
+
+---
+
+## 5. Ecosystem-Specific Mandates
+
+### Mobile (SOC 2 + GDPR)
+- **Encryption**: Sensitive data (tokens, PII) MUST be stored in encrypted storage (e.g., `expo-secure-store`), never plain `AsyncStorage`.
+- **Analytics**: Telemetry and analytics MUST require explicit user opt-in (GDPR Consent).
+- **Deep Links**: Incoming deep links MUST be validated to prevent unauthorized actions (Security).
+
+### Web (SOC 2 + GDPR)
+- **Cookies**: Authentication cookies MUST have `HttpOnly`, `Secure`, and `SameSite=Strict/Lax` flags.
+- **CSP**: Content Security Policy (CSP) MUST be present to mitigate XSS.
+- **URL Hygiene**: Sensitive data (tokens, PII, email) MUST NOT appear in URL parameters (prevents logging leaks).
+
+### Backend (SOC 2 + GDPR)
+- **Logging**: All log streams MUST automatically redact PII (e.g., emails, phone numbers) before persistence.
+- **Database**: Data at rest MUST be encrypted (cloud provider managed is acceptable).
+- **Rate Limiting**: All public-facing endpoints MUST have rate limiting to prevent denial of service (Availability).
+
+---
+
+## 6. Enforcement
+
+- If any part of this compliance block is violated:
+  - The reviewing agent responsible MUST return `VERDICT: BLOCK`.
+- Uncertainty defaults to BLOCK until clarified.
+- All agents must treat these requirements as first-class, non-negotiable constraints.

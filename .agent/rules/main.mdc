@@ -1,0 +1,48 @@
+---
+alwaysApply: true
+---
+
+# Project Rules and Standards
+
+## 0. Governance Hierarchy (Authoritative)
+
+This file serves as the **root index** for project governance. All agents must follow the hierarchy below:
+
+1.  **Roles & Responsibilities**: See [.agent/rules/the-team.mdc](.agent/rules/the-team.mdc)
+    -   Defines who owns what (Architecture, Security, Mobile, Web, Backend).
+2.  **Compliance Mandates**: See [.agent/rules/global-compliance-requirements.mdc](.agent/rules/global-compliance-requirements.mdc)
+    -   Defines non-negotiable SOC 2 and GDPR rules for all ecosystems.
+3.  **Change Control**: See [.agent/rules/commit-workflow.mdc](.agent/rules/commit-workflow.mdc)
+    -   Defines the audit council process for validation.
+
+---
+
+## 1. Code Quality & Standards
+
+### Python (Backend)
+-   **Primary Owner**: `@Backend` (See `the-team.mdc`)
+-   **Baseline**:
+    -   Follow PEP-8 style guidelines strictly.
+    -   All public interfaces must be typed and documented.
+    -   Use `async/await` for all I/O bound operations.
+
+### Web & Mobile (Frontend)
+-   **Primary Owners**: `@Web` / `@Mobile` (See `the-team.mdc`)
+-   **Baseline**:
+    -   **Web**: Next.js App Router, TailwindCSS, WCAG AA.
+    -   **Mobile**: Expo Router, NativeWind, Offline-First.
+    -   **UI/UX**: Implement "drag-and-relocate" for dashboard items (Pointer Events).
+
+## 2. Security & Compliance
+
+> **STOP**: Do not implement security controls ad-hoc. Refer to [global-compliance-requirements.mdc](.agent/rules/global-compliance-requirements.mdc).
+
+-   **Secrets**: Environment variables only.
+-   **Data**: Encrypt at rest (DB/Mobile) and in transit (TLS).
+-   **Privacy**: No PII in logs/URLs; lawful basis required for collection.
+
+## 3. General Organization
+
+-   **Documentation**: Keep `docs/` and `README.md` in sync with code.
+-   **imports**: Standard Lib -> Third Party -> Local (absolute paths).
+-   **Complexity**: Keep functions focused; refactor if `max-branches > 16`.

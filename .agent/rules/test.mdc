@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+---
+
+# Testing Rules
+
+## Web (Next.js)
+- **Unit Testing**: Use **Jest** (`npm run test`).
+- **E2E Testing**: Use **Playwright** (`npm run e2e:headless`).
+- **Snapshot Testing**: Use Storybook interactions where appropriate.
+
+## Mobile (Expo)
+- **Unit Testing**: Use **Jest-Expo** (`npm run test`).
+- **UI Testing**: Use **Maestro** (if configured) or Detox.
+
+## Backend (FastAPI)
+- **Unit & Integration**: Use **Pytest** (`pytest`).
+- **Async**: Ensure `pytest-asyncio` is used for async endpoints.
+- **Coverage**: Aim for high coverage on core business logic.
+
+## General
+- Always create and update tests applicable to the code.
+- Run tests locally before pushing (`npm test` or `pytest`).

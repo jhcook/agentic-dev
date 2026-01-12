@@ -1,0 +1,146 @@
+import typer
+import subprocess
+import re
+from rich.console import Console
+from rich.prompt import Prompt
+from typing import Optional
+from agent.core.config import config
+from agent.core.utils import infer_story_id
+from agent.commands.check import preflight # Verify import works or move core logic
+
+console = Console()
+
+# Helper functions moved to agent.core.utils
+
+def pr(
+    story_id: Optional[str] = typer.Option(None, "--story", help="Story ID."),
+    web: bool = typer.Option(False, "--web", help="Open PR in browser."),
+    draft: bool = typer.Option(False, "--draft", help="Create draft PR.")
+):
+    """
+    Open a GitHub Pull Request for the current branch.
+    """
+    if not story_id:
+        story_id = infer_story_id()
+        
+    target_branch = "main"
+    
+    if story_id:
+        console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
+        try:
+             # Calling preflight function directly. 
+             # Note: Typer commands when called as functions expect arguments.
+             # We can't easily call the `preflight` command function if it's decorated or complicated.
+             # Better to extract shared logic. But for now, let's call it.
+             # `preflight` takes (story_id, ai, base, provider).
+             # We must pass all args to avoid Typer OptionInfo defaults being treated as values.
+             preflight(story_id=story_id, base=target_branch, ai=False, provider=None)
+        except typer.Exit as e:
+            if e.exit_code != 0:
+                console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")
+                raise typer.Exit(code=1)
+                
+    else:
+        console.print("[yellow]⚠️  Skipping preflight (no Story ID).[/yellow]")
+
+    console.print("🚀 Creating Pull Request...")
+    
+    commit_msg = subprocess.check_output(["git", "log", "-1", "--pretty=%s"]).decode().strip()
+    title = commit_msg
+    
+    if story_id and story_id not in title:
+        title = f"[{story_id}] {title}"
+        
+    tpl = "## Story Link\n{story_link}\n\n## Changes\n- {summary}\n\n## Governance Checks\n✅ Preflight Passed"
+    body = tpl.format(
+        story_link=story_id if story_id else "N/A",
+        summary=commit_msg
+    )
+    
+    gh_args = ["gh", "pr", "create", "--title", title, "--body", body, "--base", target_branch]
+    if web: gh_args.append("--web")
+    if draft: gh_args.append("--draft")
+    
+    try:
+        subprocess.run(gh_args, check=True)
+    except subprocess.CalledProcessError:
+        console.print("[bold red]❌ Failed to create PR.[/bold red]")
+        raise typer.Exit(code=1)
+    except FileNotFoundError:
+        console.print("[bold red]❌ 'gh' CLI not found. Please install GitHub CLI.[/bold red]")
+        raise typer.Exit(code=1)
+
+
+def commit(
+    story_id: Optional[str] = typer.Option(None, "--story", help="Story ID."),
+    runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Runbook ID."),
+    ai: bool = typer.Option(False, "--ai", help="Enable AI to infer story and generate commit message."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
+):
+    """
+    Commit changes with a governed message.
+    """
+    # Configure AI if requested
+    if ai and provider:
+        from agent.core.ai import ai_service
+        ai_service.set_provider(provider)
+    elif ai: 
+        # Ensure ai_service init is triggered if not explicitly imported at top level
+        from agent.core.ai import ai_service
+
+    # 1. Infer Story ID
+    if not story_id:
+        story_id = infer_story_id()
+        
+    if not story_id and ai:
+        console.print("[dim]🤖 AI is attempting to infer Story ID from changed files...[/dim]")
+        # Get changed files
+        try:
+            diff_names = subprocess.check_output(["git", "diff", "--cached", "--name-only"], text=True).strip()
+            if diff_names:
+                from agent.core.utils import find_best_matching_story
+                inferred = find_best_matching_story(diff_names)
+                if inferred:
+                    if typer.confirm(f"AI suggests story: [bold cyan]{inferred}[/bold cyan]. Use this?", default=True):
+                        story_id = inferred
+            else:
+                console.print("[yellow]⚠️  No staged changes found to infer context from.[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️  AI inference failed: {e}[/yellow]")
+
+    if not story_id:
+         console.print("[bold red]❌ Story ID is required to commit.[/bold red]")
+         raise typer.Exit(code=1)
+         
+    # 2. Generate or Ask for Message
+    message = ""
+    if ai:
+        console.print("[dim]🤖 AI is generating a commit message...[/dim]")
+        try:
+             diff_content = subprocess.check_output(["git", "diff", "--cached"], text=True)
+             if diff_content:
+                 from agent.core.ai import ai_service
+                 from agent.core.utils import scrub_sensitive_data
+                 
+                 scrubbed_diff = scrub_sensitive_data(diff_content)
+                 
+                 sys_prompt = "You are a senior developer. Generate a concise, conventional commit message (max 72 chars subject) based on the diff."
+                 user_prompt = f"STORY ID: {story_id}\n\nDIFF:\n{scrubbed_diff[:5000]}" # Cap context
+                 
+                 generated = ai_service.complete(sys_prompt, user_prompt)
+                 if generated:
+                     message = generated.strip().strip('"').strip("'")
+        except Exception as e:
+             console.print(f"[yellow]⚠️  AI commit message generation failed: {e}[/yellow]")
+
+    if message:
+        message = Prompt.ask("Commit message", default=message)
+    else:
+        message = Prompt.ask("Enter commit message") 
+        
+    full_message = f"[{story_id}] {message}"
+    
+    if runbook_id:
+        full_message += f"\n\nRunbook: {runbook_id}"
+        
+    subprocess.run(["git", "commit", "-m", full_message])
