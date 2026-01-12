@@ -39,7 +39,7 @@ models:
   # --- GitHub CLI ---
   gh-copilot:
     provider: "gh"
-    deployment_id: "gpt-4o"
+    deployment_id: "openai/gpt-4o"
     tier: "standard"
     context_window: 8000
     cost_per_1k_input: 0.0000
