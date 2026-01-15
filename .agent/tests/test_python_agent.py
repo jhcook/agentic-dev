@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+import os
 
 # Adjust path to import agent modules
 import sys
-import os
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from typer.testing import CliRunner
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from agent.main import app
 from agent.core.config import config
+from agent.main import app
 
 runner = CliRunner()
 

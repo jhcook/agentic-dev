@@ -1,8 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from typer.testing import CliRunner
+
 from agent.main import app
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 runner = CliRunner()
 

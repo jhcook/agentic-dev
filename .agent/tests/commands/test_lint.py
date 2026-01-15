@@ -1,8 +1,10 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from typer.testing import CliRunner
-from agent.commands.lint import lint
 import typer
+from typer.testing import CliRunner
+
+from agent.commands.lint import lint
 
 runner = CliRunner()
 

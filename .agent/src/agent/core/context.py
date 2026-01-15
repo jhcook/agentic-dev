@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import yaml
+
 from agent.core.config import config
 from agent.core.utils import scrub_sensitive_data
+
 
 class ContextLoader:
     def __init__(self):

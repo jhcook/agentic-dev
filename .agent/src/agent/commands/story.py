@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import typer
 from rich.console import Console
-from rich.prompt import Prompt, IntPrompt
-from typing import Optional
+from rich.prompt import IntPrompt, Prompt
 
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title

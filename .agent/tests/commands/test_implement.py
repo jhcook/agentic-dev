@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
-from pathlib import Path
-from typer.testing import CliRunner
-from agent.commands.implement import implement
-from agent.core.utils import scrub_sensitive_data
 import typer
+from typer.testing import CliRunner
+
+from agent.commands.implement import implement
 
 runner = CliRunner()
 

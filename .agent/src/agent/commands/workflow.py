@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import typer
 import subprocess
+from typing import Optional
+
+import typer
 from rich.console import Console
 from rich.prompt import Prompt
-from typing import Optional
+
+from agent.commands.check import preflight  # Verify import works or move core logic
 from agent.core.utils import infer_story_id
-from agent.commands.check import preflight # Verify import works or move core logic
 
 console = Console()
 

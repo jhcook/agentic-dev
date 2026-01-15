@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import sqlite3
 import time
-import re
 from pathlib import Path
 from typing import Optional, Set
+
 from agent.core.utils import scrub_sensitive_data
 from agent.db.init import init_db
+
 
 def get_db_path() -> Path:
     """Returns the path to the local Agent SQLite database."""

@@ -1,14 +1,16 @@
 
-import pytest
-from unittest.mock import MagicMock, patch
 import argparse
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Ensure src is in path for imports if running directly, though pytest usually handles this
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from agent.sync import sync
+
 
 @pytest.fixture
 def mock_supabase():

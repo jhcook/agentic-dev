@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 from agent.core.router import SmartRouter
 
 # Mock configuration for testing

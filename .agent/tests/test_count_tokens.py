@@ -23,10 +23,12 @@ Tests cover:
 - Unknown model fallback behavior
 - CLI interface functionality
 """
-import pytest
-import sys
 import io
+
+import pytest
+
 from agent.core.tokens import token_manager
+
 
 def count_tokens(text, model="gpt-4o"):
     """Compatibility wrapper for TokenManager."""

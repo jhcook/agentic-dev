@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import patch
+
 import pytest
-from pathlib import Path
+
 from agent.core import utils
-from unittest.mock import patch, MagicMock
+
 
 @pytest.fixture
 def mock_fs(tmp_path):

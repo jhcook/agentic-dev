@@ -15,9 +15,10 @@
 """
 Pytest configuration and fixtures for agent tests.
 """
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 # Ensure the lib directory is in the path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))

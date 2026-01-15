@@ -1,6 +1,5 @@
-import pytest
 from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
+
 from agent.main import app
 
 runner = CliRunner()

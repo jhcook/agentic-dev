@@ -7,6 +7,8 @@ This guide will help you get up and running with the Agent CLI in less than 10 m
 - **Python 3.9+**
 - **Git** (for repository management)
 - **pip** (Python package manager)
+- **ShellCheck** (for shell script linting)
+- **Node.js & npm** (for JavaScript/TypeScript linting)
 - Optional: API keys for AI providers (Gemini or OpenAI)
 
 ## Installation

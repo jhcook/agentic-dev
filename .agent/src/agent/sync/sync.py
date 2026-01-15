@@ -14,13 +14,14 @@
 
 import argparse
 import os
+import re
 import sqlite3
 import sys
-import yaml
-import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from supabase import create_client, Client, ClientOptions
+from typing import Any, Dict
+
+import yaml
+from supabase import Client, create_client
 
 # Try to import from agent package, assuming PYTHONPATH is set or installed
 try:

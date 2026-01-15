@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import subprocess
-import logging
 import time
+
 from rich.console import Console
+
 from agent.core.router import router
 
 console = Console()

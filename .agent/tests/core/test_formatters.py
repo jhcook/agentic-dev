@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import json
-import csv
-from io import StringIO
+
+import pytest
+
 from agent.core.formatters import format_data
 
 SAMPLE_DATA = [

@@ -19,11 +19,12 @@ This module provides utilities to format data in various output formats
 including JSON, CSV, YAML, Markdown, plain text, and TSV.
 """
 
-import json
 import csv
-import yaml
+import json
 from io import StringIO
-from typing import Any, List, Dict
+from typing import Any, Dict, List
+
+import yaml
 
 
 def format_data(format_name: str, data: List[Dict[str, Any]]) -> str:

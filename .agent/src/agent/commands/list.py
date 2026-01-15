@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import typer
 import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import typer
 from rich.console import Console
 from rich.table import Table
-from typing import Optional, List, Dict, Any
-from pathlib import Path
 
 from agent.core.config import config
 from agent.core.formatters import format_data

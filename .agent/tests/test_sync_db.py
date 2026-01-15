@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import sqlite3
-import os
-from pathlib import Path
-from agent.db.client import upsert_artifact, get_connection
+
+import pytest
+
+from agent.db.client import get_connection, upsert_artifact
+
 
 @pytest.fixture
 def mock_db(tmp_path):

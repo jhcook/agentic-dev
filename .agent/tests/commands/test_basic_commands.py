@@ -12,17 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import patch
+
 import pytest
 import typer
 from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+
+from agent.commands.adr import new_adr
+from agent.commands.check import validate_story
+from agent.commands.plan import new_plan
 
 # Import functions directly to compose test app for isolation
 from agent.commands.story import new_story
-from agent.commands.plan import new_plan
-from agent.commands.adr import new_adr
-from agent.commands.check import validate_story
 from agent.commands.workflow import pr
 
 runner = CliRunner()

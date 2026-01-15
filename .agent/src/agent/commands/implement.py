@@ -16,9 +16,13 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 
-from agent.core.config import config
-from agent.core.utils import find_runbook_file, load_governance_context, scrub_sensitive_data
 from agent.core.ai import ai_service
+from agent.core.config import config
+from agent.core.utils import (
+    find_runbook_file,
+    load_governance_context,
+    scrub_sensitive_data,
+)
 
 app = typer.Typer()
 console = Console()

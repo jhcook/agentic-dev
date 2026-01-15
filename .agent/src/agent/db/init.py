@@ -16,6 +16,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+
 def get_db_path() -> Path:
     """Returns the path to the local SQLite database."""
     # Assuming run from repo root or .agent/src

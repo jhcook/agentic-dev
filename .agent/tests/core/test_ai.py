@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import pytest
-from unittest.mock import MagicMock, patch
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # We need to mock import failures or successes before importing agent.core.ai
 # Since we can't easily do that for a module already imported, we might need to reload or use patch.dict on sys.modules
-
 from agent.core.ai import AIService
+
 
 @pytest.fixture
 def mock_env_openai(monkeypatch):
@@ -95,8 +95,9 @@ def test_ai_service_priority(mock_run, mock_getenv):
     mock_run.return_value.returncode = 0 # gh present
     
     # Reload module to trigger init
-    import agent.core.ai
     import importlib
+
+    import agent.core.ai
     importlib.reload(agent.core.ai)
     from agent.core.ai import ai_service
     
@@ -119,8 +120,9 @@ def test_ai_service_manual_switch(mock_run, mock_getenv):
     mock_getenv.side_effect = getenv_side_effect
     mock_run.return_value.returncode = 0 
     
-    import agent.core.ai
     import importlib
+
+    import agent.core.ai
     importlib.reload(agent.core.ai)
     from agent.core.ai import ai_service
     
@@ -150,8 +152,9 @@ def test_ai_service_exception_propagation(mock_run, mock_getenv):
     mock_getenv.side_effect = lambda k, d=None: "fake_key" if "API_KEY" in k else d
     mock_run.return_value.returncode = 0
     
-    import agent.core.ai
     import importlib
+
+    import agent.core.ai
     importlib.reload(agent.core.ai)
     from agent.core.ai import ai_service
     
@@ -172,8 +175,9 @@ def test_ai_service_provider_override(mock_run, mock_getenv):
     mock_getenv.side_effect = getenv_side_effect
     mock_run.return_value.returncode = 0 
     
-    import agent.core.ai
     import importlib
+
+    import agent.core.ai
     importlib.reload(agent.core.ai)
     from agent.core.ai import ai_service
     
@@ -194,8 +198,9 @@ def test_ai_service_api_failure_handling(mock_run, mock_getenv):
     mock_getenv.side_effect = lambda k, d=None: "fake_key" if "API_KEY" in k else d
     mock_run.return_value.returncode = 1 # No GH, force fallback check or just init
     
-    import agent.core.ai
     import importlib
+
+    import agent.core.ai
     importlib.reload(agent.core.ai)
     from agent.core.ai import ai_service
     

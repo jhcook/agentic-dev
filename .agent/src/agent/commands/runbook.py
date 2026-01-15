@@ -15,9 +15,13 @@
 import typer
 from rich.console import Console
 
-from agent.core.config import config
-from agent.core.utils import find_story_file, load_governance_context, scrub_sensitive_data
 from agent.core.ai import ai_service
+from agent.core.config import config
+from agent.core.utils import (
+    find_story_file,
+    load_governance_context,
+    scrub_sensitive_data,
+)
 from agent.db.client import upsert_artifact
 
 app = typer.Typer()

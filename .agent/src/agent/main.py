@@ -15,10 +15,18 @@
 import typer
 from rich.console import Console
 
-from agent.commands import story, plan, adr
+from agent.commands import (
+    adr,
+    check,
+    implement,
+    lint,
+    match,
+    plan,
+    runbook,
+    story,
+    workflow,
+)
 from agent.commands import list as list_cmd
-from agent.commands import check, workflow, lint
-from agent.commands import runbook, implement, match
 from agent.sync import sync
 
 app = typer.Typer(

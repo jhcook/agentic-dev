@@ -57,3 +57,9 @@ All notable changes to the Agent Governance Framework will be documented in this
 ### Removed
 - **Breaking Change**: Removed the `-v` shorthand for `--version` to align with standard convention (verbose flag reserve).
 - Deprecated usage of `ops_ai.sh` (legacy bash AI logic).
+
+### Added
+- **Global Linting**: `agent lint` now supports scanning arbitrary directories and files (e.g., `agent lint web/`).
+- **Path-Based Dispatch**: Automatically selects the correct linter (`ruff`, `shellcheck`, `eslint`) based on file extensions found in the target path.
+- **Recursive Scanning**: Added `agent lint --all` to scan the entire repository recursively, respecting `.gitignore` where possible.
+- **JS/TS Support**: Added support for linting JavaScript and TypeScript files using `eslint` (via `npx` or local `node_modules`).

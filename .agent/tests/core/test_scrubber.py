@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from agent.core.utils import scrub_sensitive_data
+
 
 def test_scrub_sensitive_data_emails():
     # Use real-looking email mixed with text

@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from typer.testing import CliRunner
-from pathlib import Path
-from agent.commands.list import list_stories, list_plans, list_runbooks
 import typer
+from typer.testing import CliRunner
+
+from agent.commands.list import list_plans, list_runbooks, list_stories
 
 app = typer.Typer()
 app.command(name="list-stories")(list_stories)

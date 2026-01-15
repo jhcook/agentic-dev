@@ -1,124 +1,146 @@
 # Agent Governance Framework
 
-This directory contains the governance framework for the repo. It is designed to ensure strict adherence to architectural standards, compliance (SOC2/GDPR), and quality assurance through a "Governance by Code" approach.
+> **Governance by Code**: Enforce architectural standards, compliance (SOC2/GDPR), and quality assurance through an intelligent CLI that acts as your development team's governance layer.
 
-## 📚 Complete Documentation
+This directory (`.agent/`) contains the complete governance framework.
 
-**For comprehensive documentation, see [`docs/`](docs/README.md)**
+## 📁 Directory Structure
 
-The `docs/` directory contains detailed guides on:
-- 📖 [Getting Started](docs/getting_started.md) - Installation and initial setup
-- 🛠️ [Commands Reference](docs/commands.md) - All CLI commands
-- 🛡️ [Governance System](governance.md) - How the AI panel works
-- 🔄 [Workflows](docs/workflows.md) - Story-driven development
-- ⚙️ [Configuration](docs/configuration.md) - Customizing for your team
-- 🤖 [AI Integration](docs/ai_integration.md) - Provider setup and optimization
-- 📋 [Rules & Instructions](docs/rules_and_instructions.md) - Custom governance
-- 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues
-
-## Quick Start
-
-```bash
-# 1. Create a story
-agent new-story
-
-# 2. Generate runbook
-agent new-runbook INFRA-001
-
-# 3. Run preflight
-agent preflight --story INFRA-001 --ai
-
-# 4. Commit with governance
-agent commit --story INFRA-001
-
-# 5. Create PR
-agent pr --story INFRA-001
+```
+.agent/
+├── bin/agent              # CLI executable wrapper
+├── src/                   # Core Python implementation
+│   ├── agent/
+│   │   ├── commands/      # CLI command modules
+│   │   └── core/          # Core logic (AI, routing, config)
+├── cache/                 # Local artifact cache (Synced via Supabase)
+│   ├── stories/           # Feature definitions
+│   ├── plans/             # High-level epics
+│   └── runbooks/          # Implementation guides
+├── templates/             # Markdown templates
+├── rules/                 # Global governance rules (Markdown)
+├── instructions/          # Role-specific AI instructions
+├── compliance/            # SOC2/GDPR documentation
+├── workflows/             # Workflow definitions
+├── etc/                   # Configuration
+│   ├── agents.yaml        # Agent role definitions
+│   └── router.yaml        # AI Model routing config
+└── logs/                  # Execution & Preflight logs
 ```
 
-## Core Concepts
+## 🧠 Core Concepts
 
 ### Story-Driven Development
+
+Agent enforces a strict structured workflow to ensure quality:
 
 ```
 Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementation
 ```
 
-### Governance Panel
+1. **Plans**: High-level epics or Requests for Comments (RFCs).
+2. **Stories**: Individual units of work with rigorous Acceptance Criteria.
+3. **Runbooks**: AI-generated step-by-step implementation guides.
+4. **Implementation**: AI-assisted code generation based on the Runbook.
 
-9 AI agents review your code:
-- **@Architect** - System design, ADR compliance
-- **@Security** - Secrets, vulnerabilities, PII
-- **@QA** - Test coverage, strategies
-- **@Product** - Acceptance criteria
-- **@Observability** - Metrics, tracing
-- **@Docs** - Documentation sync
-- **@Compliance** - SOC2, GDPR
-- **@Mobile** - React Native patterns
-- **@Web** - Next.js, SEO
-- **@Backend** - FastAPI, Python
+### The AI Governance Panel
 
-### Directory Structure
+Your code is reviewed by 9 specialized AI agents, each with a specific focus:
 
-```
-.agent/
-├── bin/agent              # CLI executable
-├── src/                   # Python implementation
-├── cache/                 # Generated artifacts
-│   ├── stories/           # Story files
-│   ├── plans/             # Plan files
-│   └── runbooks/          # Runbook files
-├── templates/             # Templates
-├── rules/                 # Governance rules
-├── instructions/          # Role instructions
-├── compliance/            # SOC2, GDPR
-├── workflows/             # Workflow definitions
-├── etc/                   # Configuration
-│   ├── agents.yaml
-│   └── router.yaml
-└── logs/                  # Preflight logs
-```
+| Role | Focus Area |
+|------|-----------|
+| **@Architect** | System design, ADR compliance, boundaries |
+| **@QA** | Test coverage, testing strategies |
+| **@Security** | Secrets, vulnerabilities, security posture |
+| **@Product** | Acceptance criteria, user value |
+| **@Observability** | Metrics, tracing, logging |
+| **@Docs** | Documentation synchronization |
+| **@Compliance** | SOC2, GDPR enforcement |
+| **@Mobile** | React Native, Expo patterns |
+| **@Web** | Next.js, SEO, accessibility |
+| **@Backend** | FastAPI, Python, API contracts |
 
-## Synchronization
+## 🚀 Workflows
 
-The agent supports syncing artifacts (stories, plans, runbooks, adrs) to a remote Supabase backend.
+### 1. Creating a Feature
 
 ```bash
-# Push local artifacts to remote
+# 1. Create a story
+agent new-story
+
+# 2. Generate runbook (AI analyzes story + rules)
+agent new-runbook WEB-001
+
+# 3. Run preflight (AI Governance Panel reviews)
+agent preflight --story WEB-001 --ai
+
+# 4. Commit (AI generates conventional commit)
+agent commit --story WEB-001 --ai
+
+# 5. Create PR
+agent pr --story WEB-001
+```
+
+### 2. Synchronization
+
+The agent supports syncing artifacts to a centralized Supabase backend for team collaboration.
+
+```bash
+# Push changes
 agent sync push
 
-# Pull remote artifacts to local
+# Pull changes
 agent sync pull
 
 # Check status
 agent sync status
 ```
 
-### Credentials
+**Credentials**: Set `SUPABASE_ACCESS_TOKEN` in `.env` or `.agent/secrets/supabase_access_token`.
 
-To use synchronization, you must provide a **Supabase Access Token**.
+## ⚙️ Configuration
 
-1.  **Environment Variable**: Set `SUPABASE_ACCESS_TOKEN` in your `.env` file.
-2.  **Secret File**: Place the token in `.agent/secrets/supabase_access_token`.
+### AI Providers
 
-## AI Providers
+1. **Google Gemini** (Recommended): Set `GEMINI_API_KEY` (Uses `gemini-1.5-pro`).
+2. **OpenAI**: Set `OPENAI_API_KEY` (Uses `gpt-4o`).
+3. **GitHub CLI** (Fallback): Uses `gh models run`.
 
-1. **Google Gemini** (Recommended) - Set `GEMINI_API_KEY`
-2. **OpenAI** - Set `OPENAI_API_KEY`
-3. **GitHub CLI** (Fallback) - Uses `gh models run`
+### Router Configuration
 
-## Development & Testing
+Customize model selection in `.agent/etc/router.yaml`:
 
-```bash
-# Install in editable mode with dependencies
-pip install -e .agent/
-
-# Run all tests
-PYTHONPATH=.agent/src pytest .agent/tests/
-
-# Run specific suite
-PYTHONPATH=.agent/src pytest .agent/tests/commands/
+```yaml
+tiers:
+  smart:
+    providers: ["gemini", "openai"]
+  fast:
+    providers: ["gemini-flash", "gpt-4o-mini"]
 ```
 
----
+## 🛠️ Development & Testing
 
-**For detailed documentation**: [`docs/`](docs/README.md)
+If you are contributing to the Agent framework itself:
+
+```bash
+# Install in editable mode
+pip install -e .agent/
+
+# Install dev dependencies
+brew install shellcheck
+npm install -g eslint
+
+# Run Tests
+PYTHONPATH=.agent/src pytest .agent/tests/
+
+# Linting
+agent lint --all --fix
+```
+
+## 📚 Detailed Documentation
+
+For specific guides, see the `docs/` folder:
+- [Getting Started](../docs/getting_started.md)
+- [Commands Reference](../docs/commands.md)
+- [Governance System](../docs/governance.md)
+- [Rules & Instructions](../docs/rules_and_instructions.md)

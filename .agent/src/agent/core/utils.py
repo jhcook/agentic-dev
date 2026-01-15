@@ -14,11 +14,13 @@
 
 import re
 import subprocess
+from pathlib import Path
+from typing import Optional
+
 import typer
 from rich.console import Console
 from rich.prompt import Prompt
-from pathlib import Path
-from typing import Optional
+
 from agent.core.config import config
 
 console = Console()

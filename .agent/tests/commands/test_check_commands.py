@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
 from typer.testing import CliRunner
+
 from agent.main import app
-from agent.core import config as config_module # Import module to patch attribute
 
 runner = CliRunner()
 

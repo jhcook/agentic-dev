@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import typer
-from rich.console import Console
+import subprocess
 from pathlib import Path
 from typing import Optional
-import subprocess
 
-from agent.core.config import config
-from agent.core.utils import infer_story_id, scrub_sensitive_data
-from agent.core.context import context_loader
+import typer
+from rich.console import Console
+
 from agent.core.ai import ai_service
+from agent.core.config import config
+from agent.core.context import context_loader
+from agent.core.utils import infer_story_id, scrub_sensitive_data
 
 console = Console()
 
