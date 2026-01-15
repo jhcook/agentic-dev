@@ -17,6 +17,8 @@ import time
 import re
 from pathlib import Path
 from typing import Optional, Set
+from agent.core.utils import scrub_sensitive_data
+from agent.db.init import init_db
 
 def get_db_path() -> Path:
     """Returns the path to the local Agent SQLite database."""
@@ -69,82 +71,101 @@ def extract_linked_adrs(content: str) -> Set[str]:
 
 def upsert_artifact(id: str, type: str, content: str, author: str = "agent") -> bool:
     """Inserts or updates an artifact in the local cache and manages links."""
-    conn: Optional[sqlite3.Connection] = None
-    try:
-        conn = get_connection()
-        conn.execute("PRAGMA foreign_keys = ON") 
-        cursor = conn.cursor()
-        
-        # Check if exists (using composite key)
-        cursor.execute("SELECT version FROM artifacts WHERE id = ? AND type = ?", (id, type))
-        row = cursor.fetchone()
-        version = 1
-        if row:
-            version = row[0] + 1
+    # Retry loop for auto-initialization
+    for attempt in range(2):
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = get_connection()
+            conn.execute("PRAGMA foreign_keys = ON") 
+            cursor = conn.cursor()
             
-        state = extract_state(content)
-        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Upsert Artifact
-        cursor.execute("""
-            INSERT OR REPLACE INTO artifacts (id, type, content, last_modified, version, state, author)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (id, type, content, timestamp, version, state, author))
-        
-        # Log History
-        change_id = f"{id}-{type}-v{version}-{int(time.time())}"
-        cursor.execute("""
-            INSERT INTO history (change_id, artifact_id, artifact_type, timestamp, author, description, delta)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (change_id, id, type, timestamp, author, f"Updated to version {version}", ""))
-        
-        # Handle Links
-        # 1. Clear existing links from this source
-        cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (id, type))
-        
-        # 2. Parse and Insert new links
-        if type == "plan":
-            related_stories = extract_related_stories(content)
-            for story_id in related_stories:
-                # Check existence to ensure FK stability
+            # Check if exists (using composite key)
+            cursor.execute("SELECT version FROM artifacts WHERE id = ? AND type = ?", (id, type))
+            row = cursor.fetchone()
+            version = 1
+            if row:
+                version = row[0] + 1
+                
+            # Compliance: Scrub content before persistence
+            content = scrub_sensitive_data(content)
+                
+            state = extract_state(content)
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Upsert Artifact
+            cursor.execute("""
+                INSERT OR REPLACE INTO artifacts (id, type, content, last_modified, version, state, author)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (id, type, content, timestamp, version, state, author))
+            
+            # Log History
+            change_id = f"{id}-{type}-v{version}-{int(time.time())}"
+            cursor.execute("""
+                INSERT INTO history (change_id, artifact_id, artifact_type, timestamp, author, description, delta)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (change_id, id, type, timestamp, author, f"Updated to version {version}", ""))
+            
+            # Handle Links
+            # 1. Clear existing links from this source
+            cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (id, type))
+            
+            # 2. Parse and Insert new links
+            if type == "plan":
+                related_stories = extract_related_stories(content)
+                for story_id in related_stories:
+                    # Check existence to ensure FK stability
+                    cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = 'story'", (story_id,))
+                    if cursor.fetchone():
+                        cursor.execute("""
+                            INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (id, type, story_id, "story", "contains"))
+                    else:
+                        # In a distributed system, a missing link target is common (not yet pulled).
+                        # We gracefully skip it for now.
+                        pass
+
+            elif type == "story":
+                linked_adrs = extract_linked_adrs(content)
+                for adr_id in linked_adrs:
+                    cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = 'adr'", (adr_id,))
+                    if cursor.fetchone():
+                        cursor.execute("""
+                            INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (id, type, adr_id, "adr", "related"))
+
+            elif type == "runbook":
+                # Runbook ID usually == Story ID
+                story_id = id
                 cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = 'story'", (story_id,))
                 if cursor.fetchone():
                     cursor.execute("""
-                        INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (id, type, story_id, "story", "contains"))
-                else:
-                    # In a distributed system, a missing link target is common (not yet pulled).
-                    # We gracefully skip it for now.
-                    pass
+                            INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (id, type, story_id, "story", "implements"))
 
-        elif type == "story":
-            linked_adrs = extract_linked_adrs(content)
-            for adr_id in linked_adrs:
-                 cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = 'adr'", (adr_id,))
-                 if cursor.fetchone():
-                     cursor.execute("""
-                        INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (id, type, adr_id, "adr", "related"))
+            conn.commit()
+            return True
 
-        elif type == "runbook":
-            # Runbook ID usually == Story ID
-            story_id = id
-            cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = 'story'", (story_id,))
-            if cursor.fetchone():
-                 cursor.execute("""
-                        INSERT INTO links (source_id, source_type, target_id, target_type, rel_type)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (id, type, story_id, "story", "implements"))
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e) and attempt == 0:
+                print(f"Database table missing, initializing schema... ({e})")
+                if conn:
+                    conn.close()
+                init_db()
+                continue
+            else:
+                print(f"Operational error in DB: {e}")
+                return False
 
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Warning: Failed to sync to local DB: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-    finally:
-        if conn:
-            conn.close()
+        except Exception as e:
+            print(f"Warning: Failed to sync to local DB: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        finally:
+            if conn:
+                conn.close()
+                
+    return False

@@ -19,7 +19,8 @@ import sys
 import yaml
 import re
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
+from supabase import create_client, Client, ClientOptions
 
 # Try to import from agent package, assuming PYTHONPATH is set or installed
 try:
@@ -52,15 +53,15 @@ def get_config() -> Dict[str, Any]:
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     key, _, value = line.partition("=")
-                    if key.strip() == "SUPABASE_SERVICE_ROLE_KEY":
-                         os.environ["SUPABASE_SERVICE_ROLE_KEY"] = value.strip().strip('"').strip("'")
+                    if key.strip() == "SUPABASE_ACCESS_TOKEN":
+                         os.environ["SUPABASE_ACCESS_TOKEN"] = value.strip().strip('"').strip("'")
 
     # Check for secrets directory
-    secret_path = Path(".agent/secrets/supabase_key")
+    secret_path = Path(".agent/secrets/supabase_access_token")
     if secret_path.exists():
-         os.environ["SUPABASE_SERVICE_ROLE_KEY"] = secret_path.read_text().strip()
+         os.environ["SUPABASE_ACCESS_TOKEN"] = secret_path.read_text().strip()
 
-    api_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    api_key = os.environ.get("SUPABASE_ACCESS_TOKEN")
     if not api_key:
         # Warn but don't fail if just checking status locally  
         # We only print this warning if verbose or if strictly needed?
@@ -69,6 +70,17 @@ def get_config() -> Dict[str, Any]:
         
     config["supabase_api_key"] = api_key
     return config
+
+def get_supabase_client() -> Client:
+    """Creates a Supabase client."""
+    config = get_config()
+    url = config.get("supabase_url")
+    key = config.get("supabase_api_key")
+    
+    if not url or not key:
+        raise ValueError("Missing supabase_url or SUPABASE_ACCESS_TOKEN. Check .agent/etc/sync.yaml and secrets.")
+        
+    return create_client(url, key)
 
 def get_db_connection() -> sqlite3.Connection:
     """Connects to the local SQLite database."""
@@ -89,25 +101,124 @@ def get_db_connection() -> sqlite3.Connection:
 
 def push(args: argparse.Namespace) -> None:
     """Pushes local changes to remote."""
-    config = get_config()
-    if not config.get("supabase_api_key"):
-        print("Error: Cannot push without SUPABASE_SERVICE_ROLE_KEY.")
-        return
+    try:
+        sb = get_supabase_client()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        print("Sync Push: Reading local state...")
+        
+        # 1. Artifacts
+        cursor.execute("SELECT * FROM artifacts")
+        artifacts = [dict(row) for row in cursor.fetchall()]
+        
+        # 2. History
+        cursor.execute("SELECT * FROM history")
+        history = [dict(row) for row in cursor.fetchall()]
+        
+        # 3. Links
+        cursor.execute("SELECT * FROM links")
+        links = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        if not artifacts:
+            print("No local artifacts to push.")
+            return
 
-    print("Sync Push: Connecting to Supabase...")
-    # TODO: Implement Supabase client logic
-    print("Push functionality not yet fully implemented (requires Supabase client integration).")
+        print(f"Pushing {len(artifacts)} asrtifacts, {len(history)} history entries, {len(links)} links to Supabase...")
+        
+        # Chunking might be needed for large datasets, but starting simple
+        # Supabase Python client upsert
+        
+        # Artifacts
+        if artifacts:
+            res = sb.table("artifacts").upsert(artifacts).execute()
+        
+        # History
+        # Note: History might grow large.
+        if history:
+            res = sb.table("history").upsert(history).execute()
+            
+        # Links
+        if links:
+            res = sb.table("links").upsert(links).execute()
+            
+        print("Push complete.")
+        
+    except Exception as e:
+        print(f"Error during push: {e}")
+        # import traceback
+        # traceback.print_exc()
 
 def pull(args: argparse.Namespace) -> None:
     """Pulls remote changes to local."""
-    config = get_config()
-    if not config.get("supabase_api_key"):
-        print("Error: Cannot pull without SUPABASE_SERVICE_ROLE_KEY.")
-        return
+    try:
+        sb = get_supabase_client()
+        
+        print("Sync Pull: Fetching remote state...")
+        
+        # 1. Artifacts
+        # TODO: Pagination for large datasets
+        res = sb.table("artifacts").select("*").execute()
+        remote_artifacts = res.data
+        
+        # Upsert to local DB
+        # We shouldn't brute-force replace everything if we want to support offline editing?
+        # For now, strict sync: Remote -> Local. 
+        # But wait, upsert_artifact handles logic. But here we have raw rows.
+        # Let's use raw SQL upsert for efficiency and fidelity.
+        
+        conn = get_db_connection()
+        conn.execute("PRAGMA foreign_keys = ON")
+        
+        print(f"Received {len(remote_artifacts)} artifacts from remote.")
+        
+        for art in remote_artifacts:
+            # We can use our db/client logic, or raw SQL. 
+            # Raw SQL ensures we get exactly what's remote, including timestamps.
+            # However, local client.upsert_artifact has logic for history generation?
+            # If we pull, we assume history is also pulled.
+            
+            conn.execute("""
+                INSERT OR REPLACE INTO artifacts (id, type, content, last_modified, version, state, author, created_at, updated_at, owner_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                art['id'], art['type'], art['content'], art['last_modified'], 
+                art['version'], art['state'], art['author'], art['created_at'],
+                art['updated_at'], art['owner_id']
+            ))
+            
+        # 2. History
+        res = sb.table("history").select("*").execute()
+        remote_history = res.data
+        for hist in remote_history:
+             conn.execute("""
+                INSERT OR REPLACE INTO history (change_id, artifact_id, artifact_type, timestamp, author, description, delta)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                hist['change_id'], hist['artifact_id'], hist['artifact_type'], 
+                hist['timestamp'], hist['author'], hist['description'], hist['delta']
+            ))
 
-    print("Sync Pull: Connecting to Supabase...")
-    # TODO: Implement Supabase client logic
-    print("Pull functionality not yet fully implemented (requires Supabase client integration).")
+        # 3. Links
+        res = sb.table("links").select("*").execute()
+        remote_links = res.data
+        for link in remote_links:
+             conn.execute("""
+                INSERT OR REPLACE INTO links (source_id, source_type, target_id, target_type, rel_type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                link['source_id'], link['source_type'], link['target_id'], 
+                link['target_type'], link['rel_type'], link['created_at']
+            ))
+            
+        conn.commit()
+        conn.close()
+        print("Pull complete.")
+
+    except Exception as e:
+        print(f"Error during pull: {e}")
 
 def status(args: argparse.Namespace) -> None:
     """Shows sync status."""
@@ -121,7 +232,7 @@ def status(args: argparse.Namespace) -> None:
              print("Local database empty (no artifacts table). Run 'agent sync scan' first.")
              return
 
-        cursor.execute("SELECT id, type, version, state, author FROM artifacts")
+        cursor.execute("SELECT id, type, version, state, author FROM artifacts ORDER BY id DESC")
         local_artifacts = cursor.fetchall()
         print("Local Repository Status:")
         print(f"Total Artifacts: {len(local_artifacts)}")

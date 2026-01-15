@@ -1,3 +1,7 @@
+---
+description: Create a new implementation plan (Runbook) for a committed Story.
+---
+
 # Workflow: Create Implementation Runbook
 
 1. **Run**: `agent new-runbook <STORY-ID>`

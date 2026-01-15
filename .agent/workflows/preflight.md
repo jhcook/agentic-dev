@@ -1,5 +1,5 @@
 ---
-description: 
+description: Run preflight governance checks on staged changes.
 ---
 
 # preflight

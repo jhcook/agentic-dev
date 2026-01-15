@@ -17,7 +17,7 @@ from rich.console import Console
 
 from agent.commands import story, plan, adr
 from agent.commands import list as list_cmd
-from agent.commands import check, workflow
+from agent.commands import check, workflow, lint
 from agent.commands import runbook, implement, match
 from agent.sync import sync
 
@@ -46,6 +46,7 @@ app.command(name="match-story")(match.match_story)
 
 app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
+app.command(name="lint")(lint.lint)
 
 # Sync integration using Typer
 # Since sync.py uses argparse, we'll wrap it or just use subprocess for now 

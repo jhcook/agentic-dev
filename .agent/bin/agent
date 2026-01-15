@@ -43,6 +43,6 @@ if python3 -c "import typer; import rich; import pydantic" &>/dev/null; then
     fi
 else
     echo "❌ Command requires Python dependencies that are not installed." >&2
-    echo "   Please install them with: pip install typer rich pydantic google-generativeai openai" >&2
+    echo "   Please install them with: pip install -e .agent" >&2
     exit 1
 fi

@@ -19,7 +19,8 @@ from typing import Optional
 import subprocess
 
 from agent.core.config import config
-from agent.core.utils import infer_story_id, load_governance_context, scrub_sensitive_data
+from agent.core.utils import infer_story_id, scrub_sensitive_data
+from agent.core.context import context_loader
 from agent.core.ai import ai_service
 
 console = Console()
@@ -158,7 +159,11 @@ def preflight(
             story_content = file_path.read_text(errors="ignore")
             break
             
-    rules_content = load_governance_context()
+            
+    # Load full context (rules + instructions)
+    full_context = context_loader.load_context()
+    rules_content = full_context.get("rules", "")
+    instructions_content = full_context.get("instructions", "")
     
     # Cap diff size - if larger than chunk limit, we might need a smart splitter, 
     # but for assimilating roles, we send the same diff to each role agent.
@@ -176,6 +181,7 @@ def preflight(
         full_diff = scrub_sensitive_data(full_diff)
         story_content = scrub_sensitive_data(story_content) # Scrub story too just in case
         rules_content = scrub_sensitive_data(rules_content)
+        instructions_content = scrub_sensitive_data(instructions_content)
     # -----------------
         
     # Split into chunks if using GH CLI (limited context)
@@ -252,7 +258,8 @@ Your specific focus is: {focus_area}
 INPUTS:
 1. User Story
 2. Governance Rules
-3. Code Diff (Chunk {i+1}/{len(diff_chunks)})
+3. Role Instructions
+4. Code Diff (Chunk {i+1}/{len(diff_chunks)})
 
 TASK:
 Review the code changes specifically from the perspective of a {role_name}.
@@ -272,6 +279,9 @@ OUTPUT:
 
 RULES:
 {rules_subset}
+
+INSTRUCTIONS:
+{instructions_content}
 
 CODE DIFF CHUNK:
 {chunk}

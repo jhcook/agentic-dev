@@ -80,3 +80,13 @@ def test_implement_scrubbing(clean_env, app):
         
         assert "sk-12345" not in user_prompt
         assert "[REDACTED:OPENAI_KEY]" in user_prompt
+
+def test_implement_not_accepted(clean_env, app):
+    runbook_id = "INFRA-002"
+    runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
+    runbook_file.write_text("Status: DRAFT\n# Runbook Content")
+    
+    result = runner.invoke(app, [runbook_id])
+    assert result.exit_code == 1
+    assert "is not ACCEPTED" in result.stdout
+

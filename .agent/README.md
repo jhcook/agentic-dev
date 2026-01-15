@@ -4,17 +4,17 @@ This directory contains the governance framework for the repo. It is designed to
 
 ## 📚 Complete Documentation
 
-**For comprehensive documentation, see [`/docs`](../docs/README.md)**
+**For comprehensive documentation, see [`docs/`](docs/README.md)**
 
-The `/docs` directory contains detailed guides on:
-- 📖 [Getting Started](../docs/getting_started.md) - Installation and initial setup
-- 🛠️ [Commands Reference](../docs/commands.md) - All CLI commands
-- 🛡️ [Governance System](../docs/governance.md) - How the AI panel works
-- 🔄 [Workflows](../docs/workflows.md) - Story-driven development
-- ⚙️ [Configuration](../docs/configuration.md) - Customizing for your team
-- 🤖 [AI Integration](../docs/ai_integration.md) - Provider setup and optimization
-- 📋 [Rules & Instructions](../docs/rules_and_instructions.md) - Custom governance
-- 🔧 [Troubleshooting](../docs/troubleshooting.md) - Common issues
+The `docs/` directory contains detailed guides on:
+- 📖 [Getting Started](docs/getting_started.md) - Installation and initial setup
+- 🛠️ [Commands Reference](docs/commands.md) - All CLI commands
+- 🛡️ [Governance System](governance.md) - How the AI panel works
+- 🔄 [Workflows](docs/workflows.md) - Story-driven development
+- ⚙️ [Configuration](docs/configuration.md) - Customizing for your team
+- 🤖 [AI Integration](docs/ai_integration.md) - Provider setup and optimization
+- 📋 [Rules & Instructions](docs/rules_and_instructions.md) - Custom governance
+- 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues
 
 ## Quick Start
 
@@ -78,6 +78,28 @@ Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementati
 └── logs/                  # Preflight logs
 ```
 
+## Synchronization
+
+The agent supports syncing artifacts (stories, plans, runbooks, adrs) to a remote Supabase backend.
+
+```bash
+# Push local artifacts to remote
+agent sync push
+
+# Pull remote artifacts to local
+agent sync pull
+
+# Check status
+agent sync status
+```
+
+### Credentials
+
+To use synchronization, you must provide a **Supabase Access Token**.
+
+1.  **Environment Variable**: Set `SUPABASE_ACCESS_TOKEN` in your `.env` file.
+2.  **Secret File**: Place the token in `.agent/secrets/supabase_access_token`.
+
 ## AI Providers
 
 1. **Google Gemini** (Recommended) - Set `GEMINI_API_KEY`
@@ -99,4 +121,4 @@ PYTHONPATH=.agent/src pytest .agent/tests/commands/
 
 ---
 
-**For detailed documentation**: [`/docs`](../docs/README.md)
+**For detailed documentation**: [`docs/`](docs/README.md)

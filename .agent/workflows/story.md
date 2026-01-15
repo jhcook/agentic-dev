@@ -1,3 +1,7 @@
+---
+description: Create a new user story.
+---
+
 # Workflow: Create Story
 
 Run the following command:

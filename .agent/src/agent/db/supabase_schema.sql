@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.artifacts (
     author TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    owner_id UUID DEFAULT auth.uid(),
     PRIMARY KEY (id, type)
 );
 
@@ -49,16 +50,28 @@ ALTER TABLE public.links ENABLE ROW LEVEL SECURITY;
 
 -- Policies (Basic Authenticated Access)
 -- Artifacts
-CREATE POLICY "Allow authenticated read access (artifacts)" ON public.artifacts FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated insert access (artifacts)" ON public.artifacts FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Allow authenticated update access (artifacts)" ON public.artifacts FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read access (artifacts)" ON public.artifacts FOR SELECT TO authenticated USING (auth.uid() = owner_id);
+CREATE POLICY "Allow authenticated insert access (artifacts)" ON public.artifacts FOR INSERT TO authenticated WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Allow authenticated update access (artifacts)" ON public.artifacts FOR UPDATE TO authenticated USING (auth.uid() = owner_id);
 
 -- History
-CREATE POLICY "Allow authenticated read access (history)" ON public.history FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated insert access (history)" ON public.history FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated read access (history)" ON public.history FOR SELECT TO authenticated USING (
+    exists ( select 1 from public.artifacts a where a.id = history.artifact_id and a.type = history.artifact_type and a.owner_id = auth.uid() )
+);
+CREATE POLICY "Allow authenticated insert access (history)" ON public.history FOR INSERT TO authenticated WITH CHECK (
+    exists ( select 1 from public.artifacts a where a.id = history.artifact_id and a.type = history.artifact_type and a.owner_id = auth.uid() )
+);
 
 -- Links
-CREATE POLICY "Allow authenticated read access (links)" ON public.links FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated insert access (links)" ON public.links FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Allow authenticated update access (links)" ON public.links FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "Allow authenticated delete access (links)" ON public.links FOR DELETE TO authenticated USING (true);
+CREATE POLICY "Allow authenticated read access (links)" ON public.links FOR SELECT TO authenticated USING (
+    exists ( select 1 from public.artifacts a where a.id = links.source_id and a.type = links.source_type and a.owner_id = auth.uid() )
+);
+CREATE POLICY "Allow authenticated insert access (links)" ON public.links FOR INSERT TO authenticated WITH CHECK (
+    exists ( select 1 from public.artifacts a where a.id = links.source_id and a.type = links.source_type and a.owner_id = auth.uid() )
+);
+CREATE POLICY "Allow authenticated update access (links)" ON public.links FOR UPDATE TO authenticated USING (
+    exists ( select 1 from public.artifacts a where a.id = links.source_id and a.type = links.source_type and a.owner_id = auth.uid() )
+);
+CREATE POLICY "Allow authenticated delete access (links)" ON public.links FOR DELETE TO authenticated USING (
+    exists ( select 1 from public.artifacts a where a.id = links.source_id and a.type = links.source_type and a.owner_id = auth.uid() )
+);

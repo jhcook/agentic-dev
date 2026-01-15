@@ -1,3 +1,7 @@
+---
+description: Commit changes using the agent with a conventional commit message.
+---
+
 # Workflow: Commit Changes
 
 1. **Context Check**:
