@@ -388,16 +388,13 @@ File: path/to/file.py
 # Complete file content here
 ```
 """
-            chunk_user_prompt = f"""GLOBAL RUNBOOK CONTEXT:
-{global_runbook_context}
+            chunk_user_prompt = f"""GLOBAL RUNBOOK CONTEXT (Truncated):
+{global_runbook_context[:4000]}
 
 --------------------------------------------------------------------------------
 CURRENT TASK:
 {chunk}
 --------------------------------------------------------------------------------
-
-IMPLEMENTATION GUIDE:
-{guide_content}
 
 RULES (Filtered):
 {filtered_rules}

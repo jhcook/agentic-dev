@@ -45,8 +45,8 @@ class AIService:
             try:
                 from google import genai
                 from google.genai import types
-                # Set 120s timeout (120,000ms)
-                http_options = types.HttpOptions(timeout=120000)
+                # Set 600s timeout (600,000ms) for large contexts
+                http_options = types.HttpOptions(timeout=600000)
                 self.clients['gemini'] = genai.Client(api_key=gemini_key, http_options=http_options)
             except (ImportError, Exception) as e:
                 console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
@@ -205,13 +205,22 @@ class AIService:
         for attempt in range(max_retries):
             try:
                 if provider == "gemini":
-                    client = self.clients['gemini']
+                    # Re-initialize client per request to avoid stiff/dead sockets
+                    gemini_key = os.getenv("GOOGLE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+                    from google import genai
                     from google.genai import types
+                    
+                    bg_client = genai.Client(
+                        api_key=gemini_key, 
+                        http_options=types.HttpOptions(timeout=600000)
+                    )
+                    
                     config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
-                        # temperature=0.2, # Stable output
+                        http_options=types.HttpOptions(timeout=600000),
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
-                    response = client.models.generate_content(
+                    response = bg_client.models.generate_content(
                         model=model_used,
                         contents=user_prompt,
                         config=config

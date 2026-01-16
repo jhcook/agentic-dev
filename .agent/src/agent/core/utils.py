@@ -130,17 +130,22 @@ def load_governance_context(coding_only: bool = False) -> str:
     has_rules = False
     
     # Process-related rules to skip when coding_only is True
-    PROCESS_RULES = {
-        "the-team.mdc", 
-        "commit-workflow.mdc", 
-        "story-standards.mdc",
-        "plan-standards.mdc"
-    }
     
+    # Whitelist of critical rules for coding tasks to minimize context size
+    CODING_WHITELIST = {
+        "lean-code.mdc",
+        "test.mdc",
+        "main.mdc"
+    }
+
     if config.rules_dir.exists():
         for rule_file in sorted(config.rules_dir.glob("*.mdc")):
-            if coding_only and rule_file.name in PROCESS_RULES:
+            # If strictly coding, we skip anything NOT in the whitelist
+            if coding_only and rule_file.name not in CODING_WHITELIST:
                 continue
+            
+            # Legacy blacklist fallback (if we weren't using whitelist logic, which we are now replacing)
+            # if coding_only and rule_file.name in PROCESS_RULES: continue
                 
             has_rules = True
             context += f"\n--- RULE: {rule_file.name} ---\n"
