@@ -48,4 +48,27 @@ class Config:
         return Path.cwd()
 
 # Global config instance
+# Global config instance
 config = Config()
+
+import os
+
+def get_sync_page_size() -> int:
+    """
+    Retrieves the sync page size from environment with a default and upper limit.
+    """
+    default_page_size = 100
+    max_page_size = 1000
+
+    try:
+        # Retrieve page size variable from environment, use default if not set
+        page_size = int(os.getenv('AGENT_SYNC_PAGE_SIZE', default_page_size))
+    except ValueError:
+        # Handle case where environment variable is set but not a valid integer.
+        page_size = default_page_size
+
+    # Enforce maximum limit
+    if page_size > max_page_size:
+        page_size = max_page_size
+
+    return page_size
