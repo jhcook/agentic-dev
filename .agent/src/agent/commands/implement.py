@@ -334,10 +334,8 @@ GOVERNANCE RULES:
         context_size = len(system_prompt) + len(user_prompt)
         logging.info(f"AI Full Context Attempt | Context size: ~{context_size} chars")
 
-        console.print("[bold green]🤖 AI is coding (Full Context)...[/bold green]")
-        full_content = ai_service.complete(system_prompt, user_prompt)
-             
-        if not full_content:
+        with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
+             full_content = ai_service.complete(system_prompt, user_prompt)
              raise Exception("Empty response from AI")
 
     except Exception as e:
@@ -403,22 +401,22 @@ RULES (Filtered):
 
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
-            console.print(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]")
-            try:
-                chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
-                if chunk_result:
-                        full_content += f"\n\n{chunk_result}"
-                        # Apply immediately if flag set
-                        if apply:
-                            code_blocks = parse_code_blocks(chunk_result)
-                            if code_blocks:
-                                console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                                for block in code_blocks:
-                                    apply_change_to_file(block['file'], block['content'], yes)
-            except Exception as e:
-                 console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
-                 # If chunking fails too, we are done.
-                 raise typer.Exit(code=1)
+            with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
+                try:
+                    chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
+                    if chunk_result:
+                            full_content += f"\n\n{chunk_result}"
+                            # Apply immediately if flag set
+                            if apply:
+                                code_blocks = parse_code_blocks(chunk_result)
+                                if code_blocks:
+                                    console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                                    for block in code_blocks:
+                                        apply_change_to_file(block['file'], block['content'], yes)
+                except Exception as e:
+                     console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
+                     # If chunking fails too, we are done.
+                     raise typer.Exit(code=1)
 
     # Final Handling
     if not full_content:
