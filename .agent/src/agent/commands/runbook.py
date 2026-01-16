@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import typer
+from typing import Optional
 from rich.console import Console
 
 from agent.core.ai import ai_service
@@ -29,10 +30,17 @@ console = Console()
 
 def new_runbook(
     story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+    ),
 ):
     """
     Generate an implementation runbook using AI Governance Panel.
     """
+    # 0. Configure Provider Override if set
+    if provider:
+        ai_service.set_provider(provider)
+    
     # 1. Find Story
     story_file = find_story_file(story_id)
     if not story_file:

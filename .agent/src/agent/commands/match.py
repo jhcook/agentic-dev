@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import typer
+from typing import Optional
 from rich.console import Console
 
 app = typer.Typer()
@@ -20,6 +21,9 @@ console = Console()
 
 def match_story(
     files: str = typer.Option(..., help="List of changed files (space or newline separated)"),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+    ),
 ):
     """
     AI-assisted story selection based on context.
@@ -27,6 +31,10 @@ def match_story(
     if not files:
         console.print("[red]❌ Error: --files argument is required.[/red]")
         raise typer.Exit(code=1)
+
+    if provider:
+        from agent.core.ai import ai_service
+        ai_service.set_provider(provider)
 
     from agent.core.utils import find_best_matching_story
     

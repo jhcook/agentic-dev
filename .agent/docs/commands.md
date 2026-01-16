@@ -138,7 +138,11 @@ Generate a detailed implementation runbook using AI and the Governance Panel.
 **Example:**
 ```bash
 agent new-runbook WEB-001
+agent new-runbook WEB-001 --provider gemini
 ```
+
+**Options:**
+- `--provider <PROVIDER>` - Force AI provider (gh, gemini, openai)
 
 **Runbook States:**
 - `PROPOSED` - AI-generated, needs review
@@ -230,7 +234,13 @@ Execute an implementation runbook using AI assistance.
 **Example:**
 ```bash
 agent implement WEB-001
+agent implement WEB-001 --apply --provider gemini
 ```
+
+**Options:**
+- `--apply` - Apply code changes to files
+- `--yes` - Skip confirmation prompts (requires --apply)
+- `--provider <PROVIDER>` - Force AI provider (gh, gemini, openai)
 
 **Safety Features:**
 - Shows diff before making changes
@@ -426,7 +436,7 @@ Create a GitHub Pull Request for the current branch.
 agent pr --story WEB-001
 
 # Draft PR
-agent pr --story WEB-001 --draft
+agent pr --story WEB-001 --draft --provider gemini
 
 # Open in browser
 agent pr --story WEB-001 --web
@@ -446,6 +456,7 @@ AI-assisted story selection based on changed files.
 
 **Options:**
 - `--files <FILES>` (required): Space-separated list of files
+- `--provider <PROVIDER>`: Force AI provider (gh, gemini, openai)
 
 **Process:**
 1. Analyzes file paths and content

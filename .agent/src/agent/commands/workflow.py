@@ -29,7 +29,10 @@ console = Console()
 def pr(
     story_id: Optional[str] = typer.Option(None, "--story", help="Story ID."),
     web: bool = typer.Option(False, "--web", help="Open PR in browser."),
-    draft: bool = typer.Option(False, "--draft", help="Create draft PR.")
+    draft: bool = typer.Option(False, "--draft", help="Create draft PR."),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+    ),
 ):
     """
     Open a GitHub Pull Request for the current branch.
@@ -48,7 +51,7 @@ def pr(
              # Better to extract shared logic. But for now, let's call it.
              # `preflight` takes (story_id, ai, base, provider).
              # We must pass all args to avoid Typer OptionInfo defaults being treated as values.
-             preflight(story_id=story_id, base=target_branch, ai=False, provider=None, report_file=None)
+             preflight(story_id=story_id, base=target_branch, ai=False, provider=provider, report_file=None)
         except typer.Exit as e:
             if e.exit_code != 0:
                 console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")

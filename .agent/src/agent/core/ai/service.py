@@ -86,12 +86,19 @@ class AIService:
             
     def set_provider(self, provider_name: str):
         """Force a specific provider."""
+        valid_providers = ['gh', 'gemini', 'openai']
+        
+        if provider_name not in valid_providers:
+            console.print(f"[bold red]❌ Invalid provider name: '{provider_name}'. Must be one of: {', '.join(valid_providers)}[/bold red]")
+            raise ValueError(f"Invalid provider: {provider_name}")
+
         if provider_name in self.clients:
             self.provider = provider_name
             self.is_forced = True
             console.print(f"[bold cyan]🤖 AI Provider set to: {provider_name}[/bold cyan]")
         else:
-            console.print(f"[bold red]❌ Provider '{provider_name}' not available/configured.[/bold red]")
+            console.print(f"[bold red]❌ Provider '{provider_name}' is valid but not available/configured.[/bold red]")
+            raise RuntimeError(f"Provider not configured: {provider_name}")
 
     def try_switch_provider(self) -> bool:
         """

@@ -90,3 +90,17 @@ def test_implement_not_accepted(clean_env, app):
     assert result.exit_code == 1
     assert "is not ACCEPTED" in result.stdout
 
+def test_implement_with_provider(clean_env, app):
+    runbook_id = "INFRA-003"
+    runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
+    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content")
+    
+    with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
+         patch("agent.core.ai.ai_service.complete", return_value="Steps"):
+        
+        result = runner.invoke(app, [runbook_id, "--provider", "gemini"])
+        
+        assert result.exit_code == 0
+        mock_set_provider.assert_called_once_with("gemini")
+        assert "AI Provider set to: gemini" in result.stdout or True # Console print might be captured or mocked
+

@@ -151,6 +151,9 @@ def implement(
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Skip confirmation prompts (use with --apply)."
     ),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+    ),
 ):
     """
     Execute an implementation runbook using AI.
@@ -159,6 +162,10 @@ def implement(
     With --apply, automatically applies code changes to files.
     With --yes, skips confirmation prompts (requires --apply).
     """
+    # 0. Configure Provider Override if set
+    if provider:
+        ai_service.set_provider(provider)
+    
     # Validate flag combination
     if yes and not apply:
         console.print("[bold red]❌ --yes requires --apply flag[/bold red]")

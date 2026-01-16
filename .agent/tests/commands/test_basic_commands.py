@@ -153,3 +153,17 @@ def test_pr_command(mock_preflight, mock_check_output, mock_run, app, mock_fs):
     assert cmd_list[2] == "create"
     assert "--web" in cmd_list
     assert "[INFRA-123] feat: New feature" in cmd_list # Title check
+
+@patch("agent.commands.workflow.subprocess.run")
+@patch("agent.commands.workflow.subprocess.check_output")
+@patch("agent.commands.workflow.preflight")
+def test_pr_command_with_provider(mock_preflight, mock_check_output, mock_run, app, mock_fs):
+    """Test pr command with --provider flag."""
+    mock_check_output.return_value = b"feat: New feature"
+    
+    result = runner.invoke(app, ["pr", "--story", "INFRA-123", "--provider", "openai"])
+    
+    assert result.exit_code == 0
+    # Check preflight was called with provider
+    args, kwargs = mock_preflight.call_args
+    assert kwargs['provider'] == "openai"

@@ -55,3 +55,17 @@ def test_new_runbook_not_committed(mock_fs, app):
     
     assert result.exit_code == 1
     assert "is not COMMITTED" in result.stdout
+
+def test_new_runbook_with_provider(mock_fs, app):
+    story_id = "INFRA-003"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n# Story Content")
+    
+    with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
+         patch("agent.core.ai.ai_service.complete", return_value="Status: PROPOSED\n# Content"), \
+         patch("agent.commands.runbook.upsert_artifact"):
+        
+        result = runner.invoke(app, [story_id, "--provider", "openai"])
+        
+        assert result.exit_code == 0
+        mock_set_provider.assert_called_once_with("openai")
