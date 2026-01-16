@@ -55,6 +55,13 @@ export PATH="$PATH:$(pwd)/.agent/bin"
 
 # Initialize
 agent new-story
+
+## 🛠️ Key Commands
+
+- `agent run-ui-tests`: Run Maestro UI tests.
+- `agent preflight`: Run governance checks.
+- `agent panel`: Consult with AI experts.
+- `agent lint`: Run linters.
 ```
 
 ## 📖 Documentation
