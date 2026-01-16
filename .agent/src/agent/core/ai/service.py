@@ -206,10 +206,15 @@ class AIService:
             try:
                 if provider == "gemini":
                     client = self.clients['gemini']
-                    full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER PROMPT:\n{user_prompt}"
+                    from google.genai import types
+                    config = types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        # temperature=0.2, # Stable output
+                    )
                     response = client.models.generate_content(
                         model=model_used,
-                        contents=full_prompt
+                        contents=user_prompt,
+                        config=config
                     )
                     return response.text.strip() if response.text else ""
 

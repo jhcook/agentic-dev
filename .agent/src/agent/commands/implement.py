@@ -144,6 +144,38 @@ def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool
     
     return True
 
+def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
+    """
+    Splits a runbook into global context and discrete implementation chunks.
+    Returns (global_context, task_chunks)
+    """
+    headers = ["## Implementation Steps", "## Proposed Changes", "## Changes"]
+    start_idx = -1
+    for h in headers:
+        if h in content:
+            start_idx = content.find(h)
+            break
+    
+    if start_idx == -1:
+        return content, [content]
+
+    global_context = content[:start_idx].strip()
+    body = content[start_idx:]
+    
+    # Split the body into chunks by '### '
+    raw_chunks = re.split(r'\n### ', body)
+    
+    chunks = []
+    header_part = raw_chunks[0] # e.g. "## Implementation Steps\n..."
+    
+    for i in range(1, len(raw_chunks)):
+        chunks.append(f"{header_part}\n### {raw_chunks[i]}")
+        
+    if not chunks:
+        return global_context, [body]
+        
+    return global_context, chunks
+
 def implement(
     runbook_id: str = typer.Argument(..., help="The ID of the runbook to implement."),
     apply: bool = typer.Option(
@@ -157,7 +189,7 @@ def implement(
     ),
 ):
     """
-    Execute an implementation runbook using AI.
+    Execute an implementation runbook using AI with chunked task processing.
     
     By default, generates implementation advice as markdown.
     With --apply, automatically applies code changes to files.
@@ -181,10 +213,11 @@ def implement(
          raise typer.Exit(code=1)
 
     console.print(f"🛈 Implementing Runbook {runbook_id}...")
-    runbook_content = scrub_sensitive_data(runbook_file.read_text())
+    original_runbook_content = runbook_file.read_text()
+    runbook_content_scrubbed = scrub_sensitive_data(original_runbook_content)
 
     # 1.1 Enforce Runbook State
-    if "Status: ACCEPTED" not in runbook_content:
+    if "Status: ACCEPTED" not in runbook_content_scrubbed:
         console.print(
             f"[bold red]❌ Runbook {runbook_id} is not ACCEPTED. "
             "Please review and update status to ACCEPTED "
@@ -200,53 +233,54 @@ def implement(
     
     # 3. Load Rules
     rules_content = scrub_sensitive_data(load_governance_context())
+    # COMPRESSION: Remove markdown comments and extra blank lines to save token space
+    rules_content = re.sub(r'<!--.*?-->', '', rules_content, flags=re.DOTALL)
+    rules_content = re.sub(r'\n{3,}', '\n\n', rules_content)
 
-    # 3.1 Optimize Context
-    if ai_service.provider == "gh":
-         console.print(
-             "[yellow]⚠️  Using GitHub CLI (limited context): "
-             "Strictly truncating guides and rules.[/yellow]"
-         )
-         guide_content = guide_content[:4000] # Cap guide at 4k chars
-         rules_content = rules_content[:2000] # Cap rules at 2k chars
+    # 4. Chunking Strategy
+    global_runbook_context, chunks = split_runbook_into_chunks(runbook_content_scrubbed)
+    
+    if len(chunks) > 1:
+        console.print(f"[bold blue]🛈 Strategy: Chunked Processing Active[/bold blue]")
+        console.print(f"  • Runbook split into {len(chunks)} tasks to optimize reliability.")
+        console.print(f"  • Full governance context is PRESERVED for each task.")
     else:
-         # For other providers, still truncate rules to a reasonable safety limit 
-         # to avoid transport-layer disconnects seen with large prompts.
-         rules_content = rules_content[:10000] 
+        console.print(f"[dim]Runbook small enough for single-pass processing.[/dim]")
 
-    # 4. Prompt
-    system_prompt = """You are an Implementation Agent.
-Your goal is to EXECUTE the tasks defined in the provided RUNBOOK.
+    total_content = ""
+    
+    # 5. Iterative Implementation Loop
+    for idx, chunk in enumerate(chunks):
+        if len(chunks) > 1:
+            console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
 
-CONTEXT:
-1. RUNBOOK (The plan you must follow)
-2. IMPLEMENTATION GUIDE (The process you must follow)
-3. RULES (Governance you must obey)
+        system_prompt = """You are an Implementation Agent.
+Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
 
-INSTRUCTIONS:
-- Review the Runbook's 'Proposed Changes'.
-- Generate the actual code changes required.
-- Output code using this format:
+CONSTRAINTS:
+1. ONLY implement the changes described in the 'CURRENT TASK' section.
+2. Maintain consistency with the 'GLOBAL RUNBOOK CONTEXT'.
+3. Follow the 'IMPLEMENTATION GUIDE' and 'GOVERNANCE RULES'.
+
+OUTPUT FORMAT:
+Return a Markdown response with file paths and code blocks:
 
 File: path/to/file.py
 ```python
 # Complete file content here
 ```
 
-File: path/to/another.py
-```python
-# Complete file content here
-```
-
-- Provide complete, working code for each file.
-- Include all necessary imports and logic.
-
-OUTPUT FORMAT:
-Return a Markdown response with file paths and code blocks as shown above.
+- Provide complete, working code for each file mentioned in the task.
+- Include all necessary imports.
 """
 
-    user_prompt = f"""RUNBOOK CONTENT:
-{runbook_content}
+        user_prompt = f"""GLOBAL RUNBOOK CONTEXT:
+{global_runbook_context}
+
+--------------------------------------------------------------------------------
+CURRENT TASK:
+{chunk}
+--------------------------------------------------------------------------------
 
 IMPLEMENTATION GUIDE:
 {guide_content}
@@ -255,66 +289,47 @@ GOVERNANCE RULES:
 {rules_content}
 """
 
-    # Log context size
-    context_size = len(system_prompt) + len(user_prompt)
-    logging.info(f"AI Completion Requested | Context size: ~{context_size} chars")
+        # Log context size
+        context_size = len(system_prompt) + len(user_prompt)
+        logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{context_size} chars")
 
-    with console.status("[bold green]🤖 AI is coding...[/bold green]"):
-        try:
-            content = ai_service.complete(system_prompt, user_prompt)
-        except Exception as e:
-            console.print(f"[bold red]❌ AI Implementation failed: {e}[/bold red]")
-            raise typer.Exit(code=1)
-        
-    if not content:
-        console.print("[bold red]❌ AI returned empty response.[/bold red]")
+        with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
+            try:
+                chunk_result = ai_service.complete(system_prompt, user_prompt)
+                if not chunk_result:
+                    logging.warning(f"Task {idx+1} returned empty content.")
+                    continue
+                total_content += f"\n\n{chunk_result}"
+                
+                # If applying automatically, apply this chunk immediately to keep momentum
+                if apply:
+                    code_blocks = parse_code_blocks(chunk_result)
+                    if code_blocks:
+                        console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                        for block in code_blocks:
+                            apply_change_to_file(block['file'], block['content'], yes)
+                    else:
+                        console.print("[yellow]⚠️ No code blocks found in this task response.[/yellow]")
+                
+            except Exception as e:
+                console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
+                if not apply: # If not applying, we can stop early
+                    raise typer.Exit(code=1)
+                # If applying, maybe continue? or stop? Given it's a chain, stopping is safer.
+                raise typer.Exit(code=1)
+
+    if not total_content:
+        console.print("[bold red]❌ AI returned empty response for all tasks.[/bold red]")
         raise typer.Exit(code=1)
 
-    # Only display the full AI response if not automatically applying
+    # 6. Final Summary (only if not apply, as we already applied above)
     if not apply:
-        console.print(Markdown(content))
-    
-    # Apply changes if --apply flag is set
-    if apply:
-        console.print("\n[bold blue]🔧 Applying changes...[/bold blue]")
-        
-        code_blocks = parse_code_blocks(content)
-        
-        if not code_blocks:
-            console.print(
-                "[yellow]⚠️  No code blocks found in AI response. "
-                "Nothing to apply.[/yellow]"
-            )
-            console.print(
-                "[dim]Tip: Ensure the AI response includes code blocks "
-                "with file paths.[/dim]"
-            )
-            return
-        
-        console.print(f"[dim]Found {len(code_blocks)} file(s) to modify[/dim]\n")
-        
-        applied_count = 0
-        skipped_count = 0
-        
-        for block in code_blocks:
-            filepath = block['file']
-            code_content = block['content']
-            
-            if apply_change_to_file(filepath, code_content, yes):
-                applied_count += 1
-            else:
-                skipped_count += 1
-        
-        # Summary
-        console.print("\n[bold]Summary:[/bold]")
-        console.print(f"  Applied: {applied_count}")
-        console.print(f"  Skipped: {skipped_count}")
-        
-        if applied_count > 0:
-            console.print("\n[bold green]✅ Changes applied successfully![/bold green]")
-            console.print("[dim]💡 Backups saved to .agent/backups/[/dim]")
-            console.print("[dim]📝 Change log: .agent/logs/implement_changes.log[/dim]")
+        console.print("\n[bold green]--- FINAL IMPLEMENTATION ADVICE ---[/bold green]")
+        console.print(Markdown(total_content))
+        console.print("\n[bold green]✅ Implementation advice generated in chunks.[/bold green]")
+        console.print("[dim]💡 Use --apply to automatically apply changes sequentially.[/dim]")
     else:
-        console.print("\n[bold green]✅ Implementation advice generated.[/bold green]")
-        console.print("[dim]💡 Use --apply to automatically apply changes[/dim]")
+        console.print("\n[bold green]✅ Sequential implementation complete![/bold green]")
+        console.print("[dim]💡 Backups saved to .agent/backups/[/dim]")
+        console.print("[dim]📝 Change log: .agent/logs/implement_changes.log[/dim]")
 
