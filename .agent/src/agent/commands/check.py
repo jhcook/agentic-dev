@@ -24,6 +24,7 @@ from agent.core.config import config
 from agent.core.context import context_loader
 from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.governance import convene_council_full
+from agent.core.ai.prompts import generate_impact_prompt
 
 console = Console()
 
@@ -203,14 +204,118 @@ def preflight(
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
+
 def impact(
-    story_id: str = typer.Argument(..., help="The ID of the story.")
+    story_id: str = typer.Argument(..., help="The ID of the story."),
+    ai: bool = typer.Option(False, "--ai", help="Enable AI-powered impact analysis."),
+    base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
+    update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai).")
 ):
     """
     Run impact analysis for a story.
+    
+    Default: Static analysis (files touched).
+    --ai: AI-powered analysis (risk, breaking changes).
     """
-    # Stub
-    console.print(f"🛈 [impact] Run impact analysis for {story_id} (extend this logic as needed).")
+    console.print(f"[bold blue]🔍 Running impact analysis for {story_id}...[/bold blue]")
+
+    # 1. Find the story file
+    found_file = None
+    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+        if file_path.name.startswith(story_id):
+            found_file = file_path
+            break
+            
+    if not found_file:
+         console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
+         raise typer.Exit(code=1)
+
+    story_content = found_file.read_text(errors="ignore")
+
+    # 2. Get Diff
+    if base:
+        cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
+        diff_cmd = ["git", "diff", f"origin/{base}...HEAD", "."]
+    else:
+        cmd = ["git", "diff", "--cached", "--name-only"]
+        diff_cmd = ["git", "diff", "--cached", "."]
+        
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    files = result.stdout.strip().splitlines()
+    
+    if not files or files == ['']:
+        console.print("[yellow]⚠️  No files to analyze. Did you stage your changes?[/yellow]")
+        return
+
+    # 3. Generate Analysis
+    analysis = ""
+    
+    if ai:
+        # AI Mode
+        console.print("[dim]🤖 Generating AI impact analysis...[/dim]")
+        if provider:
+            ai_service.set_provider(provider)
+            
+        diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
+        full_diff = diff_res.stdout
+        
+        # Scrubbing
+        full_diff = scrub_sensitive_data(full_diff)
+        story_content = scrub_sensitive_data(story_content)
+        
+        prompt = generate_impact_prompt(diff=full_diff, story=story_content)
+        
+        try:
+            analysis = ai_service.get_completion(prompt)
+        except Exception as e:
+            console.print(f"[bold red]❌ AI Analysis Failed: {e}[/bold red]")
+            raise typer.Exit(code=1)
+            
+    else:
+        # Static Mode
+        console.print("[dim]📊 Generating static impact analysis...[/dim]")
+        components = set()
+        for f in files:
+            parts = Path(f).parts
+            if len(parts) > 1:
+                components.add(parts[0]) # Top level dir
+            else:
+                components.add("root")
+                
+        analysis = f"""## Impact Analysis Summary
+Components touched: {', '.join(files)}
+Workflows affected: TBD (Static analysis limited)
+Risks identified: Static analysis only. Verify manually.
+Breaking Changes: Unknown (Run with --ai for detection)
+"""
+
+    console.print("\n[bold]Impact Analysis:[/bold]")
+    console.print(analysis)
+
+    # 4. Update Story
+    if update_story:
+        console.print(f"[dim]✏️ Updating story file: {found_file.name}...[/dim]")
+        # We need to replace the content under "## Impact Analysis Summary"
+        # Simple regex replacement or just finding the header
+        import re
+        
+        # Normalize the analysis to ensure it has the header if missing from AI (it shouldn't be based on prompt)
+        if "## Impact Analysis Summary" not in analysis:
+            analysis = "## Impact Analysis Summary\n" + analysis
+            
+        # Regex to match ## Impact Analysis Summary until the next ## Header or End of String
+        pattern = r"(## Impact Analysis Summary)([\s\S]*?)(?=\n## |$)"
+        
+        if re.search(pattern, story_content):
+            new_content = re.sub(pattern, analysis.strip(), story_content)
+            found_file.write_text(new_content)
+            console.print(f"[bold green]✅ Updated {found_file.name}[/bold green]")
+        else:
+            console.print(f"[yellow]⚠️  Could not find '## Impact Analysis Summary' section in {found_file.name}. Appending...[/yellow]")
+            found_file.write_text(story_content + "\n\n" + analysis)
+            console.print(f"[bold green]✅ Appended to {found_file.name}[/bold green]")
+
 
 def panel(
     story_id: Optional[str] = typer.Argument(None, help="The ID of the story. If excluded, infers from content."),

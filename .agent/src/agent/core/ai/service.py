@@ -163,6 +163,16 @@ class AIService:
             logging.error(f"Provider {provider_to_use} failed: {e}")
             raise e # Propagate so caller can handle strategy switch
 
+    def get_completion(self, prompt: str) -> str:
+        """
+        Simplified wrapper for single-prompt completion (used by impact command).
+        Uses a standard system prompt for an AI assistant.
+        """
+        return self.complete(
+            system_prompt="You are a helpful AI assistant for software development governance.",
+            user_prompt=prompt
+        )
+
     def _try_complete(self, provider, system_prompt, user_prompt, model=None) -> str:
         model_used = model or self.models.get(provider)
         
