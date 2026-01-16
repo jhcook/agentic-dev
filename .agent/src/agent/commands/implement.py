@@ -251,14 +251,19 @@ GOVERNANCE RULES:
 """
 
     with console.status("[bold green]🤖 AI is coding...[/bold green]"):
-        content = ai_service.complete(system_prompt, user_prompt)
+        try:
+            content = ai_service.complete(system_prompt, user_prompt)
+        except Exception as e:
+            console.print(f"[bold red]❌ AI Implementation failed: {e}[/bold red]")
+            raise typer.Exit(code=1)
         
     if not content:
         console.print("[bold red]❌ AI returned empty response.[/bold red]")
         raise typer.Exit(code=1)
 
-    # Display the AI response
-    console.print(Markdown(content))
+    # Only display the full AI response if not automatically applying
+    if not apply:
+        console.print(Markdown(content))
     
     # Apply changes if --apply flag is set
     if apply:

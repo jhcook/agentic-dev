@@ -182,50 +182,69 @@ class AIService:
 
     def _try_complete(self, provider, system_prompt, user_prompt, model=None) -> str:
         model_used = model or self.models.get(provider)
+        max_retries = 3
         
-        if provider == "gemini":
-            client = self.clients['gemini']
-            full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER PROMPT:\n{user_prompt}"
-            response = client.models.generate_content(
-                model=model_used,
-                contents=full_prompt
-            )
-            return response.text.strip() if response.text else ""
+        for attempt in range(max_retries):
+            try:
+                if provider == "gemini":
+                    client = self.clients['gemini']
+                    full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER PROMPT:\n{user_prompt}"
+                    response = client.models.generate_content(
+                        model=model_used,
+                        contents=full_prompt
+                    )
+                    return response.text.strip() if response.text else ""
 
-        elif provider == "openai":
-            client = self.clients['openai']
-            response = client.chat.completions.create(
-                model=model_used,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                elif provider == "openai":
+                    client = self.clients['openai']
+                    response = client.chat.completions.create(
+                        model=model_used,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ]
+                    )
+                    return response.choices[0].message.content.strip() if response.choices else ""
+
+                elif provider == "gh":
+                    cmd = ["gh", "models", "run", model_used, "--system-prompt", system_prompt]
+                    result = subprocess.run(cmd, input=user_prompt, text=True, capture_output=True)
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+                    
+                    # Check 429
+                    if "rate limit" in result.stderr.lower() or "too many requests" in result.stderr.lower():
+                        if attempt < max_retries - 1:
+                            wait_time = (attempt + 1) * 3
+                            console.print(f"[yellow]⏳ GH API Rate Limited ({attempt+1}/{max_retries}). Retrying in {wait_time}s...[/yellow]")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            raise Exception("GH Rate Limited (Max Retries)")
+                    
+                    # Other error
+                    logging.error(f"GH Error: {result.stderr}")
+                    raise Exception(f"GH Error: {result.stderr.strip()}")
+                
+            except Exception as e:
+                # Catch transient network errors and retry
+                error_str = str(e).lower()
+                transient_indicators = [
+                    "remote protocol error", 
+                    "server disconnected", 
+                    "timeout", 
+                    "connection reset",
+                    "rate limit",
+                    "dns resolution"
                 ]
-            )
-            return response.choices[0].message.content.strip() if response.choices else ""
-
-        elif provider == "gh":
-            cmd = ["gh", "models", "run", model_used, "--system-prompt", system_prompt]
-            max_retries = 3 # "After three errors" (attempts 0, 1, 2)
-            for attempt in range(max_retries):
-                result = subprocess.run(cmd, input=user_prompt, text=True, capture_output=True)
-                if result.returncode == 0:
-                    return result.stdout.strip()
                 
-                # Check 429
-                if "rate limit" in result.stderr.lower() or "too many requests" in result.stderr.lower():
-                    if attempt < max_retries - 1:
-                        wait_time = (attempt + 1) * 3
-                        console.print(f"[yellow]⏳ GH API Rate Limited ({attempt+1}/{max_retries}). Retrying in {wait_time}s...[/yellow]")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        raise Exception("GH Rate Limited (Max Retries)")
-                
-                # Other error
-                logging.error(f"GH Error: {result.stderr}")
-                raise Exception(f"GH Error: {result.stderr.strip()}")
-                
-            raise Exception("GH Failed to complete")
+                if any(ind in error_str for ind in transient_indicators) and attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    console.print(f"[yellow]⚠️ AI Provider error: {e}. Retrying ({attempt+1}/{max_retries}) in {wait_time}s...[/yellow]")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise e
             
         return ""
 
