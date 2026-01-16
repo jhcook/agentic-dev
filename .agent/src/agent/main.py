@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import typer
+import logging
 import subprocess
 from pathlib import Path
 from rich.console import Console
@@ -80,9 +81,24 @@ def sync_cmd(ctx: typer.Context):
     # existing sys.argv: ['.../main...py', 'sync', 'status']
     # sync.py expects: ['script', 'status']
     
-    # Let's fake it.
     sys.argv = ["agent-sync"] + ctx.args
     sync.main()
+
+def setup_logging():
+    """Configure global logging to file and console."""
+    log_dir = Path(".agent/logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "agent.log"
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            # Note: We rely on Rich Console for stdout, so we don't add a StreamHandler here
+            # to avoid duplicate/ugly output in the terminal.
+        ]
+    )
 
 console = Console()
 
@@ -98,6 +114,7 @@ def main(
     """
     Agent CLI - Governance and Workflow Automation
     """
+    setup_logging()
 
     if version:
         ver = "unknown"
