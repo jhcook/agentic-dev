@@ -1,6 +1,7 @@
 ---
 description: Perform impact analysis on code changes using the Agent's AI capabilities.
 ---
+
 # Workflow: Impact Analysis
 
 You will manually perform the impact analysis logic instead of running the CLI command.
@@ -48,3 +49,8 @@ You will manually perform the impact analysis logic instead of running the CLI c
 
 6. **Report**:
    - Output the analysis to the user.
+
+NOTES:
+- Do NOT run git commit.
+- Do NOT modify files.
+- Focus only on analysis and feedback.
