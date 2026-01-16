@@ -4,7 +4,7 @@
 INFRA-008
 
 ## State
-OPEN
+COMMITTED
 
 ## Problem Statement
 The `agent implement` command currently only generates advice as Markdown. It does not help the developer by actually applying the changes, which reduces the "agentic" value.
@@ -19,9 +19,23 @@ As a developer, I want to run `agent implement <RUNBOOK_ID> --apply` so that the
 - [ ] The agent prompts for confirmation before writing files (unless `--yes` is passed).
 
 ## Impact Analysis Summary
-Components touched: `agent/commands/implement.py`
-Workflows affected: Implementation.
-Risks identified: AI generating bad code or overwriting files incorrectly.
+
+**Components Touched:**
+- `agent/commands/implement.py` - Major changes (3 new functions, enhanced main function, 6 new imports)
+- `README.md`, `CHANGELOG.md` - Documentation updates
+
+**Workflows Affected:**
+- Implementation Workflow - Developers can now auto-apply code changes
+- Development Velocity - Reduces manual copy-paste work
+- Backup/Recovery - New `.agent/backups/` directory created
+
+**Risks:**
+- **Security (LOW)**: File writes protected by confirmation prompts; backups enable rollback
+- **Performance (LOW)**: Regex parsing and file I/O are synchronous
+- **Reliability (MEDIUM)**: AI code quality depends on model accuracy; mitigated by user confirmation
+- **Path Traversal (LOW)**: Uses `Path()` normalization but no explicit validation
+
+**Breaking Changes:** None - backward compatible, new flags are optional
 
 ## Test Strategy
 - Create a dummy runbook.
