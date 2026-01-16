@@ -23,6 +23,7 @@ from agent.core.ai import ai_service
 from agent.core.config import config
 from agent.core.context import context_loader
 from agent.core.utils import infer_story_id, scrub_sensitive_data
+from agent.core.governance import convene_council_full
 
 console = Console()
 
@@ -184,211 +185,21 @@ def preflight(
         rules_content = scrub_sensitive_data(rules_content)
         instructions_content = scrub_sensitive_data(instructions_content)
     # -----------------
-        
-    # Split into chunks if using GH CLI (limited context)
-    if ai_service.provider == "gh":
-         chunk_size = 6000
-    else:
-         # Gemini/OpenAI have large context, send full diff
-         chunk_size = len(full_diff) + 1000
- 
-    if len(full_diff) > chunk_size:
-        diff_chunks = [full_diff[i:i+chunk_size] for i in range(0, len(full_diff), chunk_size)]
-    else:
-        diff_chunks = [full_diff]
-        
-    report = f"# Governance Preflight Report\n\nStory: {story_id}\n\n"
-    
+
     if ai:
-        console.print("[bold cyan]🤖 Convening the AI Governance Council...[/bold cyan]")
-        
-        # Complete Council
-        roles = [
-            {"name": "Architect", "focus": "System design, ADR compliance, patterns, and dependency hygiene."},
-            {"name": "Security", "focus": "PII leaks, hardcoded secrets, injection vulnerabilities, and permission scope."},
-            {"name": "Compliance", "focus": "GDPR, SOC2, and legal compliance mandates."},
-            {"name": "QA", "focus": "Test coverage, edge cases, and testability of the changes."},
-            {"name": "Docs", "focus": "Documentation updates, clarity, and user manual accuracy."},
-            {"name": "Observability", "focus": "Logging, metrics, tracing, and error handling."},
-            {"name": "Backend", "focus": "API design, database schemas, and backend patterns."},
-            {"name": "Mobile", "focus": "Mobile-specific UX, performance, and platform guidelines."},
-            {"name": "Web", "focus": "Web accessibility, responsive design, and browser compatibility."}
-        ]
-        
-        attempt_loop = True
-        while attempt_loop:
-            # 1. Determine Chunking Strategy based on CURRENT provider
-            if ai_service.provider == "gh":
-                 chunk_size = 6000
-                 console.print("[dim]Using chunked analysis for GitHub CLI (Context Limit)[/dim]")
-            else:
-                 # Gemini/OpenAI have large context, send full diff
-                 chunk_size = len(full_diff) + 1000 #(effectively unlimited relative to diff)
-                 console.print(f"[dim]Using full-context analysis for {ai_service.provider}[/dim]")
-
-            if len(full_diff) > chunk_size:
-                diff_chunks = [full_diff[i:i+chunk_size] for i in range(0, len(full_diff), chunk_size)]
-            else:
-                diff_chunks = [full_diff]
-
-            overall_verdict = "PASS"
-            report = f"# Governance Preflight Report\n\nStory: {story_id}\n\n"
-            json_roles = []
-            
-            try:
-                for role in roles:
-                    role_name = role["name"]
-                    focus_area = role["focus"]
-                    
-                    role_data = {
-                        "name": role_name,
-                        "verdict": "PASS",
-                        "findings": [],
-                        "summary": ""
-                    }
-
-                    role_verdict = "PASS"
-                    role_findings = []
-                    
-                    with console.status(f"[bold blue]🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks using {ai_service.provider})...[/bold blue]"):
-                        
-                        for i, chunk in enumerate(diff_chunks):
-                            system_prompt = f"""You are the {role_name} Agent in the Governance Council.
-Your specific focus is: {focus_area}
-
-INPUTS:
-1. User Story
-2. Governance Rules
-3. Role Instructions
-4. Code Diff (Chunk {i+1}/{len(diff_chunks)})
-
-TASK:
-Review the code changes specifically from the perspective of a {role_name}.
-
-OUTPUT:
-- Verdict: PASS | BLOCK
-- Brief analysis of findings relative to your focus.
-"""
-                            # Select appropriate rules context size
-                            if ai_service.provider == "gh":
-                                rules_subset = rules_content[:10000]
-                            else:
-                                rules_subset = rules_content
-
-                            user_prompt = f"""STORY:
-{story_content}
-
-RULES:
-{rules_subset}
-
-INSTRUCTIONS:
-{instructions_content}
-
-CODE DIFF CHUNK:
-{chunk}
-"""
-                            # Check for potential token overflow if using GH provider
-                            total_chars = len(system_prompt) + len(user_prompt)
-                            if ai_service.provider == "gh" and total_chars > 30000:
-                                console.print(f"[yellow]⚠️  Warning: Prompt size ({total_chars} chars) is near GitHub CLI limit. Truncating context further.[/yellow]")
-                                # Emergency truncation
-                                user_prompt = f"STORY: {story_content}\nRULES: {rules_content[:5000]}\nDIFF: {chunk}"
-                            
-                            review = ai_service.complete(system_prompt, user_prompt)
-                            
-                            # Verdict parsing logic
-                            import re
-                            is_block = False
-                            
-                            # Case-insensitive check for "Verdict: BLOCK"
-                            # Regex explanation:
-                            # Verdict\s*[:]\s* : Matches "Verdict:" with optional whitespace
-                            # [*]* : Matches optional markdown bold asterisks
-                            # BLOCK : Matches the keyword BLOCK
-                            # [*]* : Matches optional trailing asterisks
-                            if re.search(r"Verdict\s*[:]\s*[*]*BLOCK[*]*", review, re.IGNORECASE):
-                                is_block = True
-                            # Fallback: if the AI just screamed "BLOCK" at the start
-                            elif review.strip().upper().startswith("BLOCK"):
-                                is_block = True
-                                
-                            if is_block:
-                                 role_verdict = "BLOCK"
-                                 role_findings.append(review)
-                    
-                    # Store detailed findings in JSON role data
-                    # For simplicity in JSON, we just append the full review text to findings
-                    if role_findings:
-                         role_data["findings"] = role_findings
-                    else:
-                         # Even if PASS, we might want to capture the review if it exists (not in current logic for PASS though)
-                         pass
-
-                    role_data["verdict"] = role_verdict
-                    
-                    # Store summary if blocked (first line or extracted summary logic could go here)
-                    if role_verdict == "BLOCK":
-                         console.print(f"[bold red]❌ @{role_name}: BLOCK[/bold red]")
-                         # Summarize first finding
-                         if role_findings:
-                             first_finding = role_findings[0].replace('Verdict: BLOCK', '').strip()
-                             console.print(f"[red]{first_finding}[/red]")
-                             role_data["summary"] = first_finding.split('\n')[0]
-                         
-                         overall_verdict = "BLOCK"
-                         full_review = "\n\n".join(role_findings)
-                         report += f"### ❌ @{role_name}: BLOCK\n{full_review}\n\n"
-                    else:
-                         console.print(f"[bold green]✅ @{role_name}: PASS[/bold green]")
-                         report += f"### ✅ @{role_name}: PASS\n\n"
-                    
-                    json_roles.append(role_data)
-                
-                # If we get here, all roles passed without Exception
-                attempt_loop = False # Exit successful loop
-
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Analysis interrupted: {e}[/yellow]")
-                if ai_service.try_switch_provider():
-                    console.print(f"[bold magenta]🔄 Switching provider to {ai_service.provider} and restarting analysis (Full Context)...[/bold magenta]")
-                    continue # Restart loop with new provider
-                else:
-                    console.print("[bold red]❌ All AI providers failed. Aborting.[/bold red]")
-                    if report_file:
-                        json_report["error"] = str(e)
-                        import json
-                        report_file.write_text(json.dumps(json_report, indent=2))
-                    raise typer.Exit(code=1)
-
-        # Update JSON report with collected data
-        json_report["overall_verdict"] = overall_verdict
-        json_report["roles"] = json_roles
-
-        # Save Report to Log
-        import time
-        timestamp = int(time.time())
-        log_dir = config.agent_dir / "logs"
-        log_dir.mkdir(exist_ok=True)
-        log_file = log_dir / f"preflight-{story_id}-{timestamp}.md"
-        log_file.write_text(report)
-        json_report["log_file"] = str(log_file)
-        
-        console.print("") # Newline before final verdict
-        
-        # Write JSON report if requested
-        if report_file:
-            import json
-            report_file.write_text(json.dumps(json_report, indent=2))
-
-        if overall_verdict == "BLOCK":
-             console.print("[bold red]❌ Governance Council Verdict: BLOCK[/bold red]")
-             report += "## 🛑 FINAL VERDICT: BLOCK\nOne or more agents blocked this change.\n"
-             console.print(f"Full report saved to: [underline]{log_file}[/underline]")
+        verdict = convene_council_full(
+            console=console,
+            story_id=story_id,
+            story_content=story_content,
+            rules_content=rules_content,
+            instructions_content=instructions_content,
+            full_diff=full_diff,
+            report_file=report_file,
+            mode="gatekeeper"
+        )
+        if verdict == "BLOCK":
+             # convene_council_full handles printing the error/report location
              raise typer.Exit(code=1)
-        else:
-             console.print("[bold green]✅ Governance Council Verdict: PASS[/bold green]")
-             report += "## 🟢 FINAL VERDICT: PASS\nAll agents approved this change.\n"
-             console.print(f"Full report saved to: [underline]{log_file}[/underline]")
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
@@ -402,19 +213,74 @@ def impact(
     console.print(f"🛈 [impact] Run impact analysis for {story_id} (extend this logic as needed).")
 
 def panel(
-    story_id: str = typer.Argument(..., help="The ID of the story.")
+    story_id: Optional[str] = typer.Argument(None, help="The ID of the story. If excluded, infers from content."),
+    base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai).")
 ):
     """
-    Simulate governance panel.
+    Convening the Governance Panel to review changes.
     """
-    # Stub
-    console.print(f"🛈 [panel] Convening the Governance Panel for {story_id}...")
-    agents_file = config.etc_dir / "agents.yaml"
-    if not agents_file.exists():
-        console.print("[yellow]⚠️  No agents.yaml found.[/yellow]")
-        return
+    # 0. Configure Provider Override if set
+    if provider:
+        ai_service.set_provider(provider)
         
-    console.print("   (Simulated approval from agents.yaml roles)")
+    if not story_id:
+        story_id = infer_story_id()
+        if not story_id:
+             console.print("[bold red]❌ Story ID is required (and could not be inferred).[/bold red]")
+             raise typer.Exit(code=1)
+
+    console.print(f"[bold cyan]🤖 Convening the Governance Panel for {story_id}...[/bold cyan]")
+
+    # 1. Get Changed Files
+    if base:
+        cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
+    else:
+        cmd = ["git", "diff", "--cached", "--name-only"]
+        
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    files = result.stdout.strip().splitlines()
+    
+    if not files or files == ['']:
+        console.print("[yellow]⚠️  No files to review. Did you stage your changes?[/yellow]")
+        return
+
+    # 2. Get Full Diff
+    diff_cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
+    diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
+    full_diff = diff_res.stdout
+    if not full_diff:
+        full_diff = ""
+
+    # 3. Load Context
+    story_content = ""
+    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+        if file_path.name.startswith(story_id):
+            story_content = file_path.read_text(errors="ignore")
+            break
+    
+    if not story_content:
+         console.print(f"[yellow]⚠️  Story {story_id} file not found. Reviewing without specific story context.[/yellow]")
+
+    full_context = context_loader.load_context()
+    rules_content = full_context.get("rules", "")
+    instructions_content = full_context.get("instructions", "")
+    
+    # 4. Scrum & Run
+    full_diff = scrub_sensitive_data(full_diff)
+    story_content = scrub_sensitive_data(story_content)
+    rules_content = scrub_sensitive_data(rules_content)
+    instructions_content = scrub_sensitive_data(instructions_content)
+
+    convene_council_full(
+        console=console,
+        story_id=story_id,
+        story_content=story_content,
+        rules_content=rules_content,
+        instructions_content=instructions_content,
+        full_diff=full_diff,
+        mode="consultative"
+    )
 
 def run_ui_tests(
     story_id: str = typer.Argument(..., help="The ID of the story.")

@@ -2,6 +2,15 @@
 
 All notable changes to the Agent Governance Framework will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Governance Commands**: New `agent panel` and `agent preflight` Python implementations.
+- **Consultative Mode**: `agent panel` now acts as a consultative board rather than a gatekeeper.
+
+### Changed
+- **Documentation Structure**: Relocated `docs/` to `.agent/docs/` for better encapsulation.
+
 ## [0.2.0] - 2026-01-12
 
 ### Added

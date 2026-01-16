@@ -1,0 +1,54 @@
+import pytest
+from unittest.mock import patch, MagicMock
+from typer.testing import CliRunner
+from agent.main import app
+from agent.core.governance import convene_council_full
+
+runner = CliRunner()
+
+@patch("agent.commands.check.convene_council_full")
+@patch("agent.commands.check.infer_story_id", return_value="TEST-123")
+@patch("pathlib.Path.read_text", return_value="Dummy story content")
+@patch("subprocess.run")
+def test_panel_run(mock_subproc, mock_read, mock_infer, mock_convene):
+    """
+    Test that 'agent panel' calls convene_council_full with proper arguments
+    and mode='consultative'.
+    """
+    # Mock subprocess git diff
+    mock_run_return = MagicMock()
+    mock_run_return.stdout = "file1.py\nfile2.py"
+    mock_subproc.return_value = mock_run_return
+    
+    # Mock mock_convene return
+    mock_convene.return_value = "PASS"
+
+    result = runner.invoke(app, ["panel"])
+    
+    assert result.exit_code == 0
+    assert "Convening the Governance Panel" in result.stdout
+    
+    # Verify the mode was "consultative"
+    mock_convene.assert_called_once()
+    call_args = mock_convene.call_args
+    assert call_args.kwargs.get("mode") == "consultative"
+
+
+@patch("agent.commands.check.convene_council_full")
+@patch("agent.commands.check.infer_story_id", return_value="TEST-123")
+@patch("pathlib.Path.read_text", return_value="Dummy story content")
+@patch("subprocess.run")
+def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene):
+    """Test 'agent panel MY-STORY' passes story_id correctly."""
+    mock_run_return = MagicMock()
+    mock_run_return.stdout = "modified_file.py"
+    mock_subproc.return_value = mock_run_return
+    
+    mock_convene.return_value = "PASS"
+
+    result = runner.invoke(app, ["panel", "MY-STORY"])
+    
+    assert result.exit_code == 0
+    assert "MY-STORY" in result.stdout
+    mock_convene.assert_called()
+    assert mock_convene.call_args.kwargs["story_id"] == "MY-STORY"

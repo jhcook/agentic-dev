@@ -12,6 +12,24 @@
 - ✅ **Generates implementation plans** and runbooks
 - ✅ **Automates preflight checks** before commits
 
+## 🛑 Validation vs 💡 Consultation
+
+The Agent supports two modes of governance review:
+
+### 1. Preflight (The Gatekeeper)
+**Command**: `agent preflight --ai`
+- **Role**: Strict auditor.
+- **Goal**: Validation before merge/deploy.
+- **Outcome**: `PASS` or `BLOCK` (Exit code 1 on failure).
+- **Use When**: You are ready to commit or create a PR.
+
+### 2. Panel (The Expert Council)
+**Command**: `agent panel` (or via workflow)
+- **Role**: Expert consultants (Architect, Security, QA).
+- **Goal**: Advice, warnings, and design feedback.
+- **Outcome**: Friendly advice (Always exit code 0).
+- **Use When**: You are designing, prototyping, or stuck.
+
 ## ⚡ Quick Start
 
 ### Prerequisites
@@ -41,13 +59,13 @@ agent new-story
 
 ## 📖 Documentation
 
-- **[Deep Dive & Architecture](.agent/README.md)**: Detailed explanation of how the Agent framework works, including the AI Governance Panel, Synchronization, and Directory Structure.
-- **[Full Documentation](docs/README.md)**: Comprehensive guides for all features.
-  - [Getting Started](docs/getting_started.md)
-  - [Commands Reference](docs/commands.md)
-  - [Workflows](docs/workflows.md)
-  - [Configuration](docs/configuration.md)
-  - [Troubleshooting](docs/troubleshooting.md)
+- **[Deep Dive & Architecture](.agent/README.md)**: Detailed explanation of how the Agent framework works.
+- **[Full Documentation](.agent/docs/README.md)**: Comprehensive guides for all features.
+  - [Getting Started](.agent/docs/getting_started.md)
+  - [Commands Reference](.agent/docs/commands.md)
+  - [Workflows](.agent/docs/workflows.md)
+  - [Configuration](.agent/docs/configuration.md)
+  - [Troubleshooting](.agent/docs/troubleshooting.md)
 
 ## 🤝 Contributing
 

@@ -140,7 +140,7 @@ agent lint --all --fix
 ## 📚 Detailed Documentation
 
 For specific guides, see the `docs/` folder:
-- [Getting Started](../docs/getting_started.md)
-- [Commands Reference](../docs/commands.md)
-- [Governance System](../docs/governance.md)
-- [Rules & Instructions](../docs/rules_and_instructions.md)
+- [Getting Started](docs/getting_started.md)
+- [Commands Reference](docs/commands.md)
+- [Governance System](docs/governance.md)
+- [Rules & Instructions](docs/rules_and_instructions.md)
