@@ -37,6 +37,10 @@ Thumbs.db
 # Agentic Dev specific (if any temp files arise, add here)
 # Keeping .agent/cache/ as it contains Stories/Plans/Runbooks which seem to be committed artifacts.
 
+# Agent
+.agent/uv.lock
+
 # Secrets
 .agent/secrets/
 .agent/cache/agent.db
+
