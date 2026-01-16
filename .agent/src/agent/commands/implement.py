@@ -190,9 +190,114 @@ def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool
         console.print(f"[bold red]❌ Failed to write file: {e}[/bold red]")
         return False
 
-# ... (split_runbook_into_chunks remains same) ...
+def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
+    """
+    Splits a runbook into global context and discrete implementation chunks.
+    Returns (global_context, task_chunks)
+    """
+    headers = ["## Implementation Steps", "## Proposed Changes", "## Changes"]
+    start_idx = -1
+    for h in headers:
+        if h in content:
+            start_idx = content.find(h)
+            break
+    
+    if start_idx == -1:
+        return content, [content]
 
-# ... (implement function start) ...
+    global_context = content[:start_idx].strip()
+    body = content[start_idx:]
+    
+    # Split the body into chunks by '### '
+    raw_chunks = re.split(r'\n### ', body)
+    
+    chunks = []
+    header_part = raw_chunks[0] # e.g. "## Implementation Steps\n..."
+    
+    for i in range(1, len(raw_chunks)):
+        chunks.append(f"{header_part}\n### {raw_chunks[i]}")
+        
+    if not chunks:
+        return global_context, [body]
+        
+    return global_context, chunks
+
+def implement(
+    runbook_id: str = typer.Argument(..., help="The ID of the runbook to implement."),
+    apply: bool = typer.Option(
+        False, "--apply", help="Apply changes to files automatically."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompts (use with --apply)."
+    ),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+    ),
+):
+    """
+    Execute an implementation runbook using AI with chunked task processing.
+    
+    By default, generates implementation advice as markdown.
+    With --apply, automatically applies code changes to files.
+    With --yes, skips confirmation prompts (requires --apply).
+    """
+    # 0. Configure Provider Override if set
+    if provider:
+        ai_service.set_provider(provider)
+    
+    # Validate flag combination
+    if yes and not apply:
+        console.print("[bold red]❌ --yes requires --apply flag[/bold red]")
+        raise typer.Exit(code=1)
+    
+    # 1. Find Runbook
+    runbook_file = find_runbook_file(runbook_id)
+    if not runbook_file:
+         console.print(
+             f"[bold red]❌ Runbook file not found for {runbook_id}[/bold red]"
+         )
+         raise typer.Exit(code=1)
+
+    console.print(f"🛈 Implementing Runbook {runbook_id}...")
+    original_runbook_content = runbook_file.read_text()
+    runbook_content_scrubbed = scrub_sensitive_data(original_runbook_content)
+
+    # 1.1 Enforce Runbook State
+    if "Status: ACCEPTED" not in runbook_content_scrubbed:
+        console.print(
+            f"[bold red]❌ Runbook {runbook_id} is not ACCEPTED. "
+            "Please review and update status to ACCEPTED "
+            "before implementing.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    # 2. Load Guide
+    guide_path = config.agent_dir / "workflows/implement.md"
+    guide_content = ""
+    if guide_path.exists():
+        guide_content = scrub_sensitive_data(guide_path.read_text())
+    
+    # 3. Load Rules
+    rules_content = scrub_sensitive_data(load_governance_context())
+    # COMPRESSION: Remove markdown comments and extra blank lines to save token space
+    rules_content = re.sub(r'<!--.*?-->', '', rules_content, flags=re.DOTALL)
+    rules_content = re.sub(r'\n{3,}', '\n\n', rules_content)
+
+    # 4. Hybrid Strategy: Try Full Context -> Fallback to Chunking
+    
+    # Attempt 1: Full Context
+    console.print("[dim]Attempting full context execution...[/dim]")
+    
+    full_content = ""
+    fallback_needed = False
+    
+    # Check if runbook is small enough to skip complexity
+    if len(runbook_content_scrubbed) < 10000:
+         # Just goes straight to full context, no need for fancy logic
+         pass
+    else:
+         pass
+
     try:
         system_prompt = """You are an Implementation Agent.
 Your goal is to EXECUTE the tasks defined in the provided RUNBOOK.
@@ -229,8 +334,8 @@ GOVERNANCE RULES:
         context_size = len(system_prompt) + len(user_prompt)
         logging.info(f"AI Full Context Attempt | Context size: ~{context_size} chars")
 
-        with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
-             full_content = ai_service.complete(system_prompt, user_prompt)
+        console.print("[bold green]🤖 AI is coding (Full Context)...[/bold green]")
+        full_content = ai_service.complete(system_prompt, user_prompt)
              
         if not full_content:
              raise Exception("Empty response from AI")
@@ -299,22 +404,24 @@ RULES (Filtered):
 """
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
-            with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
-                try:
-                    chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
-                    if chunk_result:
-                         full_content += f"\n\n{chunk_result}"
-                         # Apply immediately if flag set
-                         if apply:
-                             code_blocks = parse_code_blocks(chunk_result)
-                             if code_blocks:
-                                 console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                                 for block in code_blocks:
-                                     apply_change_to_file(block['file'], block['content'], yes)
-                except Exception as e:
-                     console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
-                     # If chunking fails too, we are done.
-                     raise typer.Exit(code=1)
+            logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
+
+            console.print(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]")
+            try:
+                chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
+                if chunk_result:
+                        full_content += f"\n\n{chunk_result}"
+                        # Apply immediately if flag set
+                        if apply:
+                            code_blocks = parse_code_blocks(chunk_result)
+                            if code_blocks:
+                                console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                                for block in code_blocks:
+                                    apply_change_to_file(block['file'], block['content'], yes)
+            except Exception as e:
+                 console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
+                 # If chunking fails too, we are done.
+                 raise typer.Exit(code=1)
 
     # Final Handling
     if not full_content:
