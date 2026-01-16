@@ -1,7 +1,7 @@
 # INFRA-007: Implement Agent Impact Command
 
 ## State
-OPEN
+COMMITTED
 
 ## Problem Statement
 The "Impact Analysis Summary" section in stories is critical for governance but often difficult to populate accurately manually. Developers may miss subtle dependencies or downstream effects of their changes. Automated analysis is needed to ensure this section is meaningful and accurate.
