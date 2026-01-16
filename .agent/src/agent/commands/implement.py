@@ -359,6 +359,13 @@ GOVERNANCE RULES:
         global_runbook_context, chunks = split_runbook_into_chunks(runbook_content_scrubbed)
         console.print(f"[dim]Runbook split into {len(chunks)} tasks[/dim]")
 
+        # Reset provider state to ensure chunks use the preferred/forced provider,
+        # ignoring any fallback switches that happened during Full Context failure.
+        if provider:
+             ai_service.set_provider(provider)
+        else:
+             ai_service.reset_provider()
+
         for idx, chunk in enumerate(chunks):
             if len(chunks) > 1:
                 console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
@@ -401,22 +408,23 @@ RULES (Filtered):
 
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
-            with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
-                try:
+            chunk_result = None
+            try:
+                with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
                     chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
-                    if chunk_result:
-                            full_content += f"\n\n{chunk_result}"
-                            # Apply immediately if flag set
-                            if apply:
-                                code_blocks = parse_code_blocks(chunk_result)
-                                if code_blocks:
-                                    console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                                    for block in code_blocks:
-                                        apply_change_to_file(block['file'], block['content'], yes)
-                except Exception as e:
-                     console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
-                     # If chunking fails too, we are done.
-                     raise typer.Exit(code=1)
+            except Exception as e:
+                 console.print(f"[bold red]❌ Task {idx+1} failed during generation: {e}[/bold red]")
+                 raise typer.Exit(code=1)
+
+            if chunk_result:
+                full_content += f"\n\n{chunk_result}"
+                # Apply immediately if flag set (NOW SAFE: Outside spinner)
+                if apply:
+                    code_blocks = parse_code_blocks(chunk_result)
+                    if code_blocks:
+                        console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                        for block in code_blocks:
+                            apply_change_to_file(block['file'], block['content'], yes)
 
     # Final Handling
     if not full_content:

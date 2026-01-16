@@ -36,7 +36,7 @@ class AIService:
         self.models = {
             'gh': 'openai/gpt-4o',
             'gemini': 'gemini-pro-latest',
-            'openai': 'gpt-4o'
+            'openai': os.getenv("OPENAI_MODEL", "gpt-4o")
         }
         
         # 1. Check Gemini
@@ -77,7 +77,14 @@ class AIService:
         except (FileNotFoundError, subprocess.CalledProcessError):
             return False
 
+    def reset_provider(self):
+        """Reset provider to default state (useful after fallback sequences)."""
+        self.provider = None
+        self.is_forced = False
+        self._set_default_provider()
+
     def _set_default_provider(self):
+        # ... existing logic ...
         if 'gh' in self.clients:
             self.provider = 'gh'
         elif 'gemini' in self.clients:
@@ -246,8 +253,11 @@ class AIService:
                     return response.choices[0].message.content.strip() if response.choices else ""
 
                 elif provider == "gh":
-                    cmd = ["gh", "models", "run", model_used, "--system-prompt", system_prompt]
-                    result = subprocess.run(cmd, input=user_prompt, text=True, capture_output=True)
+                    # Combine system and user prompt to avoid CLI argument length limits (ARG_MAX)
+                    # and ensuring we use stdin for the bulk of the content.
+                    combined_prompt = f"System: {system_prompt}\n\nUser: {user_prompt}"
+                    cmd = ["gh", "models", "run", model_used]
+                    result = subprocess.run(cmd, input=combined_prompt, text=True, capture_output=True)
                     if result.returncode == 0:
                         return result.stdout.strip()
                     
