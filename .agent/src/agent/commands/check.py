@@ -235,8 +235,10 @@ def impact(
 
     # 2. Get Diff
     if base:
-        cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
-        diff_cmd = ["git", "diff", f"origin/{base}...HEAD", "."]
+        # Use simple revision range without forcing origin/
+        # This allows HEAD~, local branches, or tags
+        cmd = ["git", "diff", "--name-only", f"{base}...HEAD"]
+        diff_cmd = ["git", "diff", f"{base}...HEAD", "."]
     else:
         cmd = ["git", "diff", "--cached", "--name-only"]
         diff_cmd = ["git", "diff", "--cached", "."]

@@ -30,6 +30,7 @@ The proposed code changes introduce a new `impact` command to assist developers 
 
 ---
 
+```markdown
 ## Impact Analysis Summary
 
 **Components touched**:
@@ -37,67 +38,27 @@ The proposed code changes introduce a new `impact` command to assist developers 
 - `agent/core/ai/__init__.py` (new)
 - `agent/core/ai/prompts.py` (new)
 - `agent/core/ai/service.py` (new)
+- `.agent/workflows/impact.md` (new)
 
 **Workflows affected**:
-- Governance workflows: Introduces an automated system to populate the "Impact Analysis Summary."
-- Development workflows: Adds tooling for impact-checking, especially beneficial for reviewing code changes and ensuring compliance with governance policies.
+- **Governance workflows**: Automates the "Impact Analysis Summary" section of Story files, improving compliance and reducing manual effort for developers.
+- **Development workflows**: Adds a new tool (`agent impact`) for analyzing and reviewing changes, especially for identifying risks and downstream dependencies.
 
 **Risks identified**:
 1. **Security Risks**:
-   - The AI integration requires sensitive code diffs and story content to be sent to external services such as OpenAI, Gemini, or GitHub's AI, increasing data exposure risk.
-   - While the diff and story contents are scrubbed of PII/secrets (via `scrub_sensitive_data`), any flaws or gaps in this mechanism could expose private information.
-2. **External Dependency Risks**:
-   - The functionality relies heavily on external AI APIs, which may introduce downtime, latency, or rate-limiting issues.
-   - The fallback logic for handling multiple AI providers (GitHub, Gemini, OpenAI) helps mitigate the impact of a single failure but does not eliminate reliance on external APIs.
-3. **Error Management**:
-   - Limited retry logic for handling API rate limits or transient failures (e.g., for the GitHub CLI). These retries are capped at three attempts, which could lead to partial or inconsistent results for users.
-4. **Performance Risk**:
-   - The AI-based analysis could be slow, especially for large diffs or congested API endpoints. This could deteriorate the developer experience if the latency becomes significant.
+   - Code diffs and Story content are sent to external AI services, introducing potential data leakage risks. The effectiveness of `scrub_sensitive_data` is critical and requires thorough validation.
+2. **Dependency Risks**:
+   - Relies heavily on external AI APIs (GitHub CLI, Gemini, OpenAI). Failures, rate limits, or downtime from these providers could reduce reliability.
+3. **Performance Risks**:
+   - AI-based analysis might experience latency on large diffs or under congested conditions. Monitoring and optimization for these cases are recommended.
+4. **Error Handling**:
+   - Limited retry mechanisms for transient API failures may lead to incomplete or inconsistent results during provider issues.
 
-**Breaking Changes**:
-No breaking changes were identified:
-- The additions are backward-compatible with existing CLI commands and configurations.
-- No existing APIs, database schemas, or workflows are altered.
+**Breaking Changes**: No  
+- The changes are entirely additive, introducing a new CLI command and cleanly separated AI modules. Existing commands, APIs, or workflows remain unaffected.
 
 ---
-
-### Detailed Analysis
-
-#### Breaking Changes
-The new functionality introduces an independent CLI command (`impact`) and new modules for AI integration. These changes are designed to be entirely additive and do not make modifications to existing commands or APIs. Therefore, no breaking changes are present.
-
-#### Affected Components
-1. `agent/commands/check.py`:
-   - Added the `impact` function that implements the new CLI command.
-   - Integrated AI-specific functionality (e.g., calling `scrub_sensitive_data` and generating/using AI prompts).
-
-2. `agent/core/ai/` (new namespace created):
-   - `prompts.py`: Contains a single function for generating a standardized AI analysis prompt.
-   - `service.py`: Provides an abstraction layer for different AI provider implementations (GitHub CLI, Gemini, OpenAI), including provider fallback, error handling, and security scrubbing.
-   - `__init__.py`: Exposes the `ai_service` module globally.
-
-3. System commands:
-   - New `impact` command allows AI-based and static analysis of changes via Git diff.
-
-#### New Dependencies and Modules
-1. **Rich Console**: Used for printing user-friendly messaging to the CLI. Library appears to already be in use, so no new dependency is introduced here.
-2. **AI APIs**:
-   - **GitHub CLI (gh)**: Ensures compatible installation.
-   - **Gemini AI**: Checks for `GOOGLE_GEMINI_API_KEY`.
-   - **OpenAI API**: Checks for `OPENAI_API_KEY`.
-3. **New AI Logic**:
-   - Fallback provider handling and environment variable checks ensure a priority hierarchy for the available providers (GH > Gemini > OpenAI).
-
-#### Security Considerations
-1. The `scrub_sensitive_data` method is invoked to clean diff and story content before sending it to external AI services. Its effectiveness is critical for protecting sensitive information. However, the implementation of `scrub_sensitive_data` has not been provided in the diff, and its thoroughness should be evaluated.
-2. AI calls involve vendor APIs, and the system warns users to avoid including PII. However, robust user education and consistent audits of AI usage logs (as indicated by the observability requirement) are essential.
-
-#### Observability
-- AI service usage and latency are being logged, which is a necessary step for both performance monitoring and auditing purposes.
-- The `impact` command appropriately handles user feedback through CLI messages (`rich.console`) for different scenarios, such as missing staged changes or unavailability of AI providers.
-
----
-
+```
 ## Recommendations
 1. **Validation of Scrubbing Logic**:
    - To mitigate security risks, an additional unit test suite should be implemented for `scrub_sensitive_data` to verify it effectively redacts sensitive content under various scenarios.
