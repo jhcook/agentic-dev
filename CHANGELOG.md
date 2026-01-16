@@ -12,6 +12,8 @@ All notable changes to the Agent Governance Framework will be documented in this
 - **Consultative Mode**: `agent panel` now acts as a consultative board rather than a gatekeeper.
 
 ### Changed
+- **Impact Workflow**: Enhanced `@[/impact]` workflow to use `DependencyAnalyzer` for static analysis plus AI insights.
+- **Workflow Documentation**: Updated workflows guide with impact analysis step in the development lifecycle.
 - **Documentation Structure**: Relocated `docs/` to `.agent/docs/` for better encapsulation.
 
 ## [0.2.0] - 2026-01-12

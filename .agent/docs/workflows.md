@@ -7,8 +7,15 @@ Master the story-driven development process with Agent CLI.
 Agent enforces a structured workflow that ensures quality at every step:
 
 ```
-Plan → Story → Runbook → Implementation → Review → Merge
+Plan → Story → Runbook → Implementation → Testing → Impact Analysis → Review → Commit → PR → Merge
 ```
+
+**Key Quality Gates:**
+1. **Story Commitment** - Requirements locked before implementation
+2. **Runbook Acceptance** - Implementation plan approved
+3. **Impact Analysis** - Dependency tracking and risk assessment
+4. **Governance Review** - AI panel validates compliance
+5. **Preflight Checks** - Automated quality gates
 
 ## The Core Workflow
 
@@ -126,7 +133,63 @@ Basic preflight checks:
 - Tests pass
 - No uncommitted changes
 
-### 6. Governance Review
+### 6. Impact Analysis
+
+Before committing, analyze the impact of your changes:
+
+```bash
+# Stage your changes
+git add .
+
+# Run impact analysis
+agent impact WEB-042
+```
+
+**Static Analysis (Default):**
+- Uses AST parsing for Python imports
+- Uses regex for JavaScript imports
+- Shows reverse dependencies (which files depend on your changes)
+- Identifies blast radius
+
+**AI-Enhanced Analysis:**
+```bash
+agent impact WEB-042 --ai
+```
+
+Adds:
+- Security risk assessment
+- Performance implications
+- Breaking change detection
+- Workflow impact analysis
+
+**Update Story with Analysis:**
+```bash
+agent impact WEB-042 --ai --update-story
+```
+
+Automatically updates the story's "Impact Analysis Summary" section.
+
+**Example Output:**
+```
+📊 Dependency Analysis:
+
+📄 src/auth/middleware.py
+  → Impacts 12 file(s):
+    • src/api/routes/user.py
+    • src/api/routes/admin.py
+    • tests/auth/test_middleware.py
+    ... and 9 more
+
+Total Impact: 12 file(s)
+
+Impact Analysis Summary:
+Components touched: auth, api
+Reverse dependencies: 12 file(s) impacted
+Workflows affected: Authentication, User Management
+Risks identified: 12 files depend on changed code
+```
+
+### 7. Governance Review
 
 ```bash
 agent preflight --story WEB-042 --ai
@@ -143,7 +206,7 @@ Full AI governance panel:
 
 **Fix any blockers before committing!**
 
-### 7. Commit
+### 8. Commit
 
 ```bash
 # Stage changes
@@ -165,7 +228,7 @@ feat(web): add user profile page [WEB-042]
 - Includes unit tests
 ```
 
-### 8. Pull Request
+### 9. Pull Request
 
 ```bash
 agent pr --story WEB-042
@@ -186,7 +249,7 @@ agent pr --story WEB-042 --draft
 agent pr --story WEB-042 --web
 ```
 
-### 9. Review & Merge
+### 10. Review & Merge
 
 Team reviews PR:
 - Code quality
