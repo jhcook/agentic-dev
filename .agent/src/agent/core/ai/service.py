@@ -220,12 +220,19 @@ class AIService:
                         http_options=types.HttpOptions(timeout=600000),
                         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
-                    response = bg_client.models.generate_content(
+                    response_stream = bg_client.models.generate_content(
                         model=model_used,
                         contents=user_prompt,
                         config=config
                     )
-                    return response.text.strip() if response.text else ""
+                    
+                    full_text = ""
+                    # Streaming keeps the connection alive, preventing 60s/120s idle timeouts
+                    for chunk in response_stream:
+                        if chunk.text:
+                            full_text += chunk.text
+                            
+                    return full_text.strip()
 
                 elif provider == "openai":
                     client = self.clients['openai']
