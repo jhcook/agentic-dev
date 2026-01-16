@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import re
 import shutil
 from datetime import datetime
@@ -200,14 +201,18 @@ def implement(
     # 3. Load Rules
     rules_content = scrub_sensitive_data(load_governance_context())
 
-    # 3.1 Optimize Context for GitHub CLI
+    # 3.1 Optimize Context
     if ai_service.provider == "gh":
          console.print(
              "[yellow]⚠️  Using GitHub CLI (limited context): "
-             "Truncating guides and rules.[/yellow]"
+             "Strictly truncating guides and rules.[/yellow]"
          )
          guide_content = guide_content[:4000] # Cap guide at 4k chars
          rules_content = rules_content[:2000] # Cap rules at 2k chars
+    else:
+         # For other providers, still truncate rules to a reasonable safety limit 
+         # to avoid transport-layer disconnects seen with large prompts.
+         rules_content = rules_content[:10000] 
 
     # 4. Prompt
     system_prompt = """You are an Implementation Agent.
@@ -249,6 +254,10 @@ IMPLEMENTATION GUIDE:
 GOVERNANCE RULES:
 {rules_content}
 """
+
+    # Log context size
+    context_size = len(system_prompt) + len(user_prompt)
+    logging.info(f"AI Completion Requested | Context size: ~{context_size} chars")
 
     with console.status("[bold green]🤖 AI is coding...[/bold green]"):
         try:

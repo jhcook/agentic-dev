@@ -44,19 +44,22 @@ class AIService:
         if gemini_key:
             try:
                 from google import genai
-                self.clients['gemini'] = genai.Client(api_key=gemini_key)
-            except ImportError:
-                console.print("[yellow]⚠️  GOOGLE_GEMINI_API_KEY found but 'google-genai' package missing.[/yellow]")
+                from google.genai import types
+                # Set 120s timeout (120,000ms)
+                http_options = types.HttpOptions(timeout=120000)
+                self.clients['gemini'] = genai.Client(api_key=gemini_key, http_options=http_options)
+            except (ImportError, Exception) as e:
+                console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
 
         # 2. Check OpenAI
         openai_key = os.getenv("OPENAI_API_KEY")
         if openai_key:
             try:
                 from openai import OpenAI
-                self.clients['openai'] = OpenAI(api_key=openai_key)
-            except ImportError:
-                 # Check if installed
-                 console.print("[yellow]⚠️  OPENAI_API_KEY found but 'openai' package missing.[/yellow]")
+                # Set 120s timeout
+                self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
+            except (ImportError, Exception) as e:
+                 console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
 
         # 3. Check GH CLI
         if self._check_gh_cli():
@@ -100,7 +103,7 @@ class AIService:
             console.print(f"[bold red]❌ Provider '{provider_name}' is valid but not available/configured.[/bold red]")
             raise RuntimeError(f"Provider not configured: {provider_name}")
 
-    def try_switch_provider(self) -> bool:
+    def try_switch_provider(self, current_provider: str) -> bool:
         """
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
@@ -109,11 +112,10 @@ class AIService:
         fallback_chain = ['gh', 'gemini', 'openai']
         
         current_idx = -1
-        if self.provider in fallback_chain:
-            try:
-                current_idx = fallback_chain.index(self.provider)
-            except ValueError:
-                pass
+        try:
+            current_idx = fallback_chain.index(current_provider)
+        except ValueError:
+            pass
         
         # Look for next available
         start_search = current_idx + 1
@@ -129,7 +131,7 @@ class AIService:
 
     def complete(self, system_prompt: str, user_prompt: str, model: str = None) -> str:
         """
-        Sends a completion request. Raises Exception on failure.
+        Sends a completion request with automatic fallback.
         """
         provider_to_use = self.provider
         model_to_use = model
@@ -142,7 +144,6 @@ class AIService:
                 if routed_provider in self.clients:
                     provider_to_use = routed_provider
                     model_to_use = route.get("deployment_id")
-                    # console.print(f"[dim]⚡ Smart Router selected {model_to_use} ({provider_to_use})[/dim]")
                 else:
                     console.print(f"[dim][yellow]⚠️ Smart Router suggested {routed_provider}, but it is not configured. Falling back to default.[/yellow][/dim]")
 
@@ -150,25 +151,42 @@ class AIService:
              console.print("[red]❌ No valid AI provider found (Gemini key, OpenAI key, or GH CLI). AI features disabled.[/red]")
              return ""
 
-        # Security / Compliance Warning (Once per call logic?)
+        # Security / Compliance Warning
         console.print("[dim]🔒 Security Pre-check: Ensuring no PII/Secrets in context...[/dim]")
-        # console.print("[yellow]⚠️  remote-inference: Sending data to external AI provider. Do NOT include PII or Secrets.[/yellow]")
         
-        try:
-            start_time = time.time()
-            content = self._try_complete(provider_to_use, system_prompt, user_prompt, model_to_use)
-            
-            if content:
-                logging.info(f"AI Completion Success | Provider: {provider_to_use} | Duration: {time.time() - start_time:.2f}s")
-                return content
-            else:
-                # Should not happen on success, usually implies empty response which is valid but rare
-                logging.warning(f"AI Completion Empty | Provider: {provider_to_use}")
-                return ""
+        # Fallback Loop
+        attempted_providers = set()
+        current_p = provider_to_use
+        
+        while current_p and current_p not in attempted_providers:
+            attempted_providers.add(current_p)
+            try:
+                start_time = time.time()
+                content = self._try_complete(current_p, system_prompt, user_prompt, model_to_use if current_p == provider_to_use else None)
+                
+                if content:
+                    logging.info(f"AI Completion Success | Provider: {current_p} | Duration: {time.time() - start_time:.2f}s")
+                    return content
+                else:
+                    logging.warning(f"AI Completion Empty | Provider: {current_p}")
+                    return ""
 
-        except Exception as e:
-            logging.error(f"Provider {provider_to_use} failed: {e}")
-            raise e # Propagate so caller can handle strategy switch
+            except Exception as e:
+                logging.error(f"Provider {current_p} failed: {e}")
+                
+                # If we are forced or using a specific model, we might still want to fallback unless explicitly disallowed
+                # but typically a forced provider should probably not fallback unless we want maximum reliability.
+                # Given the user experience so far, maximum reliability is better.
+                if self.try_switch_provider(current_p):
+                    new_p = self.provider
+                    console.print(f"[yellow]⚠️ Provider {current_p} failed. Falling back to {new_p}...[/yellow]")
+                    current_p = new_p
+                    continue
+                else:
+                    console.print(f"[bold red]❌ All AI providers failed. Last error: {e}[/bold red]")
+                    raise e
+
+        return ""
 
     def get_completion(self, prompt: str) -> str:
         """
