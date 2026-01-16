@@ -1,56 +1,50 @@
 ---
-description: Run impact analysis on code changes using AI.
+description: Perform impact analysis on code changes using the Agent's AI capabilities.
 ---
 # Workflow: Impact Analysis
 
-Run the following command:
-`agent impact <STORY-ID> [--ai] [--base <BRANCH>] [--update-story]`
-
----
-
-# Impact Analysis Guide
-
-You are a Release Engineer performing an impact analysis.
-
-## PURPOSE
-To identify breaking changes, risks, and affected components before merging code.
-
-## SYNTAX
-```bash
-agent impact <STORY-ID> [flags]
-```
-
-## FLAGS
-- `--ai`: Enable AI-powered analysis (Required for deep insights).
-- `--base <BRANCH>`: Compare against a specific branch (default: staged changes).
-- `--update-story`: Automatically update the Story file with the analysis.
+You will manually perform the impact analysis logic instead of running the CLI command.
 
 ## PROCESS
 
-1. **Identify the Story**:
+1. **Identify Story ID**:
    - Determine the Story ID from the context or user input.
 
-2. **Run Analysis**:
-   - Execute `agent impact <STORY-ID> --ai` to generate the report.
-   - If you need to update the story file directly, append `--update-story`.
+2. **Get Git Diff**:
+   - If a base branch is provided (e.g., via User Request "compare against main"), run:
+     `git diff <BASE>...HEAD .`
+   - Otherwise, get the staged changes:
+     `git diff --cached .`
+   - If the output is empty, notify the user.
 
-3. **Review Output**:
-   - Check for **High Risks** or **Breaking Changes**.
-   - If breaking changes are found, ensure they are documented in the Story and CHANGELOG.
+3. **Read Story Context**:
+   - Locate the story file: `.agent/cache/stories/*/<STORY-ID>*.md`.
+   - Read its content using `read_file`.
 
-## EXAMPLES
+4. **Generate AI Analysis**:
+   - Construct a prompt including the **Story Content** and the **Git Diff**.
+   - Use the `notify_user` tool (or just plain text output) to generate the analysis.
+   - **PROMPT**:
+     ```
+     You are an expert Release Engineer. Analyze these changes:
+     
+     STORY:
+     <Story Content>
+     
+     DIFF:
+     <Git Diff>
+     
+     Determine:
+     1. Components touched
+     2. Workflows affected
+     3. Risks (Security, Performance, etc.)
+     4. Breaking Changes
+     
+     Provide a "Impact Analysis Summary".
+     ```
 
-**Standard AI Analysis:**
-```bash
-agent impact INFRA-007 --ai
-```
+5. **Update Story (Optional)**:
+   - If the user requested to update the story (e.g., "update the story"), use `replace_file_content` to inject the analysis into the "Impact Analysis Summary" section of the story file.
 
-**Update Story with Analysis:**
-```bash
-agent impact INFRA-007 --ai --update-story
-```
-
-**Compare Branch vs Main:**
-```bash
-agent impact INFRA-007 --ai --base main
-```
+6. **Report**:
+   - Output the analysis to the user.
