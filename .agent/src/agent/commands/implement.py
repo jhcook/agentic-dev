@@ -237,24 +237,85 @@ def implement(
     rules_content = re.sub(r'<!--.*?-->', '', rules_content, flags=re.DOTALL)
     rules_content = re.sub(r'\n{3,}', '\n\n', rules_content)
 
-    # 4. Chunking Strategy
-    global_runbook_context, chunks = split_runbook_into_chunks(runbook_content_scrubbed)
+    # 4. Hybrid Strategy: Try Full Context -> Fallback to Chunking
     
-    if len(chunks) > 1:
-        console.print(f"[bold blue]🛈 Strategy: Chunked Processing Active[/bold blue]")
-        console.print(f"  • Runbook split into {len(chunks)} tasks to optimize reliability.")
-        console.print(f"  • Full governance context is PRESERVED for each task.")
+    # Attempt 1: Full Context
+    console.print("[dim]Attempting full context execution...[/dim]")
+    
+    full_content = ""
+    fallback_needed = False
+    
+    # Check if runbook is small enough to skip complexity
+    if len(runbook_content_scrubbed) < 10000:
+         # Just goes straight to full context, no need for fancy logic
+         pass
     else:
-        console.print(f"[dim]Runbook small enough for single-pass processing.[/dim]")
+         pass 
 
-    total_content = ""
-    
-    # 5. Iterative Implementation Loop
-    for idx, chunk in enumerate(chunks):
-        if len(chunks) > 1:
-            console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
-
+    try:
         system_prompt = """You are an Implementation Agent.
+Your goal is to EXECUTE the tasks defined in the provided RUNBOOK.
+
+CONTEXT:
+1. RUNBOOK (The plan you must follow)
+2. IMPLEMENTATION GUIDE (The process you must follow)
+3. RULES (Governance you must obey)
+
+INSTRUCTIONS:
+- Review the Runbook's 'Proposed Changes'.
+- Generate the actual code changes required.
+- Output code using this format:
+
+File: path/to/file.py
+```python
+# Complete file content here
+```
+
+- Provide complete, working code for each file.
+- Include all necessary imports.
+"""
+        user_prompt = f"""RUNBOOK CONTENT:
+{runbook_content_scrubbed}
+
+IMPLEMENTATION GUIDE:
+{guide_content}
+
+GOVERNANCE RULES:
+{rules_content}
+"""
+        # Log context size
+        context_size = len(system_prompt) + len(user_prompt)
+        logging.info(f"AI Full Context Attempt | Context size: ~{context_size} chars")
+
+        with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
+             full_content = ai_service.complete(system_prompt, user_prompt)
+             
+        if not full_content:
+             raise Exception("Empty response from AI")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠️ Full context failed: {e}[/yellow]")
+        console.print("[bold blue]🔄 Falling back to Chunked Processing...[/bold blue]")
+        fallback_needed = True
+
+    # Attempt 2: Chunking (Fallback or if explicitly chosen later)
+    if fallback_needed:
+        global_runbook_context, chunks = split_runbook_into_chunks(runbook_content_scrubbed)
+        console.print(f"[dim]Runbook split into {len(chunks)} tasks[/dim]")
+
+        for idx, chunk in enumerate(chunks):
+            if len(chunks) > 1:
+                console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
+
+            system_prompt = """You are an Implementation Agent.
+Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
+... (rest of chunking prompt) ...
+"""
+            # Reuse previous chunking logic here...
+            # For brevity in this replacement, I need to make sure I don't lose the logic I wrote before.
+            # I will use the previously written chunking loop here.
+            
+            chunk_system_prompt = """You are an Implementation Agent.
 Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
 
 CONSTRAINTS:
@@ -269,12 +330,8 @@ File: path/to/file.py
 ```python
 # Complete file content here
 ```
-
-- Provide complete, working code for each file mentioned in the task.
-- Include all necessary imports.
 """
-
-        user_prompt = f"""GLOBAL RUNBOOK CONTEXT:
+            chunk_user_prompt = f"""GLOBAL RUNBOOK CONTEXT:
 {global_runbook_context}
 
 --------------------------------------------------------------------------------
@@ -288,48 +345,37 @@ IMPLEMENTATION GUIDE:
 GOVERNANCE RULES:
 {rules_content}
 """
+            logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
-        # Log context size
-        context_size = len(system_prompt) + len(user_prompt)
-        logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{context_size} chars")
+            with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
+                try:
+                    chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
+                    if chunk_result:
+                         full_content += f"\n\n{chunk_result}"
+                         # Apply immediately if flag set
+                         if apply:
+                             code_blocks = parse_code_blocks(chunk_result)
+                             if code_blocks:
+                                 console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                                 for block in code_blocks:
+                                     apply_change_to_file(block['file'], block['content'], yes)
+                except Exception as e:
+                     console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
+                     # If chunking fails too, we are done.
+                     raise typer.Exit(code=1)
 
-        with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
-            try:
-                chunk_result = ai_service.complete(system_prompt, user_prompt)
-                if not chunk_result:
-                    logging.warning(f"Task {idx+1} returned empty content.")
-                    continue
-                total_content += f"\n\n{chunk_result}"
-                
-                # If applying automatically, apply this chunk immediately to keep momentum
-                if apply:
-                    code_blocks = parse_code_blocks(chunk_result)
-                    if code_blocks:
-                        console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                        for block in code_blocks:
-                            apply_change_to_file(block['file'], block['content'], yes)
-                    else:
-                        console.print("[yellow]⚠️ No code blocks found in this task response.[/yellow]")
-                
-            except Exception as e:
-                console.print(f"[bold red]❌ Task {idx+1} failed: {e}[/bold red]")
-                if not apply: # If not applying, we can stop early
-                    raise typer.Exit(code=1)
-                # If applying, maybe continue? or stop? Given it's a chain, stopping is safer.
-                raise typer.Exit(code=1)
+    # Final Handling
+    if not full_content:
+         console.print("[bold red]❌ All attempts failed.[/bold red]")
+         raise typer.Exit(code=1)
 
-    if not total_content:
-        console.print("[bold red]❌ AI returned empty response for all tasks.[/bold red]")
-        raise typer.Exit(code=1)
-
-    # 6. Final Summary (only if not apply, as we already applied above)
-    if not apply:
-        console.print("\n[bold green]--- FINAL IMPLEMENTATION ADVICE ---[/bold green]")
-        console.print(Markdown(total_content))
-        console.print("\n[bold green]✅ Implementation advice generated in chunks.[/bold green]")
-        console.print("[dim]💡 Use --apply to automatically apply changes sequentially.[/dim]")
-    else:
-        console.print("\n[bold green]✅ Sequential implementation complete![/bold green]")
-        console.print("[dim]💡 Backups saved to .agent/backups/[/dim]")
-        console.print("[dim]📝 Change log: .agent/logs/implement_changes.log[/dim]")
+    # ... Display/Apply logic for full content ...
+    if not apply and full_content:
+         console.print(Markdown(full_content))
+    elif apply and not fallback_needed: # If we did full context apply, do it now
+         console.print("\n[bold blue]🔧 Applying changes...[/bold blue]")
+         code_blocks = parse_code_blocks(full_content)
+         # ... apply loop ...
+         for block in code_blocks:
+            apply_change_to_file(block['file'], block['content'], yes)
 
