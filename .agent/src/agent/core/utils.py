@@ -116,20 +116,32 @@ def find_story_file(story_id: str) -> Optional[Path]:
             return file_path
     return None
 
-def load_governance_context() -> str:
+    return context
+
+def load_governance_context(coding_only: bool = False) -> str:
     """
-    Load all governance rules from the rules directory.
-
-    Reads all .mdc files in the configured rules directory and concatenates them
-    into a single string to be used as context for AI operations.
-
-    Returns:
-        str: A formatted string containing all governance rules.
+    Load governance rules from the rules directory.
+    
+    Args:
+        coding_only: If True, filters out non-coding related rules (process/roles)
+                     to save context window space.
     """
     context = "GOVERNANCE RULES:\n"
     has_rules = False
+    
+    # Process-related rules to skip when coding_only is True
+    PROCESS_RULES = {
+        "the-team.mdc", 
+        "commit-workflow.mdc", 
+        "story-standards.mdc",
+        "plan-standards.mdc"
+    }
+    
     if config.rules_dir.exists():
         for rule_file in sorted(config.rules_dir.glob("*.mdc")):
+            if coding_only and rule_file.name in PROCESS_RULES:
+                continue
+                
             has_rules = True
             context += f"\n--- RULE: {rule_file.name} ---\n"
             context += rule_file.read_text(errors="ignore")

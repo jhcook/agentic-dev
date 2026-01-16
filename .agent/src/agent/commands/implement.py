@@ -298,8 +298,19 @@ GOVERNANCE RULES:
         console.print("[bold blue]🔄 Falling back to Chunked Processing...[/bold blue]")
         fallback_needed = True
 
-    # Attempt 2: Chunking (Fallback or if explicitly chosen later)
+    # Attempt 2: Chunking (Fallback)
     if fallback_needed:
+        # SEMANTIC FILTERING for Fallback Mode
+        # We need to reduce context size to avoid transport crashes.
+        # Instead of truncating, we filter out non-coding rules (process, roles, etc).
+        console.print("[yellow]⚠️  Applying semantic context filtering (Coding Rules Only)...[/yellow]")
+        
+        # Load lean rules
+        filtered_rules = scrub_sensitive_data(load_governance_context(coding_only=True))
+        # Compress (remove comments/extra whitespace)
+        filtered_rules = re.sub(r'<!--.*?-->', '', filtered_rules, flags=re.DOTALL)
+        filtered_rules = re.sub(r'\n{3,}', '\n\n', filtered_rules)
+
         global_runbook_context, chunks = split_runbook_into_chunks(runbook_content_scrubbed)
         console.print(f"[dim]Runbook split into {len(chunks)} tasks[/dim]")
 
@@ -342,8 +353,8 @@ CURRENT TASK:
 IMPLEMENTATION GUIDE:
 {guide_content}
 
-GOVERNANCE RULES:
-{rules_content}
+RULES (Filtered):
+{filtered_rules}
 """
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
