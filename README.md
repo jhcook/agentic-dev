@@ -60,6 +60,7 @@ agent new-story
 
 - `agent run-ui-tests`: Run Maestro UI tests.
 - `agent implement --apply`: Auto-apply code changes from runbooks.
+- `agent impact`: Analyze code changes with dependency tracking.
 - `agent preflight`: Run governance checks.
 - `agent panel`: Consult with AI experts.
 - `agent lint`: Run linters.

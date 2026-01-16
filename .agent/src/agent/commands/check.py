@@ -275,22 +275,59 @@ def impact(
             raise typer.Exit(code=1)
             
     else:
-        # Static Mode
-        console.print("[dim]📊 Generating static impact analysis...[/dim]")
+        # Static Mode - Use Dependency Analyzer
+        console.print("[dim]📊 Running static dependency analysis...[/dim]")
+        
+        from agent.core.dependency_analyzer import DependencyAnalyzer
+        
+        repo_root = Path.cwd()
+        analyzer = DependencyAnalyzer(repo_root)
+        
+        # Convert file strings to Path objects
+        changed_files = [Path(f) for f in files]
+        
+        # Get all Python and JS files in repo
+        all_files = []
+        for pattern in ['**/*.py', '**/*.js', '**/*.ts', '**/*.tsx']:
+            all_files.extend(repo_root.glob(pattern))
+        all_files = [f.relative_to(repo_root) for f in all_files]
+        
+        # Find reverse dependencies
+        reverse_deps = analyzer.find_reverse_dependencies(changed_files, all_files)
+        
+        total_impacted = sum(len(deps) for deps in reverse_deps.values())
+        
+        # Build analysis summary
         components = set()
         for f in files:
             parts = Path(f).parts
             if len(parts) > 1:
-                components.add(parts[0]) # Top level dir
+                components.add(parts[0])
             else:
                 components.add("root")
-                
+        
         analysis = f"""## Impact Analysis Summary
 Components touched: {', '.join(files)}
-Workflows affected: TBD (Static analysis limited)
-Risks identified: Static analysis only. Verify manually.
-Breaking Changes: Unknown (Run with --ai for detection)
+Reverse dependencies: {total_impacted} file(s) impacted
+Workflows affected: {', '.join(components)}
+Risks identified: {total_impacted} files depend on changed code
 """
+        
+        # Display detailed reverse dependencies
+        console.print("\n[bold]📊 Dependency Analysis:[/bold]")
+        for changed_file, dependents in reverse_deps.items():
+            console.print(f"\n📄 [cyan]{changed_file}[/cyan]")
+            if dependents:
+                console.print(
+                    f"  [yellow]→ Impacts {len(dependents)} file(s):[/yellow]"
+                )
+                # Show first 10 dependents
+                for dep in sorted(dependents)[:10]:
+                    console.print(f"    • {dep}")
+                if len(dependents) > 10:
+                    console.print(f"    ... and {len(dependents) - 10} more")
+            else:
+                console.print("  [green]✓ No direct dependents[/green]")
 
     console.print("\n[bold]Impact Analysis:[/bold]")
     console.print(analysis)

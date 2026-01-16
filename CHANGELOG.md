@@ -7,6 +7,7 @@ All notable changes to the Agent Governance Framework will be documented in this
 ### Added
 - **UI Tests Runner**: New `agent run-ui-tests` command to execute Maestro UI test flows.
 - **Enhanced Implement Command**: Added `--apply` and `--yes` flags to `agent implement` for automatic code application.
+- **Improved Impact Analysis**: Enhanced `agent impact` with dependency tracking using AST parsing for Python and regex for JavaScript.
 - **Governance Commands**: New `agent panel` and `agent preflight` Python implementations.
 - **Consultative Mode**: `agent panel` now acts as a consultative board rather than a gatekeeper.
 
