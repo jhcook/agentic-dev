@@ -5,31 +5,69 @@
 **Assignee**: @Backend
 
 ## Context
-The `agent` CLI needs to report its version correctly even when distributed as a tarball without `.git` metadata. We will implement a file-based fallback mechanism.
+The `agent` CLI currently relies on `git describe` for versioning. This fails when the tool is distributed as a tarball or installed in environments without `.git` metadata. We need a dual-strategy versioning system:
+1.  **Dev/Git Mode**: Use `git describe` (dynamic).
+2.  **Distribution Mode**: Use a static `VERSION` file generated at build time.
 
-## Proposed Changes
+## Panel Review Findings
 
-### 1. Build Script (`package.sh`)
-- **Objective**: Generate a `VERSION` file during packaging.
-- **Action**: Add a step to `package.sh` that runs `git describe --tags --always --dirty > VERSION` before archiving.
+### @Architect
+-   **Pattern**: The proposed pattern of "Dynamic fallback to Static" is standard for Python CLIs.
+-   **Structure**: The `VERSION` file should live in the package root (e.g., inside `.agent/src/` or adjacent to `pyproject.toml`) so it is included in the build artifact.
+-   **Dependency**: Ensure `package.sh` is the canonical way to build distribution artifacts.
 
-### 2. CLI Entrypoint (`.agent/src/agent/main.py`)
-- **Objective**: Read from `VERSION` file if git lookup fails.
-- **Action**:
-    - Locate the integration point for version retrieval.
-    - Add logic to check for a `VERSION` file in the package root (adjacent to `main.py` or package root).
-    - If `VERSION` exists, return its content.
-    - Fallback to "unknown" or existing default.
+### @Security
+-   **Risk**: Low. Version strings are public information.
+-   **Check**: Ensure the `VERSION` file isn't writable by the application at runtime (readonly).
 
-## Verification Plan
+### @QA
+-   **Strategy**: Needs two distinct test cases:
+    -   Case A: Running inside a git repo (mocks git command success).
+    -   Case B: Running outside a git repo (mocks git failure, correct file read).
+-   **Regression**: Ensure existing `--version` flag logic isn't broken.
 
-### Manual Verification
-1. **Dev Mode**: Run `agent --version` in the repo -> Expect `git describe` output.
-2. **Dist Mode**:
-    - Run `./package.sh`.
-    - Extract the tarball to a temporary location (outside git).
-    - Run the extracted `agent` -> Expect `VERSION` file content.
+### @Compliance
+-   **Constraint**: No PII in version strings (standard git hashes are fine).
 
-### Automated Tests
-- Ensure `test_governance.py` and other new tests pass.
-- (Optional) Add a unit test specifically for the version reader function mocking the file system.
+## Implementation Plan
+
+### 1. Build Script Enhancement (`package.sh`)
+-   **Objective**: Stamp the version during packaging.
+-   **Changes**:
+    -   Before running `tar`, execute: `git describe --tags --always --dirty > .agent/src/VERSION`.
+    -   Ensure the `VERSION` file is included in the created archive.
+
+### 2. Version Logic Update (`.agent/src/agent/version.py` or equivalent)
+-   **Target File**: Likely `main.py` or a dedicated version utility.
+-   **Logic**:
+    ```python
+    def get_version():
+        # 1. Try Git
+        try:
+            return subprocess.check_output(["git", "describe", ...]).decode().strip()
+        except:
+            pass
+        
+        # 2. Try File
+        version_file = Path(__file__).parent / "VERSION"  # Adjust path as needed
+        if version_file.exists():
+            return version_file.read_text().strip()
+            
+        # 3. Fallback
+        return "unknown"
+    ```
+
+### 3. Verification Plan
+
+#### Manual Verification
+1.  **Git Context**: Run `agent --version` in current repo -> Verify output matches `git describe`.
+2.  **No-Git Context**:
+    -   Run `./package.sh`.
+    -   Move `dist/agent-release.tar.gz` to `/tmp/`.
+    -   Extract and run `./agent --version`.
+    -   Verify it prints the version (not crash, not "unknown").
+
+#### Automated Tests
+-   Create `tests/core/test_version.py`.
+-   Use `unittest.mock` to simulate `subprocess.check_output` raising `CalledProcessError`.
+-   Verify correct fallback to file reading.

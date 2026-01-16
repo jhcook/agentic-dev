@@ -22,6 +22,17 @@ find "$SOURCE_DIR" -name ".DS_Store" -delete
 find "$SOURCE_DIR" -name ".pytest_cache" -type d -exec rm -rf {} +
 find "$SOURCE_DIR" -name ".ruff_cache" -type d -exec rm -rf {} +
 
+
+# Stamp Version
+echo "🔖 Stamping version..."
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    # Ensure src directory exists to avoid errors if it doesn't
+    mkdir -p .agent/src
+    git describe --tags --always --dirty > .agent/src/VERSION
+else
+    echo "unknown" > .agent/src/VERSION
+fi
+
 echo "📦 Packaging agent..."
 # Exclude user-specific data directories but keep the tool structure
 tar --exclude="$SOURCE_DIR/logs/*" \

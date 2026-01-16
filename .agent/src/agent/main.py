@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import typer
+import subprocess
+from pathlib import Path
 from rich.console import Console
 
 from agent.commands import (
@@ -96,12 +98,24 @@ def main(
     """
     Agent CLI - Governance and Workflow Automation
     """
+
     if version:
+        ver = "unknown"
         try:
-            import subprocess
             ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"]).decode().strip()
         except Exception:
-            ver = "v0.1.0"
+            try:
+                # Fallback to file
+                # .agent/src/agent/main.py -> .agent/src/VERSION
+                version_file = Path(__file__).parent.parent / "VERSION"
+                if version_file.exists():
+                    ver = version_file.read_text().strip()
+            except Exception:
+                pass
+        
+        if ver == "unknown":
+             ver = "v0.1.0" # Legacy fallback
+
         typer.echo(f"Agent CLI {ver}")
         raise typer.Exit()
 
@@ -111,3 +125,4 @@ def main(
 
 if __name__ == "__main__":
     app()
+
