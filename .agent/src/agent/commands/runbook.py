@@ -118,12 +118,13 @@ INPUTS:
 
 OUTPUT FORMAT:
 Raw Markdown content ONLY. Do NOT wrap the output in code fences (```markdown).
-The content MUST start with 'Status: PROPOSED'.
+The content MUST start with '## State'.
 
 STRUCTURE:
 # STORY-ID: <Title>
 
-Status: PROPOSED
+## State
+PROPOSED
 
 ## Goal Description
 <Clear summary of the objective>
@@ -193,4 +194,4 @@ GOVERNANCE RULES:
     else:
          console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
 
-    console.print("[yellow]⚠️  ACTION REQUIRED: Review and change 'Status: PROPOSED' to 'Status: ACCEPTED'.[/yellow]")
+    console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")

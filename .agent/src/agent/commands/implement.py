@@ -263,7 +263,9 @@ def implement(
     runbook_content_scrubbed = scrub_sensitive_data(original_runbook_content)
 
     # 1.1 Enforce Runbook State
-    if "Status: ACCEPTED" not in runbook_content_scrubbed:
+    # Check for formats: "Status: ACCEPTED", "## Status\nACCEPTED", "## State\nACCEPTED"
+    status_pattern = r"(?:^Status:\s*ACCEPTED|^## Status\s*\n+ACCEPTED|^## State\s*\n+ACCEPTED)"
+    if not re.search(status_pattern, runbook_content_scrubbed, re.MULTILINE):
         console.print(
             f"[bold red]❌ Runbook {runbook_id} is not ACCEPTED. "
             "Please review and update status to ACCEPTED "

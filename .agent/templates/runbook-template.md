@@ -1,6 +1,7 @@
 # STORY-ID: <Title>
 
-Status: PROPOSED
+## State
+PROPOSED
 
 ## Goal Description
 <Clear summary of the objective>
