@@ -61,9 +61,9 @@ def test_commit_options():
     assert "--runbook" in result.stdout
 
 def test_plan_help():
-    result = runner.invoke(app, ["plan", "--help"])
+    result = runner.invoke(app, ["new-plan", "--help"])
     assert result.exit_code == 0
-    assert "Generate an implementation plan" in result.stdout
+    assert "Create a new implementation plan" in result.stdout
 
 def test_implement_help():
     result = runner.invoke(app, ["implement", "--help"])

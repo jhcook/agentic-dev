@@ -35,4 +35,4 @@ def test_apply_auto_correct(mock_mkdir, mock_write, mock_exists, mock_find, mock
     # Verify we wrote to the DEEP path, not the root path
     # args[0] of write_text should be the content. The Path object it's called on matters.
     # We can check if console printed the auto-correct message
-    mock_console.print.assert_any_call("[yellow]⚠️  Path Auto-Correct: 'main.py' -> '.agent/src/agent/main.py'[/yellow]")
+    mock_console.print.assert_any_call("[yellow]⚠️  Path Auto-Correct (File Match): 'main.py' -> '.agent/src/agent/main.py'[/yellow]")

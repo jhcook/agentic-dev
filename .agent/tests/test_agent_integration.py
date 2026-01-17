@@ -21,6 +21,14 @@ import pytest
 # Path to the real repository root
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
+def get_venv_env():
+    """Get environment with venv bin in PATH."""
+    import sys
+    env = os.environ.copy()
+    venv_bin = os.path.dirname(sys.executable)
+    env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
+    return env
+
 @pytest.fixture
 def agent_sandbox(tmp_path):
     """
@@ -50,7 +58,7 @@ def agent_sandbox(tmp_path):
 def test_agent_help(agent_sandbox):
     """Test standard help output."""
     agent_bin, _ = agent_sandbox
-    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True)
+    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env())
     assert result.returncode == 0
     assert "Governed workflow CLI" in result.stdout
     assert "preflight" in result.stdout
@@ -67,7 +75,8 @@ def test_new_story_interactive(agent_sandbox):
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
         text=True,
-        cwd=cwd
+        cwd=cwd,
+        env=get_venv_env()
     )
     stdout, stderr = proc.communicate(input="Test Story Title\n")
     
@@ -95,7 +104,8 @@ def test_new_story_auto_id(agent_sandbox):
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
         text=True,
-        cwd=cwd
+        cwd=cwd,
+        env=get_venv_env()
     )
     stdout, stderr = proc.communicate(input=inputs)
     
@@ -118,7 +128,8 @@ def test_new_plan(agent_sandbox):
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
         text=True,
-        cwd=cwd
+        cwd=cwd,
+        env=get_venv_env()
     )
     stdout, stderr = proc.communicate(input="My Plan\n")
     assert proc.returncode == 0
@@ -136,7 +147,8 @@ def test_new_adr(agent_sandbox):
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
         text=True,
-        cwd=cwd
+        cwd=cwd,
+        env=get_venv_env()
     )
     stdout, stderr = proc.communicate(input="Architecture Decision\n")
     assert proc.returncode == 0
@@ -150,17 +162,17 @@ def test_validate_story_success(agent_sandbox):
     
     # First create a valid story
     story_id = "MOBILE-777"
-    subprocess.run([agent_bin, "new-story", story_id], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True)
+    subprocess.run([agent_bin, "new-story", story_id], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True, env=get_venv_env())
     
     # Run validate
-    result = subprocess.run([agent_bin, "validate-story", story_id], cwd=cwd, capture_output=True, text=True)
+    result = subprocess.run([agent_bin, "validate-story", story_id], cwd=cwd, capture_output=True, text=True, env=get_venv_env())
     assert result.returncode == 0
     assert f"Story schema validation passed for {story_id}" in result.stdout
 
 def test_pr_help_check(agent_sandbox):
     """Verify 'agent pr' command loads and displays help (regression test for missing cmd_pr)."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin, "pr", "--help"], capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run([agent_bin, "pr", "--help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
     assert result.returncode == 0
     assert "Open a GitHub Pull Request" in result.stdout
     assert "--story" in result.stdout
@@ -168,7 +180,7 @@ def test_pr_help_check(agent_sandbox):
 def test_agent_no_args(agent_sandbox):
     """Test that running agent without arguments displays help and does not crash."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin], capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run([agent_bin], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
     assert result.returncode == 0
     assert "Usage: agent [COMMAND]" in result.stdout or "Usage: python -m agent.main" in result.stdout
     assert "Governed workflow CLI" in result.stdout
@@ -176,7 +188,7 @@ def test_agent_no_args(agent_sandbox):
 def test_agent_nested_help(agent_sandbox):
     """Test 'agent <cmd> help' syntax translation."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin, "preflight", "help"], capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run([agent_bin, "preflight", "help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
     assert result.returncode == 0
     assert "Run preflight checks" in result.stdout or "Run governance preflight checks" in result.stdout
 

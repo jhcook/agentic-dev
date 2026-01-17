@@ -20,7 +20,7 @@ def mock_deps(tmp_path):
     
     # Create dummy story in subfolder for correct scoping
     story_file = agent_dir / "stories" / "INFRA" / "STORY-123-test.md"
-    story_file.write_text("# Test Story\nContext here.")
+    story_file.write_text("# Test Story\nState: COMMITTED\nContext here.")
     
     # Create dummy rule
     rule_file = agent_dir / "rules" / "rule1.mdc"
@@ -41,17 +41,17 @@ def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
         
 
         # Invoke command
-        result = runner.invoke(app, ["plan", "STORY-123"])
+        result = runner.invoke(app, ["new-plan", "STORY-123"], input="My Plan Title\n")
         
         # Verify
         if result.exit_code != 0:
             print(result.stdout) # For debugging
         assert result.exit_code == 0
-        assert "Plan generated" in result.stdout
+        assert "Created Plan" in result.stdout
         # Check file created
-        plan_files = list((mock_deps["root"] / ".agent" / "plans").glob("INFRA/STORY-123-impl-plan.md"))
+        plan_files = list((mock_deps["root"] / ".agent" / "plans").glob("MISC/STORY-123-my-plan-title.md"))
         assert len(plan_files) > 0
-        assert plan_files[0].read_text() == "# Plan Content\nSteps..."
+        assert "# STORY-123: My Plan Title" in plan_files[0].read_text()
 
 @patch("agent.core.ai.ai_service.complete")
 def test_new_runbook_command(mock_complete, mock_deps):

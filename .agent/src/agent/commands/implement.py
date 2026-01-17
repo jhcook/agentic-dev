@@ -107,42 +107,121 @@ def find_file_in_repo(filename: str) -> List[str]:
     except Exception:
         return []
 
+def find_directories_in_repo(dirname: str) -> List[str]:
+    """
+    Search for directories with a specific name in the repo.
+    Excludes hidden directories (starting with .).
+    """
+    try:
+        # standard 'find' command to look for directories with exact name
+        # -type d : directories
+        # -name : match name
+        # -not -path '*/.*' : ignore hidden paths like .git/foo
+        cmd = ["find", ".", "-type", "d", "-name", dirname, "-not", "-path", "*/.*"]
+        result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
+        if not result:
+            return []
+        
+        # clean up paths (./foo -> foo)
+        paths = [p.lstrip("./") for p in result.split('\n') if p]
+        return paths
+    except Exception:
+        return []
+
+def resolve_path(filepath: str) -> Optional[Path]:
+    """
+    Resolve a potentially hallucinated file path to a real location.
+    Returns None if the path is invalid/ambiguous and should be rejected.
+    Returns Path object if resolved.
+    """
+    file_path = Path(filepath)
+    
+    # 1. Exact Match (Best Case)
+    if file_path.exists():
+        return file_path
+        
+    # 2. Existing File Search (renames/moves)
+    # If the file exists somewhere else with the exact same name, assume that's it.
+    candidates = find_file_in_repo(file_path.name)
+    exact_matches = [c for c in candidates if Path(c).name == file_path.name]
+    
+    if len(exact_matches) == 1:
+        # Single exact file match - Auto-Redirect
+        new_path = exact_matches[0]
+        if new_path != filepath:
+            console.print(f"[yellow]⚠️  Path Auto-Correct (File Match): '{filepath}' -> '{new_path}'[/yellow]")
+            return Path(new_path)
+    elif len(exact_matches) > 1:
+        # Ambiguous file match
+        console.print(f"[bold red]❌ Ambiguous file path '{filepath}'. Found multiple existing files:[/bold red]")
+        for i, c in enumerate(exact_matches):
+            console.print(f"  {i+1}: {c}")
+        console.print("[red]Aborting to prevent editing the wrong file.[/red]")
+        return None
+
+    # 3. Smart Directory Resolution (New File)
+    # The file is new. Check if the directory path is valid.
+    # We walk the path parts. If we hit a non-existent directory, we try to resolve it.
+    parts = file_path.parts
+    current_check = Path(".")
+    
+    for i, part in enumerate(parts[:-1]): # Skip filename
+        next_check = current_check / part
+        if not next_check.exists():
+            # This directory component is missing. 
+            # Example: 'src/foo.py' -> 'src' missing.
+            # Search for a directory named 'part' in the repo.
+            console.print(f"[dim]Directory '{next_check}' not found. Searching for '{part}'...[/dim]")
+            dir_candidates = find_directories_in_repo(str(part))
+            
+            if len(dir_candidates) == 0:
+                console.print(f"[bold red]❌ Cannot create new root hierarchy '{next_check}'.[/bold red]")
+                console.print(f"[red]Directory '{part}' not found in repo.[/red]")
+                return None
+            elif len(dir_candidates) == 1:
+                # Unique match found! Resolve the prefix.
+                found_dir = dir_candidates[0]
+                # Reconstruct path: found_dir + rest_of_path
+                # existing parts: parts[:i] was valid (or root).
+                # part is replaced by found_dir.
+                # remaining is parts[i+1:]
+                
+                # Wait, if we are at 'src' (root), parts[:i] is empty.
+                # found_dir is e.g. 'packages/app/src'
+                # remaining is 'foo.py'
+                
+                rest_of_path = Path(*parts[i+1:])
+                new_full_path = Path(found_dir) / rest_of_path
+                console.print(f"[yellow]⚠️  Path Auto-Correct (Dir Match): '{filepath}' -> '{new_full_path}'[/yellow]")
+                return new_full_path
+            else:
+                # Ambiguous directory
+                console.print(f"[bold red]❌ Ambiguous directory '{part}'. Found multiple matches:[/bold red]")
+                for i, c in enumerate(dir_candidates[:10]):
+                    console.print(f"  - {c}")
+                console.print("[red]Aborting. Please specify the full path.[/red]")
+                return None
+                
+        current_check = next_check
+
+    # If we made it here, the parent directories exist, or we are creating a file in root (allowed if not caught above).
+    # But wait, logic above catches the *first* missing component.
+    # If I create 'new_root/foo.py', 'new_root' is missing.
+    # 'find_directories_in_repo' for 'new_root' -> returns [].
+    # Returns None. So we BLOCK creating new root dirs implicitly. This is Desired.
+    
+    return file_path
+
 def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool:
     """
     Apply code changes to a file with smart path resolution.
     """
-    original_path_str = filepath
-    file_path = Path(filepath)
-    
-    # 1. Smart Path Resolution
-    if not file_path.exists():
-        # Try to find the file in the repo to avoid accidental root creation
-        candidates = find_file_in_repo(file_path.name)
+    resolved_path = resolve_path(filepath)
+    if not resolved_path:
+        return False
         
-        # Filter candidates to find exact filename match (handle partials)
-        exact_matches = [c for c in candidates if Path(c).name == file_path.name]
-        
-        if len(exact_matches) == 1:
-            # Auto-Correct: We found exactly one file with this name in the repo
-            new_path = exact_matches[0]
-            if new_path != filepath:
-                console.print(f"[yellow]⚠️  Path Auto-Correct: '{filepath}' -> '{new_path}'[/yellow]")
-                filepath = new_path
-                file_path = Path(filepath)
-        elif len(exact_matches) > 1:
-            # Ambiguity: Ask user
-            console.print(f"[yellow]⚠️  Ambiguous path '{filepath}'. Found multiple updates:[/yellow]")
-            for i, c in enumerate(exact_matches):
-                console.print(f"  {i+1}: {c}")
-            
-            if yes:
-                console.print("[red]Cannot auto-resolve ambiguity with --yes. Skipping.[/red]")
-                return False
-                
-            choice = typer.prompt("Select file to update (0 to create new)", type=int, default=0)
-            if choice > 0 and choice <= len(exact_matches):
-                filepath = exact_matches[choice-1]
-                file_path = Path(filepath)
+    file_path = resolved_path
+    filepath = str(resolved_path)
 
     # Show diff preview
     console.print(f"\n[bold cyan]📝 Changes for: {filepath}[/bold cyan]")
@@ -296,12 +375,7 @@ def implement(
     full_content = ""
     fallback_needed = False
     
-    # Check if runbook is small enough to skip complexity
-    if len(runbook_content_scrubbed) < 10000:
-         # Just goes straight to full context, no need for fancy logic
-         pass
-    else:
-         pass
+
 
     try:
         system_prompt = """You are an Implementation Agent.
@@ -315,7 +389,8 @@ CONTEXT:
 INSTRUCTIONS:
 - Review the Runbook's 'Proposed Changes'.
 - Generate the actual code changes required.
-- **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). Do not use root-relative paths unless the file is actually in the root.
+- **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). 
+- **WARNING**: DO NOT use 'agent/' as a root folder. The source code lives in '.agent/src/agent/'.
 - Output code using this format:
 
 File: path/to/file.py
@@ -341,7 +416,8 @@ GOVERNANCE RULES:
 
         with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
              full_content = ai_service.complete(system_prompt, user_prompt, model=model)
-             raise Exception("Empty response from AI")
+             if not full_content:
+                 raise Exception("Empty response from AI")
 
     except Exception as e:
         console.print(f"[yellow]⚠️ Full context failed: {e}[/yellow]")
@@ -389,7 +465,7 @@ CONSTRAINTS:
 1. ONLY implement the changes described in the 'CURRENT TASK'.
 2. Maintain consistency with the 'GLOBAL RUNBOOK CONTEXT'.
 3. Follow the 'IMPLEMENTATION GUIDE' and 'GOVERNANCE RULES'.
-4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py).
+4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py). DO NOT use 'agent/' as root.
 OUTPUT FORMAT:
 Return a Markdown response with file paths and code blocks:
 
@@ -411,7 +487,7 @@ RULES (Filtered):
 """
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 
-            logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
+
 
             chunk_result = None
             try:

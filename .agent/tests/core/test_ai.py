@@ -14,6 +14,8 @@
 
 import sys
 from unittest.mock import MagicMock, patch
+# Patch Counter to avoid Duplicated Timeseries error during reloads
+patch("prometheus_client.Counter").start()
 
 import pytest
 
@@ -69,7 +71,10 @@ def test_complete_gemini(mock_env_gemini):
     # Structure: Client(api_key=...) -> instance
     mock_genai.Client.return_value = mock_client
     # client.models.generate_content(...) -> response
-    mock_client.models.generate_content.return_value = mock_response
+    # mock streaming response
+    mock_chunk = MagicMock()
+    mock_chunk.text = "Gemini response"
+    mock_client.models.generate_content_stream.return_value = [mock_chunk]
     
     with patch.dict(sys.modules, {"google.genai": mock_genai}):
         # Force GH check fail
@@ -78,8 +83,8 @@ def test_complete_gemini(mock_env_gemini):
             assert ai.provider == "gemini"
             response = ai.complete("System", "User")
             assert response == "Gemini response"
-@patch("agent.core.ai.os.getenv")
-@patch("agent.core.ai.subprocess.run")
+@patch("agent.core.ai.service.os.getenv")
+@patch("agent.core.ai.service.subprocess.run")
 def test_ai_service_priority(mock_run, mock_getenv):
     """
     Test that GH is prioritized if available, then Gemini, then OpenAI.
@@ -97,17 +102,17 @@ def test_ai_service_priority(mock_run, mock_getenv):
     # Reload module to trigger init
     import importlib
 
-    import agent.core.ai
-    importlib.reload(agent.core.ai)
-    from agent.core.ai import ai_service
+    import agent.core.ai.service
+    importlib.reload(agent.core.ai.service)
+    from agent.core.ai.service import ai_service
     
     assert ai_service.provider == "gh"
     assert "gh" in ai_service.clients
     assert "gemini" in ai_service.clients
     assert "openai" in ai_service.clients
 
-@patch("agent.core.ai.os.getenv")
-@patch("agent.core.ai.subprocess.run")
+@patch("agent.core.ai.service.os.getenv")
+@patch("agent.core.ai.service.subprocess.run")
 def test_ai_service_manual_switch(mock_run, mock_getenv):
     """
     Test manual switching logic for retry strategies.
@@ -130,21 +135,21 @@ def test_ai_service_manual_switch(mock_run, mock_getenv):
     assert ai_service.provider == "gh"
     
     # 2. Switch to Gemini
-    switched = ai_service.try_switch_provider()
+    switched = ai_service.try_switch_provider(ai_service.provider)
     assert switched is True
     assert ai_service.provider == "gemini"
     
     # 3. Switch to OpenAI
-    switched = ai_service.try_switch_provider()
+    switched = ai_service.try_switch_provider(ai_service.provider)
     assert switched is True
     assert ai_service.provider == "openai"
     
     # 4. No more providers (gh is start, gemini, openai... loop ended)
-    switched = ai_service.try_switch_provider()
+    switched = ai_service.try_switch_provider(ai_service.provider)
     assert switched is False
 
-@patch("agent.core.ai.os.getenv")
-@patch("agent.core.ai.subprocess.run")
+@patch("agent.core.ai.service.os.getenv")
+@patch("agent.core.ai.service.subprocess.run")
 def test_ai_service_exception_propagation(mock_run, mock_getenv):
     """
     Test that complete() raises exception on failure (allowing check.py to catch it).
@@ -154,9 +159,9 @@ def test_ai_service_exception_propagation(mock_run, mock_getenv):
     
     import importlib
 
-    import agent.core.ai
-    importlib.reload(agent.core.ai)
-    from agent.core.ai import ai_service
+    import agent.core.ai.service
+    importlib.reload(agent.core.ai.service)
+    from agent.core.ai.service import ai_service
     
     # Mock _try_complete to fail
     with patch.object(ai_service, "_try_complete", side_effect=Exception("GH Failed")):
@@ -164,8 +169,8 @@ def test_ai_service_exception_propagation(mock_run, mock_getenv):
             ai_service.complete("sys", "user")
         assert "GH Failed" in str(excinfo.value)
 
-@patch("agent.core.ai.os.getenv")
-@patch("agent.core.ai.subprocess.run")
+@patch("agent.core.ai.service.os.getenv")
+@patch("agent.core.ai.service.subprocess.run")
 def test_ai_service_provider_override(mock_run, mock_getenv):
     def getenv_side_effect(key, default=None):
         if "API_KEY" in key:
@@ -177,9 +182,9 @@ def test_ai_service_provider_override(mock_run, mock_getenv):
     
     import importlib
 
-    import agent.core.ai
-    importlib.reload(agent.core.ai)
-    from agent.core.ai import ai_service
+    import agent.core.ai.service
+    importlib.reload(agent.core.ai.service)
+    from agent.core.ai.service import ai_service
     
     # Default is GH
     assert ai_service.provider == "gh"
@@ -189,8 +194,8 @@ def test_ai_service_provider_override(mock_run, mock_getenv):
     assert ai_service.provider == "openai"
 
 
-@patch("agent.core.ai.os.getenv")
-@patch("agent.core.ai.subprocess.run")
+@patch("agent.core.ai.service.os.getenv")
+@patch("agent.core.ai.service.subprocess.run")
 def test_ai_service_api_failure_handling(mock_run, mock_getenv):
     """
     Test that generic API errors (not just rate limits) are raised properly.
@@ -200,9 +205,9 @@ def test_ai_service_api_failure_handling(mock_run, mock_getenv):
     
     import importlib
 
-    import agent.core.ai
-    importlib.reload(agent.core.ai)
-    from agent.core.ai import ai_service
+    import agent.core.ai.service
+    importlib.reload(agent.core.ai.service)
+    from agent.core.ai.service import ai_service
     
     # Setup OpenAI failure
     ai_service.provider = "openai"

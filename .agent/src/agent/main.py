@@ -59,6 +59,12 @@ app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
 app.command(name="lint")(lint.lint)
 
+try:
+    from agent.commands import onboard
+    app.command(name="onboard")(onboard.onboard)
+except ImportError:
+    pass
+
 # Sync integration using Typer
 # Since sync.py uses argparse, we'll wrap it or just use subprocess for now 
 # TO keep it clean, let's just make a shim here.

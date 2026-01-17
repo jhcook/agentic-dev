@@ -9,17 +9,19 @@ class TestVersionCheck(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
+    @patch("agent.main.setup_logging")
     @patch("subprocess.check_output")
-    def test_version_from_git(self, mock_subprocess):
+    def test_version_from_git(self, mock_subprocess, mock_logging):
         """Test that git version is returned when git command succeeds."""
         mock_subprocess.return_value = b"v1.2.3-git"
         result = self.runner.invoke(app, ["--version"])
         self.assertIn("Agent CLI v1.2.3-git", result.stdout)
 
 
+    @patch("agent.main.setup_logging")
     @patch("subprocess.check_output")
     @patch("agent.main.Path")
-    def test_version_from_file_fallback(self, mock_path_cls, mock_subprocess):
+    def test_version_from_file_fallback(self, mock_path_cls, mock_subprocess, mock_logging):
         """Test that file version is returned when git command fails."""
         # Git fails
         mock_subprocess.side_effect = Exception("Git not found")
@@ -33,9 +35,10 @@ class TestVersionCheck(unittest.TestCase):
         result = self.runner.invoke(app, ["--version"])
         self.assertIn("Agent CLI v1.2.3-file", result.stdout)
 
+    @patch("agent.main.setup_logging")
     @patch("subprocess.check_output")
     @patch("agent.main.Path")
-    def test_version_unknown_fallback(self, mock_path_cls, mock_subprocess):
+    def test_version_unknown_fallback(self, mock_path_cls, mock_subprocess, mock_logging):
         """Test fallback to default when both git and file fail."""
         # Git fails
         mock_subprocess.side_effect = Exception("Git not found")

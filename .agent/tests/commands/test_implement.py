@@ -95,8 +95,8 @@ def test_implement_with_provider(clean_env, app):
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
     runbook_file.write_text("Status: ACCEPTED\n# Runbook Content")
     
-    with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
-         patch("agent.core.ai.ai_service.complete", return_value="Steps"):
+    with patch("agent.commands.implement.ai_service.set_provider") as mock_set_provider, \
+         patch("agent.commands.implement.ai_service.complete", return_value="Steps"):
         
         result = runner.invoke(app, [runbook_id, "--provider", "gemini"])
         

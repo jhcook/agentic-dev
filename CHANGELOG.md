@@ -1,10 +1,17 @@
-## [Unreleased]
-### Added
-- Introduced a `--provider` option for AI-powered CLI commands (`implement`, `match-story`, `new-runbook`, `pr`) to allow specifying an AI provider.
-  - Supported providers: `gh`, `gemini`, `openai`
-  - The system validates the provider against available configurations and raises appropriate errors:
-    - `ValueError` for unsupported provider names.
-    - `RuntimeError` for missing configuration of a valid provider.
-  - Default provider (`gh`) is used if `--provider` is omitted and is properly configured.
+# Changelog
 
-Refer to `docs/commands.md` for details.
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- New `agent onboard` command to automate initial developer setup. This command handles dependency checks, API key configuration, and workspace initialization.
+
+## [0.1.0] - 2023-10-26
+
+### Added
+- Initial project structure.
+- Basic agent core logic.
