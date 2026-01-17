@@ -233,6 +233,9 @@ def implement(
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, openai)."
     ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Force specific AI model deployment ID."
+    ),
 ):
     """
     Execute an implementation runbook using AI with chunked task processing.
@@ -337,7 +340,7 @@ GOVERNANCE RULES:
         logging.info(f"AI Full Context Attempt | Context size: ~{context_size} chars")
 
         with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
-             full_content = ai_service.complete(system_prompt, user_prompt)
+             full_content = ai_service.complete(system_prompt, user_prompt, model=model)
              raise Exception("Empty response from AI")
 
     except Exception as e:
@@ -413,7 +416,7 @@ RULES (Filtered):
             chunk_result = None
             try:
                 with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
-                    chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt)
+                    chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt, model=model)
             except Exception as e:
                  console.print(f"[bold red]❌ Task {idx+1} failed during generation: {e}[/bold red]")
                  raise typer.Exit(code=1)

@@ -165,6 +165,10 @@ def convene_council_full(
         report = f"# Governance Preflight Report\n\nStory: {story_id}\n\n"
         json_roles = []
         
+        
+        # Capture provider to detect switches
+        current_provider_snapshot = ai_service.provider
+
         try:
             for role in roles:
                 role_name = role["name"]
@@ -180,7 +184,7 @@ def convene_council_full(
                 role_verdict = "PASS"
                 role_findings = []
                 
-                with console.status(f"[bold blue]🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks using {ai_service.provider})...[/bold blue]"):
+                with console.status(f"[bold blue]🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks using {ai_service.provider})...[/bold blue]") as status:
                     
                     for i, chunk in enumerate(diff_chunks):
                         if mode == "consultative":
@@ -219,6 +223,9 @@ OUTPUT:
 - Verdict: PASS | BLOCK
 - Brief analysis of findings relative to your focus.
 """
+                        # Update status in case provider changed during fallback
+                        status.update(f"[bold blue]🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks using {ai_service.provider})...[/bold blue]")
+
                         if ai_service.provider == "gh":
                             rules_subset = rules_content[:10000]
                         else:
@@ -261,7 +268,19 @@ CODE DIFF CHUNK:
                 if role_findings:
                         role_data["findings"] = role_findings
                 
-                role_data["verdict"] = role_verdict
+                        role_data["verdict"] = role_verdict
+                        
+                        # Check for Provider Switch & Re-chunking
+                        # If the provider changed during execution (fallback), we need to restart the outer loop
+                        # to recalculate chunks (e.g. GH -> Gemini allows bigger chunks).
+                        if ai_service.provider != current_provider_snapshot:
+                            console.print(f"[bold magenta]🔄 Provider switched to {ai_service.provider}. Re-optimizing chunks...[/bold magenta]")
+                            # Break inner loop to restart attempt_loop
+                            break
+
+                # If we broke out of the 'with' block due to provider switch
+                if ai_service.provider != current_provider_snapshot:
+                    break # Break role loop to restart attempt_loop
                 
                 if mode == "consultative":
                      console.print(f"[bold cyan]ℹ️  @{role_name}: CONSULTED[/bold cyan]")
@@ -288,7 +307,9 @@ CODE DIFF CHUNK:
                 
                 json_roles.append(role_data)
             
-            attempt_loop = False 
+            # Only mark clean exit if we didn't break for provider switch
+            if ai_service.provider == current_provider_snapshot:
+                attempt_loop = False 
 
         except Exception as e:
             console.print(f"[yellow]⚠️  Analysis interrupted: {e}[/yellow]")

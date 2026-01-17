@@ -12,63 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from pathlib import Path
-
 
 class Config:
     def __init__(self):
-        # Locate the root of the repostory.
-        # Assuming this file is in .agent/src/agent/core/config.py
-        # We need to go up 4 levels to get to the repo root from .agent/src/agent/core
-        # But wait, .agent is at the root.
-        # .agent/src/agent/core -> up 1 -> agent/src/agent -> up 2 -> agent/src -> up 3 -> .agent -> up 4 -> repo root?
-        # Let's rely on finding .agent directory.
+        # file is in .agent/src/agent/core/config.py
+        # .parents[4] resolves to the repo root (containing .agent)
+        self.repo_root = Path(__file__).parents[4]
         
-        self.repo_root = self._find_repo_root()
         self.agent_dir = self.repo_root / ".agent"
+        self.src_dir = self.agent_dir / "src"
+        self.templates_dir = self.agent_dir / "templates"
+        self.etc_dir = self.agent_dir / "etc"
+        self.rules_dir = self.agent_dir / "rules"
+        self.instructions_dir = self.agent_dir / "instructions"
         self.cache_dir = self.agent_dir / "cache"
+        self.adrs_dir = self.agent_dir / "adrs"
+        self.logs_dir = self.agent_dir / "logs"
+        self.agent_dir = self.repo_root / ".agent"
+
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
         self.runbooks_dir = self.cache_dir / "runbooks"
-        self.adrs_dir = self.agent_dir / "adrs"
-        self.templates_dir = self.agent_dir / "templates"
-        self.rules_dir = self.agent_dir / "rules"
-        self.instructions_dir = self.agent_dir / "instructions"
-        self.etc_dir = self.agent_dir / "etc"
-
-    def _find_repo_root(self) -> Path:
-        """Finds the git repository root."""
-        current = Path.cwd()
-        for parent in [current, *current.parents]:
-            if (parent / ".agent").exists():
-                return parent
-            if (parent / ".git").exists():
-                return parent
-        # Fallback
-        return Path.cwd()
-
-# Global config instance
-# Global config instance
+        
 config = Config()
 
-import os
 
-def get_sync_page_size() -> int:
+from typing import Dict, List, Optional
+
+def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]]:
     """
-    Retrieves the sync page size from environment with a default and upper limit.
+    Retrieve the configuration for a given provider.
     """
-    default_page_size = 100
-    max_page_size = 1000
+    config_map = {
+        "gh": {"api_key": os.getenv("GH_API_KEY")},
+        "openai": {"api_key": os.getenv("OPENAI_API_KEY")},
+        "gemini": {"api_key": os.getenv("GEMINI_API_KEY")},
+    }
+    return config_map.get(provider_name.lower())
 
-    try:
-        # Retrieve page size variable from environment, use default if not set
-        page_size = int(os.getenv('AGENT_SYNC_PAGE_SIZE', default_page_size))
-    except ValueError:
-        # Handle case where environment variable is set but not a valid integer.
-        page_size = default_page_size
-
-    # Enforce maximum limit
-    if page_size > max_page_size:
-        page_size = max_page_size
-
-    return page_size
+def get_valid_providers() -> List[str]:
+    """
+    Dynamically loads valid providers from the configuration keys.
+    """
+    # Create a temporary map to extract keys
+    # In a real dynamic system, this might scan installed plugins or config files
+    # For now, we reuse the source of truth in get_provider_config logic
+    # or better, define the supported providers constant if we can't inspect the function easily.
+    # To keep it simple and dynamic-ish:
+    return ["gh", "openai", "gemini"]

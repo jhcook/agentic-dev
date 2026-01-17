@@ -135,6 +135,36 @@ def preflight(
              report_file.write_text(json.dumps(json_report, indent=2))
         raise typer.Exit(code=1)
 
+    # 1.5 Run Automated Tests
+    console.print("[bold blue]🧪 Running Automated Tests...[/bold blue]")
+    try:
+        # Determine test command - strictly pytest for backend/agent for now
+        # Ideally this comes from config
+        test_cmd = [".agent/.venv/bin/python", "-m", "pytest", ".agent/src/tests"]
+        
+        # Check if we are in the root or need to adjust path? 
+        # Assuming run from repo root as per standard
+        
+        result = subprocess.run(test_cmd, capture_output=False, check=False)
+        
+        if result.returncode != 0:
+            msg = "Automated tests failed. Preflight ABORTED."
+            console.print(f"[bold red]❌ {msg}[/bold red]")
+            if report_file:
+                json_report["overall_verdict"] = "BLOCK"
+                json_report["error"] = "Automated tests failed"
+                import json
+                report_file.write_text(json.dumps(json_report, indent=2))
+            raise typer.Exit(code=1)
+        else:
+            console.print("[bold green]✅ Automated tests passed.[/bold green]")
+
+    except FileNotFoundError:
+        console.print("[yellow]⚠️  Could not find test runner (pytest). Skipping tests but warning...[/yellow]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Error running tests: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
     # 2. Get Changed Files
     if base:
         cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]

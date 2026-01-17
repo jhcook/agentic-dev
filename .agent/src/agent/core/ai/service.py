@@ -16,12 +16,22 @@ import logging
 import os
 import subprocess
 import time
+from typing import Optional
 
 from rich.console import Console
+from prometheus_client import Counter
 
+from agent.core.config import get_valid_providers
 from agent.core.router import router
 
 console = Console()
+
+# Prometheus Metrics
+ai_command_runs_total = Counter(
+    'ai_command_runs_total', 
+    'Total number of AI command executions', 
+    ['provider']
+)
 
 class AIService:
     """
@@ -94,7 +104,7 @@ class AIService:
         self.is_forced = False
         self._set_default_provider()
 
-    def _set_default_provider(self):
+    def _set_default_provider(self) -> None:
         # ... existing logic ...
         if 'gh' in self.clients:
             self.provider = 'gh'
@@ -105,13 +115,22 @@ class AIService:
         else:
             self.provider = None
             
-    def set_provider(self, provider_name: str):
+    def set_provider(self, provider_name: str) -> None:
         """Force a specific provider."""
-        valid_providers = ['gh', 'gemini', 'openai']
+        valid_providers = get_valid_providers()
         
         if provider_name not in valid_providers:
-            console.print(f"[bold red]❌ Invalid provider name: '{provider_name}'. Must be one of: {', '.join(valid_providers)}[/bold red]")
-            raise ValueError(f"Invalid provider: {provider_name}")
+            # Check safely case-insensitive
+            found = False
+            for vp in valid_providers:
+                if vp.lower() == provider_name.lower():
+                     provider_name = vp # Canonicalize
+                     found = True
+                     break
+            
+            if not found:
+                console.print(f"[bold red]❌ Invalid provider name: '{provider_name}'. Must be one of: {', '.join(valid_providers)}[/bold red]")
+                raise ValueError(f"Invalid provider: {provider_name}")
 
         if provider_name in self.clients:
             self.provider = provider_name
@@ -127,6 +146,7 @@ class AIService:
         Returns True if switched, False if no providers left.
         """
         # Chain order: gh -> gemini -> openai
+        # TODO: This chain could also be dynamic from config
         fallback_chain = ['gh', 'gemini', 'openai']
         
         current_idx = -1
@@ -147,7 +167,7 @@ class AIService:
                 
         return False
 
-    def complete(self, system_prompt: str, user_prompt: str, model: str = None) -> str:
+    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         """
         Sends a completion request with automatic fallback.
         """
@@ -180,17 +200,26 @@ class AIService:
             attempted_providers.add(current_p)
             try:
                 start_time = time.time()
+                
+                # OBSERVABILITY: Log start
+                logging.info("AI Request Start", extra={"provider": current_p, "model": model_to_use})
+                
                 content = self._try_complete(current_p, system_prompt, user_prompt, model_to_use if current_p == provider_to_use else None)
                 
+                duration = time.time() - start_time
                 if content:
-                    logging.info(f"AI Completion Success | Provider: {current_p} | Duration: {time.time() - start_time:.2f}s")
+                    logging.info(f"AI Completion Success | Provider: {current_p} | Duration: {duration:.2f}s")
+                    
+                    # METRICS: Increment Counter
+                    ai_command_runs_total.labels(provider=current_p).inc()
+                    
                     return content
                 else:
                     logging.warning(f"AI Completion Empty | Provider: {current_p}")
                     return ""
 
             except Exception as e:
-                logging.error(f"Provider {current_p} failed: {e}")
+                logging.error(f"Provider {current_p} failed: {e}", extra={"provider": current_p, "error": str(e)})
                 
                 # If we are forced or using a specific model, we might still want to fallback unless explicitly disallowed
                 # but typically a forced provider should probably not fallback unless we want maximum reliability.
@@ -216,7 +245,7 @@ class AIService:
             user_prompt=prompt
         )
 
-    def _try_complete(self, provider, system_prompt, user_prompt, model=None) -> str:
+    def _try_complete(self, provider: str, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         model_used = model or self.models.get(provider)
         max_retries = 3
         

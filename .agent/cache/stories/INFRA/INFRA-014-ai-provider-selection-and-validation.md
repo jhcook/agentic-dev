@@ -31,7 +31,15 @@ Workflows affected:
 Risks identified:
 
 ## Test Strategy
-How will we verify correctness?
+- **Unit Tests**:
+    - Verify `AIService.set_provider` validation logic (valid, invalid, unconfigured).
+    - Verify `AIService` defaults to `gh`.
+    - Verify `metrics` counter is incremented on success.
+- **Integration Tests**:
+    - Test `agent implement --provider` flag works for all inputs.
+    - Test fallback logic when primary provider fails.
+- **Manual Verification**:
+    - Run `agent preflight --provider=gh` and check logs for structured output.How will we verify correctness?
 
 ## Rollback Plan
 How do we revert safely?
