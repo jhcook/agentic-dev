@@ -73,8 +73,19 @@ class AIService:
         try:
             # Check version
             subprocess.run(["gh", "--version"], capture_output=True, check=True)
+            
+            # Check if models extension is installed
+            ext_list = subprocess.run(["gh", "extension", "list"], capture_output=True, text=True)
+            if "gh-models" not in ext_list.stdout:
+                console.print("[yellow]📦 Installing 'gh-models' extension...[/yellow]")
+                subprocess.run(["gh", "extension", "install", "https://github.com/github/gh-models"], check=True)
+            
             return True
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            # If we fail to install the extension, we can't use the provider
+            if "extension install" in str(e):
+                 console.print(f"[red]❌ Failed to install gh-models extension: {e}[/red]")
+                 return False
             return False
 
     def reset_provider(self):
@@ -270,6 +281,20 @@ class AIService:
                             continue
                         else:
                             raise Exception("GH Rate Limited (Max Retries)")
+                            
+                    # Start of Upgrade Logic Check
+                    # If it's a generic failure, it might be an outdated extension. 
+                    # Try upgrading ONCE per call.
+                    # We can use a flag or just check if we haven't retried for this reason yet.
+                    # For simplicity, if we haven't exhausted retries, try upgrading.
+                    if attempt == 0: # Only try upgrade on the very first failure of a request
+                         console.print("[yellow]🔄 GH Model run failed. Attempting extension upgrade...[/yellow]")
+                         try:
+                             subprocess.run(["gh", "extension", "upgrade", "github/gh-models"], check=True, capture_output=True)
+                             # Retry immediately without sleep
+                             continue 
+                         except Exception as upgrade_err:
+                             console.print(f"[dim]Upgrade failed: {upgrade_err}[/dim]")
                     
                     # Other error
                     logging.error(f"GH Error: {result.stderr}")
