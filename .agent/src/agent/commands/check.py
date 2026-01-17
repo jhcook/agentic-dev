@@ -228,7 +228,7 @@ def preflight(
             report_file=report_file,
             mode="gatekeeper"
         )
-        if verdict == "BLOCK":
+        if verdict in ["BLOCK", "FAIL"]:
              # convene_council_full handles printing the error/report location
              raise typer.Exit(code=1)
     

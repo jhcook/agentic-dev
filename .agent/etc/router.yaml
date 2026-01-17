@@ -20,9 +20,9 @@ models:
     cost_per_1k_output: 0.00060
 
   # --- Gemini Models ---
-  gemini-1.5-pro:
+  gemini-pro-latest:
     provider: "gemini"
-    deployment_id: "gemini-1.5-pro-latest"
+    deployment_id: "gemini-pro-latest"
     tier: "advanced"
     context_window: 2000000
     cost_per_1k_input: 0.00125
@@ -30,7 +30,7 @@ models:
 
   gemini-1.5-flash:
     provider: "gemini"
-    deployment_id: "gemini-1.5-flash-latest"
+    deployment_id: "gemini-2.0-flash"
     tier: "standard"
     context_window: 1000000
     cost_per_1k_input: 0.000075

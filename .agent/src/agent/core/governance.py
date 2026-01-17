@@ -313,7 +313,7 @@ CODE DIFF CHUNK:
 
         except Exception as e:
             console.print(f"[yellow]⚠️  Analysis interrupted: {e}[/yellow]")
-            if ai_service.try_switch_provider():
+            if ai_service.try_switch_provider(ai_service.provider):
                 console.print(f"[bold magenta]🔄 Switching provider to {ai_service.provider} and restarting analysis (Full Context)...[/bold magenta]")
                 continue
             else:

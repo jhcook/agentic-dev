@@ -1,0 +1,35 @@
+---
+description: Architectural Standards and Boundaries
+globs: .agent/src/**/*.py
+---
+
+# Architectural Standards
+
+## 1. Architectural Layers & Boundaries
+
+The codebase is structured into distinct layers. Dependencies must flow **downwards** (from high-level to low-level).
+
+### Layers
+1.  **CLI / Interface Layer** (`agent/cli.py`, `agent/commands/`, `agent/main.py`)
+    -   **Responsibility**: User interaction, argument parsing, output formatting.
+    -   **Restrictions**: MUST NOT contain core business logic. MUST delegate to Core/Service layer.
+
+2.  **Core / Service Layer** (`agent/core/`, `agent/core/ai/`)
+    -   **Responsibility**: Business logic, orchestration, state management.
+    -   **Restrictions**: MUST NOT rely on CLI libraries (e.g., `click`, `typer`) for logic.
+
+3.  **Infrastructure / Utils Layer** (`agent/core/db/`, `agent/core/utils/`)
+    -   **Responsibility**: Low-level I/O, database access, helper functions.
+    -   **Restrictions**: ZERO dependencies on upper layers.
+
+## 2. Dependency Rules
+
+-   **No Circular Imports**: Strictly prohibited.
+-   **No Cross-Layer Pollution**:
+    -   CLI code should not directly import low-level system libraries (`subprocess`, `sys`, `os`) if a Service/Core wrapper exists (e.g., use `ai_service` instead of raw `subprocess.run("gh ...")`).
+-   **Strict Typing**: All boundaries (public methods of Services and Core modules) MUST have full type hints.
+
+## 3. Enforcement
+
+-   **@Architect** must BLOCK any PR that violates these boundaries.
+-   **@Backend** must BLOCK any PR that introduces circular dependencies.

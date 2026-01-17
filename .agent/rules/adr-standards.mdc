@@ -11,3 +11,9 @@ All ADRs in this repository must follow these rules:
 2. **Change Logging**: If minor updates or clarifications are made to an existing ADR, you **MUST** add a `## Changes` section at the bottom of the file.
     - The section should list changes in **descending chronological order** (most recent first).
     - Format: `- **YYYY-MM-DD**: <Description of change>`
+
+3. **Compliance & Validation**:
+    - **Linkage**: Any Pull Request or Commit that implements or modifies architecture MUST explicitly link to the relevant ADR (e.g., "Implements ADR-014").
+    - **Evidence**: Provide evidence in the PR description that the changes align with the ADR's decision logic.
+    - **Updates**: If the implementation requires deviating from the ADR, the ADR MUST be updated *before* the code is merged.
+

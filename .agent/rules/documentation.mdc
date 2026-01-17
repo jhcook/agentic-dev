@@ -41,6 +41,16 @@ alwaysApply: true
 ## 5. Change Management
 -   **CHANGELOG.md**: Must be updated for all user-facing changes or breaking API changes.
 
-## 6. Enforcement
+## 6. Operational Documentation
+-   **New Features**: Any new CLI command or feature MUST have a corresponding entry in `docs/commands.md` (or equivalent).
+-   **Error Handling**: Documentation must clearly state visible error conditions and troubleshooting steps for the user.
+
+## 7. Observability Requirements
+-   **Failure Modes**: New features must implement logging/metrics for failure scenarios (not just "happy path").
+-   **Traceability**: Errors must propagate sufficient context (e.g., Request ID, Story ID) to allow debugging.
+
+## 8. Enforcement
 -   Missing docstrings on new public code -> **BLOCK**.
 -   Missing ADR for major architectural shift -> **BLOCK**.
+-   New feature without operational docs -> **BLOCK**.
+

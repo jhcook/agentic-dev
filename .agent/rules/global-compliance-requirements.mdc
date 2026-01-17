@@ -136,6 +136,13 @@ Systems must support, or not block the ability to support:
   - Impact
 - Logs and error messages must be explicitly PII-safe.
 
+- Logs and error messages must be explicitly PII-safe.
+
+## 4a. Feature Completeness (Definition of Done)
+- **Preflight Integration**: Any new configuration option (e.g., `--provider`) or constraint MUST be added to the `agent preflight` checks.
+    - You cannot introduce a rule/option without a way to validate it automatically.
+- **Dynamic Configuration**: Whitelists or allowed values MUST be defined in configuration or dynamically loaded, NEVER hardcoded in source.
+
 ---
 
 ## 5. Ecosystem-Specific Mandates

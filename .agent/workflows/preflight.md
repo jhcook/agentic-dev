@@ -21,7 +21,12 @@ CONTEXT:
 
 WORKFLOW:
 
-1. LOAD RULES
+1. RUN AUTOMATED TESTS
+   - Run the full test suite (e.g., `pytest`, `npm test`).
+   - If ANY test fails, stop immediately.
+   - VERDICT: BLOCK.
+
+2. LOAD RULES
    - Load and apply all rules from .agent/rules/ and .agent/instructions/<role>/ (all `*.md?` files).
    - Especially enforce:
      - Security, SOC 2, GDPR
