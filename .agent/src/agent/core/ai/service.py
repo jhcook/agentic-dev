@@ -227,7 +227,7 @@ class AIService:
                         http_options=types.HttpOptions(timeout=600000),
                         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
-                    response_stream = bg_client.models.generate_content(
+                    response_stream = bg_client.models.generate_content_stream(
                         model=model_used,
                         contents=user_prompt,
                         config=config
