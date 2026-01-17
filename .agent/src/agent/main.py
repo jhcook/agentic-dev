@@ -27,6 +27,7 @@ from agent.commands import (
     plan,
     runbook,
     story,
+    visualize,
     workflow,
 )
 from agent.commands import list as list_cmd
@@ -58,6 +59,31 @@ app.command(name="match-story")(match.match_story)
 app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
 app.command(name="lint")(lint.lint)
+
+# Register visualize Click group with Typer
+# visualize.py uses Click @click.group(), so we register the Click group directly
+import click
+from click import Context
+
+@app.command(name="visualize", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def visualize_cmd(ctx: typer.Context):
+    """
+    Generate Mermaid diagrams of project artifacts.
+    
+    Subcommands:
+      graph  - Generate full dependency graph
+      flow   - Show flow for a specific story
+    """
+    # Forward to the Click group
+    import sys
+    from click.testing import CliRunner
+    
+    # Use Click's invoke directly
+    runner = CliRunner()
+    result = runner.invoke(visualize.visualize, ctx.args)
+    typer.echo(result.output)
+    if result.exit_code != 0:
+        raise typer.Exit(code=result.exit_code)
 
 try:
     from agent.commands import onboard

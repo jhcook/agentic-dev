@@ -273,10 +273,14 @@ def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
     """
     Splits a runbook into global context and discrete implementation chunks.
     Returns (global_context, task_chunks)
+    
+    Now includes Definition of Done and Verification Plan as separate chunks
+    to ensure documentation and test requirements are processed.
     """
-    headers = ["## Implementation Steps", "## Proposed Changes", "## Changes"]
+    # Find the start of implementation-related content
+    impl_headers = ["## Implementation Steps", "## Proposed Changes", "## Changes"]
     start_idx = -1
-    for h in headers:
+    for h in impl_headers:
         if h in content:
             start_idx = content.find(h)
             break
@@ -295,9 +299,21 @@ def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
     
     for i in range(1, len(raw_chunks)):
         chunks.append(f"{header_part}\n### {raw_chunks[i]}")
-        
+    
     if not chunks:
-        return global_context, [body]
+        chunks = [body]
+    
+    # CRITICAL: Also extract Definition of Done and Verification Plan as final chunks
+    # These often contain documentation and test requirements that must be implemented
+    dod_match = re.search(r'(## Definition of Done.*?)(?=\n## |$)', content, re.DOTALL)
+    if dod_match:
+        dod_content = dod_match.group(1).strip()
+        chunks.append(f"DOCUMENTATION AND COMPLETION REQUIREMENTS:\n{dod_content}")
+        
+    verify_match = re.search(r'(## Verification Plan.*?)(?=\n## |$)', content, re.DOTALL)
+    if verify_match:
+        verify_content = verify_match.group(1).strip()
+        chunks.append(f"TEST REQUIREMENTS:\n{verify_content}")
         
     return global_context, chunks
 
@@ -379,16 +395,19 @@ def implement(
 
     try:
         system_prompt = """You are an Implementation Agent.
-Your goal is to EXECUTE the tasks defined in the provided RUNBOOK.
+Your goal is to EXECUTE ALL tasks defined in the provided RUNBOOK, including code, documentation, and tests.
 
 CONTEXT:
-1. RUNBOOK (The plan you must follow)
+1. RUNBOOK (The plan you must follow - ALL sections are mandatory)
 2. IMPLEMENTATION GUIDE (The process you must follow)
 3. RULES (Governance you must obey)
 
 INSTRUCTIONS:
-- Review the Runbook's 'Proposed Changes'.
-- Generate the actual code changes required.
+- Review the ENTIRE Runbook, including:
+  * 'Proposed Changes' / 'Implementation Steps' - Generate the code
+  * 'Definition of Done' - Generate documentation updates (CHANGELOG.md, README.md)
+  * 'Verification Plan' - Generate test files
+- **CRITICAL**: You MUST generate ALL artifacts specified, not just the main code.
 - **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). 
 - **WARNING**: DO NOT use 'agent/' as a root folder. The source code lives in '.agent/src/agent/'.
 - Output code using this format:
@@ -400,6 +419,8 @@ File: path/to/file.py
 
 - Provide complete, working code for each file.
 - Include all necessary imports.
+- Documentation files (CHANGELOG.md, README.md) should show the COMPLETE updated file content.
+- Test files should follow the patterns in .agent/tests/.
 """
         user_prompt = f"""RUNBOOK CONTENT:
 {runbook_content_scrubbed}
@@ -475,7 +496,7 @@ File: path/to/file.py
 ```
 """
             chunk_user_prompt = f"""GLOBAL RUNBOOK CONTEXT (Truncated):
-{global_runbook_context[:4000]}
+{global_runbook_context[:8000]}
 
 --------------------------------------------------------------------------------
 CURRENT TASK:
