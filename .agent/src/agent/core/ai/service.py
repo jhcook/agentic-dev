@@ -46,7 +46,8 @@ class AIService:
         self.models = {
             'gh': 'openai/gpt-4o',
             'gemini': 'gemini-pro-latest',
-            'openai': os.getenv("OPENAI_MODEL", "gpt-4o")
+            'openai': os.getenv("OPENAI_MODEL", "gpt-4o"),
+            'anthropic': 'claude-sonnet-4-5-20250929'
         }
         
         # 1. Check Gemini
@@ -74,6 +75,16 @@ class AIService:
         # 3. Check GH CLI
         if self._check_gh_cli():
              self.clients['gh'] = "gh-cli" # Marker
+
+        # 4. Check Anthropic
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        if anthropic_key:
+            try:
+                from anthropic import Anthropic
+                # Set 120s timeout for large contexts
+                self.clients['anthropic'] = Anthropic(api_key=anthropic_key, timeout=120.0)
+            except (ImportError, Exception) as e:
+                console.print(f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]")
 
         # Default Priority: GH -> Gemini -> OpenAI
         self._set_default_provider()
@@ -147,7 +158,7 @@ class AIService:
         """
         # Chain order: gh -> gemini -> openai
         # TODO: This chain could also be dynamic from config
-        fallback_chain = ['gh', 'gemini', 'openai']
+        fallback_chain = ['gh', 'gemini', 'openai', 'anthropic']
         
         current_idx = -1
         try:
@@ -328,6 +339,22 @@ class AIService:
                     # Other error
                     logging.error(f"GH Error: {result.stderr}")
                     raise Exception(f"GH Error: {result.stderr.strip()}")
+
+                elif provider == "anthropic":
+                    client = self.clients['anthropic']
+                    full_text = ""
+                    # Use streaming to prevent timeouts with large contexts (similar to Gemini)
+                    with client.messages.stream(
+                        model=model_used,
+                        max_tokens=4096,
+                        system=system_prompt,
+                        messages=[
+                            {"role": "user", "content": user_prompt}
+                        ]
+                    ) as stream:
+                        for text in stream.text_stream:
+                            full_text += text
+                    return full_text.strip()
                 
             except Exception as e:
                 # Catch transient network errors and retry

@@ -72,6 +72,57 @@ gh auth login
 **Model:**
 - `gh models run gpt-4o`
 
+### 4. Anthropic Claude 4.5 (NEW)
+
+**Advantages:**
+- Large context window (200K tokens)
+- Excellent reasoning and coding
+- **Streaming support** prevents timeouts
+- Three model tiers for flexibility
+
+**Limitations:**
+- Requires paid API key (no free tier)
+- Moderate pricing
+
+**Setup:**
+```bash
+export ANTHROPIC_API_KEY="sk-ant-api03-..."
+```
+
+**Get API Key:**
+1. Visit [Anthropic Console](https://console.anthropic.com/settings/keys)
+2. Create new API key
+3. Add payment method (usage-based billing)
+4. Copy and export
+
+**Models available:**
+- `claude-sonnet-4-5-20250929` - Advanced tier (balanced performance/cost)
+- `claude-haiku-4-5-20250929` - Standard tier (fast, economical)
+- `claude-opus-4-5-20250929` - Premium tier (highest quality)
+
+**Streaming:**
+Claude uses streaming API to handle large contexts without timeouts:
+```python
+# Automatic streaming in agent
+with client.messages.stream(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=4096,
+    system=system_prompt,
+    messages=[{"role": "user", "content": user_prompt}]
+) as stream:
+    for text in stream.text_stream:
+        full_text += text
+```
+
+**Provider selection:**
+```bash
+# Use Anthropic explicitly
+agent --provider anthropic new-runbook WEB-001
+
+# Or set as default
+export AGENT_DEFAULT_PROVIDER="anthropic"
+```
+
 ## Model Selection
 
 ### Automatic Routing
@@ -204,12 +255,17 @@ export AGENT_CHUNK_SIZE=6000  # characters per chunk
 **Pricing (approximate):**
 
 | Model | Cost per 1M tokens | 100k token task |
-|-------|-------------------|-----------------|
+|-------|-------------------|--------------------|
 | gemini-1.5-pro | $1.25 | $0.125 |
 | gpt-4o | $2.50 | $0.250 |
+| claude-sonnet-4-5 | $3.00/$15.00 | $0.30/$1.50 |
 | gemini-1.5-flash | $0.075 | $0.0075 |
 | gpt-4o-mini | $0.15 | $0.015 |
+| claude-haiku-4-5 | $1.00/$5.00 | $0.10/$0.50 |
+| claude-opus-4-5 | $15.00/$75.00 | $1.50/$7.50 |
 | github (gh cli) | Free | $0 |
+
+*Note: Claude pricing shows input/output costs*
 
 **Cost-saving tips:**
 
