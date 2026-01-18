@@ -177,6 +177,7 @@ def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]
         "gh": {"api_key": os.getenv("GH_API_KEY")},
         "openai": {"api_key": os.getenv("OPENAI_API_KEY")},
         "gemini": {"api_key": os.getenv("GEMINI_API_KEY")},
+        "anthropic": {"api_key": os.getenv("ANTHROPIC_API_KEY")},
     }
     return config_map.get(provider_name.lower())
 
@@ -185,7 +186,7 @@ def get_valid_providers() -> List[str]:
     """
     Returns list of valid AI provider names.
     """
-    return ["gh", "openai", "gemini"]
+    return ["gh", "openai", "gemini", "anthropic"]
 
 
 # Configuration for Agent Query feature (INFRA-017)

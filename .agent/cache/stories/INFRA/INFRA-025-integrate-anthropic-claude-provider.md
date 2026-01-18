@@ -1,7 +1,7 @@
 # INFRA-017: Integrate Anthropic Claude Provider
 
 ## State
-DRAFT
+COMMITTED
 
 ## Problem Statement
 The agent framework currently supports three AI providers (GitHub CLI, Gemini, OpenAI), but lacks support for Anthropic Claude. Claude is a leading AI model known for excellent reasoning, coding assistance, and large context windows (200K tokens). Adding Claude as a provider would give users more flexibility in choosing their preferred AI backend and provide an additional fallback option for reliability.

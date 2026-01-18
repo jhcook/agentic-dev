@@ -39,7 +39,7 @@ def test_set_valid_provider(ai_service):
 
 def test_set_invalid_provider(ai_service):
     with pytest.raises(ValueError):
-        ai_service.set_provider("anthropic")
+        ai_service.set_provider("invalid_xyz")
 
 def test_set_unconfigured_provider(ai_service):
     del ai_service.clients['openai']
