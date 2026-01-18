@@ -30,6 +30,7 @@ from agent.commands import (
     plan,
     query,
     runbook,
+    secret,
     story,
     visualize,
     workflow,
@@ -47,6 +48,7 @@ app = typer.Typer(
 )
 
 app.add_typer(config.app, name="config")
+app.add_typer(secret.app, name="secret")
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)

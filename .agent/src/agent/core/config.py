@@ -168,18 +168,60 @@ class Config:
 config = Config()
 
 
+def get_secret(key: str, service: Optional[str] = None) -> Optional[str]:
+    """
+    Get secret from secret manager or environment variable.
+    
+    Tries secret manager first (if initialized and unlocked), then falls back
+    to environment variables. This provides backward compatibility.
+    
+    Args:
+        key: Secret key name (e.g., 'api_key') or environment variable name
+        service: Optional service name (e.g., 'openai', 'gemini')
+        
+    Returns:
+        Secret value or None if not found
+    """
+    # Try secret manager first
+    if service:
+        try:
+            from agent.core.secrets import get_secret_manager
+            manager = get_secret_manager()
+            if manager.is_initialized() and manager.is_unlocked():
+                value = manager.get_secret(service, key)
+                if value:
+                    return value
+        except Exception:
+            pass  # Fall back to environment
+    
+    # Fallback to environment variable
+    return os.getenv(key)
+
+
 # Provider configuration
 def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]]:
     """
     Retrieve the configuration for a given provider.
+    
+    Tries secret manager first, then falls back to environment variables.
     """
-    config_map = {
-        "gh": {"api_key": os.getenv("GH_API_KEY")},
-        "openai": {"api_key": os.getenv("OPENAI_API_KEY")},
-        "gemini": {"api_key": os.getenv("GEMINI_API_KEY")},
-        "anthropic": {"api_key": os.getenv("ANTHROPIC_API_KEY")},
+    provider = provider_name.lower()
+    
+    # Service to env var mapping
+    env_map = {
+        "gh": "GH_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
     }
-    return config_map.get(provider_name.lower())
+    
+    if provider not in env_map:
+        return None
+    
+    # Try secret manager first, fall back to env var
+    api_key = get_secret("api_key", provider) or os.getenv(env_map[provider])
+    
+    return {"api_key": api_key}
 
 
 def get_valid_providers() -> List[str]:

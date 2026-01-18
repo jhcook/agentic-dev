@@ -106,7 +106,29 @@ agent sync status
 2. **OpenAI**: Set `OPENAI_API_KEY` (Uses `gpt-4o`).
 3. **GitHub CLI** (Fallback): Uses `gh models run`.
 
+### Secret Management
+
+Store API keys encrypted instead of in environment variables:
+
+```bash
+# Initialize (first time)
+agent secret init
+
+# Import existing env vars
+agent secret import openai
+agent secret import supabase
+
+# Or set manually
+agent secret set gemini api_key
+
+# List stored secrets
+agent secret list
+```
+
+See [ADR-006](adrs/ADR-006-encrypted-secret-management.md) for details.
+
 ### Router Configuration
+
 
 Customize model selection in `.agent/etc/router.yaml`:
 
