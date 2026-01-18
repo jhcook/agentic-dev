@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from time import sleep
+
 try:
     import supabase
 except ImportError:

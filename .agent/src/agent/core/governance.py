@@ -22,15 +22,16 @@ gatekeeper and consultative modes.
 
 
 import re
-import yaml
-from pathlib import Path
-from typing import Optional, List, Dict, Any
-from rich.console import Console
 import time
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import yaml
+from rich.console import Console
 
 from agent.core.ai import ai_service
 from agent.core.config import config
-from agent.core.utils import scrub_sensitive_data
+
 
 def load_roles() -> List[Dict[str, str]]:
     """
@@ -61,7 +62,7 @@ def load_roles() -> List[Dict[str, str]]:
                         "focus": focus,
                         "instruction": member.get('instruction', '') # specific instructions if any
                     })
-        except Exception as e:
+        except Exception:
             # Fallback will handle this effectively, or we can log warning
             pass
 

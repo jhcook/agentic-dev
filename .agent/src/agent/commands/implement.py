@@ -90,6 +90,7 @@ def backup_file(file_path: Path) -> Optional[Path]:
 
 import subprocess
 
+
 def find_file_in_repo(filename: str) -> List[str]:
     """
     Search for a file in the git repo (respecting .gitignore).

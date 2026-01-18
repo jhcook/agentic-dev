@@ -14,11 +14,12 @@
 
 """Tests for agent query command."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
-from agent.commands.query import query, grep_fallback
+from agent.commands.query import grep_fallback
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@
 
 import time
 
+
 class ProgressTracker:
     def __init__(self, total):
         self.total = total

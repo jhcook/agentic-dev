@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .service import ai_service, AIService
+from .service import AIService, ai_service

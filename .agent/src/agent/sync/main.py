@@ -14,7 +14,9 @@
 
 import logging
 import time
+
 from memory_profiler import memory_usage
+
 from .metrics import MetricsCollector
 
 # Configure logger for this module

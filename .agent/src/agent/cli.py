@@ -1,4 +1,5 @@
 import typer
+
 from agent.commands.onboard import app as onboard_app
 
 app = typer.Typer()

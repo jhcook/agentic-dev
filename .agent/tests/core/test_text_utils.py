@@ -14,7 +14,6 @@
 
 """Tests for text utilities."""
 
-import pytest
 from agent.utils.text import sanitize_mermaid_label
 
 

@@ -1,17 +1,19 @@
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 import typer
 from typer.testing import CliRunner
 
 from agent.commands.onboard import (
+    app as onboard_app,
+)
+from agent.commands.onboard import (
     check_dependencies,
+    configure_api_keys,
     ensure_agent_directory,
     ensure_gitignore,
-    configure_api_keys,
-    app as onboard_app,
 )
 
 # Fix for "AttributeError: 'Typer' object has no attribute 'name'"

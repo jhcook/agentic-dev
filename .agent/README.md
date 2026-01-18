@@ -118,6 +118,24 @@ tiers:
     providers: ["gemini-flash", "gpt-4o-mini"]
 ```
 
+**Manage Configuration via CLI:**
+
+The `agent config` command allows you to view and modify configuration files without direct editing.
+
+```bash
+# List all configurations
+agent config list
+
+# Get a value (defaults to router.yaml)
+agent config get models.gpt-4o.tier
+
+# Get a value from a specific file (prefix routing)
+agent config get agents.team.0.role
+
+# Set a value (updates file safely with backup)
+agent config set settings.default_tier advanced
+```
+
 ## 🛠️ Development & Testing
 
 If you are contributing to the Agent framework itself:

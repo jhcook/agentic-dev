@@ -14,12 +14,11 @@
 
 """Graph builder for project artifacts visualization."""
 
+import logging
 import os
 import re
-import yaml
-import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)

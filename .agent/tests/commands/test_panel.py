@@ -1,8 +1,8 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
+
 from agent.main import app
-from agent.core.governance import convene_council_full
 
 runner = CliRunner()
 

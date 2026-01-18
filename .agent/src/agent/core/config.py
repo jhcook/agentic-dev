@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
+import shutil
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 try:
     from dotenv import load_dotenv
@@ -22,6 +27,7 @@ try:
 except ImportError:
     pass  # dotenv is optional
 
+logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self):
@@ -38,10 +44,126 @@ class Config:
         self.cache_dir = self.agent_dir / "cache"
         self.adrs_dir = self.agent_dir / "adrs"
         self.logs_dir = self.agent_dir / "logs"
+        self.backups_dir = self.agent_dir / "backups"
 
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
         self.runbooks_dir = self.cache_dir / "runbooks"
+        
+        self.backups_dir.mkdir(parents=True, exist_ok=True)
+
+    def load_yaml(self, path: Path) -> Dict[str, Any]:
+        """Load a YAML file safely."""
+        if not path.exists():
+            raise FileNotFoundError(f"Config file not found: {path}")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            logger.error(f"Failed to parse YAML from {path}: {e}")
+            raise
+
+    def save_yaml(self, path: Path, data: Dict[str, Any]) -> None:
+        """Save YAML file atomically."""
+        tmp_path = path.with_suffix(".tmp")
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            os.replace(tmp_path, path)
+        except Exception as e:
+            logger.error(f"Failed to save content to {path}: {e}")
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise
+
+    def backup_config(self, path: Path) -> Path:
+        """Create a timestamped backup of a config file."""
+        if not path.exists():
+            return None
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{path.stem}_{timestamp}{path.suffix}"
+        backup_path = self.backups_dir / backup_name
+        
+        shutil.copy2(path, backup_path)
+        return backup_path
+
+    def get_value(self, data: Dict[str, Any], dotted_key: str) -> Any:
+        """Retrieve a value using dot-notation (e.g. 'models.gpt-4o.tier')."""
+        keys = dotted_key.split(".")
+        current = data
+        for key in keys:
+            # Handle list access via integer key
+            if isinstance(current, list):
+                if key.isdigit():
+                    idx = int(key)
+                    if 0 <= idx < len(current):
+                        current = current[idx]
+                        continue
+                    else:
+                         return None
+                else:
+                    return None
+                    
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return None
+        return current
+
+    def set_value(self, data: Dict[str, Any], dotted_key: str, value: Any) -> None:
+        """Set a value using dot-notation, creating nested dicts as needed."""
+        keys = dotted_key.split(".")
+        current = data
+        for i, key in enumerate(keys[:-1]):
+            # Handle list traversal or dict traversal
+            if isinstance(current, list):
+                if key.isdigit():
+                    idx = int(key)
+                    if 0 <= idx < len(current):
+                        current = current[idx]
+                        continue
+                    else:
+                        raise IndexError(f"List index out of range: {key}")
+                else:
+                     raise TypeError(f"Cannot access list with non-integer key: {key}")
+
+            if key not in current or not isinstance(current[key], (dict, list)):
+                # If next key implies a list item... 
+                # This is tricky without schema. Default to dict.
+                current[key] = {}
+            current = current[key]
+        
+        # Set final value
+        last_key = keys[-1]
+        
+        # Simple type inference for CLI inputs
+        if isinstance(value, str):
+            if value.lower() == "true":
+                value = True
+            elif value.lower() == "false":
+                value = False
+            elif value.isdigit():
+                value = int(value)
+            else:
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+        
+        if isinstance(current, list):
+            if last_key.isdigit():
+                idx = int(last_key)
+                 # Extend list if needed? Or only support existing indices?
+                 # Safe set: only existing
+                if 0 <= idx < len(current):
+                    current[idx] = value
+                else:
+                    raise IndexError(f"List index out of range: {last_key}")
+            else:
+                 raise TypeError(f"Cannot set list item with non-integer key: {last_key}")
+        else:
+            current[last_key] = value
         
 config = Config()
 

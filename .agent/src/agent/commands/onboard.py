@@ -1,12 +1,12 @@
 import getpass
 import os
 import shutil
-import stat
 import sys
 from pathlib import Path
 from typing import Dict, List
 
 import typer
+
 # Note: This command requires `typer` and `python-dotenv`.
 # Ensure they are added to your project's dependencies.
 from dotenv import dotenv_values, set_key
@@ -50,7 +50,7 @@ def ensure_agent_directory(project_root: Path = None) -> None:
     try:
         if agent_dir.exists() and not agent_dir.is_dir():
             typer.secho(
-                f"[ERROR] A file named '.agent' exists. Please remove it and run again.",
+                "[ERROR] A file named '.agent' exists. Please remove it and run again.",
                 fg=typer.colors.RED,
             )
             raise typer.Exit(code=1)
@@ -88,7 +88,7 @@ def ensure_gitignore(project_root: Path = None) -> None:
                 )
     except PermissionError:
         typer.secho(
-            f"[ERROR] Could not write to '.gitignore'. Please check file permissions.",
+            "[ERROR] Could not write to '.gitignore'. Please check file permissions.",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)

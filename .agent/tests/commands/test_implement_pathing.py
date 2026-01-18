@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from agent.commands.implement import apply_change_to_file, find_file_in_repo
+
 
 @patch("agent.commands.implement.subprocess.check_output")
 def test_find_file_in_repo(mock_subprocess):
