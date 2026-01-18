@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 def generate_impact_prompt(diff: str, story: str, metadata: Dict[str, Any] = None) -> str:
     """

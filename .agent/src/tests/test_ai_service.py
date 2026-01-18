@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from agent.core.ai.service import AIService, ai_command_runs_total
-from prometheus_client import REGISTRY
+
 
 @pytest.fixture
 def ai_service():

@@ -14,8 +14,9 @@
 
 """Tests for ProjectGraph class."""
 
+
 import pytest
-from pathlib import Path
+
 from agent.core.graph import ProjectGraph, build_from_repo
 
 

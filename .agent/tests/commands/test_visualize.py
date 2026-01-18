@@ -14,8 +14,9 @@
 
 """Tests for visualize CLI command."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from click.testing import CliRunner
 
 from agent.commands.visualize import visualize

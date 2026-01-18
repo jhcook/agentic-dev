@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 - **(INFRA-017)** Added `agent query "..."` command to ask natural language questions about the codebase. This feature uses a RAG pipeline to find relevant files, scrub them, and synthesize an answer with citations using an LLM.
+- **(INFRA-023)** Added `agent config` command to manage configuration files via CLI. Supports `list`, `get`, and `set` operations with multi-file discovery, prefix routing (e.g., `agents.team.0.role`), dot-notation access, and automatic backups.
 
 ### Bug Fixes
 - None.

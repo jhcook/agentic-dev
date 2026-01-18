@@ -1,9 +1,11 @@
 
 import unittest
-from unittest.mock import patch, mock_open
-from pathlib import Path
+from unittest.mock import patch
+
 from typer.testing import CliRunner
+
 from agent.main import app
+
 
 class TestVersionCheck(unittest.TestCase):
     def setUp(self):

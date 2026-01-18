@@ -20,15 +20,15 @@ code and documentation, then synthesizes an answer with citations.
 """
 
 import asyncio
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
 
 import typer
 from rich.console import Console
 
-from agent.core.context_builder import ContextBuilder
 from agent.core.ai import ai_service
+from agent.core.context_builder import ContextBuilder
 
 logger = logging.getLogger(__name__)
 console = Console()

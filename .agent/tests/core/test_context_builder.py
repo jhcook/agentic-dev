@@ -14,11 +14,11 @@
 
 """Tests for ContextBuilder class."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
-from agent.core.context_builder import ContextBuilder, MAX_FILE_TOKENS
+import pytest
+
+from agent.core.context_builder import ContextBuilder
 
 
 @pytest.fixture

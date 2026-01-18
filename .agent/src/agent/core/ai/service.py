@@ -18,8 +18,8 @@ import subprocess
 import time
 from typing import Optional
 
-from rich.console import Console
 from prometheus_client import Counter
+from rich.console import Console
 
 from agent.core.config import get_valid_providers
 from agent.core.router import router

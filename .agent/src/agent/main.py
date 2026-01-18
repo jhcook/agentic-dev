@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import typer
 import logging
 import subprocess
 import sys
 from pathlib import Path
+
+import typer
 from rich.console import Console
 
 from agent.commands import (
     adr,
     check,
+    config,
     implement,
     lint,
     match,
@@ -43,6 +45,8 @@ app = typer.Typer(
     add_completion=False,
     pretty_exceptions_enable=False,  # Disable stack traces for users
 )
+
+app.add_typer(config.app, name="config")
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)
@@ -68,8 +72,6 @@ app.command(name="query")(query.query)
 
 # Register visualize Click group with Typer
 # visualize.py uses Click @click.group(), so we register the Click group directly
-import click
-from click import Context
 
 @app.command(name="visualize", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def visualize_cmd(ctx: typer.Context):
@@ -81,7 +83,6 @@ def visualize_cmd(ctx: typer.Context):
       flow   - Show flow for a specific story
     """
     # Forward to the Click group
-    import sys
     from click.testing import CliRunner
     
     # Use Click's invoke directly
@@ -109,7 +110,6 @@ def sync_cmd(ctx: typer.Context):
     # Sys.argv hack or just call logic?
     # sync.main() uses argparse which reads sys.argv.
     # We need to reconstruct sys.argv for the sync tool.
-    import sys
     # sys.argv will be ['agent', 'sync', 'status', ...]
     # sync.main expects ['...sync.py', 'status'] or just the args.
     # Let's adjust sys.argv to strip 'agent' and 'sync' prefix for the parser relative 

@@ -20,7 +20,6 @@ for LLM queries while respecting .gitignore and token budgets.
 """
 
 import asyncio
-import subprocess
 import logging
 from pathlib import Path
 from typing import List, Set

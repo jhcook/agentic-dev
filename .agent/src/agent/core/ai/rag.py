@@ -1,8 +1,15 @@
 # .agent/src/agent/core/ai/rag.py
 
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 from ...config import is_ai_configured
 from .llm_service import AIService, RateLimitError
+
 
 class RAGService:
     def __init__(self, ai_service: AIService):

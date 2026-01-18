@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import os
+
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
+
 
 def read_checkpoint() -> int:
     # This function should be implemented to read from a checkpoint store.

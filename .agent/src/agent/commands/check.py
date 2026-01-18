@@ -20,11 +20,11 @@ import typer
 from rich.console import Console
 
 from agent.core.ai import ai_service
+from agent.core.ai.prompts import generate_impact_prompt
 from agent.core.config import config
 from agent.core.context import context_loader
-from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.governance import convene_council_full
-from agent.core.ai.prompts import generate_impact_prompt
+from agent.core.utils import infer_story_id, scrub_sensitive_data
 
 console = Console()
 
@@ -138,9 +138,16 @@ def preflight(
     # 1.5 Run Automated Tests
     console.print("[bold blue]🧪 Running Automated Tests...[/bold blue]")
     try:
-        # Determine test command - strictly pytest for backend/agent for now
-        # Ideally this comes from config
-        test_cmd = [".agent/.venv/bin/python", "-m", "pytest", ".agent/src/tests"]
+        # Determine test command
+        # 1. Try root .venv (preferred for isolation)
+        root_venv_python = Path(".venv/bin/python")
+        if root_venv_python.exists():
+             test_cmd = [str(root_venv_python), "-m", "pytest", ".agent/tests"]
+        else:
+             # 2. Fallback to system executor (sys.executable)
+             # This handles cases where we are running inside the venv
+             import sys
+             test_cmd = [sys.executable, "-m", "pytest", ".agent/tests"]
         
         # Check if we are in the root or need to adjust path? 
         # Assuming run from repo root as per standard
@@ -482,7 +489,7 @@ def run_ui_tests(
         elif console_msg is not False: # Pass False to suppress console
             pass
 
-    console.print(f"[bold blue]📱 Initiating UI Test Run (Maestro)[/bold blue]")
+    console.print("[bold blue]📱 Initiating UI Test Run (Maestro)[/bold blue]")
     log(f"Starting run_ui_tests. Story: {story_id}, Filter: {filter}")
 
     # 2. Check Prerequisites

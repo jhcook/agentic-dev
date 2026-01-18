@@ -1,11 +1,11 @@
-import click
 import logging
 import subprocess
 import time
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from pathlib import Path
-from typing import Dict, List, Any, Set
+from typing import Any, Dict, List, Set
+
+import click
 
 from agent.core.graph import build_from_repo
 from agent.utils.text import sanitize_mermaid_label

@@ -1,10 +1,12 @@
 
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
-from typer.testing import CliRunner
-from agent.commands.check import run_ui_tests
-import typer
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+import typer
+from typer.testing import CliRunner
+
+from agent.commands.check import run_ui_tests
 
 # Create a Typer app to test the command function
 app = typer.Typer()

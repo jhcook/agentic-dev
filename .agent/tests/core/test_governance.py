@@ -1,7 +1,10 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from agent.core.governance import convene_council_full
 from rich.console import Console
+
+from agent.core.governance import convene_council_full
+
 
 @pytest.fixture
 def mock_ai_service():

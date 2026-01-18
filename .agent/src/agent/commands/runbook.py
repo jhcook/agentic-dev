@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import typer
 from typing import Optional
+
+import typer
 from rich.console import Console
 
 from agent.core.ai import ai_service

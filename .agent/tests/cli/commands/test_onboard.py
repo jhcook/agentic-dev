@@ -1,4 +1,3 @@
-import os
 import platform
 import stat
 from pathlib import Path
