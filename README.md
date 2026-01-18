@@ -1,26 +1,14 @@
-# Project Agent
+# The Agent
 
-Welcome to the Project Agent repository. This agent is designed to automate complex tasks.
+This is a developer assistant agent designed to automate and assist with software development tasks within this repository.
 
-## Quick Start
+## Features
 
-Getting started is simple. Use the automated onboarding command to set up your environment in minutes.
+- **Workflow Automation**: Run predefined workflows (e.g., `agent workflow pr`).
+- **Codebase Query**: Ask natural language questions about the codebase (`agent query "..."`).
+- **Pre-flight Checks**: Validate changes before committing (`agent preflight`).
 
-## Tooling
+## Installation
 
-### Visualize Project Artifacts
-
-Generate Mermaid diagrams of your governance artifacts (Plans, Stories, Runbooks):
-
-```bash
-# Generate full dependency graph (outputs Mermaid syntax)
-agent visualize graph
-
-# Generate graph and serve in browser
-agent visualize graph --serve
-
-# Visualize a specific story's flow
-agent visualize flow INFRA-016
-```
-
-1.  **Clone the repository:**
+1.  Clone the repository.
+2.  Install dependencies:

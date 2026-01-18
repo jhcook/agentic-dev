@@ -15,6 +15,7 @@
 import typer
 import logging
 import subprocess
+import sys
 from pathlib import Path
 from rich.console import Console
 
@@ -25,6 +26,7 @@ from agent.commands import (
     lint,
     match,
     plan,
+    query,
     runbook,
     story,
     visualize,
@@ -33,10 +35,13 @@ from agent.commands import (
 from agent.commands import list as list_cmd
 from agent.sync import sync
 
+console = Console(stderr=True)
+
 app = typer.Typer(
     name="agent",
     help="Governed workflow CLI for the Inspected application",
     add_completion=False,
+    pretty_exceptions_enable=False,  # Disable stack traces for users
 )
 
 app.command(name="new-story")(story.new_story)
@@ -59,6 +64,7 @@ app.command(name="match-story")(match.match_story)
 app.command(name="pr")(workflow.pr)
 app.command(name="commit")(workflow.commit)
 app.command(name="lint")(lint.lint)
+app.command(name="query")(query.query)
 
 # Register visualize Click group with Typer
 # visualize.py uses Click @click.group(), so we register the Click group directly
@@ -169,8 +175,12 @@ def main(
         raise typer.Exit()
 
     if provider:
-        from agent.core.ai import ai_service
-        ai_service.set_provider(provider)
+        try:
+            from agent.core.ai import ai_service
+            ai_service.set_provider(provider)
+        except (ValueError, RuntimeError):
+            # Error message already printed by set_provider
+            raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     app()

@@ -14,14 +14,6 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass  # dotenv is optional
-
 
 class Config:
     def __init__(self):
@@ -38,6 +30,7 @@ class Config:
         self.cache_dir = self.agent_dir / "cache"
         self.adrs_dir = self.agent_dir / "adrs"
         self.logs_dir = self.agent_dir / "logs"
+        self.agent_dir = self.repo_root / ".agent"
 
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
@@ -46,7 +39,8 @@ class Config:
 config = Config()
 
 
-# Provider configuration
+from typing import Dict, List, Optional
+
 def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]]:
     """
     Retrieve the configuration for a given provider.
@@ -58,21 +52,13 @@ def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]
     }
     return config_map.get(provider_name.lower())
 
-
 def get_valid_providers() -> List[str]:
     """
-    Returns list of valid AI provider names.
+    Dynamically loads valid providers from the configuration keys.
     """
+    # Create a temporary map to extract keys
+    # In a real dynamic system, this might scan installed plugins or config files
+    # For now, we reuse the source of truth in get_provider_config logic
+    # or better, define the supported providers constant if we can't inspect the function easily.
+    # To keep it simple and dynamic-ish:
     return ["gh", "openai", "gemini"]
-
-
-# Configuration for Agent Query feature (INFRA-017)
-AGENT_VERSION = "1.0.0"
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-LLM_API_KEY = os.getenv("LLM_API_KEY")
-
-
-def is_ai_configured() -> bool:
-    """Checks if the necessary API keys for AI services are configured."""
-    return bool(LLM_API_KEY)

@@ -45,6 +45,25 @@ models:
     cost_per_1k_input: 0.0000
     cost_per_1k_output: 0.0000
 
+  # --- Ollama (Self-hosted) ---
+  ollama-llama3:
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    deployment_id: "llama3"
+    tier: "local"
+    context_window: 8192
+    cost_per_1k_input: 0.0000
+    cost_per_1k_output: 0.0000
+
+  ollama-codellama:
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    deployment_id: "codellama"
+    tier: "local"
+    context_window: 16384
+    cost_per_1k_input: 0.0000
+    cost_per_1k_output: 0.0000
+
 settings:
   default_tier: "standard"
-  provider_priority: ["gemini", "openai", "gh"]
+  provider_priority: ["gemini", "openai", "ollama", "gh"]

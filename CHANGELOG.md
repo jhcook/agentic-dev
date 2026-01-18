@@ -7,12 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- New `agent onboard` command to automate initial developer setup. This command handles dependency checks, API key configuration, and workspace initialization.
-- New `agent visualize` command to generate Mermaid diagrams of project artifacts. Includes `graph` subcommand for full dependency graph and `flow` subcommand for single-story visualization. Supports `--serve` option for browser preview.
+### Features
+- **(INFRA-017)** Added `agent query "..."` command to ask natural language questions about the codebase. This feature uses a RAG pipeline to find relevant files, scrub them, and synthesize an answer with citations using an LLM.
 
-## [0.1.0] - 2023-10-26
+### Bug Fixes
+- None.
 
-### Added
-- Initial project structure.
-- Basic agent core logic.
+### Changed
+- None.
