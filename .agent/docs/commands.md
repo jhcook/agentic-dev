@@ -3,7 +3,39 @@
 This document provides details about the AI-related commands in the CLI (`implement`, `match-story`, `new-runbook`, `pr`).
 
 ---
+---
 
+## `agent sync` — Artifact Synchronization
+
+Synchronize artifacts (stories, plans, runbooks) between your local cache and the remote Supabase backend.
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `agent sync pull` | Pull artifacts from remote to local cache |
+| `agent sync push` | Push local artifacts to remote (Coming Soon) |
+| `agent sync status` | View local cache inventory |
+| `agent sync delete` | Delete artifacts from local cache |
+
+### Usage Examples
+
+```bash
+# Pull latest changes
+agent sync pull
+
+# View status
+agent sync status
+agent sync status --detailed
+
+# Delete an artifact (and its related types)
+agent sync delete INFRA-001
+
+# Delete only a specific type
+agent sync delete INFRA-001 --type story
+```
+
+---
 ## `agent secret` — Secret Management
 
 Manage encrypted secrets for API keys and credentials. Secrets are stored encrypted using AES-256-GCM in `.agent/secrets/`.

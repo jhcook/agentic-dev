@@ -100,39 +100,4 @@ def delete(id: str, type: str = None):
     else:
         print("Delete failed.")
 
-def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Sync artifacts")
-    subparsers = parser.add_subparsers(dest="command")
-    
-    # pull
-    subparsers.add_parser("pull", help="Pull artifacts from remote")
-    
-    # push
-    subparsers.add_parser("push", help="Push artifacts to remote")
-    
-    # status
-    status_parser = subparsers.add_parser("status", help="Check sync status")
-    status_parser.add_argument("--detailed", action="store_true", help="Show detailed list of artifacts")
-    
-    # delete
-    delete_parser = subparsers.add_parser("delete", help="Delete artifact from local cache")
-    delete_parser.add_argument("id", help="Artifact ID to delete")
-    delete_parser.add_argument("--type", help="Specific artifact type (story, plan, runbook, adr)")
-    
-    args = parser.parse_args()
-    
-    if args.command == "pull":
-        sync()
-    elif args.command == "push":
-        print("Push functionality not yet implemented.")
-    elif args.command == "status":
-        status(detailed=args.detailed)
-    elif args.command == "delete":
-        delete(args.id, args.type)
-    else:
-        parser.print_help()
 
-if __name__ == "__main__":
-    main()
