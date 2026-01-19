@@ -17,12 +17,16 @@ Synchronize artifacts (stories, plans, runbooks) between your local cache and th
 | `agent sync push` | Push local artifacts to remote (Coming Soon) |
 | `agent sync status` | View local cache inventory |
 | `agent sync delete` | Delete artifacts from local cache |
+| `agent sync scan` | Scan local filesystem and populate cache |
 
 ### Usage Examples
 
 ```bash
 # Pull latest changes
 agent sync pull
+
+# Scan local files (initializes DB if missing)
+agent sync scan
 
 # View status
 agent sync status
