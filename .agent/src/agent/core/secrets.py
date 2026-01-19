@@ -45,6 +45,7 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
     "supabase": {
         "service_role_key": ["SUPABASE_SERVICE_ROLE_KEY"],
         "anon_key": ["SUPABASE_ANON_KEY"],
+        "url": ["SUPABASE_URL"],
     },
     "openai": {
         "api_key": ["OPENAI_API_KEY"],

@@ -15,6 +15,11 @@ def test_sync_pull(mock_sync_ops):
     assert result.exit_code == 0
     mock_sync_ops.sync.assert_called_once()
 
+def test_sync_push(mock_sync_ops):
+    result = runner.invoke(app, ["push"])
+    assert result.exit_code == 0
+    mock_sync_ops.push.assert_called_once_with(verbose=False)
+
 def test_sync_status_default(mock_sync_ops):
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0

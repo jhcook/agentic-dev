@@ -12,18 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, List
 from time import sleep
 
 try:
-    import supabase
+    from supabase import Client
 except ImportError:
-    supabase = None
+    Client = Any
 
-def fetch_page(cursor: int, page_size: int, retries: int = 3):
+def fetch_page(client: Client, cursor: int, page_size: int, retries: int = 3) -> List[Any]:
     """
     Fetches a page of artifacts based on a cursor and page size with retry mechanics.
 
     Args:
+    client (Client): The Supabase client instance.
     cursor (int): The starting index of the page.
     page_size (int): The number of records to fetch.
     retries (int): Number of retries for fetching the data with exponential backoff.
@@ -36,13 +38,15 @@ def fetch_page(cursor: int, page_size: int, retries: int = 3):
     """
     for attempt in range(retries):
         try:
-            results = supabase.from_('artifacts').select("*").range(cursor, cursor + page_size - 1).execute()
-            if results.get('data'):
-                return results['data']
+            results = client.table('artifacts').select("*").range(cursor, cursor + page_size - 1).execute()
+            if results.data:
+                return results.data
             else:
-                raise Exception("Failed to fetch data or data is empty")
+                # If no data is returned, it might be end of list or empty
+                return []
         except Exception as e:
             if attempt < retries - 1:
                 sleep(2 ** attempt)
             else:
                 raise e
+    return []
