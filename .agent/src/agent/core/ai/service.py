@@ -116,13 +116,26 @@ class AIService:
         self._set_default_provider()
 
     def _set_default_provider(self) -> None:
-        # ... existing logic ...
+        # 1. Check configured default in agent.yaml
+        from agent.core.config import config
+        try:
+            agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
+            configured_provider = config.get_value(agent_config, "agent.provider")
+            if configured_provider and configured_provider in self.clients:
+                self.provider = configured_provider
+                return
+        except Exception:
+            pass
+
+        # 2. Hardcoded Fallback Priority
         if 'gh' in self.clients:
             self.provider = 'gh'
         elif 'gemini' in self.clients:
             self.provider = 'gemini'
         elif 'openai' in self.clients:
             self.provider = 'openai'
+        elif 'anthropic' in self.clients:
+            self.provider = 'anthropic'
         else:
             self.provider = None
             
