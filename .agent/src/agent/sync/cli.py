@@ -7,14 +7,14 @@ app = typer.Typer(
 )
 
 @app.command()
-def pull():
+def pull(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Pull artifacts from remote."""
-    sync_ops.sync()
+    sync_ops.sync(verbose=verbose)
 
 @app.command()
-def push():
+def push(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Push artifacts to remote."""
-    print("Push functionality not yet implemented.")
+    sync_ops.push(verbose=verbose)
 
 @app.command()
 def status(detailed: bool = typer.Option(False, "--detailed", help="Show detailed list of artifacts")):

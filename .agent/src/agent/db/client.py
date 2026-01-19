@@ -193,6 +193,31 @@ def get_artifact_counts() -> dict:
         if conn:
             conn.close()
 
+def get_all_artifacts_content() -> list:
+    """Returns all artifacts including content from the local cache."""
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Check if table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='artifacts'")
+        if not cursor.fetchone():
+            return []
+            
+        cursor.execute("SELECT * FROM artifacts")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.OperationalError:
+        return []
+    except Exception as e:
+        print(f"Error fetching artifacts: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
 def get_artifacts_metadata() -> list:
     """Returns metadata for all artifacts in the local cache."""
     conn: Optional[sqlite3.Connection] = None

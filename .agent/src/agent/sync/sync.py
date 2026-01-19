@@ -17,45 +17,170 @@ import os
 import re
 from pathlib import Path
 
-from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact, upsert_artifact
+from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact, upsert_artifact, get_all_artifacts_content
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
+from agent.sync.client import get_supabase_client
+import typer
 
 
 def read_checkpoint() -> int:
     # This function should be implemented to read from a checkpoint store.
+    # For now, we always start from 0 for a full sync if we don't have a persistent checkpoint mechanism
     return 0
 
 def save_checkpoint(cursor: int):
     # This function should be implemented to save to a checkpoint store.
     pass
 
-def get_total_artifacts() -> int:
-    # This function should interact with Supabase to fetch total count of artifacts.
-    # Return 0 for now to prevent crash
-    return 0
+def get_total_artifacts(client) -> int:
+    """Fetch total count of artifacts from Supabase."""
+    try:
+        # head=True means we only get the count, not the data
+        count = client.table('artifacts').select("*", count='exact', head=True).execute().count
+        return count if count is not None else 0
+    except Exception as e:
+        print(f"Error fetching total count: {e}")
+        return 0
 
 def process_page(page):
-    # Processes each page of artifacts.
-    pass
+    """Processes each page of artifacts by upserting them to the local DB."""
+    if not page:
+        return
+        
+    for item in page:
+        try:
+            # Upsert into local SQLite
+            # Item keys match Supabase columns: id, type, content, etc.
+            # We map them to upsert_artifact arguments
+            upsert_artifact(
+                id=item.get('id'),
+                type=item.get('type'),
+                content=item.get('content'),
+                author=item.get('author', 'remote')
+            )
+        except Exception as e:
+            print(f"Error processing artifact {item.get('id')}: {e}")
 
-def sync():
-    total = get_total_artifacts()  # Fetch total count from Supabase
+from agent.commands.secret import _prompt_password
+from agent.core.secrets import get_secret_manager, InvalidPasswordError
+
+def sync(verbose: bool = False):
+    """Execute the sync process."""
+    client = get_supabase_client(verbose=verbose)
+    
+    # interactive unlock if client is None
+    if not client:
+        manager = get_secret_manager()
+        if manager.is_initialized() and not manager.is_unlocked():
+            print("Secrets found but manager is locked.")
+            if typer.confirm("Unlock secret manager?", default=True):
+                try:
+                    password = _prompt_password()
+                    manager.unlock(password)
+                    print("Manager unlocked. Retrying...")
+                    client = get_supabase_client(verbose=verbose)
+                except Exception as e:
+                    print(f"Failed to unlock: {e}")
+
+    if not client:
+        print("Cannot sync: Supabase client not initialized. Check credentials.")
+        if verbose:
+            print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
+        return
+
+    total = get_total_artifacts(client)  # Fetch total count from Supabase
+    
+    if total == 0:
+        print("No artifacts found on remote.")
+        return
+        
     tracker = ProgressTracker(total)
     page_size = int(os.getenv("AGENT_SYNC_PAGE_SIZE", 100))
     cursor = read_checkpoint() or 0
 
+    print(f"Syncing {total} artifacts from remote...")
+
     while cursor < total:
         try:
-            page = fetch_page(cursor, page_size)
+            page = fetch_page(client, cursor, page_size)
+            if not page:
+                break
+                
             process_page(page)
-            cursor += len(page)  # Ensure cursor progresses by actual page size received
-            tracker.update(len(page))
+            
+            # Update cursor and progress
+            count = len(page)
+            cursor += count
+            tracker.update(count)
             save_checkpoint(cursor)
+            
         except KeyboardInterrupt:
-            print("Sync interrupted. Saving progress...")
+            print("\nSync interrupted. Saving progress...")
             save_checkpoint(cursor)
             break
+        except Exception as e:
+            print(f"\nError during sync: {e}")
+            break
+
+def push(verbose: bool = False):
+    """Push local artifacts to remote Supabase."""
+    client = get_supabase_client(verbose=verbose)
+    
+    # interactive unlock if client is None
+    if not client:
+        manager = get_secret_manager()
+        if manager.is_initialized() and not manager.is_unlocked():
+            print("Secrets found but manager is locked.")
+            if typer.confirm("Unlock secret manager?", default=True):
+                try:
+                    password = _prompt_password()
+                    manager.unlock(password)
+                    print("Manager unlocked. Retrying...")
+                    client = get_supabase_client(verbose=verbose)
+                except Exception as e:
+                    print(f"Failed to unlock: {e}")
+
+    if not client:
+        print("Cannot push: Supabase client not initialized. Check credentials.")
+        if verbose:
+            print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
+        return
+
+    artifacts = get_all_artifacts_content()
+    if not artifacts:
+        print("No local artifacts to push.")
+        return
+
+    print(f"Pushing {len(artifacts)} artifacts to remote...")
+    
+    success_count = 0
+    error_count = 0
+    
+    for art in artifacts:
+        try:
+            # Prepare payload matching Supabase schema
+            payload = {
+                "id": art["id"],
+                "type": art["type"],
+                "content": art["content"],
+                "version": art["version"],
+                "state": art["state"],
+                "author": art["author"],
+                # Let Supabase handle timestamps or use local modified time?
+                # Using upsert
+            }
+            
+            client.table("artifacts").upsert(payload).execute()
+            success_count += 1
+            if verbose:
+                print(f"  Pushed {art['id']}")
+                
+        except Exception as e:
+            error_count += 1
+            print(f"Failed to push {art.get('id')}: {e}")
+
+    print(f"Push complete. {success_count} success, {error_count} errors.")
 
 def status(detailed: bool = False):
     """Checks and prints the sync status."""
