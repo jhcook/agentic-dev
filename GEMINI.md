@@ -3,12 +3,12 @@
 You are an intelligent agent. This repository uses a strict "Agentic Workflow" where logic is encapsulated in Python CLI commands, and you (the agent) are responsible for high-level reasoning and executing those commands.
 
 ## Core Philosophy
-1.  **Workflows are Wrappers**: The markdown files in `.agent/workflows/` are simple pointers. You should execute the CLI command they denote (e.g., `agent pr`, `agent commit`). Do not try to manually "simulate" the workflow steps; just run the tool.
+1.  **Workflows are Instructions**: The markdown files in `.agent/workflows/` are explicit instructions for YOU. When asked to perform a workflow (e.g., "create a story", "run preflight"), you must read the corresponding markdown file, **assume the specified roles** (e.g., @Architect, @Security), and execute the steps manually interactively. **Do not** simply run the `agent` CLI command unless it is a specific utility step within those instructions. The `agent` CLI is primarily for human use.
 2.  **Single Source of Truth**: The Python code in `.agent/src/` is the truth. Templates in `.agent/templates/` are the truth for file structures.
-3.  **Governance is Code**: Compliance, security, and architectural checks are enforced by the `agent preflight` and `agent check` commands.
+3.  **Governance is Code**: Compliance, security, and architectural checks are enforced by the `agent preflight` and `agent check` commands, which you may run as tools to verify your work, but you must also perform the reasoning yourself.
 
 ## Folder Structure
-- **`.agent/workflows/`**: Executable wrappers. e.g. `pr.md` -> `agent pr`.
+- **`.agent/workflows/`**: Explicit instructions for the agent. e.g. `pr.md` -> Instructions for creating a PR.
 - **`.agent/templates/`**: Markdown templates for Stories, Plans, and Runbooks.
 - **`.agent/etc/`**: Configuration files (`agents.yaml`, `router.yaml`).
 - **`.agent/src/`**: The core Python application (`agent` CLI).
