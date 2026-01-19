@@ -15,8 +15,8 @@ As a User, I want to have a natural voice conversation with the assistant, where
 ## Acceptance Criteria
 - [ ] **WebSocket Endpoint**: `/ws/voice` endpoint is created in FastAPI.
 - [ ] **Connection Management**: Robust handling of connect/disconnect events, including cleanup of resources (streams) on disconnect.
-- [ ] **Orchestration Loop**: `async` logic pipes STT -> LangGraph (LLM) -> TTS without blocking the main thread.
-- [ ] **State Management**: Simple session state (e.g., `conversation_id`) is maintained for the duration of the WebSocket connection.
+- [ ] **Orchestration Loop**: `async` logic pipes STT -> Stateful ReAct Agent (LangGraph) -> TTS. The Agent must maintain conversation history and access codebase tools.
+- [ ] **State Management**: Persist full conversation state (messages, tool outputs) across the WebSocket session to support multi-turn reasoning.
 - [ ] **Streaming**: The system streams text/audio as it becomes available (`yield`), not waiting for full completion.
 - [ ] **Rate Limiting**: Basic protection against socket flooding (can be simple initially, e.g., 1 connection per user).
 - [ ] **Latency**: Initial response audio starts streaming within reasonable time (<1s acceptable for MVP, target <250ms).

@@ -24,7 +24,7 @@ Implement a real-time voice interface using a single provider (Deepgram) for bot
   - Create `voice.py` router injecting these providers.
 - **M2:** Voice Logic Implementation
   - Implement "Listen" (STT stream).
-  - Implement "Think" (LLM via LangGraph, generating conversational text).
+  - Implement "Think" (Stateful ReAct Agent via LangGraph, maintaining conversation history & codebase context).
   - Implement "Speak" (TTS stream via Deepgram Aura).
 - **M3:** Frontend Audio Integration
   - Update React Native audio player to handle streaming MP3/Linear16 chunks.
