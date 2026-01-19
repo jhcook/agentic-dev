@@ -206,7 +206,7 @@ def get_artifacts_metadata() -> list:
         if not cursor.fetchone():
             return []
             
-        cursor.execute("SELECT id, type, version, state, author, last_modified FROM artifacts ORDER BY type, id")
+        cursor.execute("SELECT id, type, version, state, author, last_modified FROM artifacts ORDER BY id DESC, type")
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     except sqlite3.OperationalError:
@@ -214,6 +214,53 @@ def get_artifacts_metadata() -> list:
     except Exception as e:
         print(f"Error fetching metadata: {e}")
         return []
+        if conn:
+            conn.close()
+
+def delete_artifact(id: str, type: Optional[str] = None) -> bool:
+    """Deletes an artifact from the local cache."""
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = get_connection()
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+        
+        if type:
+            # Check existence
+            cursor.execute("SELECT 1 FROM artifacts WHERE id = ? AND type = ?", (id, type))
+            if not cursor.fetchone():
+                print(f"Artifact {id} (type={type}) not found.")
+                return False
+
+            print(f"Deleting {id} ({type})...")
+            # Deletions propagate via FKs if ON DELETE CASCADE is set, 
+            # but our schema.sql uses default (NO ACTION or RESTRICT).
+            # So we manually clear children first to be safe.
+            cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (id, type))
+            cursor.execute("DELETE FROM links WHERE target_id = ? AND target_type = ?", (id, type))
+            cursor.execute("DELETE FROM history WHERE artifact_id = ? AND artifact_type = ?", (id, type))
+            cursor.execute("DELETE FROM artifacts WHERE id = ? AND type = ?", (id, type))
+        else:
+            # Delete all types with this ID
+            cursor.execute("SELECT type FROM artifacts WHERE id = ?", (id,))
+            rows = cursor.fetchall()
+            if not rows:
+                print(f"Artifact {id} not found.")
+                return False
+                
+            for row in rows:
+                art_type = row[0]
+                print(f"Deleting {id} ({art_type})...")
+                cursor.execute("DELETE FROM links WHERE source_id = ? AND source_type = ?", (id, art_type))
+                cursor.execute("DELETE FROM links WHERE target_id = ? AND target_type = ?", (id, art_type))
+                cursor.execute("DELETE FROM history WHERE artifact_id = ? AND artifact_type = ?", (id, art_type))
+                cursor.execute("DELETE FROM artifacts WHERE id = ? AND type = ?", (id, art_type))
+
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error deleting artifact: {e}")
+        return False
     finally:
         if conn:
             conn.close()

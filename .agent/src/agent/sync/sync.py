@@ -13,7 +13,7 @@
 # limitations under the License.
 import os
 
-from agent.db.client import get_artifact_counts, get_artifacts_metadata
+from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
 
@@ -92,6 +92,14 @@ def status(detailed: bool = False):
     else:
         print(f"\n  (Use --detailed to see list of {total_count} artifacts)")
 
+def delete(id: str, type: str = None):
+    """Deletes an artifact."""
+    success = delete_artifact(id, type)
+    if success:
+        print("Delete successful.")
+    else:
+        print("Delete failed.")
+
 def main():
     import argparse
     
@@ -108,6 +116,11 @@ def main():
     status_parser = subparsers.add_parser("status", help="Check sync status")
     status_parser.add_argument("--detailed", action="store_true", help="Show detailed list of artifacts")
     
+    # delete
+    delete_parser = subparsers.add_parser("delete", help="Delete artifact from local cache")
+    delete_parser.add_argument("id", help="Artifact ID to delete")
+    delete_parser.add_argument("--type", help="Specific artifact type (story, plan, runbook, adr)")
+    
     args = parser.parse_args()
     
     if args.command == "pull":
@@ -116,6 +129,8 @@ def main():
         print("Push functionality not yet implemented.")
     elif args.command == "status":
         status(detailed=args.detailed)
+    elif args.command == "delete":
+        delete(args.id, args.type)
     else:
         parser.print_help()
 
