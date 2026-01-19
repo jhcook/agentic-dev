@@ -277,3 +277,77 @@ def list_runbooks(
         except ValueError as e:
             console.print(f"[red]❌ {e}[/red]")
             raise typer.Exit(code=1)
+
+def list_models(
+    provider: Optional[str] = typer.Argument(None, help="Provider to list models for (gemini, openai, anthropic, gh)."),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file instead of stdout")
+):
+    """
+    List available AI models for a provider.
+    
+    If no provider is specified, uses the currently active/default provider.
+    """
+    from agent.core.ai import ai_service
+    
+    logger.info(f"Listing models (provider={provider}, format={output_format}, output={output_file})")
+    
+    try:
+        # Get the target provider (uses default if none specified)
+        target_provider = provider or ai_service.provider
+        
+        if not target_provider:
+            console.print("[red]❌ No AI provider available. Configure at least one provider (set GOOGLE_GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY).[/red]")
+            raise typer.Exit(code=1)
+            
+        console.print(f"[dim]🔍 Querying models for provider: {target_provider}...[/dim]")
+        
+        models = ai_service.get_available_models(target_provider)
+        
+        # Prepare data for formatting
+        models_data = [
+            {
+                "ID": scrub_sensitive_data(m.get("id", "")),
+                "Name": scrub_sensitive_data(m.get("name", "")),
+                "Provider": target_provider
+            }
+            for m in models
+        ]
+        
+        # Handle output formatting
+        if output_format == "pretty" and not output_file:
+            table = Table(title=f"🤖 Available Models ({target_provider})")
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Name", style="white")
+            
+            for model in models_data:
+                table.add_row(model["ID"], model["Name"])
+            
+            if models_data:
+                console.print(table)
+                console.print(f"\n[dim]Total: {len(models_data)} models[/dim]")
+            else:
+                console.print(f"  (No models found for {target_provider})")
+        else:
+            try:
+                formatted_output = format_data(output_format, models_data)
+                
+                if output_file:
+                    write_output(formatted_output, output_file)
+                else:
+                    print(formatted_output)
+            except ValueError as e:
+                console.print(f"[red]❌ {e}[/red]")
+                raise typer.Exit(code=1)
+                
+    except ValueError as e:
+        console.print(f"[red]❌ Invalid provider: {e}[/red]")
+        raise typer.Exit(code=1)
+    except RuntimeError as e:
+        console.print(f"[red]❌ {e}[/red]")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[red]❌ Failed to list models: {e}[/red]")
+        logger.error(f"Failed to list models: {e}", exc_info=True)
+        raise typer.Exit(code=1)
+

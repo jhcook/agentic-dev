@@ -6,6 +6,7 @@ This is a developer assistant agent designed to automate and assist with softwar
 
 - **Workflow Automation**: Run predefined workflows (e.g., `agent workflow pr`).
 - **Codebase Query**: Ask natural language questions about the codebase (`agent query "..."`).
+- **List AI Models**: Query available models from configured providers (`agent list-models [gemini|openai|anthropic|gh]`).
 - **Pre-flight Checks**: Validate changes before committing (`agent preflight`).
 
 ## Installation

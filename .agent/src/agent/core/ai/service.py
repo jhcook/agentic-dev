@@ -16,7 +16,7 @@ import logging
 import os
 import subprocess
 import time
-from typing import Optional
+from typing import List, Optional
 
 from prometheus_client import Counter
 from rich.console import Console
@@ -255,6 +255,85 @@ class AIService:
             system_prompt="You are a helpful AI assistant for software development governance.",
             user_prompt=prompt
         )
+
+    def get_available_models(self, provider: str | None = None) -> List[dict]:
+        """
+        Query available models from a provider.
+        
+        Args:
+            provider: The provider to query. If None, uses the current/default provider.
+            
+        Returns:
+            List of dicts with model information: [{"id": "model-id", "name": "display-name"}]
+            
+        Raises:
+            ValueError: If provider is invalid.
+            RuntimeError: If provider is not configured.
+        """
+        target_provider = provider or self.provider
+        
+        if not target_provider:
+            raise RuntimeError("No AI provider available. Configure at least one provider.")
+        
+        valid_providers = get_valid_providers()
+        if target_provider not in valid_providers:
+            raise ValueError(f"Invalid provider: {target_provider}. Must be one of: {', '.join(valid_providers)}")
+            
+        if target_provider not in self.clients:
+            raise RuntimeError(f"Provider '{target_provider}' is not configured. Set the required API key.")
+        
+        models: List[dict] = []
+        
+        try:
+            if target_provider == "gemini":
+                client = self.clients['gemini']
+                # Use the Gemini models.list() API
+                for model in client.models.list():
+                    model_id = model.name if hasattr(model, 'name') else str(model)
+                    display_name = model.display_name if hasattr(model, 'display_name') else model_id
+                    models.append({"id": model_id, "name": display_name})
+                    
+            elif target_provider == "openai":
+                client = self.clients['openai']
+                # Use the OpenAI models.list() API
+                response = client.models.list()
+                for model in response.data:
+                    model_id = model.id
+                    # OpenAI doesn't provide display names, use ID
+                    models.append({"id": model_id, "name": model_id})
+                    
+            elif target_provider == "anthropic":
+                # Anthropic doesn't have a models.list() API, return known models
+                known_models = [
+                    {"id": "claude-sonnet-4-5-20250929", "name": "Claude 4.5 Sonnet"},
+                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"},
+                    {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku"},
+                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus"},
+                ]
+                models = known_models
+                
+            elif target_provider == "gh":
+                # Use gh models list command
+                result = subprocess.run(
+                    ["gh", "models", "list"],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    # Parse the output (one model per line typically)
+                    for line in result.stdout.strip().split("\n"):
+                        if line.strip():
+                            # gh models list outputs model names directly
+                            model_id = line.strip()
+                            models.append({"id": model_id, "name": model_id})
+                else:
+                    raise RuntimeError(f"gh models list failed: {result.stderr.strip()}")
+                    
+        except Exception as e:
+            logging.error(f"Failed to list models for {target_provider}: {e}")
+            raise RuntimeError(f"Failed to list models for {target_provider}: {e}")
+            
+        return models
 
     def _try_complete(self, provider: str, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         model_used = model or self.models.get(provider)
