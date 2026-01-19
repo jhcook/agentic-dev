@@ -171,3 +171,49 @@ def upsert_artifact(id: str, type: str, content: str, author: str = "agent") -> 
                 conn.close()
                 
     return False
+
+def get_artifact_counts() -> dict:
+    """Returns a count of artifacts by type."""
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Check if table exists first preventing crash on fresh install
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='artifacts'")
+        if not cursor.fetchone():
+            return {}
+            
+        cursor.execute("SELECT type, COUNT(*) FROM artifacts GROUP BY type")
+        return dict(cursor.fetchall())
+    except sqlite3.OperationalError:
+        return {}
+    except Exception as e:
+        print(f"Error checking status: {e}")
+        return {}
+        if conn:
+            conn.close()
+
+def get_artifacts_metadata() -> list:
+    """Returns metadata for all artifacts in the local cache."""
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Check if table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='artifacts'")
+        if not cursor.fetchone():
+            return []
+            
+        cursor.execute("SELECT id, type, version, state, author, last_modified FROM artifacts ORDER BY type, id")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.OperationalError:
+        return []
+    except Exception as e:
+        print(f"Error fetching metadata: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
