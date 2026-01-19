@@ -278,7 +278,18 @@ class SecretManager:
         secrets[key]["updated_at"] = datetime.utcnow().isoformat()
         
         self._save_service_secrets(service, secrets)
+        self._save_service_secrets(service, secrets)
         self._log_operation("set", service, key, "success")
+    
+    def has_secret(self, service: str, key: str) -> bool:
+        """
+        Check if secret exists in secure storage (no fallback).
+        """
+        if not self.is_unlocked():
+            return False
+        
+        secrets = self._load_service_secrets(service)
+        return key in secrets
     
     def get_secret(self, service: str, key: str) -> Optional[str]:
         """
@@ -450,5 +461,16 @@ def get_secret(key: str, service: Optional[str] = None) -> Optional[str]:
         if value:
             return value
     
-    # Direct environment variable fallback
+    # Fallback to environment variable using mapping
+    if (
+        service
+        and service in SERVICE_ENV_MAPPINGS
+        and key in SERVICE_ENV_MAPPINGS[service]
+    ):
+        for env_var in SERVICE_ENV_MAPPINGS[service][key]:
+            value = os.getenv(env_var)
+            if value:
+                return value
+
+    # Direct fallback (legacy or unmapped)
     return os.getenv(key)

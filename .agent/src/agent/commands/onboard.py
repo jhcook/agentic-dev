@@ -1,21 +1,23 @@
 import getpass
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 import typer
 
 # Note: This command requires `typer` and `python-dotenv`.
 # Ensure they are added to your project's dependencies.
-from dotenv import dotenv_values, set_key
 from rich.console import Console
 from rich.table import Table
 
+from agent.core.ai.service import PROVIDERS, AIService, ai_service
 from agent.core.config import config
-from agent.core.ai.service import AIService, ai_service, PROVIDERS
+from agent.core.secrets import (
+    InvalidPasswordError,
+    get_secret,
+    get_secret_manager,
+)
 
 console = Console()
 
@@ -36,7 +38,7 @@ def check_dependencies() -> None:
     # As per @Security review, add any binary dependencies here. e.g., `git`
     dependencies = ["git", "python3"]
     recommended = ["gh"]
-    
+
     all_found = True
     for dep in dependencies:
         if not shutil.which(dep):
@@ -47,7 +49,7 @@ def check_dependencies() -> None:
             all_found = False
         else:
             typer.secho(f"  - Found {dep}", fg=typer.colors.GREEN)
-            
+
     if not all_found:
         raise typer.Exit(code=1)
 
@@ -73,24 +75,24 @@ def check_github_auth() -> None:
     try:
         # Run gh auth status. Capture output to avoid spamming unless error.
         result = subprocess.run(
-            ["gh", "auth", "status"], 
-            capture_output=True, 
+            ["gh", "auth", "status"],
+            capture_output=True,
             text=True
         )
-        
+
         if result.returncode == 0:
             typer.secho("[OK] GitHub CLI is authenticated.", fg=typer.colors.GREEN)
         else:
             typer.secho(
-                "[WARN] GitHub CLI is not authenticated.", 
+                "[WARN] GitHub CLI is not authenticated.",
                 fg=typer.colors.YELLOW
             )
             typer.echo("To use GitHub features (like PR creation), please run:")
             typer.secho("  gh auth login", fg=typer.colors.CYAN, bold=True)
-            
+
             if typer.confirm("Would you like to run 'gh auth login' now?", default=True):
                 subprocess.run(["gh", "auth", "login"])
-                
+
     except Exception as e:
         typer.secho(f"[WARN] Failed to check GitHub status: {e}", fg=typer.colors.YELLOW)
 
@@ -99,7 +101,7 @@ def ensure_agent_directory(project_root: Path = None) -> None:
     """Ensures the .agent directory exists and is a directory."""
     root = project_root or Path(".").resolve()
     agent_dir = root / ".agent"
-    
+
     typer.echo("\n[INFO] Checking for '.agent' workspace directory...")
     try:
         if agent_dir.exists() and not agent_dir.is_dir():
@@ -119,7 +121,7 @@ def ensure_gitignore(project_root: Path = None) -> None:
     """Ensures .env is listed in .gitignore to prevent accidental secret exposure."""
     root = project_root or Path(".").resolve()
     gitignore_file = root / ".gitignore"
-    
+
     typer.echo("\n[INFO] Verifying '.gitignore' configuration...")
     try:
         if not gitignore_file.exists():
@@ -151,76 +153,117 @@ def ensure_gitignore(project_root: Path = None) -> None:
         raise typer.Exit(code=1)
 
 
-def configure_api_keys(project_root: Path = None) -> None:
-    """Interactively prompts for and saves required API keys in a secure .env file."""
-    root = project_root or Path(".").resolve()
-    env_file = root / ".env"
-    
-    typer.echo("\n[INFO] Configuring API keys in '.env' file...")
+def configure_api_keys() -> None:
+    """Prompts for API keys and saves them to the secret manager."""
+    typer.echo("\n[INFO] Configuring API keys in Secret Manager...")
 
-    if not env_file.exists():
-        env_file.touch()
-        typer.echo("[INFO] Created '.env' file for API keys.")
+    manager = get_secret_manager()
 
-    try:
-        # Set permissions to 600 (owner read/write) as per @Security review
-        os.chmod(env_file, 0o600)
-    except OSError as e:
-        typer.secho(
-            f"[WARN] Could not set permissions on '.env': {e}. Please set them to 600 manually.",
-            fg=typer.colors.YELLOW,
-        )
+    # 1. Initialize if needed
+    if not manager.is_initialized():
+        typer.echo("Secret Manager is not initialized.")
+        typer.echo("You need to set a master password to encrypt your API keys.")
+        from agent.commands.secret import _prompt_password, _validate_password_strength
 
-    existing_config: Dict[str, str] = {
-        k: v for k, v in dotenv_values(env_file).items() if v is not None
-    }
-    keys_to_set: Dict[str, str] = {}
-    
+        while True:
+            password = _prompt_password(confirm=True)
+            if _validate_password_strength(password):
+                try:
+                    manager.initialize(password)
+                    typer.echo("[OK] Secret Manager initialized.")
+                    break
+                except Exception as e:
+                    typer.secho(f"[ERROR] Initialization failed: {e}", fg=typer.colors.RED)
+                    raise typer.Exit(code=1)
+            else:
+                 typer.echo("Password does not meet requirements. Please try again.")
+
+    # 2. Unlock if needed
+    if not manager.is_unlocked():
+        typer.echo("Please unlock the Secret Manager.")
+        from agent.commands.secret import _prompt_password
+
+        while True:
+            try:
+                password = _prompt_password(confirm=False)
+                manager.unlock(password)
+                typer.echo("[OK] Secret Manager unlocked.")
+                break
+            except InvalidPasswordError:
+                 typer.secho("[ERROR] Incorrect password. Try again.", fg=typer.colors.RED)
+            except Exception as e:
+                 typer.secho(f"[ERROR] Failed to unlock: {e}", fg=typer.colors.RED)
+                 raise typer.Exit(code=1)
+
     typer.echo("Please provide API keys for the providers you wish to use.")
     typer.echo("(Leave blank to skip a provider)")
 
     for provider_id, provider_config in PROVIDERS.items():
-        key = provider_config.get("env_var")
-        
-        # Skip providers that don't need keys (like gh)
-        if not key:
+        key_name = provider_config.get("secret_key")
+        service_name = provider_config.get("service")
+
+        # Skip providers that don't use secrets (like gh)
+        if not key_name or not service_name:
             continue
+
+        # Check if already set
+        display_name = provider_config['name']
+
+        if not manager.has_secret(service_name, key_name):
+            # Check if exists in environment (migration path)
+            # Since not in manager, get_secret will use fallback logic to find in env
+            env_val = get_secret(key_name, service=service_name)
             
-        if key not in existing_config or not existing_config[key]:
-            typer.echo(f"\n{provider_config['name']} ({key}):")
-            try:
-                # Use getpass for masked input
-                value = getpass.getpass("Value: ")
-                if value:
-                    keys_to_set[key] = value
-                else:
-                    typer.secho(
-                        f"[WARN] Skipping {key}.", fg=typer.colors.YELLOW, dim=True
-                    )
-            except (KeyboardInterrupt, EOFError):
-                typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
-                raise typer.Exit(code=1)
+            migrated = False
+            if env_val:
+                typer.secho(f"\n[WARN] {display_name} key found in environment but not in secure storage.", fg=typer.colors.YELLOW)
+                if typer.confirm("Would you like to migrate this key to the Secret Manager?", default=True):
+                    try:
+                        manager.set_secret(service_name, key_name, env_val)
+                        typer.secho(
+                            f"[OK] Migrated {display_name} key to secure storage.",
+                            fg=typer.colors.GREEN
+                        )
+                        migrated = True
+                    except Exception as e:
+                         typer.secho(
+                             f"[ERROR] Failed to migrate secret: {e}",
+                             fg=typer.colors.RED
+                         )
+            
+            if not migrated:
+                typer.echo(f"\n{display_name} ({key_name}):")
+                try:
+                    # Use getpass for masked input
+                    value = getpass.getpass("Value: ")
+                    if value:
+                         try:
+                            manager.set_secret(service_name, key_name, value)
+                            typer.secho(
+                                f"[OK] Saved {display_name} key.",
+                                fg=typer.colors.GREEN
+                            )
+                         except Exception as e:
+                            typer.secho(
+                                f"[ERROR] Failed to save secret: {e}",
+                                fg=typer.colors.RED
+                            )
+                    else:
+                        typer.secho(
+                            f"[WARN] Skipping {display_name}.",
+                            fg=typer.colors.YELLOW, dim=True
+                        )
+                except (KeyboardInterrupt, EOFError):
+                    typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
+                    raise typer.Exit(code=1)
         else:
-            typer.secho(f"[OK] {key} is already configured.", fg=typer.colors.GREEN, dim=True)
-
-    if not keys_to_set:
-        typer.echo("[INFO] No new keys to save.")
-        return
-
-    typer.echo("\n[INFO] Saving new API keys to '.env' file...")
-    try:
-        for key, value in keys_to_set.items():
-            set_key(str(env_file), key, value)
-
-        # Re-apply permissions after writing
-        os.chmod(env_file, 0o600)
-        typer.secho("[OK] Successfully saved configuration.", fg=typer.colors.GREEN)
-    except (OSError, PermissionError) as e:
-        typer.secho(
-            f"[ERROR] Could not write to '.env' file: {e}. Please check permissions.",
-            fg=typer.colors.RED,
-        )
-        raise typer.Exit(code=1)
+            typer.secho(
+                f"[OK] {display_name} key is already configured.",
+                fg=typer.colors.GREEN, dim=True
+            )
+    
+    # Reload the AI service to pick up new keys
+    ai_service.reload()
 
 
 def configure_agent_settings() -> None:
@@ -270,7 +313,9 @@ def configure_agent_settings() -> None:
     load_dotenv(override=True)
     
     # Force the service to recognize the new key/provider?
-    # aiservice singleton is already initialized. We might need to manually refresh it or just instantiate a new client in get_available_models if possible.
+    # aiservice singleton is already initialized.
+    # We might need to manually refresh it or just instantiate a new client
+    # in get_available_models if possible.
     # Actually, service.py checks os.getenv at init. 
     # But get_available_models re-checks or uses client?
     # We might need to handle this carefully.
@@ -280,26 +325,33 @@ def configure_agent_settings() -> None:
         # We need to hackily update the singleton's state if we just added keys
         # Or simply rely on the fact that we just set the .env file and load_dotenv()
         # But `service.py` init ran at import time.
-        # We should probably force a re-init or use a raw client check if we want to be safe.
-        # Let's rely on basic `ai_service.get_available_models` but we might need to "reload" the service.
+        # We should probably force a re-init or use a raw client check if we
+        # want to be safe.
+        # Let's rely on basic `ai_service.get_available_models` but we might
+        # need to "reload" the service.
         # Actually `service.py` logic:
         # __init__ checks env vars. 
         # So we need to re-init the service or manually add the client.
         
         # Let's try to "reload" the specific client in the service if missing
         if provider not in ai_service.clients:
-             # This is a bit internal-knowledge heavy, but necessary since we just set the keys
+             # This is a bit internal-knowledge heavy, but necessary since we
+             # just set the keys
              pass 
-             # For now, let's just proceed. The user might have had keys or we just restart.
-             # Actually, if we just set the ENV var in this process, we need to update os.environ
+             # For now, let's just proceed. The user might have had keys or we
+             # just restart.
+             # Actually, if we just set the ENV var in this process, we need to
+             # update os.environ
              # load_dotenv(override=True) does update os.environ.
              # But aiservice.__init__ ran already.
              # We can't easily re-run __init__.
              # We will skip model selection if client not ready, or warn user.
              pass
 
-        # We will attempt to list. If it fails because client is missing (due to init timing), we catch it.
-        # To fix this properly, we should probably have a `reload_config()` on AIService.
+        # We will attempt to list. If it fails because client is missing
+        # (due to init timing), we catch it.
+        # To fix this properly, we should probably have a `reload_config()`
+        # on AIService.
         pass
 
     except Exception:
@@ -337,7 +389,10 @@ def select_default_model(provider: str, config_data: dict, config_path: Path) ->
         models = ai_service.get_available_models(provider)
         
         if not models:
-            typer.echo("[WARN] No models found or unable to query API. Skipping default model selection.")
+            typer.echo(
+                "[WARN] No models found or unable to query API. "
+                "Skipping default model selection."
+            )
             return
 
         table = Table(title=f"Available Models ({provider})")
@@ -352,24 +407,32 @@ def select_default_model(provider: str, config_data: dict, config_path: Path) ->
             
         console.print(table)
         
-        choice = typer.prompt("Select default model (number) or press Enter to skip", default="")
+        choice = typer.prompt(
+            "Select default model (number) or press Enter to skip", default=""
+        )
         if choice:
             try:
                 idx = int(choice) - 1
                 if 0 <= idx < len(display_models):
                     model_id = display_models[idx]['id']
                     # Save formatted as provider_model?? No, `agent.model`? 
-                    # The requirement said "save to agent.yaml under provider_model or similar"
+                    # The requirement said "save to agent.yaml under
+                    # provider_model or similar"
                     # Ideally: agent.models.{provider} = model_id
                     
                     config.set_value(config_data, f"agent.models.{provider}", model_id)
                     config.save_yaml(config_path, config_data)
-                    typer.echo(f"[OK] Default model for {provider} set to '{model_id}'.")
+                    typer.echo(
+                        f"[OK] Default model for {provider} set to '{model_id}'."
+                    )
             except ValueError:
                 pass
                 
     except Exception as e:
-        typer.secho(f"[WARN] Could not list models: {e}. Skipping model selection.", fg=typer.colors.YELLOW)
+        typer.secho(
+            f"[WARN] Could not list models: {e}. Skipping model selection.",
+            fg=typer.colors.YELLOW
+        )
 
 
 
@@ -385,28 +448,56 @@ def run_verification() -> None:
     # Instantiate a FRESH service to pick up new keys
     service = AIService()
     
+    # Force the configured provider to ensure we verify what the user selected
+    try:
+        config_data = config.load_yaml(config.etc_dir / "agent.yaml")
+        configured_provider = config.get_value(config_data, "agent.provider")
+        if configured_provider:
+            # We don't want to fail if it's not available (e.g. if
+            # initialization failed)
+            # checking if it's in service.clients happens inside set_provider
+            # but raises error
+            # so we check first
+             if configured_provider in service.clients:
+                 service.set_provider(configured_provider)
+    except Exception:
+        # Fallback to default behavior if config read fails
+        pass
+    
     try:
         response = service.complete(
             system_prompt="You are a helpful assistant.",
             user_prompt="Reply with exactly 'Hello World'",
         )
         if "Hello World" in response or "Hello" in response:
-            typer.secho("[SUCCESS] AI Connectivity Verified! 🚀", fg=typer.colors.GREEN, bold=True)
+            typer.secho(
+                "[SUCCESS] AI Connectivity Verified! 🚀",
+                fg=typer.colors.GREEN,
+                bold=True
+            )
         else:
-            typer.secho(f"[WARN] AI returned unexpected response: {response}", fg=typer.colors.YELLOW)
+            typer.secho(
+                f"[WARN] AI returned unexpected response: {response}",
+                fg=typer.colors.YELLOW
+            )
     except Exception as e:
         typer.secho(f"[ERROR] Verification failed: {e}", fg=typer.colors.RED)
 
 
 def display_next_steps() -> None:
     """Displays a guided tour of next steps."""
-    console.print("\n[bold cyan]🎉 You are all set! Here is a quick tour of what you can do:[/bold cyan]")
+    console.print(
+        "\n[bold cyan]🎉 You are all set! "
+        "Here is a quick tour of what you can do:[/bold cyan]"
+    )
     
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Command", style="green")
     table.add_column("Description")
     
-    table.add_row("agent story", "Start a new feature or bugfix (creates a Story artifact)")
+    table.add_row(
+        "agent story", "Start a new feature or bugfix (creates a Story artifact)"
+    )
     table.add_row("agent preflight", "Run governance checks (preflight) on your code")
     table.add_row("agent pr", "Create a Pull Request with all checks passing")
     table.add_row("agent list-models", "See available AI models")
@@ -420,10 +511,15 @@ def display_next_steps() -> None:
 def onboard() -> None:
     """Guides a developer through initial agent setup and configuration."""
     typer.secho("--- Agent Onboarding ---", bold=True)
-    typer.echo("This command will check dependencies and set up your local environment.")
+    typer.echo(
+        "This command will check dependencies and set up your local environment."
+    )
 
     if sys.platform == "win32":
-        typer.secho("\n[ERROR] This command is not yet supported on Windows.", fg=typer.colors.RED)
+        typer.secho(
+            "\n[ERROR] This command is not yet supported on Windows.",
+            fg=typer.colors.RED
+        )
         raise typer.Exit(code=1)
 
     try:
@@ -445,7 +541,11 @@ def onboard() -> None:
     except typer.Exit:
         raise
     except Exception as e:
-        typer.secho(f"\n[FATAL] An unexpected error occurred: {e}", fg=typer.colors.RED, bold=True)
+        typer.secho(
+            f"\n[FATAL] An unexpected error occurred: {e}",
+            fg=typer.colors.RED,
+            bold=True
+        )
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

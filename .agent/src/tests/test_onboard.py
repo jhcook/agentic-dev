@@ -1,8 +1,6 @@
-
-import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
@@ -11,10 +9,13 @@ from typer.testing import CliRunner
 # Add src to path if needed (though pytest usually handles this)
 sys.path.append(str(Path.cwd() / "src"))
 
-from agent.commands.onboard import app, onboard
-from agent.core.ai.service import PROVIDERS
+from agent.commands.onboard import onboard
 
 runner = CliRunner()
+
+@pytest.fixture
+def mock_runner():
+    return runner
 
 @pytest.fixture
 def mock_path_ensure():
@@ -31,13 +32,6 @@ def mock_shutil_which():
 def mock_getpass():
     with patch("getpass.getpass") as mock:
         yield mock
-
-@pytest.fixture
-def mock_dotenv():
-    with patch("agent.commands.onboard.dotenv_values") as m1, \
-         patch("agent.commands.onboard.set_key") as m2:
-        m1.return_value = {} # Empty existing config
-        yield m1, m2
 
 @pytest.fixture
 def mock_config(tmp_path):
@@ -71,6 +65,48 @@ def mock_subprocess_run():
         yield mock
 
 @pytest.fixture
+def mock_check_dependencies():
+    with patch("agent.commands.onboard.check_dependencies") as mock:
+        yield mock
+
+@pytest.fixture
+def mock_user_input():
+    with patch("agent.commands.onboard.getpass.getpass") as mock_pass, \
+         patch("agent.commands.onboard.typer.prompt") as mock_prompt:
+             
+        # Create a combined side_effect handler or mock object
+        # But the tests treat mock_user_input as a single mock with side_effect
+        # This is tricky if it covers both getpass and prompt.
+        # In the test logic: 
+        # mock_user_input.side_effect = [...]
+        # The test seems to expect a single mock callable that handles input.
+        # But onboard.py calls getpass.getpass AND typer.prompt.
+        
+        # Let's check how the previous test version did it.
+        # It had `mock_getpass` and patch logic for `typer.prompt`.
+        
+        # I'll revert to separate mocks if possible, or implement a unifying fixture.
+        # Given the test code: `mock_user_input.side_effect = [...]`
+        # and checking the sequence of calls: getpass, getpass, getpass, prompt, prompt.
+        
+        # I will create a wrapper mock that feeds both.
+        
+        mock_wrapper = MagicMock()
+        
+        def side_effect(*args, **kwargs):
+            return mock_wrapper()
+            
+        mock_pass.side_effect = side_effect
+        mock_prompt.side_effect = side_effect
+        
+        yield mock_wrapper
+
+@pytest.fixture
+def mock_github_auth():
+    with patch("agent.commands.onboard.check_github_auth") as mock:
+        yield mock
+
+@pytest.fixture
 def test_app():
     test_app = typer.Typer()
     
@@ -93,84 +129,129 @@ def test_onboard_dependencies_missing(test_app, mock_shutil_which):
     assert result.exit_code == 1
     assert "Dependency not found: 'git'" in result.stdout
 
+@pytest.fixture
+def mock_secret_manager():
+    with patch("agent.commands.onboard.get_secret_manager") as mock1, \
+         patch("agent.core.secrets.get_secret_manager") as mock2:
+        manager = MagicMock()
+        mock1.return_value = manager
+        mock2.return_value = manager
+        
+        manager.is_initialized.return_value = True
+        manager.is_unlocked.return_value = True
+        manager.get_secret.return_value = None # No existing secrets
+        manager.has_secret.return_value = False # Default to not having secret
+        yield manager
+
+@pytest.fixture(autouse=True)
+def mock_env():
+    """Ensure clean environment for all tests."""
+    with patch.dict("os.environ", {}, clear=True):
+        # Restore PATH so mocks (shutil.which) might work if they relied on real path, 
+        # but here we utilize side_effects usually.
+        # However, to be safe, maybe keep PATH or crucial vars?
+        # Actually simplest is clear=True.
+        yield
+
+@pytest.fixture
+def mock_prompt_password():
+    with patch("agent.commands.secret._prompt_password") as mock:
+        mock.return_value = "Secret123!"
+        yield mock
+
+@pytest.fixture
+def mock_validate_password():
+    with patch("agent.commands.secret._validate_password_strength") as mock:
+        mock.return_value = True
+        yield mock
+
 def test_onboard_happy_path(
-    test_app,
-    mock_shutil_which,
-    mock_path_ensure, 
-    mock_getpass, 
-    mock_dotenv,
-    mock_config,
-    mock_ai_service
+    test_app, 
+    mock_check_dependencies, 
+    mock_user_input, 
+    mock_runner, 
+    mock_config, 
+    mock_ai_service,
+    mock_github_auth,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password,
 ):
-    """Test the full happy path of onboarding with prompts"""
-    # 1. Deps found
-    mock_shutil_which.return_value = "/usr/bin/tool"
-    
-    # 2. Getpass inputs for API Keys: OpenAI, Gemini, Anthropic
-    # We provide values for all
-    mock_getpass.side_effect = ["sk-openai", "sk-gemini", "sk-anthropic"]
-    
-    # 3. Typer Prompt for Provider Selection (select 1. openai)
-    # 4. Typer Prompt for Model Selection (select 1. gpt-4o)
-    # Using 'input=' to simulate stdin for prompts
-    inputs = "1\n1\n" # Select OpenAI, Select Model 1
-    
-    with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
-        result = runner.invoke(test_app, [])
-
-    # Assertions
-    assert result.exit_code == 0
-    assert "[SUCCESS] Onboarding complete!" in result.stdout
-    
-    # Check API keys saved
-    mock_set_key = mock_dotenv[1]
-    assert mock_set_key.call_count == 3
-    # Check we saved required keys
-    calls = [
-        call(str(Path(".").resolve() / ".env"), 'OPENAI_API_KEY', 'sk-openai'),
-        call(str(Path(".").resolve() / ".env"), 'GEMINI_API_KEY', 'sk-gemini'),
-        call(str(Path(".").resolve() / ".env"), 'ANTHROPIC_API_KEY', 'sk-anthropic')
+    """Test the happy path where all checks pass and user provides keys."""
+    # Simulate user input:
+    # 1. OpenAI Key
+    # 2. Gemini Key
+    # 3. Anthropic Key
+    # 4. Default Provider Selection (1=openai, 2=gemini etc. logic changed to
+    #    list index)
+    #    PROVIDERS keys list order: openai, gemini, anthropic, gh. 
+    #    Selection: "2" -> gemini.
+    # 5. Default Model Selection (Enter to skip/default)
+    mock_user_input.side_effect = [
+        "sk-openai",    # OpenAI Key
+        "sk-gemini",    # Gemini Key
+        "sk-anthropic", # Anthropic Key
+        "2",            # Select Gemini
+        "1",            # Select Model (1st in list)
     ]
-    mock_set_key.assert_has_calls(calls, any_order=True)
 
+    result = mock_runner.invoke(test_app, [])
+    
+    # Print output for debugging if it fails
+    if result.exit_code != 0:
+        print(result.stdout)
+        print(result.exception)
 
+    assert result.exit_code == 0
+    assert "Agent Onboarding" in result.stdout
+    mock_check_dependencies.assert_called_once()
+    mock_github_auth.assert_called_once()
+    
+    # Check Secret Manager calls
+    # Should be initialized (or checked) and unlocked
+    # In this test, is_initialized=True, is_unlocked=True
+    
+    # Verify set_secret calls
+    # Arguments: service, key, value
+    mock_secret_manager.set_secret.assert_any_call("openai", "api_key", "sk-openai")
+    mock_secret_manager.set_secret.assert_any_call("gemini", "api_key", "sk-gemini")
+    mock_secret_manager.set_secret.assert_any_call(
+        "anthropic", "api_key", "sk-anthropic"
+    )
 
     # Check Provider Configured
-    # The provider index 1 corresponds to whichever key is at index 0 of PROVIDERS.keys()
-    # This is fragile if dict order is not guaranteed or if PROVIDERS changes.
-    # But Python 3.7+ dicts preserve insertion order.
-    # In service.py: openai, gemini, anthropic, gh (gh has no key).
-    
-    # We selected "1" from the list of drivers.
-    # drivers list: ["openai", "gemini", "anthropic", "gh"]
-    # 1 -> "openai"
-    mock_config.set_value.assert_any_call({}, "agent.provider", "openai")
+    # We selected "2" (Gemini)
+    mock_config.set_value.assert_any_call({}, "agent.provider", "gemini")
     
     # Check Model Configured
-    mock_config.set_value.assert_any_call({}, "agent.models.openai", "gpt-4o")
+    # We selected "1" -> models[0]['id'] -> "gpt-4o"
+    mock_config.set_value.assert_any_call({}, "agent.models.gemini", "gpt-4o")
 
 def test_onboard_skip_keys(
     test_app,
-    mock_shutil_which, 
-    mock_path_ensure, 
-    mock_getpass, 
-    mock_dotenv,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password,
+    mock_shutil_which,
+    mock_check_dependencies,
+    mock_user_input,
+    mock_runner,
     mock_config,
     mock_ai_service
 ):
     """Test skipping optional keys"""
     mock_shutil_which.return_value = "/bin/tool"
     
-    # User hits enter (empty) for all keys
-    mock_getpass.return_value = ""
+    # User hits enter (empty) for all keys (3 keys)
+    # Select Provider (4. gh)
+    # Select Model (enter to skip)
+    mock_user_input.side_effect = ["", "", "", "4", ""]
     
-    # Select Provider (4. gh), Skip Model (enter)
-    with patch("agent.commands.onboard.typer.prompt", side_effect=["4", ""]):
-        result = runner.invoke(test_app, [])
+    result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
     # No keys should be saved
-    mock_dotenv[1].assert_not_called()
+    mock_secret_manager.set_secret.assert_not_called()
     
     # Provider should be set to gh
     mock_config.set_value.assert_any_call({}, "agent.provider", "gh")
@@ -179,14 +260,18 @@ def test_verification_failure_warns(
     test_app,
     mock_shutil_which,
     mock_path_ensure, 
-    mock_getpass, 
-    mock_dotenv,
-    mock_config,
-    mock_ai_service
+    mock_user_input,
+    mock_runner, 
+    mock_config, 
+    mock_ai_service,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password
 ):
     """Test that verification failure just warns and doesn't crash"""
     mock_shutil_which.return_value = "/bin/tool"
-    mock_getpass.return_value = "secret"
+    # Inputs handled by side_effect in assertion block
+
     
     # Mock AIService (instantiated inside verify) to fail
     with patch("agent.commands.onboard.AIService") as mock_cls_local:
@@ -194,8 +279,9 @@ def test_verification_failure_warns(
         mock_inst.complete.side_effect = Exception("Connection Refused")
         mock_cls_local.return_value = mock_inst
         
-        with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
-             result = runner.invoke(test_app, [])
+        # Inputs: 3 keys (skipping), Select Provider 1, Select Model 1
+        mock_user_input.side_effect = ["", "", "", "1", "1"]
+        result = mock_runner.invoke(test_app, [])
              
     assert result.exit_code == 0
     assert "[ERROR] Verification failed: Connection Refused" in result.stdout
@@ -206,10 +292,13 @@ def test_check_github_auth_authenticated(
     mock_shutil_which,
     mock_subprocess_run,
     mock_path_ensure, 
-    mock_getpass, 
-    mock_dotenv,
+    mock_user_input, 
+    mock_runner,
     mock_config,
-    mock_ai_service
+    mock_ai_service,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password
 ):
     """Test standard flow when gh is authenticated"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -218,9 +307,9 @@ def test_check_github_auth_authenticated(
     mock_subprocess_run.return_value.returncode = 0
     
     # Standard inputs
-    mock_getpass.side_effect = ["", "", ""] # Skip keys
-    with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
-        result = runner.invoke(test_app, [])
+    # 3 Keys (skip), Provider 1, Model 1
+    mock_user_input.side_effect = ["", "", "", "1", "1"]
+    result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
     assert "[INFO] Checking GitHub authentication status..." in result.stdout
@@ -231,10 +320,13 @@ def test_check_github_auth_not_authenticated_yes(
     mock_shutil_which,
     mock_subprocess_run,
     mock_path_ensure, 
-    mock_getpass, 
-    mock_dotenv,
+    mock_user_input, 
+    mock_runner,
     mock_config,
-    mock_ai_service
+    mock_ai_service,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password
 ):
     """Test flow when gh is NOT authenticated and user says YES to login"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -243,12 +335,133 @@ def test_check_github_auth_not_authenticated_yes(
     mock_subprocess_run.return_value.returncode = 1
     
     # Standard inputs + YES to login
-    mock_getpass.side_effect = ["", "", ""] 
-    with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
-        with patch("agent.commands.onboard.typer.confirm", return_value=True):
-            result = runner.invoke(test_app, [])
+    # 3 Keys (skip), Provider 1, Model 1
+    # Note: explicit confirm mock handles the "Yes" to login,
+    # so we don't need input for that?
+    # Typer confirm usually uses stdin? Or uses typer.confirm?
+    # We patch typer.confirm below.
+    # So we just need the standard flow inputs.
+    mock_user_input.side_effect = ["", "", "", "1", "1"]
+    
+    with patch("agent.commands.onboard.typer.confirm", return_value=True):
+        result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
     assert "[WARN] GitHub CLI is not authenticated." in result.stdout
+    assert "[WARN] GitHub CLI is not authenticated." in result.stdout
     # Check we called login
     mock_subprocess_run.assert_called_with(["gh", "auth", "login"])
+
+def test_verification_uses_configured_provider(
+    test_app,
+    mock_shutil_which,
+    mock_path_ensure, 
+    mock_user_input, 
+    mock_runner, 
+    mock_config,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password
+):
+    """Test that verification forces the configured provider"""
+    mock_shutil_which.return_value = "/bin/tool"
+    
+    # Mock config to return 'gemini' as provider
+    # Mocking get_value is tricky because it's a method on the real Config object,
+    # but mock_config fixture patches the module-level 'config' INSTANCE in onboard.py?
+    # No, fixture `mock_config` patches "agent.commands.onboard.config".
+    
+    # We need to ensure load_yaml returns data that get_value can read, 
+    # OR mock get_value directly.
+    # The code calls:
+    #   config_data = config.load_yaml(...)
+    #   configured_provider = config.get_value(config_data, "agent.provider")
+    
+    mock_config.load_yaml.return_value = {"agent": {"provider": "gemini"}}
+    # If config.get_value is NOT mocked on the object, it runs real logic?
+    # mock_config is a MagicMock replacing the `config` object.
+    # So `config.get_value` is also a mock.
+    mock_config.get_value.return_value = "gemini" 
+
+    # Mock AIService to verify set_provider call
+    with patch("agent.commands.onboard.AIService") as mock_cls_local:
+        mock_inst = MagicMock()
+        mock_inst.clients = {"gemini": "client"} # Ensure gemini is considered available
+        mock_inst.complete.return_value = "Hello World"
+        mock_cls_local.return_value = mock_inst
+
+        # Inputs: 3 keys (skipping), Select Provider 2 (Gemini), Select Model 1
+        mock_user_input.side_effect = ["", "", "", "2", "1"]
+        result = mock_runner.invoke(test_app, [])
+        
+        # Verify set_provider was called with gemini
+        mock_inst.set_provider.assert_called_with("gemini")
+        
+    assert result.exit_code == 0
+
+def test_onboard_migration(
+    test_app,
+    mock_shutil_which,
+    mock_user_input,
+    mock_runner,
+    mock_config,
+    mock_secret_manager,
+    mock_prompt_password,
+    mock_validate_password,
+    mock_ai_service
+):
+    """Test migration of keys from env to secret manager."""
+    mock_shutil_which.return_value = "/bin/tool"
+    
+    # Setup: 
+    # SecretManager is initialized/unlocked but empty
+    
+    # Set Environment Variable for Gemini to trigger migration
+    # And mock manager.get_secret to return None for it
+    
+    with patch.dict("os.environ", {"GEMINI_API_KEY": "env_gemini_key"}):
+        
+        # Mock manager.get_secret specifically
+        # (service, key)
+        def manager_get_secret_side_effect(service, key):
+            if service == "openai":
+                return "stored_openai_key"
+            return None
+            
+        # Mock manager.has_secret
+        def manager_has_secret_side_effect(service, key):
+            if service == "openai":
+                return True
+            return False
+
+        mock_secret_manager.get_secret.side_effect = manager_get_secret_side_effect
+        mock_secret_manager.has_secret.side_effect = manager_has_secret_side_effect
+    
+        # User Inputs:
+        # 1. Migration Confirmation for Gemini (Yes) -> handled by typer.confirm patch?
+        # 2. Anthropic Input (Skip) -> handled by mock_user_input returning ""
+        # 3. Provider Selection (1)
+        # 4. Model Selection (1)
+        
+        # Note regarding confirm: 
+        # The code uses `typer.confirm`. We need to patch it to say Yes.
+        
+        # Anthropic skip, Provider 1, Model 1
+        mock_user_input.side_effect = ["", "1", "1"]
+        
+        with patch("agent.commands.onboard.typer.confirm", return_value=True):
+            result = mock_runner.invoke(test_app, [])
+            
+        assert result.exit_code == 0
+        
+        # OpenAI: Already configured
+        # Gemini: Migrated
+        # Anthropic: Skipped
+        
+        assert "[WARN] Google Gemini key found in environment" in result.stdout
+        assert "[OK] Migrated Google Gemini key" in result.stdout
+        
+        # assertions
+        mock_secret_manager.set_secret.assert_any_call(
+            "gemini", "api_key", "env_gemini_key"
+        )
