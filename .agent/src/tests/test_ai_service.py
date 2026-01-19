@@ -67,6 +67,7 @@ def test_metrics_increment(ai_service):
 def test_fallback_logic(ai_service):
     ai_service.clients = {'gh': 'mock', 'gemini': 'mock', 'openai': 'mock'}
     ai_service.provider = 'gh'
+    ai_service.is_forced = True
     
     def side_effect(provider, system, user, model=None):
         if provider == "gh":
