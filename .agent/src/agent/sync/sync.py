@@ -13,7 +13,11 @@
 # limitations under the License.
 import os
 
-from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact
+import os
+import re
+from pathlib import Path
+
+from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact, upsert_artifact
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
 
@@ -99,5 +103,62 @@ def delete(id: str, type: str = None):
         print("Delete successful.")
     else:
         print("Delete failed.")
+
+def scan(verbose: bool = False):
+    """Scans local directories and populates the artifact database."""
+    base_dir = Path(".agent/cache")
+    # Also check .agent/adrs which is standard location
+    adr_dir = Path(".agent/adrs")
+    
+    if not base_dir.exists() and not adr_dir.exists():
+        print(f"No artifact directories found to scan.")
+        return
+
+    # Standard paths
+    paths_to_scan = [
+        (Path(".agent/cache/stories"), "story"),
+        (Path(".agent/cache/plans"), "plan"),
+        (Path(".agent/cache/runbooks"), "runbook"),
+        (adr_dir, "adr"),
+    ]
+
+    total_added = 0
+    total_errors = 0
+
+    print("Scanning local artifacts...")
+    
+    for path, type in paths_to_scan:
+        if not path.exists():
+            if verbose: print(f"Skipping missing directory: {path}")
+            continue
+
+        for file in path.rglob("*.md"):
+            try:
+                content = file.read_text(encoding="utf-8")
+                
+                # Extract ID from filename (e.g., INFRA-001-description.md -> INFRA-001)
+                filename = file.name
+                match = re.match(r"^([A-Z]+-\d+)", filename)
+                if match:
+                    art_id = match.group(1)
+                else:
+                    # Fallback
+                    art_id = filename.replace(".md", "")
+
+                if verbose:
+                    print(f"  Found {type.upper()}: {art_id} ({file})")
+
+                # Upsert
+                if upsert_artifact(art_id, type, content, author="scanner"):
+                    total_added += 1
+                else:
+                    total_errors += 1
+                    print(f"Failed to upsert {art_id}")
+
+            except Exception as e:
+                total_errors += 1
+                print(f"Error processing {file}: {e}")
+
+    print(f"Scan complete. Processed {total_added} artifacts with {total_errors} errors.")
 
 

@@ -28,3 +28,8 @@ def delete(
 ):
     """Delete artifact from local cache."""
     sync_ops.delete(id, type)
+
+@app.command()
+def scan(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
+    """Scan local file system and update cache."""
+    sync_ops.scan(verbose=verbose)
