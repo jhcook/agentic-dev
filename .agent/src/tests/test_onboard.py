@@ -65,6 +65,11 @@ def mock_ai_service():
         yield mock
 
 @pytest.fixture
+def mock_subprocess_run():
+    with patch("agent.commands.onboard.subprocess.run") as mock:
+        yield mock
+
+@pytest.fixture
 def test_app():
     test_app = typer.Typer()
     
@@ -184,3 +189,55 @@ def test_verification_failure_warns(
     assert result.exit_code == 0
     assert "[ERROR] Verification failed: Connection Refused" in result.stdout
     assert "[SUCCESS] Onboarding complete!" in result.stdout
+
+def test_check_github_auth_authenticated(
+    test_app,
+    mock_shutil_which,
+    mock_subprocess_run,
+    mock_path_ensure, 
+    mock_getpass, 
+    mock_dotenv,
+    mock_config,
+    mock_ai_service
+):
+    """Test standard flow when gh is authenticated"""
+    mock_shutil_which.return_value = "/usr/bin/tool"
+    
+    # Mock gh auth status success
+    mock_subprocess_run.return_value.returncode = 0
+    
+    # Standard inputs
+    mock_getpass.side_effect = ["", "", ""] # Skip keys
+    with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
+        result = runner.invoke(test_app, [])
+        
+    assert result.exit_code == 0
+    assert "[INFO] Checking GitHub authentication status..." in result.stdout
+    assert "[OK] GitHub CLI is authenticated." in result.stdout
+
+def test_check_github_auth_not_authenticated_yes(
+    test_app,
+    mock_shutil_which,
+    mock_subprocess_run,
+    mock_path_ensure, 
+    mock_getpass, 
+    mock_dotenv,
+    mock_config,
+    mock_ai_service
+):
+    """Test flow when gh is NOT authenticated and user says YES to login"""
+    mock_shutil_which.return_value = "/usr/bin/tool"
+    
+    # Mock gh auth status failure
+    mock_subprocess_run.return_value.returncode = 1
+    
+    # Standard inputs + YES to login
+    mock_getpass.side_effect = ["", "", ""] 
+    with patch("agent.commands.onboard.typer.prompt", side_effect=["1", "1"]):
+        with patch("agent.commands.onboard.typer.confirm", return_value=True):
+            result = runner.invoke(test_app, [])
+        
+    assert result.exit_code == 0
+    assert "[WARN] GitHub CLI is not authenticated." in result.stdout
+    # Check we called login
+    mock_subprocess_run.assert_called_with(["gh", "auth", "login"])

@@ -1,6 +1,7 @@
 import getpass
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -67,6 +68,37 @@ def check_dependencies() -> None:
             typer.secho(f"  - Found {dep} (recommended)", fg=typer.colors.GREEN)
 
     typer.secho("[OK] System dependencies check passed.", fg=typer.colors.GREEN)
+
+
+def check_github_auth() -> None:
+    """Checks if the user is authenticated with GitHub CLI."""
+    if not shutil.which("gh"):
+        return
+
+    typer.echo("\n[INFO] Checking GitHub authentication status...")
+    try:
+        # Run gh auth status. Capture output to avoid spamming unless error.
+        result = subprocess.run(
+            ["gh", "auth", "status"], 
+            capture_output=True, 
+            text=True
+        )
+        
+        if result.returncode == 0:
+            typer.secho("[OK] GitHub CLI is authenticated.", fg=typer.colors.GREEN)
+        else:
+            typer.secho(
+                "[WARN] GitHub CLI is not authenticated.", 
+                fg=typer.colors.YELLOW
+            )
+            typer.echo("To use GitHub features (like PR creation), please run:")
+            typer.secho("  gh auth login", fg=typer.colors.CYAN, bold=True)
+            
+            if typer.confirm("Would you like to run 'gh auth login' now?", default=True):
+                subprocess.run(["gh", "auth", "login"])
+                
+    except Exception as e:
+        typer.secho(f"[WARN] Failed to check GitHub status: {e}", fg=typer.colors.YELLOW)
 
 
 def ensure_agent_directory(project_root: Path = None) -> None:
@@ -396,6 +428,7 @@ def onboard() -> None:
 
     try:
         check_dependencies()
+        check_github_auth()
         ensure_agent_directory()
         ensure_gitignore()
         configure_api_keys()
