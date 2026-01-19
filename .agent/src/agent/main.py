@@ -59,6 +59,7 @@ app.command(name="implement")(implement.implement)
 app.command(name="list-stories")(list_cmd.list_stories)
 app.command(name="list-plans")(list_cmd.list_plans)
 app.command(name="list-runbooks")(list_cmd.list_runbooks)
+app.command(name="list-models")(list_cmd.list_models)
 
 app.command(name="validate-story")(check.validate_story)
 app.command(name="preflight")(check.preflight)

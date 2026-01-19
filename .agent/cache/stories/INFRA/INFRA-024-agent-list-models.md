@@ -1,7 +1,7 @@
 # INFRA-024: Agent List Models Command
 
 ## State
-OPEN
+COMMITTED
 
 ## Problem Statement
 Users struggle to know which AI models are actually available to use with the agent. This depends on their API key, the provider configuration, and dynamic availability (e.g., deprecated models). Debugging "404 Model Not Found" errors requires manual API calls or scripts.
