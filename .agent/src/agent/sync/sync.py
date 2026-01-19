@@ -20,7 +20,7 @@ from agent.sync.progress import ProgressTracker
 
 def read_checkpoint() -> int:
     # This function should be implemented to read from a checkpoint store.
-    pass
+    return 0
 
 def save_checkpoint(cursor: int):
     # This function should be implemented to save to a checkpoint store.
@@ -28,7 +28,8 @@ def save_checkpoint(cursor: int):
 
 def get_total_artifacts() -> int:
     # This function should interact with Supabase to fetch total count of artifacts.
-    pass
+    # Return 0 for now to prevent crash
+    return 0
 
 def process_page(page):
     # Processes each page of artifacts.
@@ -51,3 +52,33 @@ def sync():
             print("Sync interrupted. Saving progress...")
             save_checkpoint(cursor)
             break
+
+def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Sync artifacts")
+    subparsers = parser.add_subparsers(dest="command")
+    
+    # pull
+    subparsers.add_parser("pull", help="Pull artifacts from remote")
+    
+    # push
+    subparsers.add_parser("push", help="Push artifacts to remote")
+    
+    # status
+    subparsers.add_parser("status", help="Check sync status")
+    
+    args = parser.parse_args()
+    
+    if args.command == "pull":
+        sync()
+    elif args.command == "push":
+        print("Push functionality not yet implemented.")
+    elif args.command == "status":
+        print("Status check not yet implemented.")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
+
