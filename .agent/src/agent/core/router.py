@@ -84,13 +84,30 @@ class SmartRouter:
             logger.warning(f"No suitable models found for tier {requested_tier} with {input_tokens} tokens.")
             return None
             
-        # 3. Sort by Cost (Input cost primarily)
-        # Cost is defined per 1k tokens.
-        candidates.sort(key=lambda x: x[1].get("cost_per_1k_input", 999.0))
+        # 3. Sort by Priority then Cost
+        # Retrieve strict priority list from settings
+        priority_list = self.settings.get("provider_priority", ["gemini", "openai", "ollama", "gh"])
+        
+        def sort_key(candidate):
+            model_key, model_def = candidate
+            provider = model_def.get("provider", "").lower()
+            
+            # 1. Priority Index (lower is better)
+            try:
+                p_index = priority_list.index(provider)
+            except ValueError:
+                p_index = len(priority_list)  # Fallback for unknown providers
+                
+            # 2. Cost (secondary factor)
+            cost = model_def.get("cost_per_1k_input", 999.0)
+            
+            return (p_index, cost)
+
+        candidates.sort(key=sort_key)
         
         best_model_key, best_model_def = candidates[0]
         
-        logger.info(f"Routed to {best_model_key} (Tier: {best_model_def.get('tier')}, " 
+        logger.info(f"Routed to {best_model_key} (Provider: {best_model_def.get('provider')}, Tier: {best_model_def.get('tier')}, " 
                     f"Cost/1k: ${best_model_def.get('cost_per_1k_input')}) "
                     f"for {input_tokens} tokens.")
                     
