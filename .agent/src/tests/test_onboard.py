@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 sys.path.append(str(Path.cwd() / "src"))
 
 from agent.commands.onboard import app, onboard
+from agent.core.ai.service import PROVIDERS
 
 runner = CliRunner()
 
@@ -132,7 +133,17 @@ def test_onboard_happy_path(
     ]
     mock_set_key.assert_has_calls(calls, any_order=True)
 
+
+
     # Check Provider Configured
+    # The provider index 1 corresponds to whichever key is at index 0 of PROVIDERS.keys()
+    # This is fragile if dict order is not guaranteed or if PROVIDERS changes.
+    # But Python 3.7+ dicts preserve insertion order.
+    # In service.py: openai, gemini, anthropic, gh (gh has no key).
+    
+    # We selected "1" from the list of drivers.
+    # drivers list: ["openai", "gemini", "anthropic", "gh"]
+    # 1 -> "openai"
     mock_config.set_value.assert_any_call({}, "agent.provider", "openai")
     
     # Check Model Configured

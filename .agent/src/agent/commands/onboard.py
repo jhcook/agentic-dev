@@ -15,17 +15,11 @@ from rich.console import Console
 from rich.table import Table
 
 from agent.core.config import config
-from agent.core.ai.service import AIService, ai_service
+from agent.core.ai.service import AIService, ai_service, PROVIDERS
 
 console = Console()
 
-# Define the API keys required for the agent to function.
-# Define the API keys required for the agent to function.
-REQUIRED_KEYS: List[str] = [
-    "OPENAI_API_KEY",
-    "GEMINI_API_KEY",
-    "ANTHROPIC_API_KEY",
-]
+# REQUIRED_KEYS removed, driven by PROVIDERS constant from service.py
 
 # Define project paths relative to the current working directory.
 # This assumes the command is run from the project root.
@@ -185,9 +179,15 @@ def configure_api_keys(project_root: Path = None) -> None:
     typer.echo("Please provide API keys for the providers you wish to use.")
     typer.echo("(Leave blank to skip a provider)")
 
-    for key in REQUIRED_KEYS:
+    for provider_id, provider_config in PROVIDERS.items():
+        key = provider_config.get("env_var")
+        
+        # Skip providers that don't need keys (like gh)
+        if not key:
+            continue
+            
         if key not in existing_config or not existing_config[key]:
-            typer.echo(f"\n{key}:")
+            typer.echo(f"\n{provider_config['name']} ({key}):")
             try:
                 # Use getpass for masked input
                 value = getpass.getpass("Value: ")
@@ -239,7 +239,7 @@ def configure_agent_settings() -> None:
         data = {}
         
     # 1. Select Provider
-    drivers = ["openai", "gemini", "anthropic", "gh"]
+    drivers = list(PROVIDERS.keys())
     
     # Filter based on what keys are set in .env (loaded in process) or just offer all?
     # Better to offer all but warn if key missing? 

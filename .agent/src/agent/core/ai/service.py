@@ -28,10 +28,17 @@ console = Console()
 
 # Prometheus Metrics
 ai_command_runs_total = Counter(
-    'ai_command_runs_total', 
-    'Total number of AI command executions', 
-    ['provider']
+    "ai_command_runs_total",
+    "Total number of AI command executions",
+    ["provider"],
 )
+
+PROVIDERS = {
+    "openai": {"env_var": "OPENAI_API_KEY", "name": "OpenAI"},
+    "gemini": {"env_var": "GEMINI_API_KEY", "name": "Google Gemini"},
+    "anthropic": {"env_var": "ANTHROPIC_API_KEY", "name": "Anthropic Claude"},
+    "gh": {"env_var": None, "name": "GitHub CLI"},
+}
 
 class AIService:
     """
