@@ -85,6 +85,14 @@ You should see output like:
 Agent CLI v0.2.0
 ```
 
+### 4. Verify AI Connection
+
+Check that your AI provider is correctly configured and models are available:
+
+```bash
+agent list-models
+```
+
 ## Your First Story
 
 Let's create your first story using the agent:

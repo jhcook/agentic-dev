@@ -64,7 +64,80 @@ agent secret export supabase > .env.local
 - **Gitignore**: `.agent/secrets/` is automatically gitignored
 - **Backward Compatibility**: Falls back to environment variables if secrets not configured
 
+
 See [ADR-006](../adrs/ADR-006-encrypted-secret-management.md) for architecture details.
+
+---
+
+## `agent impact` — Impact Analysis
+
+Run impact analysis for a story to identify risks and affected components.
+
+### Usage
+
+```bash
+# Static analysis (default)
+agent impact STORY-001
+
+# AI-powered analysis (risk assessment, breaking changes)
+agent impact STORY-001 --ai
+
+# Update the story file with the analysis
+agent impact STORY-001 --ai --update-story
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--ai` | Enable AI-powered analysis (requires API key) |
+| `--update-story` | Write the analysis to the "Impact Analysis Summary" section of the story file |
+| `--base <branch>` | Compare against a specific branch (default: staged changes) |
+| `--provider <name>` | Force AI provider (gh, gemini, openai) |
+
+---
+
+## `agent list-models` — AI Model Discovery
+
+List available AI models from configured providers to verify connectivity and availability.
+
+### Usage
+
+```bash
+# List models from default provider
+agent list-models
+
+# List models from specific provider
+agent list-models gemini
+agent list-models openai
+agent list-models anthropic
+
+# Output in JSON format
+agent list-models gemini --format json
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--format <format>` | Output format: pretty, json, csv, yaml, markdown, plain, tsv |
+| `--output <file>` | Write output to file instead of stdout |
+
+---
+
+## `agent run-ui-tests` — Mobile UI Testing
+
+Execute UI journey tests using [Maestro](https://maestro.mobile.dev/).
+
+### Usage
+
+```bash
+# Run all UI tests
+agent run-ui-tests
+
+# Filter specific flows
+agent run-ui-tests --filter "login"
+```
 
 ---
 

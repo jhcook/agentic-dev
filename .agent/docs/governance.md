@@ -306,7 +306,7 @@ Update story state before proceeding.
 
 **Pass Criteria:**
 - ✅ Acceptance criteria clear and testable
-- ✅ Impact analysis complete
+- ✅ Impact analysis complete (Run `agent impact <ID>` to generate)
 - ✅ User story follows template
 
 **Common Failures:**

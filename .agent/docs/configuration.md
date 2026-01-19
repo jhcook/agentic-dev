@@ -228,6 +228,12 @@ export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
+**Tip**: Verify your keys and view available models:
+```bash
+agent list-models
+agent list-models anthropic
+```
+
 ### Agent Configuration
 
 ```bash

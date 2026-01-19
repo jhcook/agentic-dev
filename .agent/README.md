@@ -68,6 +68,9 @@ Your code is reviewed by 9 specialized AI agents, each with a specific focus:
 # 1. Create a story
 agent new-story
 
+# 2. Analyze Impact (Optional but recommended)
+agent impact WEB-001 --ai --update-story
+
 # 2. Generate runbook (AI analyzes story + rules)
 agent new-runbook WEB-001
 
@@ -105,6 +108,15 @@ agent sync status
 1. **Google Gemini** (Recommended): Set `GEMINI_API_KEY` (Uses `gemini-1.5-pro`).
 2. **OpenAI**: Set `OPENAI_API_KEY` (Uses `gpt-4o`).
 3. **GitHub CLI** (Fallback): Uses `gh models run`.
+
+### AI Model Discovery
+
+Check which models are available to your agent:
+
+```bash
+agent list-models
+agent list-models openai
+```
 
 ### Secret Management
 
