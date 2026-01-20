@@ -145,9 +145,22 @@ def preflight(
              test_cmd = [str(root_venv_python), "-m", "pytest", ".agent/tests"]
         else:
              # 2. Fallback to system executor (sys.executable)
-             # This handles cases where we are running inside the venv
+             # However, verify if pytest is installed in this environment
+             import shutil
              import sys
-             test_cmd = [sys.executable, "-m", "pytest", ".agent/tests"]
+             
+             # Check if pytest is importable in current env
+             try:
+                 import pytest
+                 test_cmd = [sys.executable, "-m", "pytest", ".agent/tests"]
+             except ImportError:
+                 # 3. Fallback to 'pytest' on PATH
+                 pytest_path = shutil.which("pytest")
+                 if pytest_path:
+                     test_cmd = [pytest_path, ".agent/tests"]
+                 else:
+                     console.print("[bold red]❌ Pytest not found. Please run 'pip install pytest' or activate your venv.[/bold red]")
+                     raise typer.Exit(code=1)
         
         # Check if we are in the root or need to adjust path? 
         # Assuming run from repo root as per standard

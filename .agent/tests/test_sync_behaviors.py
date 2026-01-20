@@ -4,7 +4,7 @@ pytestmark = pytest.mark.skip("Legacy implementation pending")
 from unittest.mock import patch
 
 # Assuming presence of a module `sync` with relevant methods
-from agent.sync.sync import sync as sync_module
+from agent.sync import sync as sync_module
 
 
 def test_pagination_page_sizes():
