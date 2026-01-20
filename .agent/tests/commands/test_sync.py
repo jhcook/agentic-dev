@@ -27,7 +27,7 @@ def mock_sync_ops():
 def test_sync_pull(mock_sync_ops):
     result = runner.invoke(app, ["pull"])
     assert result.exit_code == 0
-    mock_sync_ops.sync.assert_called_once()
+    mock_sync_ops.pull.assert_called_once_with(verbose=False)
 
 def test_sync_push(mock_sync_ops):
     result = runner.invoke(app, ["push"])

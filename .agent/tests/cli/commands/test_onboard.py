@@ -1,7 +1,7 @@
 import platform
 import stat
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -37,9 +37,12 @@ def mock_platform_posix(monkeypatch):
 # End-to-End / Integration Tests
 # ===================================
 
-def test_onboard_success_flow(tmp_path, mock_dependencies, mock_platform_posix, monkeypatch):
+@patch("agent.commands.secret._validate_password_strength", return_value=True)
+def test_onboard_success_flow(mock_validate, tmp_path, mock_dependencies, mock_platform_posix, monkeypatch):
     """Tests the successful, end-to-end onboarding flow in a clean environment."""
-    monkeypatch.setattr("getpass.getpass", lambda prompt: "test_api_key_secret")
+    # Inputs: Password, Confirm, Key
+    mock_responses = iter(["test_api_key_secret", "test_api_key_secret", "test_api_key_secret"])
+    monkeypatch.setattr("getpass.getpass", lambda prompt: next(mock_responses))
 
     with runner.isolated_filesystem(temp_dir=tmp_path) as td:
         project_root = Path(td)
@@ -53,26 +56,34 @@ def test_onboard_success_flow(tmp_path, mock_dependencies, mock_platform_posix, 
         assert "All system dependencies are present." in result.output
         assert "Checking for '.agent' workspace directory..." in result.output
         assert "'.agent' directory is present." in result.output
-        assert "Configuring API keys in '.env' file..." in result.output
+        assert "Configuring API keys in Secret Manager..." in result.output
         assert "Verifying '.gitignore' configuration..." in result.output
 
         agent_dir = project_root / ".agent"
         assert agent_dir.is_dir()
 
-        env_file = project_root / ".env"
-        assert env_file.is_file()
-        content = env_file.read_text()
-        assert "AGENT_API_KEY" in content or "OPENAI_API_KEY" in content
-        assert "test_api_key_secret" in content
-
+        secrets_dir = agent_dir / "secrets"
+        assert secrets_dir.is_dir()
+        
+        # Verify encryption file exists
+        assert (secrets_dir / "openai.json").exists()
+        
         if platform.system() != "Windows":
-            file_mode = env_file.stat().st_mode
+            file_mode = secrets_dir.stat().st_mode
             assert not (file_mode & stat.S_IRWXG)
             assert not (file_mode & stat.S_IRWXO)
 
         assert gitignore_path.is_file()
         gitignore_content = gitignore_path.read_text()
+        # .agent/secrets should be ignored (or *.json in secrets dir)
+        # SecretManager creates a .gitignore inside .agent/secrets
+        # Root .gitignore might not be touched for secrets specifically if inside .agent
+        # But agent.db etc might be ignored.
+        # onboard.py adds .env to .gitignore if migrated?
+        # If no .env, does it modify .gitignore?
+        # Let's check logic: _check_gitignore() checks .env and agent.db
         assert ".env" in gitignore_content
+        assert "agent.db" in gitignore_content
 
 
 def test_onboard_is_idempotent(tmp_path, mock_dependencies, mock_platform_posix, monkeypatch):

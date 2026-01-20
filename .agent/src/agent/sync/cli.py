@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import typer
+
 from agent.sync import sync as sync_ops
 
 app = typer.Typer(
@@ -23,7 +24,7 @@ app = typer.Typer(
 @app.command()
 def pull(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Pull artifacts from remote."""
-    sync_ops.sync(verbose=verbose)
+    sync_ops.pull(verbose=verbose)
 
 @app.command()
 def push(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):

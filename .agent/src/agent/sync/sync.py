@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-
-import os
 import re
 from pathlib import Path
 
-from agent.db.client import get_artifact_counts, get_artifacts_metadata, delete_artifact, upsert_artifact, get_all_artifacts_content
+import typer
+
+from agent.db.client import (
+    delete_artifact,
+    get_all_artifacts_content,
+    get_artifact_counts,
+    get_artifacts_metadata,
+    upsert_artifact,
+)
+from agent.sync.client import get_supabase_client
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
-from agent.sync.client import get_supabase_client
-import typer
 
 
 def read_checkpoint() -> int:
@@ -63,10 +68,11 @@ def process_page(page):
             print(f"Error processing artifact {item.get('id')}: {e}")
 
 from agent.commands.secret import _prompt_password
-from agent.core.secrets import get_secret_manager, InvalidPasswordError
+from agent.core.secrets import get_secret_manager
 
-def sync(verbose: bool = False):
-    """Execute the sync process."""
+
+def pull(verbose: bool = False):
+    """Execute the sync process (pull from remote)."""
     client = get_supabase_client(verbose=verbose)
     
     # interactive unlock if client is None
@@ -236,7 +242,7 @@ def scan(verbose: bool = False):
     adr_dir = Path(".agent/adrs")
     
     if not base_dir.exists() and not adr_dir.exists():
-        print(f"No artifact directories found to scan.")
+        print("No artifact directories found to scan.")
         return
 
     # Standard paths
