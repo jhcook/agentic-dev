@@ -84,7 +84,9 @@ def preflight(
     ai: bool = typer.Option(False, "--ai", help="Enable AI-powered governance review."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)"),
-    report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON.")
+    report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
+    skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
+    ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only).")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -95,6 +97,8 @@ def preflight(
         base: Base branch for comparison (defaults to staged changes).
         provider: Force a specific AI provider (gh, gemini, openai).
         report_file: Path to save the preflight report as JSON.
+        skip_tests: Skip running tests.
+        ignore_tests: Run tests but ignore failure.
     """
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
 
@@ -136,56 +140,210 @@ def preflight(
         raise typer.Exit(code=1)
 
     # 1.5 Run Automated Tests
-    console.print("[bold blue]🧪 Running Automated Tests...[/bold blue]")
-    try:
-        # Determine test command
-        # 1. Try root .venv (preferred for isolation)
-        root_venv_python = Path(".venv/bin/python")
-        if root_venv_python.exists():
-             test_cmd = [str(root_venv_python), "-m", "pytest", ".agent/tests"]
+    if skip_tests:
+        console.print("[yellow]⏩ Skipping automated tests (--skip-tests passed).[/yellow]")
+    else:
+        console.print("[bold blue]🧪 Implementing Smart Test Selection...[/bold blue]")
+        
+        # Identify changed files
+        if base:
+            cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
         else:
-             # 2. Fallback to system executor (sys.executable)
-             # However, verify if pytest is installed in this environment
-             import shutil
-             import sys
-             
-             # Check if pytest is importable in current env
-             try:
-                 import pytest
-                 test_cmd = [sys.executable, "-m", "pytest", ".agent/tests"]
-             except ImportError:
-                 # 3. Fallback to 'pytest' on PATH
-                 pytest_path = shutil.which("pytest")
-                 if pytest_path:
-                     test_cmd = [pytest_path, ".agent/tests"]
+            cmd = ["git", "diff", "--cached", "--name-only"]
+            
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            files = [Path(f) for f in result.stdout.strip().splitlines() if f]
+        except Exception as e:
+            console.print(f"[bold red]❌ Error finding changed files: {e}[/bold red]")
+            files = []
+
+        # Analyze Dependencies
+        from agent.core.dependency_analyzer import DependencyAnalyzer
+        analyzer = DependencyAnalyzer(Path.cwd())
+        
+        # Get all files for analysis context
+        # Ideally we should list all files, but for now we might rely on dynamic resolution or just simple glob
+        # The analzyer helper finds reverse deps requires ALL files to be passed if we want full graph
+        # For optimization, we'll try to just identify test files that import changed modules
+        # But `find_reverse_dependencies` needs `all_files`.
+        
+        # Let's do a smarter/simpler check first:
+        # Group changes by project
+        backend_changes = [f for f in files if str(f).startswith("backend/")]
+        mobile_changes = [f for f in files if str(f).startswith("mobile/")]
+        web_changes = [f for f in files if str(f).startswith("web/")]
+        root_py_changes = [f for f in files if f.suffix == ".py" and not str(f).startswith("backend/") and not str(f).startswith(".agent/")]
+        
+        test_commands = []
+        
+        # --- Python / Backend Strategy ---
+        if backend_changes or root_py_changes:
+            console.print("[dim]🐍 Analyzing Python dependencies...[/dim]")
+            
+            # Simple fallback: if backend changed, run pytest backend. 
+            # If root changed, run pytest .
+            # But let's try strict dependency analysis if possible.
+            
+            # Find all test files
+            all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
+            all_test_files = [f.relative_to(Path.cwd()) for f in all_test_files if ".agent" not in f.parts and "node_modules" not in f.parts]
+            
+            relevant_tests = set()
+            
+            # Map test files to their imports and check if they import changed files
+            # This is "forward" analysis from tests -> code
+            changed_set = set(files)
+            
+            for test_file in all_test_files:
+                deps = analyzer.get_file_dependencies(test_file)
+                # If test depends on any changed file
+                if changed_set.intersection(deps):
+                    relevant_tests.add(test_file)
+                # OR if the test file itself changed
+                if test_file in changed_set:
+                    relevant_tests.add(test_file)
+            
+            # Construct pytest command
+            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent"]
+            
+            if relevant_tests:
+                console.print(f"[green]🎯 Found {len(relevant_tests)} relevant test(s).[/green]")
+                for rt in relevant_tests:
+                    console.print(f"  - {rt}")
+                # Pass specific files
+                # Note: If list is too long, we might fall back to dirs.
+                if len(relevant_tests) < 50:
+                    pytest_args.extend([str(t) for t in relevant_tests])
+                else:
+                    console.print("[yellow]Files list too long, falling back to directory discovery.[/yellow]")
+                    if backend_changes: pytest_args.append("backend")
+                    if root_py_changes: pytest_args.append(".")
+            else:
+                # No strictly dependent tests found.
+                # If we have changes, we might want to run everything to be safe, OR minimal.
+                # User asked for "relevant". If analysis says none, maybe none?
+                # BUT, side effects exist.
+                # Let's fallback to "backend" if backend changed, and "." if root changed, 
+                # UNLESS we are confident.
+                # Let's trust the analyzer? No, it might be incomplete.
+                # Let's fallback to running project roots if no specific tests found but changes exist.
+                
+                targets = []
+                if backend_changes: targets.append("backend")
+                if root_py_changes: targets.append(".")
+                
+                if targets:
+                    console.print("[yellow]⚠️  No direct test dependencies found, running project-level tests.[/yellow]")
+                    # Avoid duplicates if "." covers "backend"
+                    if "." in targets:
+                        pytest_args.append(".")
+                    else:
+                        pytest_args.extend(targets)
+                else:
+                     console.print("[dim]No Python changes requiring verification found.[/dim]")
+                     pytest_args = None
+
+            if pytest_args:
+                 # Check for venv
+                 # Try root .venv (preferred for isolation)
+                 root_venv_python = Path(".venv/bin/python")
+                 import sys
+                 if root_venv_python.exists():
+                      python_exe = str(root_venv_python)
                  else:
-                     console.print("[bold red]❌ Pytest not found. Please run 'pip install pytest' or activate your venv.[/bold red]")
-                     raise typer.Exit(code=1)
-        
-        # Check if we are in the root or need to adjust path? 
-        # Assuming run from repo root as per standard
-        
-        result = subprocess.run(test_cmd, capture_output=False, check=False)
-        
-        if result.returncode != 0:
-            msg = "Automated tests failed. Preflight ABORTED."
-            console.print(f"[bold red]❌ {msg}[/bold red]")
-            if report_file:
-                json_report["overall_verdict"] = "BLOCK"
-                json_report["error"] = "Automated tests failed"
+                      python_exe = sys.executable
+                
+                 test_commands.append({
+                     "name": "Python Tests",
+                     "cmd": [python_exe] + pytest_args,
+                     "cwd": Path.cwd()
+                 })
+
+        # --- Mobile Strategy (NPM) ---
+        if mobile_changes:
+            console.print("[dim]📱 Detecting Mobile (React Native) changes...[/dim]")
+            mobile_root = Path("mobile")
+            pkg_json = mobile_root / "package.json"
+            if pkg_json.exists():
                 import json
-                report_file.write_text(json.dumps(json_report, indent=2))
-            raise typer.Exit(code=1)
-        else:
-            console.print("[bold green]✅ Automated tests passed.[/bold green]")
+                scripts = json.loads(pkg_json.read_text()).get("scripts", {})
+                
+                if "lint" in scripts:
+                    test_commands.append({
+                        "name": "Mobile Lint",
+                        "cmd": ["npm", "run", "lint"],
+                        "cwd": mobile_root
+                    })
+                if "test" in scripts:
+                    test_commands.append({
+                        "name": "Mobile Tests",
+                        "cmd": ["npm", "test"],
+                        "cwd": mobile_root
+                    })
 
-    except FileNotFoundError:
-        console.print("[yellow]⚠️  Could not find test runner (pytest). Skipping tests but warning...[/yellow]")
-    except Exception as e:
-        console.print(f"[bold red]❌ Error running tests: {e}[/bold red]")
-        raise typer.Exit(code=1)
+        # --- Web Strategy (NPM) ---
+        if web_changes:
+            console.print("[dim]🌐 Detecting Web (Next.js) changes...[/dim]")
+            web_root = Path("web")
+            pkg_json = web_root / "package.json"
+            if pkg_json.exists():
+                import json
+                scripts = json.loads(pkg_json.read_text()).get("scripts", {})
+                
+                if "lint" in scripts:
+                    test_commands.append({
+                        "name": "Web Lint",
+                        "cmd": ["npm", "run", "lint"],
+                        "cwd": web_root
+                    })
+                if "test" in scripts:
+                    test_commands.append({
+                        "name": "Web Tests",
+                        "cmd": ["npm", "test"],
+                        "cwd": web_root
+                    })
 
-    # 2. Get Changed Files
+        # --- EXECUTE CMDS ---
+        tests_passed = True
+        
+        if not test_commands:
+             console.print("[green]✅ No relevant tests to run based on changed files.[/green]")
+        
+        for task in test_commands:
+            console.print(f"[bold cyan]🏃 Running: {task['name']}[/bold cyan]")
+            try:
+                # Run command
+                res = subprocess.run(task['cmd'], cwd=task['cwd'], check=False)
+                if res.returncode != 0:
+                    console.print(f"[bold red]❌ {task['name']} FAILED[/bold red]")
+                    tests_passed = False
+                    if not ignore_tests:
+                        break # Stop on first failure if not ignoring
+                else:
+                    console.print(f"[green]✅ {task['name']} PASSED[/green]")
+            except FileNotFoundError:
+                 console.print(f"[red]❌ Command not found: {task['cmd'][0]}[/red]")
+                 tests_passed = False
+
+        if not tests_passed:
+            msg = "Automated tests failed."
+            if ignore_tests:
+                console.print(f"[yellow]⚠️  {msg} (Ignored by --ignore-tests)[/yellow]")
+            else:
+                console.print(f"[bold red]❌ {msg} Preflight ABORTED.[/bold red]")
+                if report_file:
+                    json_report["overall_verdict"] = "BLOCK"
+                    json_report["error"] = msg
+                    import json
+                    report_file.write_text(json.dumps(json_report, indent=2))
+                raise typer.Exit(code=1)
+        elif test_commands:
+            console.print("[bold green]✅ All tests passed.[/bold green]")
+
+
+    # 2. Get Changed Files (for AI review)
+    # Re-run diff cleanly
     if base:
         cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
     else:
@@ -238,6 +396,11 @@ def preflight(
     # -----------------
 
     if ai:
+        
+        # Determine changed extensions to filter relevant role prompts?
+        # For now, we still run the full council, or we could specialize.
+        # Sticking to full council as per requirement.
+        
         verdict = convene_council_full(
             console=console,
             story_id=story_id,
