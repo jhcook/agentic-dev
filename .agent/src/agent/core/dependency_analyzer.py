@@ -98,6 +98,7 @@ class DependencyAnalyzer:
         Examples:
             'agent.core.utils' -> '.agent/src/agent/core/utils.py'
             'agent.core' -> '.agent/src/agent/core/__init__.py'
+            'app.main' -> 'backend/app/main.py' (if in backend root)
             
         Args:
             module_name: Python module name (e.g., 'agent.core.utils')
@@ -107,15 +108,29 @@ class DependencyAnalyzer:
         """
         parts = module_name.split('.')
         
-        # Try as a file
-        file_path = self.repo_root / '.agent' / 'src' / '/'.join(parts)
-        if file_path.with_suffix('.py').exists():
-            return file_path.with_suffix('.py').relative_to(self.repo_root)
+        # Search paths: .agent/src, backend, and root
+        search_roots = [
+            self.repo_root / '.agent' / 'src',
+            self.repo_root / 'backend',
+            self.repo_root
+        ]
         
-        # Try as a package
-        init_path = file_path / '__init__.py'
-        if init_path.exists():
-            return init_path.relative_to(self.repo_root)
+        for root in search_roots:
+            # Try as a file
+            file_path = root.joinpath(*parts)
+            if file_path.with_suffix('.py').exists():
+                try:
+                    return file_path.with_suffix('.py').relative_to(self.repo_root)
+                except ValueError:
+                    continue
+            
+            # Try as a package
+            init_path = file_path / '__init__.py'
+            if init_path.exists():
+                try:
+                    return init_path.relative_to(self.repo_root)
+                except ValueError:
+                    continue
         
         return None
     
@@ -125,39 +140,68 @@ class DependencyAnalyzer:
         """
         Resolve JavaScript import to actual file path.
         
-        Handles relative imports and common extensions.
+        Handles relative imports, common extensions, and tsconfig paths.
         
         Args:
-            import_path: Import string (e.g., './utils' or '../components')
+            import_path: Import string (e.g., './utils', '@/components')
             from_file: File containing the import (relative to repo root)
             
         Returns:
             Path relative to repo root, or None if not found
         """
-        # Skip node_modules
-        if not import_path.startswith('.'):
-            return None
+        # 1. Handle tsconfig aliases (e.g. @/ -> ./)
+        # Detect project root for from_file
+        project_root = None
+        for root_name in ['mobile', 'web']:
+            if str(from_file).startswith(f"{root_name}/"):
+                project_root = self.repo_root / root_name
+                break
         
-        from_dir = (self.repo_root / from_file).parent
-        target = (from_dir / import_path).resolve()
-        
+        resolved_import_path = import_path
+        if project_root and import_path.startswith('@/'):
+            # Simple alias replacement for now, assuming standard "@/*": ["./*"]
+            resolved_import_path = import_path.replace('@/', './', 1)
+            # This makes it relative to project root, not current file?
+            # actually usually @/ refers to baseUrl or root.
+            # in the tsconfig we saw: "baseUrl": ".", "paths": { "@/*": ["./*"] }
+            # So @/components is project_root/components
+            target = (project_root / resolved_import_path.replace('./', '')).resolve()
+            return self._finalize_js_resolution(target)
+
+        # 2. Handle relative imports
+        if import_path.startswith('.'):
+            from_dir = (self.repo_root / from_file).parent
+            target = (from_dir / import_path).resolve()
+            return self._finalize_js_resolution(target)
+            
+        return None
+
+    def _finalize_js_resolution(self, target: Path) -> Optional[Path]:
+        """Helper to try extensions and index files."""
+        # Try exact match (unlikely for imports but possible)
+        if target.exists() and target.is_file():
+             try:
+                return target.relative_to(self.repo_root)
+             except ValueError:
+                pass
+
         # Try common extensions
-        for ext in ['.js', '.ts', '.tsx', '.jsx']:
+        for ext in ['.js', '.ts', '.tsx', '.jsx', '.mjs']:
             if target.with_suffix(ext).exists():
                 try:
                     return target.with_suffix(ext).relative_to(self.repo_root)
                 except ValueError:
-                    return None
+                    pass
         
         # Try as directory with index file
-        for ext in ['.js', '.ts', '.tsx']:
+        for ext in ['.js', '.ts', '.tsx', '.jsx', '.mjs']:
             index_file = target / f'index{ext}'
             if index_file.exists():
                 try:
                     return index_file.relative_to(self.repo_root)
                 except ValueError:
-                    return None
-        
+                    pass
+                    
         return None
     
     @lru_cache(maxsize=1000)

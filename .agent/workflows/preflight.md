@@ -22,8 +22,14 @@ CONTEXT:
 WORKFLOW:
 
 1. RUN AUTOMATED TESTS
-   - Run the full test suite (e.g., `pytest`, `npm test`).
-   - If ANY test fails, stop immediately.
+   - **Smart Test Selection**: The agent will identify relevant tests based on the changed files.
+     - **Python**: Uses dependency graph to find tests impacting changes.
+     - **Mobile/Web**: Detects changes in `mobile/` or `web/` and runs `npm run lint` / `npm test`.
+     - **Fallback**: Runs project-level tests if no specific dependencies found.
+   - **Flags**:
+     - `--skip-tests`: Bypass test execution completely.
+     - `--ignore-tests`: Run tests but treat failures as non-blocking warnings.
+   - If tests fail (and not ignored), stop immediately.
    - VERDICT: BLOCK.
 
 2. LOAD RULES
