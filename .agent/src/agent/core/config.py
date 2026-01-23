@@ -241,3 +241,13 @@ LLM_API_KEY = os.getenv("LLM_API_KEY")
 def is_ai_configured() -> bool:
     """Checks if the necessary API keys for AI services are configured."""
     return bool(LLM_API_KEY)
+
+
+# Default MCP Server Configurations
+DEFAULT_MCP_SERVERS = {
+    "github": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {}
+    }
+}
