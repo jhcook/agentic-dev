@@ -27,6 +27,7 @@ from agent.commands import (
     implement,
     lint,
     match,
+    mcp,
     plan,
     query,
     runbook,
@@ -49,6 +50,7 @@ app = typer.Typer(
 
 app.add_typer(config.app, name="config")
 app.add_typer(secret.app, name="secret")
+app.add_typer(mcp.app, name="mcp")
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)

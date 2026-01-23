@@ -36,19 +36,38 @@ def check_dependencies() -> None:
     """Verifies that required system dependencies are installed."""
     typer.echo("[INFO] Checking for required system dependencies...")
     # As per @Security review, add any binary dependencies here. e.g., `git`
-    dependencies = ["git", "python3"]
-    recommended = ["gh"]
+    dependencies = ["git", "python3", "gh"]
+    recommended = []
 
     all_found = True
     for dep in dependencies:
         if not shutil.which(dep):
             typer.secho(
-                f"[ERROR] Dependency not found: '{dep}'. Please install it and run onboard again.",
+                f"[ERROR] Binary dependency not found: '{dep}'. Please install it.",
                 fg=typer.colors.RED,
             )
             all_found = False
         else:
-            typer.secho(f"  - Found {dep}", fg=typer.colors.GREEN)
+            typer.secho(f"  - Found binary: {dep}", fg=typer.colors.GREEN)
+
+    # Check Python dependencies
+    python_deps = [
+        ("dotenv", "python-dotenv"),
+        ("mcp", "modelcontextprotocol"),
+        ("typer", "typer"),
+    ]
+    
+    import importlib.util
+    for module_name, package_name in python_deps:
+        if not importlib.util.find_spec(module_name):
+            typer.secho(
+                f"[ERROR] Python dependency not found: '{package_name}' ({module_name}).\n"
+                f"        Please run: pip install -e .agent",
+                fg=typer.colors.RED,
+            )
+            all_found = False
+        else:
+            typer.secho(f"  - Found module: {module_name}", fg=typer.colors.GREEN)
 
     if not all_found:
         raise typer.Exit(code=1)
@@ -67,34 +86,85 @@ def check_dependencies() -> None:
 
 
 def check_github_auth() -> None:
-    """Checks if the user is authenticated with GitHub CLI."""
+    """Checks GitHub authentication via MCP and CLI (Unified)."""
+    typer.echo("\n[INFO] Configuring GitHub Access...")
+
+    # Ensure gh is available
     if not shutil.which("gh"):
+        typer.secho(
+            "[ERROR] GitHub CLI ('gh') is required but not found. Please install it.",
+            fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+
+    # Check if already authenticated via gh
+    gh_status = subprocess.run(
+        ["gh", "auth", "status"], capture_output=True, text=True
+    )
+    gh_logged_in = gh_status.returncode == 0
+    
+    # Check if secret already exists
+    manager = get_secret_manager()
+    secret_exists = manager.is_initialized() and manager.is_unlocked() and manager.has_secret("github", "token")
+
+    if gh_logged_in and secret_exists:
+        typer.secho("[OK] GitHub access already configured (CLI & MCP).", fg=typer.colors.GREEN)
+        if not typer.confirm("Would you like to re-configure?", default=False):
+            return
+
+    typer.echo("\n[INFO] We will now configure GitHub access for both the Agent (MCP) and CLI (gh).")
+    typer.echo("You will need a GitHub Personal Access Token (PAT) with scopes: repo, read:org")
+
+    token = getpass.getpass("GitHub PAT: ")
+    if not token:
+        typer.secho("[WARN] No token provided. Skipping GitHub configuration.", fg=typer.colors.YELLOW)
         return
 
-    typer.echo("\n[INFO] Checking GitHub authentication status...")
+    # 1. Configure MCP Secret
     try:
-        # Run gh auth status. Capture output to avoid spamming unless error.
-        result = subprocess.run(
-            ["gh", "auth", "status"],
-            capture_output=True,
+        if manager.is_initialized():
+             if not manager.is_unlocked():
+                  typer.echo("Secret manager is locked. Please unlock to save access token.")
+                  # We rely on previous steps ensuring it's unlocked or prompt
+                  # But actually onboard runs sequentially, so it should be unlocked.
+                  pass
+             
+             manager.set_secret("github", "token", token)
+             typer.secho("  - [OK] Agent MCP token saved securely.", fg=typer.colors.GREEN)
+             
+             # Set generic config to 'mcp' as primary tool for agent, though 'gh' is also available
+             agent_config_path = config.etc_dir / "agent.yaml"
+             try:
+                 data = config.load_yaml(agent_config_path)
+             except FileNotFoundError:
+                 data = {}
+             config.set_value(data, "agent.github.tool", "mcp")
+             config.save_yaml(agent_config_path, data)
+             
+    except Exception as e:
+        typer.secho(f"  - [ERROR] Failed to save MCP token: {e}", fg=typer.colors.RED)
+
+    # 2. Configure gh CLI
+    try:
+        # Pipe token to gh auth login
+        process = subprocess.Popen(
+            ["gh", "auth", "login", "--with-token"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True
         )
-
-        if result.returncode == 0:
-            typer.secho("[OK] GitHub CLI is authenticated.", fg=typer.colors.GREEN)
+        stdout, stderr = process.communicate(input=token)
+        
+        if process.returncode == 0:
+            typer.secho("  - [OK] GitHub CLI authenticated.", fg=typer.colors.GREEN)
         else:
-            typer.secho(
-                "[WARN] GitHub CLI is not authenticated.",
-                fg=typer.colors.YELLOW
-            )
-            typer.echo("To use GitHub features (like PR creation), please run:")
-            typer.secho("  gh auth login", fg=typer.colors.CYAN, bold=True)
-
-            if typer.confirm("Would you like to run 'gh auth login' now?", default=True):
-                subprocess.run(["gh", "auth", "login"])
-
+             typer.secho(f"  - [ERROR] GitHub CLI login failed: {stderr.strip() if stderr else 'Unknown error'}", fg=typer.colors.RED)
+             
     except Exception as e:
-        typer.secho(f"[WARN] Failed to check GitHub status: {e}", fg=typer.colors.YELLOW)
+         typer.secho(f"  - [ERROR] Failed to run gh auth: {e}", fg=typer.colors.RED)
+
+    typer.secho("[OK] GitHub access configuration complete.", fg=typer.colors.GREEN)
 
 
 def ensure_agent_directory(project_root: Path = None) -> None:
@@ -524,10 +594,11 @@ def onboard() -> None:
 
     try:
         check_dependencies()
-        check_github_auth()
         ensure_agent_directory()
         ensure_gitignore()
-        configure_api_keys()
+        # Initialize secrets first so we can use them
+        configure_api_keys() 
+        check_github_auth() # Now safe to use secrets if needed? Actually I just save preference.
         configure_agent_settings()
         run_verification()
         
