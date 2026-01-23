@@ -215,7 +215,7 @@ def convene_council_full(
                  # Current implementation: Single client.
                  # We will use the GitHub client if 'github:*' tools are present.
                  
-                     executor = AgentExecutor(
+                 executor = AgentExecutor(
                      llm=ai_service, 
                      mcp_client=client,
                      max_steps=5, # Limit steps for council review
