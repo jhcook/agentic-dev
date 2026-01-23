@@ -25,7 +25,9 @@ class AgentExecutor:
         mcp_client: MCPClient,
         parser: Optional[BaseParser] = None,
         max_steps: int = 10,
-        system_prompt: str = "You are a helpful AI assistant."
+        max_steps: int = 10,
+        system_prompt: str = "You are a helpful AI assistant.",
+        allowed_tools: Optional[List[str]] = None
     ):
         self.llm = llm
         self.mcp = mcp_client
@@ -33,6 +35,7 @@ class AgentExecutor:
         self.max_steps = max_steps
         self.system_prompt = system_prompt
         self.secure_manager = SecureManager() # For scrubbing
+        self.allowed_tools = allowed_tools
 
     async def run(self, user_prompt: str) -> str:
         """
@@ -44,6 +47,10 @@ class AgentExecutor:
         # Discover tools first (to inject into prompt)
         try:
              tools = await self.mcp.list_tools()
+             
+             # Filter tools if allow-list provided
+             if self.allowed_tools is not None:
+                 tools = [t for t in tools if t.name in self.allowed_tools]
         except Exception as e:
              logger.error(f"Failed to list tools: {e}")
              tools = []
@@ -103,6 +110,10 @@ class AgentExecutor:
                 # 3. ACT
                 observation_str = ""
                 try:
+                    # Security Check: Tool Allow-list
+                    if self.allowed_tools is not None and action.tool not in self.allowed_tools:
+                        raise ValueError(f"Tool '{action.tool}' is not allowed in this context.")
+
                     tool_result = await self.mcp.call_tool(action.tool, action.tool_input)
                     
                     # Convert result to string (MCP returns object or dict)

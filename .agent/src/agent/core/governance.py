@@ -215,11 +215,12 @@ def convene_council_full(
                  # Current implementation: Single client.
                  # We will use the GitHub client if 'github:*' tools are present.
                  
-                 executor = AgentExecutor(
+                     executor = AgentExecutor(
                      llm=ai_service, 
                      mcp_client=client,
                      max_steps=5, # Limit steps for council review
-                     system_prompt=system_prompt
+                     system_prompt=system_prompt,
+                     allowed_tools=allowed_tools
                  )
                  
                  return await executor.run(user_prompt)
@@ -272,6 +273,10 @@ INPUTS:
 
 TASK:
 Review the code changes specifically from the perspective of a {role_name}.
+
+CONTEXT:
+Repository: {config.repo_owner}/{config.repo_name}
+(You are running in a CI/CD environment for this specific repository. Do not hallucinate other repositories.)
 
 OUTPUT:
 - Verdict: PASS | BLOCK
