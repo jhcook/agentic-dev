@@ -59,6 +59,9 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
     "gh": {
         "api_key": ["GH_API_KEY", "GITHUB_TOKEN"],
     },
+    "github": {
+        "token": ["GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"],
+    },
 }
 
 
@@ -169,14 +172,18 @@ class SecretManager:
         # Derive key
         self._master_key = self._derive_key(master_password, self._salt)
         
-        # Verify password by trying to load existing secrets
+        # Verify password by trying to load and decrypt existing secrets
         # If there are no secrets yet, we can't verify, so we trust the user
         for service_file in self.secrets_dir.glob("*.json"):
             if service_file.name == "config.json":
                 continue
             try:
-                self._load_service_secrets(service_file.stem)
-                break  # Password is correct
+                secrets = self._load_service_secrets(service_file.stem)
+                # verify by attempting to decrypt first available secret
+                if secrets:
+                    first_key = next(iter(secrets))
+                    self._decrypt_value(secrets[first_key])
+                    break  # Password is correct
             except Exception:
                 self._master_key = None
                 raise InvalidPasswordError("Incorrect master password")
