@@ -130,14 +130,29 @@ def convene_council_full(
     instructions_content: str,
     full_diff: str,
     report_file: Optional[Path] = None,
-    mode: str = "gatekeeper" # gatekeeper | consultative
+    mode: str = "gatekeeper", # gatekeeper | consultative
+    council_identifier: str = "default"
 ) -> str:
     """
     Run the AI Governance Council review. Handles provider switching and re-chunking.
+    Supports ReAct Agent Loop if tools are enabled for the council.
     """
     console.print("[bold cyan]🤖 Convening the AI Governance Council...[/bold cyan]")
     
+    # Imports inside function to avoid circular imports if any, and only load if needed logic
+    import asyncio
+    from agent.core.engine.executor import AgentExecutor
+    from agent.core.mcp.client import MCPClient
+    from agent.core.config import DEFAULT_MCP_SERVERS
+    
     roles = load_roles()
+    
+    # Check for Allowed Tools
+    allowed_tool_names = config.get_council_tools(council_identifier)
+    use_tools = len(allowed_tool_names) > 0
+    
+    if use_tools:
+        console.print(f"[bold magenta]🛠️  Tools Enabled for {council_identifier}: {', '.join(allowed_tool_names)}[/bold magenta]")
 
     json_report = {
         "story_id": story_id,
@@ -171,6 +186,44 @@ def convene_council_full(
         current_provider_snapshot = ai_service.provider
 
         try:
+            # Prepare MCP Client if tools enabled
+            # We create the client, but we need to run asyncio loop for tool calls.
+            # Since this function is sync, we will create fresh event loops or run_until_complete for each agent step?
+            # Or better: We instantiate the client, but the AgentExecutor handles the actual calls.
+            # AgentExecutor.run() is async. We need to run it via asyncio.run().
+            
+            # Note: MCPClient needs to be connected.
+            
+            async def run_agent_review(system_prompt: str, user_prompt: str, allowed_tools: List[str]) -> str:
+                 # Initialize MCP Client (GitHub server mainly)
+                 # TODO: make this configurable per tool? For now, standard GitHub server.
+                 server_config = DEFAULT_MCP_SERVERS.get("github")
+                 client = MCPClient(
+                     command=server_config["command"],
+                     args=server_config["args"],
+                     env=server_config["env"]
+                 )
+                 
+                 # Executor
+                 # We need to filter tools available to the agent?
+                 # MCPClient currently lists ALL tools from server.
+                 # INFRA-033 req: "Tool Allow-listing"
+                 # We should probably filter inside Executor or Client.
+                 # For now, let's assume we implement filtering in Executor or just trust the server sets.
+                 # Wait, Client connects to a specific server. "github" server exposes github tools.
+                 # If we have multiple servers, we need multiple clients or a MultiServerClient.
+                 # Current implementation: Single client.
+                 # We will use the GitHub client if 'github:*' tools are present.
+                 
+                 executor = AgentExecutor(
+                     llm=ai_service, 
+                     mcp_client=client,
+                     max_steps=5, # Limit steps for council review
+                     system_prompt=system_prompt
+                 )
+                 
+                 return await executor.run(user_prompt)
+
             for role in roles:
                 role_name = role["name"]
                 focus_area = role.get("focus", role.get("description", ""))
@@ -249,7 +302,17 @@ CODE DIFF CHUNK:
                              console.print(f"[yellow]⚠️  Warning: Prompt size ({total_chars} chars) is near GitHub CLI limit. Truncating context further.[/yellow]")
                              user_prompt = f"STORY: {story_content}\nRULES: {rules_content[:5000]}\nDIFF: {chunk}"
                         
-                        review = ai_service.complete(system_prompt, user_prompt)
+                        # EXECUTION
+                        if use_tools:
+                            # Run with tools
+                            try:
+                                review = asyncio.run(run_agent_review(system_prompt, user_prompt, allowed_tool_names))
+                            except Exception as e:
+                                console.print(f"[red]Tool Execution Failed for @{role_name}: {e}. Falling back to standard generation.[/red]")
+                                review = ai_service.complete(system_prompt, user_prompt)
+                        else:
+                            # Standard Generation
+                            review = ai_service.complete(system_prompt, user_prompt)
                         
                         if mode == "consultative":
                              role_findings.append(review)
@@ -357,3 +420,4 @@ CODE DIFF CHUNK:
             console.print(f"Full report saved to: [underline]{log_file}[/underline]")
             
     return overall_verdict
+

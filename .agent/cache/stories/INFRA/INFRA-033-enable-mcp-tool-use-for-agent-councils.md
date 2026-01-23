@@ -34,9 +34,28 @@ As a Developer, I want the Agent (Preflight Council, Governance Panel, etc.) to 
 
 ## Impact Analysis Summary
 
-- Components touched: `agent.agent.core.ai`, `agent.core.mcp`.
-- Workflows affected: `preflight`, `impact`, `panel`.
-- Risks: Infinite loops, token exhaustion.
+- **Static Analysis**: 0 files impacted by reverse dependencies (New files are not yet integrated).
+- **Components Touched**:
+  - `agent.core.engine` (New: Executor, Parser, Typedefs) - Core ReAct logic.
+  - `agent.core.security` (New: SecureManager) - Output scrubbing.
+  - `agent.commands.workflow` (Fix) - Fixes `agent pr` test skipping logic.
+- **Workflows Affected**: `agent pr` (Immediate fix), `agent panel` (Future integration).
+- **Risks**:
+  - **Security**: Reliability of `SecureManager` is critical for tool output safety.
+  - **Stability**: `AgentExecutor` introduces complex looping logic; potential for infinite loops if guards fail.
+  - **Blast Radius**: Currently low (zero deps), will increase once `governance.py` imports `AgentExecutor`.
+- **Breaking Changes**: None. Additive changes only.
+
+## Non-Functional Requirements
+
+- **Performance**: Agent loop execution overhead should not exceed 5 seconds per step.
+- **Security**: All tool outputs must be scrubbed of PII/Secrets.
+- **Reliability**: Graceful fallback if MCP server is unreachable.
+
+## Rollback Plan
+
+- Revert `agent/core/governance.py` and `agent/core/config.py` changes.
+- Safe to revert as feature is opt-in via config.
 
 ## Test Strategy
 

@@ -406,3 +406,83 @@ def list_services():
             table.add_row(service, key, ", ".join(env_vars))
     
     console.print(table)
+
+
+@app.command(name="login")
+def login_secrets(
+    password: Optional[str] = typer.Option(
+        None, "--password", "-p",
+        help="Master password (will prompt if not provided)"
+    ),
+):
+    """
+    Store master password in system keychain for auto-unlocking.
+    
+    Allows headless execution of agent commands without prompts.
+    """
+    try:
+        import keyring
+    except ImportError:
+        console.print(
+            "[bold red]Error:[/bold red] 'keyring' library not installed. "
+            "Run 'pip install keyring' first."
+        )
+        raise typer.Exit(code=1)
+
+    manager = get_secret_manager()
+    
+    if not manager.is_initialized():
+        console.print(
+            "[bold red]Error:[/bold red] Secret manager not initialized. "
+            "Run 'agent secret init' first."
+        )
+        raise typer.Exit(code=1)
+    
+    # Get and verify password
+    if password:
+        # Verify provided password
+        try:
+            manager.unlock(password)
+        except InvalidPasswordError:
+             console.print("[bold red]Error:[/bold red] Incorrect master password.")
+             raise typer.Exit(code=1)
+    else:
+        # Prompt explicitly
+        console.print("Enter master password to store in keychain:")
+        password = _prompt_password()
+        try:
+             manager.unlock(password)
+        except InvalidPasswordError:
+             console.print("[bold red]Error:[/bold red] Incorrect master password.")
+             raise typer.Exit(code=1)
+
+    # Store in keyring
+    try:
+        keyring.set_password("agent-cli", "master_key", password)
+        console.print(
+            "[green]✅ Master password stored in system keychain.[/green]"
+        )
+        console.print(
+            "[dim]The agent will now auto-unlock using the keychain.[/dim]"
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] Failed to write to keychain: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command(name="logout")
+def logout_secrets():
+    """
+    Remove master password from system keychain.
+    """
+    try:
+        import keyring
+        try:
+            keyring.delete_password("agent-cli", "master_key")
+            console.print("[green]✅ Master password removed from keychain.[/green]")
+        except keyring.errors.PasswordDeleteError:
+             console.print("[yellow]No password found in keychain.[/yellow]")
+    except ImportError:
+         console.print("[red]Keyring library not available.[/red]")
+         raise typer.Exit(code=1)
+

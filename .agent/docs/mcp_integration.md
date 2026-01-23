@@ -79,7 +79,15 @@ Common tools include:
 - `get_file_contents`
 - `create_pull_request`
 
-## Architecture
+### Council Tool Integration
+
+Agents in the Governance Council (e.g., `preflight`, `panel`) can be configured to use specific tools during their review. This allows them to read referenced issues or inspect file contents dynamically.
+
+**Configuration**:
+See `agent/core/config.py` for the `DEFAULT_COUNCIL_TOOLS` mapping.
+
+- **Preflight Council**: Can read issues (`github:get_issue`).
+- **Governance Panel**: Can read issues and files (`filesystem:read_file`).
 
 The integration uses the `agent.core.mcp` package to communicate with MCP servers over `stdio`. The `github` server configuration is defined in `agent.core.config.DEFAULT_MCP_SERVERS` and uses `npx` to spawn the official `@modelcontextprotocol/server-github`.
 

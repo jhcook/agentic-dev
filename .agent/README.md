@@ -47,6 +47,8 @@ Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementati
 
 Your code is reviewed by 9 specialized AI agents, each with a specific focus:
 
+> **New**: With MCP Tool Integration, these agents can now dynamically inspect the environment (read files, check issues) during review.
+
 | Role | Focus Area |
 |------|-----------|
 | **@Architect** | System design, ADR compliance, boundaries |
@@ -137,10 +139,30 @@ agent secret set gemini api_key
 agent secret list
 ```
 
+**Auto-Unlock (Keyring Integration)**
+
+To avoid entering your master password repeatedly:
+
+```bash
+# Securely store master password in OS Keychain
+agent secret login
+
+# Remove from Keychain
+agent secret logout
+```
+
+**Headless / CI Mode**
+
+For automated environments (CI/CD) where no keyring is available:
+
+```bash
+export AGENT_MASTER_KEY="your-master-password"
+agent preflight --ai
+```
+
 See [ADR-006](adrs/ADR-006-encrypted-secret-management.md) for details.
 
 ### Router Configuration
-
 
 Customize model selection in `.agent/etc/router.yaml`:
 
@@ -192,6 +214,7 @@ agent lint --all --fix
 ## 📚 Detailed Documentation
 
 For specific guides, see the `docs/` folder:
+
 - [Getting Started](docs/getting_started.md)
 - [Commands Reference](docs/commands.md)
 - [Governance System](docs/governance.md)

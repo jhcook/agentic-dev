@@ -449,10 +449,44 @@ _secret_manager: Optional[SecretManager] = None
 
 
 def get_secret_manager() -> SecretManager:
-    """Get or create the global SecretManager instance."""
+    """
+    Get or create the global SecretManager instance.
+    
+    Automatically attempts to unlock using:
+    1. System Keyring (secure local storage)
+    2. AGENT_MASTER_KEY (CI/CD override)
+    """
     global _secret_manager
     if _secret_manager is None:
         _secret_manager = SecretManager()
+        
+        # 1. Try Keyring (Secure Local)
+        if _secret_manager.is_initialized():
+            try:
+                import keyring
+                # Use 'agent-cli' as service name, 'master_key' as username
+                stored_key = keyring.get_password("agent-cli", "master_key")
+                if stored_key:
+                    try:
+                        _secret_manager.unlock(stored_key)
+                        logger.info("Secret manager auto-unlocked via Keyring")
+                        return _secret_manager
+                    except Exception as e:
+                        logger.warning(f"Keyring key invalid: {e}")
+            except ImportError:
+                pass  # Keyring library not available
+            except Exception as e:
+                logger.warning(f"Keyring access failed: {e}")
+
+        # 2. Try Env Var (CI/CD)
+        master_key = os.getenv("AGENT_MASTER_KEY")
+        if master_key and _secret_manager.is_initialized() and not _secret_manager.is_unlocked():
+            try:
+                _secret_manager.unlock(master_key)
+                logger.info("Secret manager auto-unlocked via AGENT_MASTER_KEY")
+            except Exception as e:
+                logger.warning(f"Failed to auto-unlock secret manager: {e}")
+                
     return _secret_manager
 
 
