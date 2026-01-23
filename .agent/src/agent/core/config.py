@@ -52,6 +52,42 @@ class Config:
         
         self.backups_dir.mkdir(parents=True, exist_ok=True)
 
+        # Initialize repo info
+        self.repo_owner = "unknown"
+        self.repo_name = "unknown"
+        self._load_repo_info()
+
+    def _load_repo_info(self):
+        """Try to load repo info from git config."""
+        try:
+            import subprocess
+            from urllib.parse import urlparse
+            
+            # Get remote URL
+            url = subprocess.check_output(
+                ["git", "config", "--get", "remote.origin.url"], 
+                cwd=self.repo_root, 
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            
+            if url:
+                # Handle SSH (git@github.com:owner/repo.git) and HTTPS
+                if url.startswith("git@"):
+                    path = url.split(":", 1)[1]
+                else:
+                    path = urlparse(url).path.lstrip("/")
+                
+                if path.endswith(".git"):
+                    path = path[:-4]
+                
+                parts = path.split("/")
+                if len(parts) >= 2:
+                    self.repo_owner = parts[-2]
+                    self.repo_name = parts[-1]
+                    
+        except Exception as e:
+            logger.warning(f"Failed to load repo info: {e}")
+
     def load_yaml(self, path: Path) -> Dict[str, Any]:
         """Load a YAML file safely."""
         if not path.exists():
