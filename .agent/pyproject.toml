@@ -20,6 +20,7 @@ dependencies = [
     "modelcontextprotocol>=0.1.0",
     "pytest>=8.0.0",
     "python-dotenv>=1.0.0",
+    "keyring>=24.0.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

@@ -81,6 +81,46 @@ Common tools include:
 
 ## Architecture
 
+How the Agent Loop integrates with the Governance Council:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Governance
+    participant AgentExecutor
+    participant MCPClient
+    participant LLM
+
+    User->>CLI: agent preflight
+    CLI->>Governance: convene_council_full(id="preflight")
+    Governance->>Governance: Check enabled tools
+    alt Tools Enabled
+        Governance->>AgentExecutor: run(prompt)
+        loop ReAct Loop
+            AgentExecutor->>LLM: Think
+            LLM-->>AgentExecutor: Action(Tool)
+            AgentExecutor->>MCPClient: execute(tool)
+            MCPClient-->>AgentExecutor: Observation (Scrubbed)
+        end
+        AgentExecutor-->>Governance: Final Answer
+    else No Tools
+        Governance->>LLM: complete(prompt)
+        LLM-->>Governance: Review
+    end
+    Governance-->>CLI: Verdict
+```
+
+### Council Tool Integration
+
+Agents in the Governance Council (e.g., `preflight`, `panel`) can be configured to use specific tools during their review. This allows them to read referenced issues or inspect file contents dynamically.
+
+**Configuration**:
+See `agent/core/config.py` for the `DEFAULT_COUNCIL_TOOLS` mapping.
+
+- **Preflight Council**: Can read issues (`github:get_issue`).
+- **Governance Panel**: Can read issues and files (`filesystem:read_file`).
+
 The integration uses the `agent.core.mcp` package to communicate with MCP servers over `stdio`. The `github` server configuration is defined in `agent.core.config.DEFAULT_MCP_SERVERS` and uses `npx` to spawn the official `@modelcontextprotocol/server-github`.
 
 ### Authentication Strategy

@@ -86,7 +86,7 @@ class AIService:
     def reload(self) -> None:
         """Reloads providers from secrets/env."""
         # 1. Check Gemini
-        gemini_key = get_secret("api_key", service="gemini")
+        gemini_key = get_secret("api_key", service="gemini") or os.getenv("GEMINI_API_KEY")
         if gemini_key:
             try:
                 from google import genai
@@ -101,7 +101,7 @@ class AIService:
                 console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
 
         # 2. Check OpenAI
-        openai_key = get_secret("api_key", service="openai")
+        openai_key = get_secret("api_key", service="openai") or os.getenv("OPENAI_API_KEY")
         if openai_key:
             try:
                 from openai import OpenAI
@@ -115,7 +115,7 @@ class AIService:
              self.clients['gh'] = "gh-cli" # Marker
 
         # 4. Check Anthropic
-        anthropic_key = get_secret("api_key", service="anthropic")
+        anthropic_key = get_secret("api_key", service="anthropic") or os.getenv("ANTHROPIC_API_KEY")
         if anthropic_key:
             try:
                 from anthropic import Anthropic

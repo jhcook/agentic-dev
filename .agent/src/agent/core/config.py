@@ -164,6 +164,13 @@ class Config:
                  raise TypeError(f"Cannot set list item with non-integer key: {last_key}")
         else:
             current[last_key] = value
+
+    def get_council_tools(self, council_name: str) -> List[str]:
+        """Retrieve allowed tools for a specific council."""
+        # TODO: Load from agent.yaml or config file if present, otherwise default
+        # For now, use the global default constants
+        return DEFAULT_COUNCIL_TOOLS.get(council_name, DEFAULT_COUNCIL_TOOLS["default"])
+
         
 config = Config()
 
@@ -250,4 +257,11 @@ DEFAULT_MCP_SERVERS = {
         "args": ["-y", "@modelcontextprotocol/server-github"],
         "env": {}
     }
+}
+
+# Default Tools for Agent Councils
+DEFAULT_COUNCIL_TOOLS = {
+    "preflight": ["github:get_issue", "github:list_issues"],
+    "panel": ["github:get_issue", "github:list_issues", "filesystem:read_file"],
+    "default": []
 }

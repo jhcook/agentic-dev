@@ -409,7 +409,8 @@ def preflight(
             instructions_content=instructions_content,
             full_diff=full_diff,
             report_file=report_file,
-            mode="gatekeeper"
+            mode="gatekeeper",
+            council_identifier="preflight"
         )
         if verdict in ["BLOCK", "FAIL"]:
              # convene_council_full handles printing the error/report location
@@ -636,7 +637,8 @@ def panel(
         rules_content=rules_content,
         instructions_content=instructions_content,
         full_diff=full_diff,
-        mode="consultative"
+        mode="consultative",
+        council_identifier="panel"
     )
 
 def run_ui_tests(
