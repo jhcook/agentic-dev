@@ -2,7 +2,7 @@
 
 ## State
 
-OPEN
+COMMITTED
 
 ## Problem Statement
 
@@ -21,6 +21,8 @@ As a Developer, I want the Agent (Preflight Council, Governance Panel, etc.) to 
     2. System executes tool via `MCPClient` (using existing auth/fallback).
     3. System feeds result back to Agent.
     4. Agent continues reasoning.
+- [ ] **Tool Output Scrubbing**: All tool outputs (observations) MUST be passed through `SecureManager` scrubbing before being added to the conversation context.
+- [ ] **Tool Allow-listing**: Implement configuration to restrict which tools are available to specific councils (e.g., `preflight` gets read-only tools, `implement` gets write tools).
 - [ ] **CI Compatibility**: Ensure this works in CI using the `gh` token fallback (implemented in INFRA-032).
 - [ ] **Configurable**: Users can enable/disable tool use for specific councils via config.
 
@@ -28,6 +30,7 @@ As a Developer, I want the Agent (Preflight Council, Governance Panel, etc.) to 
 
 - Leverage the `mcp.client.stdio` client we built.
 - Ensure `SecureManager` helps in avoiding leakage of sensitive tool outputs.
+- **Architectural Constraint**: Keep the `AgentLoop` logic distinct from `AIService`.
 
 ## Impact Analysis Summary
 
