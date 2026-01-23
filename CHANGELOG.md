@@ -3,6 +3,5 @@
 ## [Unreleased]
 
 ### Added
-- Introduced a provider-agnostic voice architecture with `STTProvider` and `TTSProvider` interfaces.
-- Implemented a concrete `Deepgram` provider for speech-to-text and text-to-speech services.
-- Added a factory function to load voice providers based on environment configuration.
+- Implemented core orchestration logic for real-time voice interaction via WebSocket endpoint `/ws/voice`.
+- Created `VoiceOrchestrator` class for managing audio processing, STT, agent interaction, and TTS.

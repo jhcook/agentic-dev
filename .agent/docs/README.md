@@ -10,6 +10,7 @@ Complete documentation for the Agent CLI governance framework.
 - **[🔄 Workflows](workflows.md)** - Story-driven development process
 - **[⚙️ Configuration](configuration.md)** - Customizing the agent
 - **[🤖 AI Integration](ai_integration.md)** - Provider setup and token management
+- **[🎤 Backend Voice](backend_voice.md)** - Voice provider architecture and WebSocket integration
 - **[📋 Rules & Instructions](rules_and_instructions.md)** - Creating custom governance
 - **[🔧 Troubleshooting](troubleshooting.md)** - Common issues and solutions
 

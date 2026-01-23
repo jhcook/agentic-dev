@@ -1,7 +1,8 @@
+import asyncio
 import logging
 import time
 
-from deepgram import DeepgramClient, PrerecordedOptions, SpeakOptions
+from deepgram import DeepgramClient
 from prometheus_client import Counter, Histogram
 from opentelemetry import trace
 
@@ -36,7 +37,7 @@ class DeepgramSTT(STTProvider):
     def __init__(self, api_key: str):
         if not api_key:
             raise ConfigurationError("Deepgram API key is not configured.")
-        self.client = DeepgramClient(api_key)
+        self.client = DeepgramClient(api_key=api_key)
         self.provider_name = "deepgram"
 
     async def listen(self, audio_data: bytes) -> str:
@@ -44,9 +45,6 @@ class DeepgramSTT(STTProvider):
             start_time = time.time()
             status = "success"
             try:
-                source = {"buffer": audio_data}
-                options = PrerecordedOptions(model="nova-2", smart_format=True)
-                
                 # Extract correlation ID from current span
                 span_ctx = span.get_span_context()
                 correlation_id = format(span_ctx.trace_id, "032x")
@@ -54,7 +52,14 @@ class DeepgramSTT(STTProvider):
                 
                 logger.info("Sending STT request to Deepgram.", extra={"provider": self.provider_name, "correlation_id": correlation_id})
                 
-                response = await self.client.listen.prerecorded.v("1").send(source, options)
+                # Deepgram SDK v5 transcribe_file is synchronous
+                # Run it in a thread pool to avoid blocking the event loop
+                response = await asyncio.to_thread(
+                    self.client.listen.v1.media.transcribe_file,
+                    request=audio_data,
+                    model="nova-2",
+                    smart_format=True
+                )
                 
                 # Best-effort transcription selection
                 transcript = response.results.channels[0].alternatives[0].transcript
@@ -84,7 +89,7 @@ class DeepgramTTS(TTSProvider):
     def __init__(self, api_key: str):
         if not api_key:
             raise ConfigurationError("Deepgram API key is not configured.")
-        self.client = DeepgramClient(api_key)
+        self.client = DeepgramClient(api_key=api_key)
         self.provider_name = "deepgram"
 
     async def speak(self, text: str) -> bytes:
@@ -92,9 +97,6 @@ class DeepgramTTS(TTSProvider):
             start_time = time.time()
             status = "success"
             try:
-                options = SpeakOptions(model="aura-asteria-en")
-                source = {"text": text}
-                
                 # Extract correlation ID from current span
                 span_ctx = span.get_span_context()
                 correlation_id = format(span_ctx.trace_id, "032x")
@@ -102,10 +104,21 @@ class DeepgramTTS(TTSProvider):
 
                 logger.info("Sending TTS request to Deepgram.", extra={"provider": self.provider_name, "correlation_id": correlation_id})
                 
-                response = await self.client.speak.v("1").stream(source, options)
+                # Deepgram SDK v5 returns a synchronous Iterator[bytes]
+                # We need to consume it in a non-blocking way
+                def _consume_generator():
+                    chunks = self.client.speak.v1.audio.generate(
+                        text=text,
+                        model="aura-asteria-en"
+                    )
+                    return b"".join(chunks)
+                
+                # Run the synchronous generator in a thread pool to avoid blocking
+                response = await asyncio.to_thread(_consume_generator)
                 
                 logger.info("Received TTS response from Deepgram.", extra={"provider": self.provider_name, "correlation_id": correlation_id})
-                return response.stream.getvalue()
+                # Response is already bytes in v5
+                return response
                 
             except Exception as e:
                 status = "error"

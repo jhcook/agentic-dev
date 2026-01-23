@@ -29,7 +29,9 @@ def get_voice_providers() -> Tuple[STTProvider, TTSProvider]:
 
     if provider_name == "deepgram":
         logger.info("Initializing Deepgram voice providers.")
-        api_key = os.getenv("DEEPGRAM_API_KEY")
+        # Use SecretManager to retrieve key (try keychain -> secret store -> env)
+        from agent.core.secrets import get_secret
+        api_key = get_secret("api_key", "deepgram")
         if not api_key:
             logger.error("DEEPGRAM_API_KEY environment variable not set.")
             raise ConfigurationError("DEEPGRAM_API_KEY is required for the 'deepgram' provider.")
