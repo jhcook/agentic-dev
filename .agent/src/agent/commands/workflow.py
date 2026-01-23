@@ -51,7 +51,16 @@ def pr(
              # Better to extract shared logic. But for now, let's call it.
              # `preflight` takes (story_id, ai, base, provider).
              # We must pass all args to avoid Typer OptionInfo defaults being treated as values.
-             preflight(story_id=story_id, base=target_branch, ai=False, provider=provider, report_file=None)
+             # BUG FIX: Explicitly pass skip_tests=False, otherwise typer.Option object is truthy.
+             preflight(
+                 story_id=story_id, 
+                 base=target_branch, 
+                 ai=False, 
+                 provider=provider, 
+                 report_file=None,
+                 skip_tests=False,
+                 ignore_tests=False
+             )
         except typer.Exit as e:
             if e.exit_code != 0:
                 console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")

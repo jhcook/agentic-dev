@@ -14,13 +14,16 @@ As an Agent Developer, I want a dedicated `AgentExecutor` or enhanced `AIService
 
 ## Acceptance Criteria
 
-- [ ] **Loop Logic**: Implement the "Thought -> Call -> Observation -> Thought" loop.
-- [ ] **Parsing**: Robust parsing of tool calls from LLM output (supporting both native Function Calling where available, and XML/JSON-RPC style fallback for others if needed).
-- [ ] **Tool Execution**: Integration with `agent.core.mcp.MCPClient` to actually execute the tools.
+- [ ] **State Management**: The loop must handle state (history/context) independently of the stateless `AIService`.
+- [ ] **Architecture**: Implement as a distinct `AgentExecutor` (or similar) that consumes `AIService`.
+- [ ] **Pluggable Parsers**: Separate "Parsing" logic from "Execution" logic. Implement an interface `ToolParser` to support:
+  - Text-based parsing (Regex for `Action: ...`)
+  - Native Function Calling (OpenAI/Gemini JSON schemas)
+- [ ] **Output Sanitization**: Tool outputs must be sanitized (e.g., escaping XML tags) before being inserted back into the Prompt to prevent injection attacks.
 - [ ] **Safety Limits**:
-  - [ ] `max_steps`: Prevent infinite loops (e.g., limit to 10 turns).
-  - [ ] `token_limits`: Manage context window growth (trimming old observations if needed).
-- [ ] **Observability**: Detailed logging of each "Step" in the loop (Thought, Tool, Result) for debugging.
+  - [ ] `max_steps`: Strict hard limit (e.g., 10) to prevent infinite loops.
+  - [ ] `token_limits`: Strategy for "Observation Folding" (summarizing older tool outputs) to preserve context window.
+- [ ] **Async/Await**: The loop must be fully async to handle non-blocking IO.
 
 ## Non-Functional Requirements
 
@@ -29,5 +32,6 @@ As an Agent Developer, I want a dedicated `AgentExecutor` or enhanced `AIService
 
 ## Test Strategy
 
-- Unit test the parser with varied LLM output examples.
-- Mock `MCPClient` to verify execution flow without real side effects.
+- **Replay Testing**: Use recorded conversation files (Replay Files) to test the Parser/Executor deterministically.
+- **Mocking**: Mock `MCPClient` to verify execution flow without real side effects.
+- **Edge Cases**: Validate handling of malformed JSON and empty tool outputs.
