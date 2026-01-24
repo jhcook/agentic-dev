@@ -40,19 +40,22 @@ The backend voice integration provides a flexible, provider-agnostic abstraction
 
 ### Component Flow
 
+### Component Flow
+
 ```mermaid
-graph TB
-    Client[WebSocket Client] -->|Audio Chunks| Router[/ws/voice Router]
-    Router --> Orchestrator[VoiceOrchestrator]
-    Orchestrator --> Factory[get_voice_providers]
-    Factory --> STT[DeepgramSTT]
-    Factory --> TTS[DeepgramTTS]
-    Orchestrator -->|Audio Data| STT
-    STT -->|Transcript| Agent[Placeholder Agent]
-    Agent -->|Response Text| TTS
-    TTS -->|Audio Bytes| Orchestrator
-    Orchestrator -->|Audio Response| Router
-    Router -->|Stream| Client
+graph TD
+    User([User Voice]) -->|WebSocket| Router[FastAPI Router]
+    Router -->|Bytes| Orchestrator[VoiceOrchestrator]
+    Orchestrator -->|Sanitize| Security[Input Sanitization]
+    Security -->|Text| Agent[LangGraph Agent]
+    subgraph Agent Flow
+        LLM[LLM Provider]
+        Mem[MemorySaver]
+        Agent <-->|Configurable| LLM
+        Agent <-->|Checkpoints| Mem
+    end
+    Agent -->|Stream| Orchestrator
+    Orchestrator -->|Audio| Router
 ```
 
 ---
@@ -160,12 +163,45 @@ def _consume_generator():
 audio_bytes = await asyncio.to_thread(_consume_generator)
 ```
 
-#### Client Initialization
-
 ```python
 # Must use keyword argument
 from deepgram import DeepgramClient
 client = DeepgramClient(api_key=api_key)
+```
+
+---
+
+## LLM Configuration
+
+The conversational agent can be configured to use different LLM providers (OpenAI, Anthropic, Gemini).
+
+### Provider Selection
+
+Use the `agent config` command to update `.agent/etc/voice.yaml`:
+
+```bash
+# Switch to Gemini
+agent config set llm.provider gemini --file voice.yaml
+agent config set llm.model gemini-2.0-flash-exp --file voice.yaml
+
+# Switch to OpenAI
+agent config set llm.provider openai --file voice.yaml
+agent config set llm.model gpt-4o-mini --file voice.yaml
+```
+
+### API Keys
+
+Ensure the API key for the selected provider is set in the secure secret manager:
+
+```bash
+# Gemini
+.venv/bin/python -m agent secret set gemini api_key YOUR_GEMINI_KEY
+
+# OpenAI
+.venv/bin/python -m agent secret set openai api_key YOUR_OPENAI_KEY
+
+# Anthropic
+.venv/bin/python -m agent secret set anthropic api_key YOUR_ANTHROPIC_KEY
 ```
 
 ---
