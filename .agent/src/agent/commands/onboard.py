@@ -505,6 +505,77 @@ def select_default_model(provider: str, config_data: dict, config_path: Path) ->
         )
 
 
+def configure_voice_settings() -> None:
+    """Configures voice capabilities (Deepgram, Local Models)."""
+    typer.echo("\n[INFO] Configuring Voice Capabilities...")
+    
+    manager = get_secret_manager()
+    voice_config_path = config.etc_dir / "voice.yaml"
+    
+    # 1. Deepgram API Key (Cloud STT/TTS)
+    if not manager.has_secret("deepgram", "api_key"):
+        if typer.confirm("Do you want to enable Cloud Voice (Deepgram)?", default=True):
+            key = getpass.getpass("Deepgram API Key: ")
+            if key:
+                try:
+                    manager.set_secret("deepgram", "api_key", key)
+                    typer.secho("[OK] Deepgram key saved.", fg=typer.colors.GREEN)
+                except Exception as e:
+                    typer.secho(f"[ERROR] Failed to save key: {e}", fg=typer.colors.RED)
+            else:
+                typer.echo("Skipping Deepgram.")
+    else:
+        typer.secho("[OK] Deepgram key already configured.", fg=typer.colors.GREEN, dim=True)
+
+    # 2. Voice LLM Provider
+    # Load existing
+    try:
+        data = config.load_yaml(voice_config_path)
+    except FileNotFoundError:
+        data = {}
+        
+    current_provider = config.get_value(data, "llm.provider") or "openai"
+    
+    if typer.confirm(f"Configure Voice LLM? (Current: {current_provider})", default=False):
+        # reuse PROVIDERS dict keys but filter for LLMs
+        llm_providers = ["openai", "anthropic", "gemini"]
+        
+        typer.echo("Select Voice LLM Provider:")
+        for i, p in enumerate(llm_providers, 1):
+            typer.echo(f"{i}. {p}")
+            
+        choice = typer.prompt("Enter number", default="1")
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(llm_providers):
+                new_provider = llm_providers[idx]
+                config.set_value(data, "llm.provider", new_provider)
+                config.save_yaml(voice_config_path, data)
+                typer.echo(f"[OK] Voice LLM set to '{new_provider}'.")
+        except ValueError:
+            pass
+
+    # 3. Local Models (Kokoro)
+    if typer.confirm("Download Local Voice Models (Kokoro)? (Recommended for Dev/Offline)", default=False):
+        typer.echo("Downloading models... This may take a moment.")
+        try:
+            # Run the download script
+            # Assuming cwd is project root and .agent/src is available
+            script_path = "backend.scripts.download_models"
+            src_path = AGENT_DIR / "src"
+            
+            subprocess.run(
+                [sys.executable, "-m", script_path],
+                cwd=src_path,
+                check=True
+            )
+            typer.secho("[OK] Local models downloaded.", fg=typer.colors.GREEN)
+        except subprocess.CalledProcessError:
+            typer.secho("[ERROR] Failed to download models.", fg=typer.colors.RED)
+        except Exception as e:
+            typer.secho(f"[ERROR] Unexpected error: {e}", fg=typer.colors.RED)
+
+
 
 
 def run_verification() -> None:
@@ -600,6 +671,7 @@ def onboard() -> None:
         configure_api_keys() 
         check_github_auth() # Now safe to use secrets if needed? Actually I just save preference.
         configure_agent_settings()
+        configure_voice_settings()
         run_verification()
         
         typer.secho(

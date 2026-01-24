@@ -77,11 +77,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 continue
             
-            # Application Logic
-            response_audio = await orchestrator.process_audio(data)
-            
-            if response_audio:
-                await websocket.send_bytes(response_audio)
+            # Application Logic (Streaming)
+            async for audio_chunk in orchestrator.process_audio(data):
+                await websocket.send_bytes(audio_chunk)
                 
     except WebSocketDisconnect:
         logger.info(f"Voice session ended: {session_id}", extra={"correlation_id": session_id})

@@ -15,7 +15,7 @@
 import os
 import logging
 import time
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -151,7 +151,7 @@ class VoiceOrchestrator:
         self.agent = create_react_agent(
             llm, 
             tools,
-            state_modifier=VOICE_SYSTEM_PROMPT  # LangGraph system prompt
+            prompt=VOICE_SYSTEM_PROMPT  # LangGraph system prompt
         )
         self.checkpointer = MemorySaver()  # Use Redis/PostgreSQL in production
         
@@ -188,15 +188,15 @@ class VoiceOrchestrator:
         # Hard limit on input length
         return sanitized[:1000]
         
-    async def process_audio(self, audio_chunk: bytes) -> bytes:
+    async def process_audio(self, audio_chunk: bytes) -> AsyncGenerator[bytes, None]:
         """
-        Process audio: STT → Agent → TTS
+        Process audio: STT → Agent → Buffer → TTS
         
         Args:
             audio_chunk: Raw audio bytes from microphone
             
-        Returns:
-            Synthesized audio response
+        Yields:
+            Synthesized audio response chunks
         """
         with tracer.start_as_current_span("voice.agent.process") as span:
             span.set_attribute("session_id", self.session_id)
@@ -204,34 +204,35 @@ class VoiceOrchestrator:
             # 1. Listen (STT)
             text_input = await self.stt.listen(audio_chunk)
             if not text_input.strip():
-                return b""
+                return
             
             logger.info(
                 "User input received",
                 extra={"session_id": self.session_id, "length": len(text_input)}
             )
             
-            # 2. Think (Agent)
-            response_text = await self._invoke_agent(text_input)
+            # 2. Pipeline: Agent -> Buffer -> TTS
+            from backend.voice.buffer import SentenceBuffer
+            buffer = SentenceBuffer()
             
-            logger.info(
-                "Agent response generated",
-                extra={"session_id": self.session_id, "length": len(response_text)}
-            )
+            text_stream = self._invoke_agent(text_input)
+            sentence_stream = buffer.process(text_stream)
             
-            # 3. Speak (TTS)
-            audio_output = await self.tts.speak(response_text)
-            return audio_output
+            async for sentence in sentence_stream:
+                logger.debug(f"Synthesizing sentence: {sentence}")
+                # 3. Speak (TTS)
+                audio_output = await self.tts.speak(sentence)
+                yield audio_output
     
-    async def _invoke_agent(self, user_input: str) -> str:
+    async def _invoke_agent(self, user_input: str) -> AsyncGenerator[str, None]:
         """
-        Invoke LangGraph agent with streaming and security.
+        Invoke LangGraph agent with streaming.
         
         Args:
             user_input: Transcribed user speech
             
-        Returns:
-            Agent's text response
+        Yields:
+            Agent's text response chunks
         """
         start = time.time()
         status = "success"
@@ -248,20 +249,23 @@ class VoiceOrchestrator:
             # Use astream for progressive response
             async for chunk in self.agent.astream(
                 {"messages": [("user", safe_input)]},
-                config=config
+                config=config,
+                stream_mode="messages" 
             ):
-                # Extract agent's response from chunk
-                if "agent" in chunk and chunk["agent"].get("messages"):
-                    message = chunk["agent"]["messages"][0]
-                    if hasattr(message, 'content'):
-                        response = message.content
-                        AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
-                        return response
+                # Langgraph 'messages' mode yields (message, metadata) tuple or similar depending on version
+                # Usually chunk is (message, metadata) where message is AIMessageChunk
+                # Or chunk is the raw update.
+                
+                # Check for AIMessageChunk
+                if isinstance(chunk, tuple):
+                    chunk = chunk[0] # The message object
+                
+                if hasattr(chunk, 'content') and chunk.content:
+                    # Increment token metric (approx)
+                    AGENT_TOKENS.labels(model=self.model_name, type="completion").inc(1)
+                    yield str(chunk.content)
             
-            # Fallback if no response
-            status = "error"
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
-            return "I'm sorry, I didn't understand that."
             
         except Exception as e:
             status = "error"
@@ -270,6 +274,7 @@ class VoiceOrchestrator:
                 f"Agent invocation failed: {e}",
                 extra={"session_id": self.session_id, "error": str(e)}
             )
-            raise
+            # Fallback
+            yield "I'm sorry, I encountered an error."
         finally:
             AGENT_LATENCY.labels(model=self.model_name).observe(time.time() - start)

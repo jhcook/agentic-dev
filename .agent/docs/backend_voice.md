@@ -44,18 +44,23 @@ The backend voice integration provides a flexible, provider-agnostic abstraction
 
 ```mermaid
 graph TD
-    User([User Voice]) -->|WebSocket| Router[FastAPI Router]
+    User([User Voice]) -->|WebSocket Stream| Router[FastAPI Router]
     Router -->|Bytes| Orchestrator[VoiceOrchestrator]
     Orchestrator -->|Sanitize| Security[Input Sanitization]
     Security -->|Text| Agent[LangGraph Agent]
+    
     subgraph Agent Flow
         LLM[LLM Provider]
         Mem[MemorySaver]
         Agent <-->|Configurable| LLM
         Agent <-->|Checkpoints| Mem
     end
-    Agent -->|Stream| Orchestrator
-    Orchestrator -->|Audio| Router
+    
+    Agent -->|Text Stream| Buffer[SentenceBuffer]
+    Buffer -->|Sentences| TTS[TTS Provider]
+    TTS -->|Audio Chunk| Orchestrator
+    Orchestrator -->|Audio Stream| Router
+    Router -->|Stream| User
 ```
 
 ---
@@ -269,8 +274,8 @@ Each STT/TTS operation creates a span:
 **Responsibilities**:
 
 1. Manage conversation history per session
-2. Orchestrate STT → Agent → TTS flow
-3. Handle async audio processing
+2. Orchestrate STT → Agent → Buffer → TTS flow
+3. Handle async streaming pipeline
 4. Provide error handling and logging
 
 **Usage**:
@@ -279,20 +284,13 @@ Each STT/TTS operation creates a span:
 from backend.voice.orchestrator import VoiceOrchestrator
 
 orchestrator = VoiceOrchestrator(session_id="user-123")
-audio_response = await orchestrator.process_audio(audio_chunk)
+async for audio_chunk in orchestrator.process_audio(audio_chunk):
+    # Stream chunks as they are generated
+    await send_to_client(audio_chunk)
 ```
 
-**Agent Integration** (Placeholder):
-Currently uses a simple echo agent. To integrate a real agent (e.g., LangGraph):
-
-```python
-# In orchestrator.py
-async def _invoke_agent(self, transcript: str) -> str:
-    # TODO: Replace with LangGraph integration
-    # from your_agent import YourAgent
-    # response = await YourAgent.achat(self.history, transcript)
-    return f"Agent: {transcript}"
-```
+**Agent Integration**:
+Uses LangGraph with `messages_modifier` (or `prompt` in older versions) for system instructions and persistent checkpointer.
 
 ### WebSocket Endpoint
 
@@ -304,8 +302,8 @@ async def _invoke_agent(self, transcript: str) -> str:
 
 1. Client connects to WebSocket
 2. Client sends binary audio chunks
-3. Server processes via `VoiceOrchestrator`
-4. Server streams audio response back
+3. Server processes via `VoiceOrchestrator` streaming pipeline
+4. Server yields chunks progressively (Real-time)
 5. Connection persists for multi-turn conversation
 
 **Example Client** (JavaScript):
