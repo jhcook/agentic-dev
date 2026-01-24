@@ -14,8 +14,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
-import time
+from typing import List, Optional
 
 from agent.core.ai.service import AIService
 from agent.core.engine.parser import BaseParser, ReActJsonParser
@@ -38,7 +37,6 @@ class AgentExecutor:
         llm: AIService, 
         mcp_client: MCPClient,
         parser: Optional[BaseParser] = None,
-        max_steps: int = 10,
         max_steps: int = 10,
         system_prompt: str = "You are a helpful AI assistant.",
         allowed_tools: Optional[List[str]] = None
@@ -116,8 +114,10 @@ class AgentExecutor:
                      output = action.tool_input
                      if isinstance(output, dict):
                          # Try to find a reasonable key
-                         if "answer" in output: output = output["answer"]
-                         elif "text" in output: output = output["text"]
+                         if "answer" in output:
+                             output = output["answer"]
+                         elif "text" in output:
+                             output = output["text"]
                          # Else return raw dict str
                      return str(output)
 
