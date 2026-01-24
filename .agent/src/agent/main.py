@@ -14,7 +14,6 @@
 
 import logging
 import subprocess
-import sys
 from pathlib import Path
 
 import typer
@@ -35,8 +34,10 @@ from agent.commands import (
     story,
     visualize,
     workflow,
+    admin,
 )
 from agent.commands import list as list_cmd
+from agent.sync import cli as sync_cli
 
 
 console = Console(stderr=True)
@@ -51,6 +52,7 @@ app = typer.Typer(
 app.add_typer(config.app, name="config")
 app.add_typer(secret.app, name="secret")
 app.add_typer(mcp.app, name="mcp")
+app.add_typer(admin.app, name="admin")
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)
@@ -102,8 +104,6 @@ try:
     app.command(name="onboard")(onboard.onboard)
 except ImportError:
     pass
-
-from agent.sync import cli as sync_cli
 
 app.add_typer(sync_cli.app, name="sync")
 

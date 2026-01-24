@@ -1,4 +1,3 @@
-
 llm:
-  provider: openai
+  provider: gemini
   model: gpt-4o-mini
