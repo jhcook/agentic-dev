@@ -1,613 +1,144 @@
 # Backend Voice Integration
 
-Complete guide to the voice provider architecture, Deepgram integration, and real-time voice orchestration via WebSocket.
-
 ## Overview
 
-The backend voice integration provides a flexible, provider-agnostic abstraction for Speech-to-Text (STT) and Text-to-Speech (TTS) services, with comprehensive observability and real-time orchestration capabilities.
+The backend voice integration provides a real-time, bidirectional voice pipeline capable of "barge-in" interactions. It orchestrates Speech-to-Text (STT), conversational AI (LangGraph), and Text-to-Speech (TTS) with ultra-low latency.
 
-**Key Components**:
+**Key Features**:
 
-- **Provider Interfaces** - Abstract STT/TTS protocols
-- **Deepgram Integration** - Production-ready implementation using Deepgram SDK v5.3.1
-- **Voice Orchestrator** - Manages STT → Agent → TTS flow
-- **WebSocket Endpoint** - Real-time bidirectional audio streaming
-- **Observability** - Prometheus metrics, OpenTelemetry tracing, structured logging
+- **Real-Time Streaming**: Asynchronous Generator architecture for sub-second responses.
+- **Barge-In Interrupts**: Voice Activity Detection (VAD) stops the agent immediately when the user speaks.
+- **Natural Prosody**: uses `SentenceBuffer` to group tokens into speech-friendly chunks.
+- **Provider Agnostic**: Interfaces for Swappable STT/TTS (Deepgram, Local Kokoro, etc.).
 
 ---
 
 ## Architecture
 
-### Directory Structure
-
-```
-.agent/src/backend/
-├── speech/
-│   ├── __init__.py
-│   ├── interfaces.py          # STTProvider & TTSProvider protocols
-│   ├── factory.py             # Provider instantiation
-│   └── providers/
-│       ├── __init__.py
-│       └── deepgram.py        # Deepgram implementation
-├── voice/
-│   ├── __init__.py
-│   └── orchestrator.py        # VoiceOrchestrator class
-├── routers/
-│   ├── __init__.py
-│   └── voice.py               # /ws/voice WebSocket endpoint
-└── main.py                    # FastAPI application entry point
-```
-
-### Component Flow
-
 ### Component Flow
 
 ```mermaid
 graph TD
-    User([User Voice]) -->|WebSocket Stream| Router[FastAPI Router]
-    Router -->|Bytes| Orchestrator[VoiceOrchestrator]
-    Orchestrator -->|Sanitize| Security[Input Sanitization]
-    Security -->|Text| Agent[LangGraph Agent]
+    User([User Voice]) -->|WebSocket Stream| Router[FastAPI Actor]
     
-    subgraph Agent Flow
-        LLM[LLM Provider]
-        Mem[MemorySaver]
-        Agent <-->|Configurable| LLM
-        Agent <-->|Checkpoints| Mem
+    subgraph Router Logic
+        Receiver[Receiver Loop]
+        Sender[Sender Task]
+        Queue[Audio Queue]
     end
     
-    Agent -->|Text Stream| Buffer[SentenceBuffer]
-    Buffer -->|Sentences| TTS[TTS Provider]
-    TTS -->|Audio Chunk| Orchestrator
-    Orchestrator -->|Audio Stream| Router
-    Router -->|Stream| User
-```
-
----
-
-## Provider Interfaces
-
-### STTProvider Protocol
-
-**File**: [interfaces.py](file:///Users/jcook/repo/agentic-dev/.agent/src/backend/speech/interfaces.py)
-
-```python
-from typing import Protocol
-
-class STTProvider(Protocol):
-    """Speech-to-Text provider interface."""
+    Receiver -->|Audio Frame| VAD[VAD Processor]
+    Receiver -->|Audio Frame| Orchestrator[VoiceOrchestrator]
     
-    async def listen(self, audio_data: bytes) -> str:
-        """Convert audio bytes to text transcript."""
-        ...
+    VAD --"Interrupt!"--> Orchestrator
+    VAD --"Flush"--> Queue
     
-    async def health_check(self) -> bool:
-        """Check if the provider is healthy and reachable."""
-        ...
-```
-
-### TTSProvider Protocol
-
-```python
-class TTSProvider(Protocol):
-    """Text-to-Speech provider interface."""
+    Orchestrator -->|Text Stream| Agent[LangGraph Agent]
+    Agent -->|Text Chunk| Buffer[SentenceBuffer]
+    Buffer -->|Sentence| TTS[TTS Provider]
+    TTS -->|Audio Chunk| Queue
     
-    async def speak(self, text: str) -> bytes:
-        """Convert text to audio bytes."""
-        ...
-    
-    async def health_check(self) -> bool:
-        """Check if the provider is healthy and reachable."""
-        ...
+    Queue -->|Stream| Sender
+    Sender -->|Audio| User
 ```
 
-**Benefits of Protocol-Based Design**:
+### Concurrent Router Pattern
 
-- ✅ Easy to add new providers (e.g., Google Cloud, Azure)
-- ✅ Supports dependency injection for testing
-- ✅ Type-safe with static analysis tools (mypy, pyright)
+To support "barge-in", the WebSocket endpoint uses a **Concurrent Actor Pattern** instead of a simple Request/Response loop.
+
+1. **Sender Task**: A dedicated background task that consumes an `asyncio.Queue` and streams audio to the client.
+2. **Receiver Loop**: The main loop reads input frames from the WebSocket.
+3. **VAD Check**: Every input frame is checked for speech probability *synchronously* before processing.
+4. **Interrupt Handling**: If speech is detected while the agent is speaking:
+    - `orchestrator.interrupt()` is called (cancels TTS generation).
+    - `audio_queue` is drained (prevents old audio from playing).
+    - `{"type": "clear_buffer"}` control message is sent to client.
 
 ---
 
-## Deepgram Integration
+## Protocols
 
-### Configuration
-
-**API Key Setup**:
-
-```bash
-# Using the Agent secret manager (recommended)
-.venv/bin/python -m agent secret set deepgram api_key YOUR_DEEPGRAM_API_KEY
-
-# Or via environment variable
-export DEEPGRAM_API_KEY=YOUR_DEEPGRAM_API_KEY
-```
-
-The factory uses the secure secret manager (`agent.core.secrets.get_secret`) which integrates with the system keychain.
-
-### Deepgram SDK v5.3.1 Specifics
-
-**Important**: The Deepgram SDK v5 has significant API changes from v3/v4:
-
-#### STT (Speech-to-Text)
-
-- **Method**: `client.listen.v1.media.transcribe_file()`
-- **Signature**: Keyword-only arguments (starts with `*,`)
-- **Synchronous**: Returns response directly, not awaitable
-- **Solution**: Wrapped in `asyncio.to_thread()` to prevent event loop blocking
-
-**Example**:
-
-```python
-response = await asyncio.to_thread(
-    self.client.listen.v1.media.transcribe_file,
-    request=audio_data,
-    model="nova-2",
-    smart_format=True
-)
-transcript = response.results.channels[0].alternatives[0].transcript
-```
-
-#### TTS (Text-to-Speech)
-
-- **Method**: `client.speak.v1.audio.generate()`
-- **Signature**: Keyword-only arguments (starts with `*,`)
-- **Returns**: `Iterator[bytes]` (synchronous generator)
-- **Solution**: Consume generator in thread pool
-
-**Example**:
-
-```python
-def _consume_generator():
-    chunks = self.client.speak.v1.audio.generate(
-        text=text,
-        model="aura-asteria-en"
-    )
-    return b"".join(chunks)
-
-audio_bytes = await asyncio.to_thread(_consume_generator)
-```
-
-```python
-# Must use keyword argument
-from deepgram import DeepgramClient
-client = DeepgramClient(api_key=api_key)
-```
-
----
-
-## LLM Configuration
-
-The conversational agent can be configured to use different LLM providers (OpenAI, Anthropic, Gemini).
-
-### Provider Selection
-
-Use the `agent config` command to update `.agent/etc/voice.yaml`:
-
-```bash
-# Switch to Gemini
-agent config set llm.provider gemini --file voice.yaml
-agent config set llm.model gemini-2.0-flash-exp --file voice.yaml
-
-# Switch to OpenAI
-agent config set llm.provider openai --file voice.yaml
-agent config set llm.model gpt-4o-mini --file voice.yaml
-```
-
-### API Keys
-
-Ensure the API key for the selected provider is set in the secure secret manager:
-
-```bash
-# Gemini
-.venv/bin/python -m agent secret set gemini api_key YOUR_GEMINI_KEY
-
-# OpenAI
-.venv/bin/python -m agent secret set openai api_key YOUR_OPENAI_KEY
-
-# Anthropic
-.venv/bin/python -m agent secret set anthropic api_key YOUR_ANTHROPIC_KEY
-```
-
----
-
-## Observability
-
-### Metrics (Prometheus)
-
-**Exposed Metrics**:
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `voice_provider_requests_total` | Counter | `provider`, `type` | Total requests to STT/TTS |
-| `voice_provider_request_duration_seconds` | Histogram | `provider`, `type` | Request latency |
-| `voice_provider_errors_total` | Counter | `provider`, `type`, `error_type` | Error count by type |
-
-**Example Query** (Prometheus):
-
-```promql
-# Average TTS latency over 5 minutes
-rate(voice_provider_request_duration_seconds_sum{type="tts"}[5m]) 
-  / rate(voice_provider_request_duration_seconds_count{type="tts"}[5m])
-```
-
-### Tracing (OpenTelemetry)
-
-Each STT/TTS operation creates a span:
-
-- `deepgram.stt.listen` - STT transcription
-- `deepgram.tts.speak` - TTS synthesis
-
-**Correlation IDs**:
-
-- Extracted from OpenTelemetry trace context
-- Added as `correlation_id` span attribute
-- Included in all log messages for request tracing
-
-### Structured Logging
-
-**Log Format**:
-
-```json
-{
-  "level": "INFO",
-  "message": "Sending TTS request to Deepgram.",
-  "provider": "deepgram",
-  "correlation_id": "f89b7c1f367f9268162b790a3e2de9ef0423d355"
-}
-```
-
-**PII Safety**:
-
-- ❌ No audio data in logs
-- ❌ No transcripts in standard logs
-- ✅ Metadata only (provider, duration, error types)
-
----
-
-## Voice Orchestration
-
-### VoiceOrchestrator Class
-
-**File**: [orchestrator.py](file:///Users/jcook/repo/agentic-dev/.agent/src/backend/voice/orchestrator.py)
-
-**Responsibilities**:
-
-1. Manage conversation history per session
-2. Orchestrate STT → Agent → Buffer → TTS flow
-3. Handle async streaming pipeline
-4. Provide error handling and logging
-
-**Usage**:
-
-```python
-from backend.voice.orchestrator import VoiceOrchestrator
-
-orchestrator = VoiceOrchestrator(session_id="user-123")
-async for audio_chunk in orchestrator.process_audio(audio_chunk):
-    # Stream chunks as they are generated
-    await send_to_client(audio_chunk)
-```
-
-**Agent Integration**:
-Uses LangGraph with `messages_modifier` (or `prompt` in older versions) for system instructions and persistent checkpointer.
-
-### WebSocket Endpoint
-
-**File**: [voice.py](file:///Users/jcook/repo/agentic-dev/.agent/src/backend/routers/voice.py)
+### WebSocket API
 
 **Endpoint**: `ws://localhost:8000/ws/voice`
 
-**Protocol**:
+**Client Messages (Input)**:
 
-1. Client connects to WebSocket
-2. Client sends binary audio chunks
-3. Server processes via `VoiceOrchestrator` streaming pipeline
-4. Server yields chunks progressively (Real-time)
-5. Connection persists for multi-turn conversation
+- **Binary**: Raw audio bytes (16kHz, single channel, PCM16).
 
-**Example Client** (JavaScript):
+**Server Messages (Output)**:
 
-```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/voice');
+- **Binary**: Audio response bytes (16kHz, PCM16).
+- **JSON (Control)**:
 
-ws.onopen = () => {
-  // Send audio chunk (e.g., from microphone)
-  ws.send(audioChunk);
-};
+  ```json
+  {
+    "type": "clear_buffer"
+  }
+  ```
 
-ws.onmessage = (event) => {
-  // Receive audio response
-  const audioResponse = event.data;
-  playAudio(audioResponse);
-};
-```
+  *Action Required*: Client MUST immediately stop audio playback and clear its local buffer.
 
 ---
 
-## Testing
+## configuration
 
-### Integration Tests
+### Voice Activity Detection (VAD)
 
-**File**: [test_voice_flow.py](file:///Users/jcook/repo/agentic-dev/.agent/tests/test_voice_flow.py)
+The system uses `silero-vad` (ONNX) via a `VADProcessor` wrapper.
 
-**Running Tests**:
+**Behavior**:
 
-```bash
-cd .agent
-.venv/bin/python -m pytest tests/test_voice_flow.py -v
-```
+- Models are downloaded automatically to `.agent/src/backend/voice/` on first run.
+- If `onnxruntime` is missing, VAD is gracefully disabled (standard conversational mode).
 
-**What's Tested**:
+### Tuning
 
-- ✅ WebSocket connection establishment
-- ✅ Audio packet flow (mocked providers)
-- ✅ Echo functionality (placeholder agent)
-- ✅ Response validation
-
-**Mocking Strategy**:
-
-```python
-from unittest.mock import AsyncMock
-
-# Mock providers to isolate WebSocket logic
-mock_stt = AsyncMock(return_value="hello")
-mock_tts = AsyncMock(return_value=b"fake-audio-data")
-```
-
-### Manual Testing
-
-**Start the Server**:
-
-```bash
-cd .agent/src
-uvicorn backend.main:app --reload
-```
-
-**Test with wscat**:
-
-```bash
-npm install -g wscat
-wscat -c ws://localhost:8000/ws/voice -b
-# Send binary data interactively
-```
-
-**Health Check**:
-
-```bash
-curl http://localhost:8000/health
-# Expected: {"status":"ok"}
-```
-
----
-
-## Known Issues & Troubleshooting
-
-### SSL Certificate Validation Error
-
-**Symptom**:
-
-```
-[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Missing Authority Key Identifier
-```
-
-**Root Cause**:
-This occurs when connecting to `api.deepgram.com` through a corporate proxy that intercepts SSL certificates. The intercepted certificate may lack proper Authority Key Identifier extensions.
-
-**Solution**:
-
-1. **Trust the proxy certificate** on your system
-2. **Configure proxy bypass** for `api.deepgram.com`
-3. **Disable certificate interception** for Deepgram endpoints
-
-**Verification**:
-
-```bash
-# Test direct connection (should succeed)
-curl -v https://api.deepgram.com
-
-# Check certificate chain
-openssl s_client -connect api.deepgram.com:443 -servername api.deepgram.com
-```
-
-**Note**: This does NOT affect:
-
-- ✅ Integration tests (use mocks, no API calls)
-- ✅ Production deployments (typically no intercepting proxies)
-- ✅ The Deepgram API itself (certificate is valid)
-
-### Pydantic v1 Warning
-
-**Warning**:
-
-```
-UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
-```
-
-**Impact**: Cosmetic only. Deepgram SDK uses Pydantic v1 internally, which shows a deprecation warning on Python 3.14.
-
-**Resolution**: No action needed. Wait for Deepgram SDK to update to Pydantic v2.
-
----
-
-## Dependencies
-
-### Required Packages
-
-```toml
-[project.dependencies]
-fastapi = ">=0.100.0"
-uvicorn = ">=0.23.0"
-deepgram-sdk = ">=3.0"
-prometheus-client = ">=0.17.0"
-opentelemetry-api = ">=1.20.0"
-opentelemetry-sdk = ">=1.20.0"
-keyring = ">=24.0.0"
-cryptography = ">=41.0.0"
-```
-
-### Installation
-
-```bash
-cd .agent
-poetry install
-# or
-.venv/bin/pip install -e .
-```
-
----
-
-## Production Deployment
-
-### Environment Variables
-
-```bash
-# Option 1: Use secret manager (recommended)
-.venv/bin/python -m agent secret set deepgram api_key YOUR_KEY
-
-# Option 2: Environment variable
-export DEEPGRAM_API_KEY=YOUR_KEY
-```
-
-### Running the Server
-
-### Local Provider (Offline)
-
-To use the local Kokoro TTS (and eventually STT):
-
-1. **Download Models**:
-
-   ```bash
-   .venv/bin/python -m backend.scripts.download_models
-   ```
-
-2. **Configure Provider**:
-
-   ```bash
-   export VOICE_PROVIDER=local
-   ```
-
-   *Note: Currently uses local TTS + Deepgram STT (requires API key).*
-
-**Development**:
-
-```bash
-cd .agent/src
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Production** (with Gunicorn):
-
-```bash
-gunicorn backend.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000
-```
-
-### Security Considerations
-
-1. **Authentication**: Add WebSocket authentication
-
-   ```python
-   # In voice.py
-   @router.websocket("/ws/voice")
-   async def websocket_voice(websocket: WebSocket, token: str = Query(...)):
-       # Validate token before accept()
-       if not validate_token(token):
-           await websocket.close(code=4001)
-           return
-       await websocket.accept()
-   ```
-
-2. **Rate Limiting**: Implement connection limits per user
-3. **Input Validation**: Validate audio chunk sizes/formats
-4. **CORS**: Configure allowed origins for WebSocket connections
-
-### Monitoring
-
-**Prometheus Scraping**:
+Configure thresholds in `.agent/etc/voice.yaml` (Planned):
 
 ```yaml
-# prometheus.yml
-scrape_configs:
-  - job_name: 'voice-backend'
-    static_configs:
-      - targets: ['localhost:8000']
+vad:
+  threshold: 0.5
+  cooldown: 1.5 # Seconds
 ```
 
-**Grafana Dashboard** (suggested metrics):
+---
 
-- Voice session duration (p50, p95, p99)
-- TTS/STT latency
-- Error rates by provider
-- Active WebSocket connections
+## Usage Example
+
+### Client (Python)
+
+```python
+import asyncio
+import websockets
+import json
+
+async def run_client():
+    async with websockets.connect("ws://localhost:8000/ws/voice") as ws:
+        
+        async def listen():
+            while True:
+                msg = await ws.recv()
+                if isinstance(msg, bytes):
+                    play_audio(msg)
+                else:
+                    data = json.loads(msg)
+                    if data.get("type") == "clear_buffer":
+                        stop_playback_immediately()
+        
+        asyncio.create_task(listen())
+        
+        # Stream microphone...
+```
 
 ---
 
 ## Next Steps
 
-### 1. Integrate Real Agent (INFRA-034)
+### 1. Tool Integration (INFRA-036)
 
-Replace the placeholder agent in `orchestrator.py`:
+Equip the `VoiceOrchestrator` agent with tools (e.g. `lookup_documentation`, `check_status`) using the LangGraph tool-calling interface.
 
-```python
-# Example: LangGraph integration
-from langgraph import create_agent
+### 2. Multi-Provider Support (INFRA-037)
 
-class VoiceOrchestrator:
-    def __init__(self, session_id: str):
-        self.session_id = session_id
-        self.agent = create_agent(...)  # Your agent setup
-        
-    async def _invoke_agent(self, transcript: str) -> str:
-        response = await self.agent.arun(transcript)
-        return response
-```
-
-### 2. Add More Providers
-
-Implement Google Cloud Speech or Azure Cognitive Services:
-
-```python
-# backend/speech/providers/google_cloud.py
-class GoogleCloudSTT:
-    async def listen(self, audio_data: bytes) -> str:
-        # Implement Google Cloud Speech API
-        ...
-```
-
-### 3. Enhanced Orchestration
-
-- Add conversation state persistence
-- Implement turn-taking logic
-- Support streaming STT (live transcription)
-- Add interrupt handling (user interrupts agent)
-
-### 4. Advanced Features
-
-- Multi-language support
-- Voice activity detection (VAD)
-- Custom voice models
-- Real-time translation
-
----
-
-## References
-
-- **Deepgram API Docs**: <https://developers.deepgram.com/>
-- **Deepgram SDK v5**: <https://github.com/deepgram/deepgram-python-sdk>
-- **FastAPI WebSockets**: <https://fastapi.tiangolo.com/advanced/websockets/>
-- **OpenTelemetry Python**: <https://opentelemetry.io/docs/languages/python/>
-- **Prometheus Client**: <https://github.com/prometheus/client_python>
-
----
-
-## Support
-
-For issues or questions:
-
-1. Check [Troubleshooting](#known-issues--troubleshooting)
-2. Review integration tests for usage examples
-3. Consult Deepgram SDK documentation for API changes
-4. Check story files: `INFRA-027` (observability), `INFRA-028` (orchestration)
+Add adapters for Google Cloud Speech and Azure Cognitive Services to `backend.speech.providers`.

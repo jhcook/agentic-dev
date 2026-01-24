@@ -48,41 +48,89 @@ def check_rate_limit(session_id: str) -> bool:
     return True
 
 
+import asyncio
+
 @router.websocket("/ws/voice")
 async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket endpoint for handling voice interactions.
-    Includes rate limiting to prevent abuse.
+    WebSocket endpoint for handling voice interactions with Barge-in support.
+    
+    Architecture:
+    - Sender Task: consumes audio_queue -> sends to client
+    - Receiver Loop: reads input -> VAD check -> offloads processing
     """
     await websocket.accept()
     session_id = str(uuid4())
     logger.info(f"Voice session started: {session_id}", extra={"correlation_id": session_id})
     
     orchestrator = VoiceOrchestrator(session_id)
+    audio_queue = asyncio.Queue()
+    
+    async def sender_task():
+        """Background task to stream audio chunks to the client."""
+        try:
+            while True:
+                chunk = await audio_queue.get()
+                if chunk is None:  # Sentinel
+                    break
+                await websocket.send_bytes(chunk)
+                audio_queue.task_done()
+        except Exception as e:
+            logger.error(f"Sender task error: {e}")
+
+    async def process_input_background(data: bytes):
+        """Worker to process audio and push response to queue."""
+        try:
+            async for audio_chunk in orchestrator.process_audio(data):
+                await audio_queue.put(audio_chunk)
+        except Exception as e:
+            logger.error(f"Processing error: {e}")
+
+    sender_future = asyncio.create_task(sender_task())
     
     try:
         while True:
-            # Expecting raw audio bytes
+            # 1. Receive (Wait for input)
             data = await websocket.receive_bytes()
             
             # Rate limit check
             if not check_rate_limit(session_id):
-                logger.warning(
-                    f"Rate limit exceeded for session {session_id}",
-                    extra={"correlation_id": session_id}
-                )
-                # Send error message as JSON
-                await websocket.send_json({
-                    "error": "Rate limit exceeded. Please wait a moment."
-                })
+                await websocket.send_json({"error": "Rate limit exceeded."})
                 continue
             
-            # Application Logic (Streaming)
-            async for audio_chunk in orchestrator.process_audio(data):
-                await websocket.send_bytes(audio_chunk)
-                
+            # 2. VAD & Interrupt Check
+            # We check VAD synchronously on the chunk before processing
+            if orchestrator.process_vad(data):
+                # If valid speech detected while we are speaking...
+                if orchestrator.is_speaking.is_set():
+                    logger.info(f"Interrupt detected in session {session_id}")
+                    
+                    # A. Stop Generation
+                    orchestrator.interrupt()
+                    
+                    # B. Clear Output Queue (Backend buffer)
+                    while not audio_queue.empty():
+                        try:
+                            audio_queue.get_nowait()
+                            audio_queue.task_done()
+                        except asyncio.QueueEmpty:
+                            break
+                    
+                    # C. Clear Client Buffer (Frontend buffer)
+                    # We send a JSON control frame. Client must distinguish bytes vs text.
+                    # Or use a special byte sequence? JSON is safer if client expects it.
+                    await websocket.send_json({"type": "clear_buffer"})
+            
+            # 3. Offload Processing
+            # We don't await here, to keep reading input (VAD)
+            asyncio.create_task(process_input_background(data))
+            
     except WebSocketDisconnect:
         logger.info(f"Voice session ended: {session_id}", extra={"correlation_id": session_id})
     except Exception as e:
         logger.error(f"Voice session error: {e}", extra={"correlation_id": session_id})
-        await websocket.close(code=1011)  # Internal Error
+        await websocket.close(code=1011)
+    finally:
+        # Cleanup
+        await audio_queue.put(None) # Stop sender
+        await sender_future

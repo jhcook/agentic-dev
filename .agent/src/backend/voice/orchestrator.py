@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import asyncio
 import logging
 import time
 from typing import Optional, AsyncGenerator
@@ -155,6 +155,17 @@ class VoiceOrchestrator:
         )
         self.checkpointer = MemorySaver()  # Use Redis/PostgreSQL in production
         
+        # State
+        self.is_speaking = asyncio.Event()
+        
+        # VAD
+        try:
+            from backend.voice.vad import VADProcessor
+            self.vad = VADProcessor()
+        except Exception as e:
+            logger.warning(f"VAD initialization failed: {e}. Interrupts disabled.")
+            self.vad = None
+        
         # Get model name for metrics
         voice_config = _get_voice_config()
         self.model_name = config.get_value(voice_config, "llm.model") or "gpt-4o-mini"
@@ -211,18 +222,61 @@ class VoiceOrchestrator:
                 extra={"session_id": self.session_id, "length": len(text_input)}
             )
             
+            # 1. Listen (STT)
+            # Parallel: VAD Check
+            # Note: In a real async loop, VAD, STT, and TTS happen concurrently.
+            # Here we assume checks happen per chunk before full STT accumulation.
+            
             # 2. Pipeline: Agent -> Buffer -> TTS
             from backend.voice.buffer import SentenceBuffer
+            # Initialize buffer for this turn
             buffer = SentenceBuffer()
             
-            text_stream = self._invoke_agent(text_input)
-            sentence_stream = buffer.process(text_stream)
+            # Start generation logic
+            self.is_speaking.set()
             
-            async for sentence in sentence_stream:
-                logger.debug(f"Synthesizing sentence: {sentence}")
-                # 3. Speak (TTS)
-                audio_output = await self.tts.speak(sentence)
-                yield audio_output
+            try:
+                text_stream = self._invoke_agent(text_input)
+                sentence_stream = buffer.process(text_stream)
+                
+                async for sentence in sentence_stream:
+                    # CHECK INTERRUPT
+                    if not self.is_speaking.is_set():
+                        logger.info("Generation interrupted.")
+                        break
+                        
+                    logger.debug(f"Synthesizing sentence: {sentence}")
+                    
+                    # 3. Speak (TTS)
+                    audio_output = await self.tts.speak(sentence)
+                    yield audio_output
+                    
+                    # Force a tiny sleep to allow event loop to cycle and catch VAD interrupts
+                    # from the Router if we were single-threaded (which we are mostly)
+                    await asyncio.sleep(0.01)
+                    
+            finally:
+                self.is_speaking.clear()
+
+    def process_vad(self, audio_chunk: bytes) -> bool:
+        """
+        Check if audio chunk contains speech.
+        """
+        try:
+            return self.vad.process(audio_chunk)
+        except Exception:
+            return False
+
+    def interrupt(self):
+        """
+        Signal to stop speaking immediately.
+        """
+        if self.is_speaking.is_set():
+            logger.warning("Interrupt signal received! Stopping generation.")
+            self.is_speaking.clear()
+            # We also need to reset VAD state to avoid noise
+            if self.vad:
+                self.vad.reset()
     
     async def _invoke_agent(self, user_input: str) -> AsyncGenerator[str, None]:
         """
