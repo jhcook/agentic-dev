@@ -166,6 +166,35 @@ agent list-models gemini --format json
 
 ---
 
+## `agent admin` — Agent Management Console
+
+Manage the visual dashboard for the agent system, launching both the backend API and frontend UI.
+
+### Usage
+
+```bash
+# Start in background (Default)
+agent admin start
+
+# Start and follow logs
+agent admin start --follow
+
+# Check status
+agent admin status
+
+# Stop services
+agent admin stop
+```
+
+### Architecture
+
+- **Backend**: FastAPI running on `localhost:8000`.
+- **Frontend**: Vite/React running on `localhost:8080`.
+- **Proxy**: The frontend proxies `/api` requests to the backend.
+- **Source**: Frontend code is located in `.agent/web/`.
+
+---
+
 ## `agent run-ui-tests` — Mobile UI Testing
 
 Execute UI journey tests using [Maestro](https://maestro.mobile.dev/).

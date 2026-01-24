@@ -163,34 +163,78 @@ def run_shellcheck(files: List[str], fix: bool = False) -> bool:
         return False
 
 
+def find_eslint_root(file_path: Path) -> Path:
+    """Find the directory containing eslint config for a file."""
+    current = file_path.parent
+    while current != current.parent:
+        if (
+            (current / "eslint.config.js").exists()
+            or (current / "eslint.config.mjs").exists()
+            or (current / "eslint.config.cjs").exists()
+            or (current / ".eslintrc.js").exists()
+            or (current / ".eslintrc.json").exists()
+        ):
+            return current
+        if (current / "package.json").exists():
+             # package.json might contain eslintConfig
+             # Check if we are at the top of a sub-project (like web/)
+             # If we hit .git without finding config, we might stop there.
+             pass
+        
+        if (current / ".git").exists():
+            return current
+            
+        current = current.parent
+    return Path.cwd()
+
+
 def run_eslint(files: List[str], fix: bool = False) -> bool:
     if not files:
         return True
 
-    console.print(f"[bold blue]Running eslint on {len(files)} files...[/bold blue]")
-
-    cmd = ["npx", "--no-install", "eslint"]
-    if fix:
-        cmd.append("--fix")
-    cmd.extend(files)
-
-    try:
-        subprocess.run(cmd, check=True)
-        return True
-    except subprocess.CalledProcessError:
+    # Group files by project root
+    groups = {}
+    for f in files:
+        p = Path(f).resolve()
+        root = find_eslint_root(p)
+        if root not in groups:
+            groups[root] = []
+        
         try:
-            fallback_cmd = ["eslint"]
-            if fix:
-                fallback_cmd.append("--fix")
-            fallback_cmd.extend(files)
-            subprocess.run(fallback_cmd, check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            console.print(
-                "[bold red]ESLint failed or not found.[/bold red] Ensure "
-                "dependencies are installed (`npm install`)."
-            )
-            return False
+            rel = p.relative_to(root)
+            groups[root].append(str(rel))
+        except ValueError:
+            groups[root].append(str(p))
+
+    success = True
+    
+    for root, root_files in groups.items():
+        console.print(f"[bold blue]Running eslint in {root} on {len(root_files)} files...[/bold blue]")
+
+        cmd = ["npx", "--no-install", "eslint"]
+        if fix:
+            cmd.append("--fix")
+        cmd.extend(root_files)
+
+        try:
+            subprocess.run(cmd, cwd=root, check=True)
+        except subprocess.CalledProcessError:
+            try:
+                # Fallback to global/local binary if npx fails weirdly?
+                # Or maybe npx failed because valid eslint not found in tree.
+                fallback_cmd = ["eslint"]
+                if fix:
+                    fallback_cmd.append("--fix")
+                fallback_cmd.extend(root_files)
+                subprocess.run(fallback_cmd, cwd=root, check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                console.print(
+                    f"[bold red]ESLint failed in {root}.[/bold red] Ensure "
+                    "dependencies are installed (`npm install`)."
+                )
+                success = False
+    
+    return success
 
 
 def lint(

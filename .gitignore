@@ -41,8 +41,16 @@ Thumbs.db
 # Agent
 .agent/uv.lock
 .agent/backups/
+.agent/models/
 
 # Secrets
 .agent/secrets/
 .agent/cache/agent.db
+
+# Node
+node_modules/
+npm-debug.log
+
+# Agent Runtime
+.agent/run/
 
