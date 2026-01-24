@@ -104,7 +104,7 @@ agent secret export supabase > .env.local
 - **Encryption**: AES-256-GCM with PBKDF2 key derivation (100k iterations)
 - **File Permissions**: 600 (owner read/write only)
 - **Gitignore**: `.agent/secrets/` is automatically gitignored
-- **Backward Compatibility**: Falls back to environment variables if secrets not configured
+- **Required for AI Commands**: If secrets are initialized, you **must** run `agent secret login` before using AI commands. The agent will not fall back to environment variables if secrets are locked.
 
 See [ADR-006](../adrs/ADR-006-encrypted-secret-management.md) for architecture details.
 

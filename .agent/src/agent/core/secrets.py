@@ -490,13 +490,35 @@ def get_secret_manager() -> SecretManager:
     return _secret_manager
 
 
-def get_secret(key: str, service: Optional[str] = None) -> Optional[str]:
+def get_secret(key: str, service: Optional[str] = None, strict: bool = False) -> Optional[str]:
     """
     Convenience function to get a secret.
     
-    Tries secret manager first, then falls back to environment variables.
+    Args:
+        key: Secret key name
+        service: Service name (e.g., 'gemini', 'openai')
+        strict: If True, raises error when secrets are locked. 
+                If False (default), allows fallback to env vars during initialization.
+    
+    Tries secret manager first. If secrets are initialized but locked:
+    - strict=True: Raises error (used during AI operations)
+    - strict=False: Falls back to env vars (used during module initialization)
     """
     manager = get_secret_manager()
+    
+    # If secrets are initialized but locked, handle based on strict mode
+    if service and manager.is_initialized() and not manager.is_unlocked():
+        if strict:
+            from rich.console import Console
+            console = Console()
+            console.print(
+                "[bold red]❌ Secret manager is locked.[/bold red]\n"
+                "[yellow]Run 'agent secret login' to unlock secrets.[/yellow]"
+            )
+            raise SecretManagerError(
+                f"Secret manager is locked. Run 'agent secret login' to access {service} secrets."
+            )
+        # In non-strict mode, fall through to env var fallback
     
     if service and manager.is_initialized() and manager.is_unlocked():
         value = manager.get_secret(service, key)
@@ -516,3 +538,5 @@ def get_secret(key: str, service: Optional[str] = None) -> Optional[str]:
 
     # Direct fallback (legacy or unmapped)
     return os.getenv(key)
+
+

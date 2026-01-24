@@ -86,7 +86,11 @@ class AIService:
     def reload(self) -> None:
         """Reloads providers from secrets/env."""
         # 1. Check Gemini
-        gemini_key = get_secret("api_key", service="gemini") or os.getenv("GEMINI_API_KEY")
+        gemini_key = (
+            get_secret("api_key", service="gemini") 
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_GEMINI_API_KEY")
+        )
         if gemini_key:
             try:
                 from google import genai
