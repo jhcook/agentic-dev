@@ -40,19 +40,22 @@ The backend voice integration provides a flexible, provider-agnostic abstraction
 
 ### Component Flow
 
+### Component Flow
+
 ```mermaid
-graph TB
-    Client[WebSocket Client] -->|Audio Chunks| Router[/ws/voice Router]
-    Router --> Orchestrator[VoiceOrchestrator]
-    Orchestrator --> Factory[get_voice_providers]
-    Factory --> STT[DeepgramSTT]
-    Factory --> TTS[DeepgramTTS]
-    Orchestrator -->|Audio Data| STT
-    STT -->|Transcript| Agent[Placeholder Agent]
-    Agent -->|Response Text| TTS
-    TTS -->|Audio Bytes| Orchestrator
-    Orchestrator -->|Audio Response| Router
-    Router -->|Stream| Client
+graph TD
+    User([User Voice]) -->|WebSocket| Router[FastAPI Router]
+    Router -->|Bytes| Orchestrator[VoiceOrchestrator]
+    Orchestrator -->|Sanitize| Security[Input Sanitization]
+    Security -->|Text| Agent[LangGraph Agent]
+    subgraph Agent Flow
+        LLM[LLM Provider]
+        Mem[MemorySaver]
+        Agent <-->|Configurable| LLM
+        Agent <-->|Checkpoints| Mem
+    end
+    Agent -->|Stream| Orchestrator
+    Orchestrator -->|Audio| Router
 ```
 
 ---
