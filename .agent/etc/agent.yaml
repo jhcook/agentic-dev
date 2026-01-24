@@ -1,0 +1,6 @@
+agent:
+  provider: gemini
+  models:
+    gemini: models/gemini-2.5-pro
+  github:
+    tool: mcp

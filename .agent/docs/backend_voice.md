@@ -473,6 +473,24 @@ export DEEPGRAM_API_KEY=YOUR_KEY
 
 ### Running the Server
 
+### Local Provider (Offline)
+
+To use the local Kokoro TTS (and eventually STT):
+
+1. **Download Models**:
+
+   ```bash
+   .venv/bin/python -m backend.scripts.download_models
+   ```
+
+2. **Configure Provider**:
+
+   ```bash
+   export VOICE_PROVIDER=local
+   ```
+
+   *Note: Currently uses local TTS + Deepgram STT (requires API key).*
+
 **Development**:
 
 ```bash
