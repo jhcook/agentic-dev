@@ -105,6 +105,20 @@ whisper:
   model_size: tiny
 ```
 
+### STT Provider Modes (Deepgram)
+
+The system supports two distinct modes for Deepgram STT:
+
+1. **`deepgram` (Default)**: Uses **HTTPS REST** (batch file API).
+   - **How**: The backend accumulates ~1.5s of audio, adds a WAV header, and sends it as a single request.
+   - **Pros**: Robust to network jitter, lower connection overhead, highly reliable.
+   - **Cons**: Slightly higher latency (buffer accumulation time).
+
+2. **`deepgram_streaming`**: Uses **WebSockets** (real-time stream).
+   - **How**: Maintains a persistent WebSocket to Deepgram. Audio is pushed in small chunks as it arrives.
+   - **Pros**: Lowest possible latency, real-time feedback.
+   - **Cons**: Sensitive to network interruptions, higher resource usage for idle connections.
+
 ---
 
 ## Robustness & Error Handling
