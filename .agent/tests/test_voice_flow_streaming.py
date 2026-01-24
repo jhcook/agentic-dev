@@ -33,7 +33,8 @@ async def test_process_audio_streaming(mock_providers):
     
     # Run pipeline
     audio_chunks = []
-    async for chunk in orchestrator.process_audio(b"dummy audio"):
+    # Send enough audio to trigger the accumulation buffer (1.5s = 48000 bytes)
+    async for chunk in orchestrator.process_audio(b"\x00" * 48000):
         audio_chunks.append(chunk)
         
     # Verification

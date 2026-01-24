@@ -7,6 +7,7 @@ from prometheus_client import Counter, Histogram
 from opentelemetry import trace
 
 from backend.speech.interfaces import STTProvider, TTSProvider
+from backend.speech.audio_utils import pcm_to_wav
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,14 @@ class DeepgramSTT(STTProvider):
                 
                 logger.info("Sending STT request to Deepgram.", extra={"provider": self.provider_name, "correlation_id": correlation_id})
                 
+                # Convert raw PCM to WAV format (Deepgram expects audio file format)
+                wav_data = pcm_to_wav(audio_data, sample_rate=16000, channels=1, sample_width=2)
+                
                 # Deepgram SDK v5 transcribe_file is synchronous
                 # Run it in a thread pool to avoid blocking the event loop
                 response = await asyncio.to_thread(
                     self.client.listen.v1.media.transcribe_file,
-                    request=audio_data,
+                    request=wav_data,
                     model="nova-2",
                     smart_format=True
                 )

@@ -1,3 +1,6 @@
+# Allow numpy to load pickled data (required for Kokoro voices.json)
+import os
+os.environ['NPY_ALLOW_PICKLE'] = '1'
 
 import logging
 import asyncio

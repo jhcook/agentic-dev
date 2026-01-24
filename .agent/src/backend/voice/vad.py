@@ -32,13 +32,14 @@ class VADProcessor:
 
         if not os.path.exists(self.model_path):
             logger.info(f"Downloading Silero VAD model to {self.model_path}...")
-            url = "https://github.com/snakers4/silero-vad/raw/master/files/silero_vad.onnx"
+            # Updated URL - the model is in the releases
+            url = "https://github.com/snakers4/silero-vad/releases/download/v5.0/silero_vad.onnx"
             try:
                 urllib.request.urlretrieve(url, self.model_path)
                 logger.info("Download complete.")
             except Exception as e:
-                logger.error(f"Failed to download VAD model: {e}")
-                raise
+                logger.warning(f"Failed to download VAD model: {e}. VAD will be disabled.")
+                return  # Don't raise, just disable VAD
 
         try:
             # Suppress excessive ONNX warnings

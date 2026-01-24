@@ -4,66 +4,106 @@ from functools import lru_cache
 from typing import Tuple
 
 from .interfaces import STTProvider, TTSProvider
-from .providers.deepgram import DeepgramSTT, DeepgramTTS, ConfigurationError
+from agent.core.config import config
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_PROVIDERS = {"deepgram", "local"}
+SUPPORTED_PROVIDERS = {"deepgram", "deepgram_streaming", "whisper", "local"}
+
+def _get_voice_config() -> dict:
+    """Load voice configuration from voice.yaml."""
+    try:
+        config_path = config.etc_dir / "voice.yaml"
+        if config_path.exists():
+            return config.load_yaml(config_path)
+    except Exception as e:
+        logger.warning(f"Failed to load voice.yaml: {e}")
+    return {}
 
 @lru_cache(maxsize=1)
 def get_voice_providers() -> Tuple[STTProvider, TTSProvider]:
     """
     Factory function to instantiate and return the configured voice providers.
-    Reads configuration from environment variables.
+    Reads configuration from .agent/etc/voice.yaml.
     
-    Raises:
-        ConfigurationError: If the provider is unsupported or misconfigured.
-        
+    Configuration priority:
+        1. Environment variables (VOICE_STT_PROVIDER, VOICE_TTS_PROVIDER)
+        2. voice.yaml config file
+        3. Defaults (deepgram for both)
+    
     Returns:
         A tuple containing the configured (STTProvider, TTSProvider).
     """
-    provider_name = os.getenv("VOICE_PROVIDER", "deepgram").lower()
+    from .interfaces import DisabledSTT, DisabledTTS
     
-    if provider_name not in SUPPORTED_PROVIDERS:
-        raise ConfigurationError(f"Unsupported voice provider: {provider_name}")
-
-    if provider_name == "deepgram":
-        logger.info("Initializing Deepgram voice providers.")
-        # Use SecretManager to retrieve key (try keychain -> secret store -> env)
-        from agent.core.secrets import get_secret
-        api_key = get_secret("api_key", "deepgram")
-        if not api_key:
-            logger.error("DEEPGRAM_API_KEY environment variable not set.")
-            raise ConfigurationError("DEEPGRAM_API_KEY is required for the 'deepgram' provider.")
-        
-        stt_provider = DeepgramSTT(api_key)
-        tts_provider = DeepgramTTS(api_key)
-        return stt_provider, tts_provider
+    voice_config = _get_voice_config()
+    stt_provider = DisabledSTT()
+    tts_provider = DisabledTTS()
     
-    elif provider_name == "local":
-        logger.info("Initializing Local voice providers (Kokoro TTS + Deepgram STT fallback).")
-        from .providers.local import LocalTTS
-        
-        # Fallback STT to Deepgram for now (INFRA-030 is TTS focused)
-        from agent.core.secrets import get_secret
-        api_key = get_secret("api_key", "deepgram")
-        if not api_key:
-             logger.warning("Deepgram API key missing. STT will fail if used.")
-             # We can likely return a dummy STT or raise error if STT is strictly required
-             # For now, let's assume user has key or doesn't use STT in this specific test
-        
-        # Initialize LocalTTS
-        tts_provider = LocalTTS()
-        
-        # Initialize DeepgramSTT (or Dummy if we wanted strictly offline, but we need an implementation)
-        stt_provider = DeepgramSTT(api_key) if api_key else None 
-        # Wait, returning None violates type hint. 
-        # Let's trust they have Deepgram key or modify type hint.
-        # Ideally we'd have LocalSTT (Faster-Whisper) here soon.
-        
-        if stt_provider is None:
-             raise ConfigurationError("Local STT not yet implemented and Deepgram key missing.")
+    # Get STT provider (env var > config > default)
+    stt_provider_name = os.getenv(
+        "VOICE_STT_PROVIDER",
+        config.get_value(voice_config, "stt.provider") or "deepgram"
+    ).lower()
+    
+    # Get TTS provider (env var > config > default)
+    tts_provider_name = os.getenv(
+        "VOICE_TTS_PROVIDER",
+        config.get_value(voice_config, "tts.provider") or "deepgram"
+    ).lower()
 
-        return stt_provider, tts_provider
+    # Initialize STT Provider
+    try:
+        if stt_provider_name == "deepgram":
+            logger.info("Initializing Deepgram STT (file-based).")
+            from .providers.deepgram import DeepgramSTT
+            from agent.core.secrets import get_secret
+            api_key = get_secret("api_key", service="deepgram")
+            if not api_key:
+                logger.warning("DEEPGRAM_API_KEY is not set. STT will be disabled.")
+            else:
+                stt_provider = DeepgramSTT(api_key)
+        
+        elif stt_provider_name == "deepgram_streaming":
+            logger.info("Initializing Deepgram STT (streaming WebSocket).")
+            from .providers.deepgram_streaming import DeepgramStreamingSTT
+            from agent.core.secrets import get_secret
+            api_key = get_secret("api_key", service="deepgram")
+            if not api_key:
+                logger.warning("DEEPGRAM_API_KEY is not set. Streaming STT will be disabled.")
+            else:
+                stt_provider = DeepgramStreamingSTT(api_key)
+        
+        elif stt_provider_name in ["whisper", "local"]:
+            logger.info("Initializing faster-whisper STT (offline).")
+            from .providers.whisper import FasterWhisperSTT
+            model_size = config.get_value(voice_config, "whisper.model_size") or "base"
+            device = config.get_value(voice_config, "whisper.device") or "auto"
+            stt_provider = FasterWhisperSTT(model_size=model_size, device=device)
+        else:
+             logger.warning(f"Unsupported STT provider: {stt_provider_name}")
+    except (ImportError, Exception) as e:
+        logger.error(f"Failed to initialize STT provider '{stt_provider_name}': {e}")
 
-    raise NotImplementedError(f"Provider '{provider_name}' is not implemented.")
+    # Initialize TTS Provider
+    try:
+        if tts_provider_name in ["deepgram", "deepgram_streaming"]:
+            logger.info("Initializing Deepgram TTS.")
+            from .providers.deepgram import DeepgramTTS
+            from agent.core.secrets import get_secret
+            api_key = get_secret("api_key", service="deepgram")
+            if not api_key:
+                logger.warning("DEEPGRAM_API_KEY is not set. TTS will be disabled.")
+            else:
+                tts_provider = DeepgramTTS(api_key)
+        
+        elif tts_provider_name in ["local", "whisper"]:
+            logger.info("Initializing Local TTS (Kokoro).")
+            from .providers.local import LocalTTS
+            tts_provider = LocalTTS()
+        else:
+             logger.warning(f"Unsupported TTS provider: {tts_provider_name}")
+    except (ImportError, Exception) as e:
+        logger.error(f"Failed to initialize TTS provider '{tts_provider_name}': {e}")
+
+    return stt_provider, tts_provider
