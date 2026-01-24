@@ -25,6 +25,13 @@ dependencies = [
     "modelcontextprotocol>=0.1.0",
     "pytest>=8.0.0",
     "python-dotenv>=1.0.0",
+    # LangGraph & LangChain for conversational agent
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    # LLM providers (install based on which you use)
+    "langchain-openai>=0.2.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-google-genai>=0.2.0",
 ]
 requires-python = ">=3.10"
 
