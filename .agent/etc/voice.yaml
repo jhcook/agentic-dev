@@ -1,3 +1,12 @@
 llm:
   provider: gemini
-  model: gpt-4o-mini
+  model: gemini-2.0-flash-exp
+stt:
+  provider: deepgram
+  model: nova-2
+tts:
+  provider: deepgram
+  model: aura-asteria-en
+whisper:
+  model_size: tiny
+  device: auto

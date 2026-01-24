@@ -94,13 +94,48 @@ The system uses `silero-vad` (ONNX) via a `VADProcessor` wrapper.
 
 ### Tuning
 
-Configure thresholds in `.agent/etc/voice.yaml` (Planned):
+Configure thresholds in `.agent/etc/voice.yaml`:
 
 ```yaml
-vad:
-  threshold: 0.5
-  cooldown: 1.5 # Seconds
+stt:
+  provider: deepgram
+tts:
+  provider: deepgram
+whisper:
+  model_size: tiny
 ```
+
+### STT Provider Modes (Deepgram)
+
+The system supports two distinct modes for Deepgram STT:
+
+1. **`deepgram` (Default)**: Uses **HTTPS REST** (batch file API).
+   - **How**: The backend accumulates ~1.5s of audio, adds a WAV header, and sends it as a single request.
+   - **Pros**: Robust to network jitter, lower connection overhead, highly reliable.
+   - **Cons**: Slightly higher latency (buffer accumulation time).
+
+2. **`deepgram_streaming`**: Uses **WebSockets** (real-time stream).
+   - **How**: Maintains a persistent WebSocket to Deepgram. Audio is pushed in small chunks as it arrives.
+   - **Pros**: Lowest possible latency, real-time feedback.
+   - **Cons**: Sensitive to network interruptions, higher resource usage for idle connections.
+
+---
+
+## Robustness & Error Handling
+
+To ensure the agent remains usable even if voice services are misconfigured or unavailable, the system implements several safety layers:
+
+### 1. Graceful Fallbacks (`DisabledSTT/TTS`)
+
+If a provider fails to initialize (e.g., missing API key, library not installed), the `get_voice_providers` factory returns a `Disabled` instance. These instances fulfill the protocol but return empty results, preventing backend crashes.
+
+### 2. Isolated Dependencies
+
+Imports for heavy voice libraries (`deepgram-sdk`, `faster-whisper`, `kokoro-onnx`) are performed **locally** within the factory initialization blocks. This allows the backend to start even if these optional dependencies are missing from the environment.
+
+### 3. VAD Resilience
+
+VAD initialization is non-fatal. If the Silero model cannot be downloaded (404s or network timeout), the system warns the user and continues in standard "push-to-talk" style mode without interrupts.
 
 ---
 

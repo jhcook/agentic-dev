@@ -20,10 +20,19 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 AGENT_DIR="$ROOT_DIR/.agent"
 
+# Determine Python interpreter (prefer venv if it exists)
+if [ -f "$ROOT_DIR/.venv/bin/python" ]; then
+    PYTHON="$ROOT_DIR/.venv/bin/python"
+elif [ -f "$ROOT_DIR/venv/bin/python" ]; then
+    PYTHON="$ROOT_DIR/venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
 # Python Shim
 # Checks if dependencies exist.
 
-if python3 -c "import typer; import rich; import pydantic" &>/dev/null; then
+if $PYTHON -c "import typer; import rich; import pydantic" &>/dev/null; then
     export PYTHONPATH="$AGENT_DIR/src"
     
     # Translate 'help' to '--help' for compatibility
@@ -37,9 +46,9 @@ if python3 -c "import typer; import rich; import pydantic" &>/dev/null; then
                 new_args+=("$arg")
             fi
         done
-        exec python3 -m agent.main "${new_args[@]}"
+        exec $PYTHON -m agent.main "${new_args[@]}"
     else
-        exec python3 -m agent.main --help
+        exec $PYTHON -m agent.main --help
     fi
 else
     echo "❌ Command requires Python dependencies that are not installed." >&2

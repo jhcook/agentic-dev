@@ -1,3 +1,17 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 import os
 import logging
@@ -32,13 +46,14 @@ class VADProcessor:
 
         if not os.path.exists(self.model_path):
             logger.info(f"Downloading Silero VAD model to {self.model_path}...")
-            url = "https://github.com/snakers4/silero-vad/raw/master/files/silero_vad.onnx"
+            # Updated URL - the model is in the releases
+            url = "https://github.com/snakers4/silero-vad/releases/download/v5.0/silero_vad.onnx"
             try:
                 urllib.request.urlretrieve(url, self.model_path)
                 logger.info("Download complete.")
             except Exception as e:
-                logger.error(f"Failed to download VAD model: {e}")
-                raise
+                logger.warning(f"Failed to download VAD model: {e}. VAD will be disabled.")
+                return  # Don't raise, just disable VAD
 
         try:
             # Suppress excessive ONNX warnings

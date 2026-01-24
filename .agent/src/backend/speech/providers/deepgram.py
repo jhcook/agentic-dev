@@ -1,3 +1,17 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import asyncio
 import logging
 import time
@@ -7,6 +21,7 @@ from prometheus_client import Counter, Histogram
 from opentelemetry import trace
 
 from backend.speech.interfaces import STTProvider, TTSProvider
+from backend.speech.audio_utils import pcm_to_wav
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +67,14 @@ class DeepgramSTT(STTProvider):
                 
                 logger.info("Sending STT request to Deepgram.", extra={"provider": self.provider_name, "correlation_id": correlation_id})
                 
+                # Convert raw PCM to WAV format (Deepgram expects audio file format)
+                wav_data = pcm_to_wav(audio_data, sample_rate=16000, channels=1, sample_width=2)
+                
                 # Deepgram SDK v5 transcribe_file is synchronous
                 # Run it in a thread pool to avoid blocking the event loop
                 response = await asyncio.to_thread(
                     self.client.listen.v1.media.transcribe_file,
-                    request=audio_data,
+                    request=wav_data,
                     model="nova-2",
                     smart_format=True
                 )

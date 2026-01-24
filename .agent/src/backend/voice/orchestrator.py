@@ -93,7 +93,7 @@ def _create_llm():
     
     if provider == "openai":
         from langchain_openai import ChatOpenAI
-        api_key = get_secret("openai", "api_key")
+        api_key = get_secret("api_key", service="openai")
         model = model_name or "gpt-4o-mini"
         return ChatOpenAI(
             api_key=api_key,
@@ -104,7 +104,7 @@ def _create_llm():
     
     elif provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
-        api_key = get_secret("anthropic", "api_key")
+        api_key = get_secret("api_key", service="anthropic")
         model = model_name or "claude-3-5-sonnet-20241022"
         return ChatAnthropic(
             api_key=api_key,
@@ -115,7 +115,7 @@ def _create_llm():
     
     elif provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
-        api_key = get_secret("gemini", "api_key")
+        api_key = get_secret("api_key", service="gemini")
         model = model_name or "gemini-2.0-flash-exp"
         return ChatGoogleGenerativeAI(
             google_api_key=api_key,
@@ -157,6 +157,15 @@ class VoiceOrchestrator:
         
         # State
         self.is_speaking = asyncio.Event()
+        
+        # Audio accumulation buffer for STT (file-based API needs larger chunks)
+        self.audio_buffer = bytearray()
+        self.buffer_duration_ms = 1500  # 1.5 seconds
+        self.sample_rate = 16000
+        self.bytes_per_sample = 2  # Int16
+        self.target_buffer_size = int(
+            (self.buffer_duration_ms / 1000) * self.sample_rate * self.bytes_per_sample
+        )  # ~48KB for 1.5s at 16kHz
         
         # VAD
         try:
@@ -201,35 +210,41 @@ class VoiceOrchestrator:
         
     async def process_audio(self, audio_chunk: bytes) -> AsyncGenerator[bytes, None]:
         """
-        Process audio: STT → Agent → Buffer → TTS
+        Process audio: Accumulate → STT → Agent → Buffer → TTS
         
         Args:
-            audio_chunk: Raw audio bytes from microphone
+            audio_chunk: Raw audio bytes from microphone (Int16 PCM, 16kHz)
             
         Yields:
             Synthesized audio response chunks
         """
+        # Accumulate audio chunks
+        self.audio_buffer.extend(audio_chunk)
+        
+        # Only process when we have enough audio (~1.5 seconds)
+        if len(self.audio_buffer) < self.target_buffer_size:
+            return
+        
+        # Extract accumulated audio and reset buffer
+        accumulated_audio = bytes(self.audio_buffer)
+        self.audio_buffer.clear()
+        
         with tracer.start_as_current_span("voice.agent.process") as span:
             span.set_attribute("session_id", self.session_id)
+            span.set_attribute("audio_size_bytes", len(accumulated_audio))
             
             # 1. Listen (STT)
-            text_input = await self.stt.listen(audio_chunk)
+            text_input = await self.stt.listen(accumulated_audio)
             if not text_input.strip():
                 return
             
             logger.info(
                 "User input received",
-                extra={"session_id": self.session_id, "length": len(text_input)}
+                extra={"session_id": self.session_id, "length": len(text_input), "text": text_input}
             )
-            
-            # 1. Listen (STT)
-            # Parallel: VAD Check
-            # Note: In a real async loop, VAD, STT, and TTS happen concurrently.
-            # Here we assume checks happen per chunk before full STT accumulation.
             
             # 2. Pipeline: Agent -> Buffer -> TTS
             from backend.voice.buffer import SentenceBuffer
-            # Initialize buffer for this turn
             buffer = SentenceBuffer()
             
             # Start generation logic
@@ -251,8 +266,6 @@ class VoiceOrchestrator:
                     audio_output = await self.tts.speak(sentence)
                     yield audio_output
                     
-                    # Force a tiny sleep to allow event loop to cycle and catch VAD interrupts
-                    # from the Router if we were single-threaded (which we are mostly)
                     await asyncio.sleep(0.01)
                     
             finally:
