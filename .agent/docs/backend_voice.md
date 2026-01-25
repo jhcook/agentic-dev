@@ -11,7 +11,15 @@ The backend voice integration provides a real-time, bidirectional voice pipeline
 - **Natural Prosody**: uses `SentenceBuffer` to group tokens into speech-friendly chunks.
 - **Provider Agnostic**: Interfaces for Swappable STT/TTS (Deepgram, Local Kokoro, etc.).
 
----
+- **Provider Agnostic**: Interfaces for Swappable STT/TTS (Deepgram, Local Kokoro, etc.).
+
+### Installation
+
+The voice module is optional. Install with:
+
+```bash
+pip install -e ".agent/[voice]"
+```
 
 ## Architecture
 

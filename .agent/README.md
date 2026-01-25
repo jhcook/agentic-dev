@@ -197,8 +197,14 @@ agent config set settings.default_tier advanced
 If you are contributing to the Agent framework itself:
 
 ```bash
-# Install in editable mode
+# Install Core (Governance checks only)
 pip install -e .agent/
+
+# Install with Voice Capabilities (Conversational Agent, VAD, STT/TTS)
+pip install -e ".agent/[voice]"
+
+# Install with Admin Console Capabilities
+pip install -e ".agent/[admin]"
 
 # Install dev dependencies
 brew install shellcheck

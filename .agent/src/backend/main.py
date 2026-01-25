@@ -13,15 +13,32 @@
 # limitations under the License.
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from backend.routers import voice, admin, governance
+from backend.routers import governance
 from backend.admin.logger import log_bus
+import logging
 import json
 import time
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Agentic Voice Backend")
 
-app.include_router(voice.router)
-app.include_router(admin.router)
+# Optional: Voice Capabilities
+try:
+    from backend.routers import voice
+    app.include_router(voice.router)
+    logger.info("Voice module loaded")
+except ImportError:
+    logger.warning("Voice dependencies missing. Voice capabilities disabled.")
+
+# Optional: Admin Capabilities
+try:
+    from backend.routers import admin
+    app.include_router(admin.router)
+    logger.info("Admin module loaded")
+except ImportError:
+    logger.warning("Admin dependencies missing. Admin capabilities disabled.")
+
 app.include_router(governance.router)
 
 @app.websocket("/ws/admin/logs")
