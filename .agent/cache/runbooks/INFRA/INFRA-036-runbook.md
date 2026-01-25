@@ -1,4 +1,4 @@
-## STORY-ID: INFRA-036: Voice Agent Tool Integration
+# STORY-ID: INFRA-036: Voice Agent Tool Integration
 
 ## State
 

@@ -15,7 +15,7 @@
 import { Mic, Settings, Activity, FileText } from 'lucide-react';
 import { useViewStore, type View } from '../store/viewStore';
 
-const navItems: { id: View; label: string; icon: any }[] = [
+const navItems: { id: View; label: string; icon: React.ElementType }[] = [
     { id: 'voice', label: 'Voice Client', icon: Mic },
     { id: 'config', label: 'Configuration', icon: Settings },
     { id: 'prompts', label: 'Persona Studio', icon: FileText },

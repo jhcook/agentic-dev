@@ -61,7 +61,7 @@ export function VoiceClient() {
                         const data = await res.json();
                         if (data.history && Array.isArray(data.history)) {
                             // Map logic matches: `${role === 'user' ? '👤' : '🤖'} ${text}`
-                            const lines = data.history.map((msg: any) =>
+                            const lines = data.history.map((msg: { role: string, text: string }) =>
                                 `${msg.role === 'user' ? '👤' : '🤖'} ${msg.text}`
                             );
                             setTranscript(lines);
@@ -92,7 +92,7 @@ export function VoiceClient() {
 
             source.start();
         };
-    }, []);
+    }, [sessionId]);
 
     // Handle incoming audio chunks
     useEffect(() => {

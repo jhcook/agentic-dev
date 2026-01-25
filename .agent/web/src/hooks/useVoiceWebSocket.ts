@@ -52,7 +52,7 @@ export function useVoiceWebSocket(url: string) {
                         console.log('[Voice] Clear buffer received (barge-in)');
                         onClearBufferRef.current?.();
                     } else if (msg.type === 'transcript') {
-                        // @ts-ignore - dynamic payload
+                        // @ts-expect-error - dynamic payload
                         const { role, text } = msg;
                         onTranscriptRef.current?.(role, text);
                     }

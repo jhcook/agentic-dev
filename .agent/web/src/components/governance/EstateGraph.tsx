@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import dagre from 'dagre';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import ReactFlow, {
     useNodesState,
     useEdgesState,
@@ -32,30 +32,9 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 
 // Types matching backend Pydantic models
-interface GraphNode {
-    id: string; // This is the UID from backend (e.g. "WEB-005-story")
-    type: string;
-    data: {
-        label: string; // This is the LOGICAL ID (e.g. "WEB-005")
-        title: string;
-        type: string;
-        status: string;
-        logical_id: string; // New field from backend
-    };
-    position: { x: number; y: number };
-}
 
-interface GraphEdge {
-    id: string;
-    source: string; // UID
-    target: string; // UID
-    type: string;
-}
 
-interface EstateGraphData {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
-}
+
 
 interface EstateGraphProps {
     isActive: boolean;

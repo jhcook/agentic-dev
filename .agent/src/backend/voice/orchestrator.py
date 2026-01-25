@@ -192,8 +192,8 @@ class VoiceOrchestrator:
         llm = _create_llm()
         
         # Configure tools
-        from backend.voice.tools import lookup_documentation, dangerous_operation
-        tools = [lookup_documentation, dangerous_operation]
+        from backend.voice.tools.registry import get_all_tools
+        tools = get_all_tools()
         
         # Use global checkpointer
         self.checkpointer = GLOBAL_MEMORY
