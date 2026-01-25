@@ -17,7 +17,16 @@
 import asyncio
 import logging
 from typing import AsyncGenerator
-from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
+
+from deepgram import DeepgramClient
+
+# Deepgram SDK v5 doesn't export LiveTranscriptionEvents directly
+# Define our own constants for compatibility
+class LiveTranscriptionEvents:
+    OPEN = "open"
+    TRANSCRIPT = "Results"
+    CLOSE = "close"
+    ERROR = "error"
 
 from backend.speech.interfaces import STTProvider
 

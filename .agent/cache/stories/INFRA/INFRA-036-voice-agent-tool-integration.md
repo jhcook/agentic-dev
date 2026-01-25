@@ -16,13 +16,18 @@ As a Developer, I want the Voice Agent to be able to use tools and remember our 
 
 - [ ] **Tool support**: Configure `VoiceOrchestrator` to accept a list of tools (e.g., `LangGraph` tools).
 - [ ] **Example Tool**: Implement a basic tool (e.g., `lookup_documentation`) and wire it up.
-- [ ] **Persistence**: Replace `MemorySaver` with a persistent checkpointer (e.g., `SqliteSaver` or file-based) so conversations resume after server restart.
-- [ ] **Configurable Prompt**: Allow the System Prompt to be updated via `agent config` without code changes.
+- [ ] **Persistence**: Replace `MemorySaver` with `SqliteSaver` (stored in `.agent/storage/`) for durable context.
+- [ ] **Configurable Prompt**: Allow the System Prompt to be updated via `agent config`.
+- [ ] **Transcript Sync**: Emit JSON events (User Text, Agent Text, Tool Result) over WebSocket to enable frontend chat history.
+- [ ] **Latency Handling**: If tool execution > 1s, play "Thinking..." filler audio/sound.
+- [ ] **Safety**: Sensitive tools must require verbal confirmation ("Are you sure?").
+- [ ] **Observability**: Trace tool execution duration and arguments via OpenTelemetry/LogBus.
 
 ## Non-Functional Requirements
 
-- **Latency**: Tool usage adds latency. Provide feedback ("Let me check that...") if execution is slow.
-- **Safety**: Tools must be sandboxed or explicitly approved.
+- **Latency**: Tool usage behavior must not degrade perceived voice responsiveness (use fillers).
+- **Safety**: Tools must be sandboxed. No unchecked filesystem access outside `.agent/`.
+- **Architecture**: Tool definitions must be decoupled from the Orchestrator.
 
 ## Linked ADRs
 

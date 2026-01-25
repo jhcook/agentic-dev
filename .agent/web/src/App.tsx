@@ -17,6 +17,7 @@ import { VoiceClient } from './components/VoiceClient'
 import { ConfigEditor } from './components/ConfigEditor'
 import { PromptStudio } from './components/PromptStudio'
 import { ActivityLog } from './components/ActivityLog'
+import { GovernanceDesk } from './components/GovernanceDesk'
 import { useViewStore } from './store/viewStore'
 
 function App() {
@@ -32,6 +33,8 @@ function App() {
         return <PromptStudio />
       case 'logs':
         return <ActivityLog />
+      case 'governance':
+        return <GovernanceDesk />
       default:
         return <VoiceClient />
     }

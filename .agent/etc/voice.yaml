@@ -1,12 +1,12 @@
 llm:
   provider: gemini
-  model: gemini-2.0-flash-exp
+  model: gemini-2.0-flash 
 stt:
-  provider: deepgram
+  provider: deepgram_streaming
   model: nova-2
 tts:
   provider: deepgram
-  model: aura-asteria-en
+  model: aura-orion-en  # Australian English accent
 whisper:
   model_size: tiny
   device: auto

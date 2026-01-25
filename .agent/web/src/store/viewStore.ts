@@ -14,7 +14,7 @@
 
 import { create } from 'zustand';
 
-export type View = 'voice' | 'config' | 'prompts' | 'logs';
+export type View = 'voice' | 'config' | 'prompts' | 'governance' | 'logs';
 
 interface ViewState {
     activeView: View;

@@ -54,3 +54,6 @@ npm-debug.log
 # Agent Runtime
 .agent/run/
 
+
+# Persistence
+.agent/storage/

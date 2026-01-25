@@ -27,15 +27,53 @@ export function VoiceClient() {
     const isPlayingRef = useRef(false);
     const playNextChunkRef = useRef<(() => void) | null>(null);
 
-    const wsUrl = import.meta.env.PROD
-        ? `wss://${window.location.host}/ws/voice`
-        : 'ws://localhost:8000/ws/voice';
+    // Persistent Session ID
+    const [sessionId] = useState(() => {
+        const stored = localStorage.getItem('agent_voice_session');
+        if (stored) return stored;
+        const newId = crypto.randomUUID();
+        localStorage.setItem('agent_voice_session', newId);
+        return newId;
+    });
 
-    const { state, error, connect, disconnect, sendAudio, setOnAudioChunk, setOnClearBuffer } =
+    const wsUrl = import.meta.env.PROD
+        ? `wss://${window.location.host}/ws/voice?session_id=${sessionId}`
+        : `ws://localhost:8000/ws/voice?session_id=${sessionId}`;
+
+    const { state, error, connect, disconnect, sendAudio, setOnAudioChunk, setOnClearBuffer, setOnTranscript } =
         useVoiceWebSocket(wsUrl);
 
     // Define playNextChunk function in useEffect to avoid ref assignment during render
     useEffect(() => {
+        // Fetch history
+        if (sessionId) {
+            const fetchHistory = async () => {
+                try {
+                    const protocol = window.location.protocol;
+                    const host = window.location.host;
+                    const baseUrl = import.meta.env.PROD
+                        ? `${protocol}//${host}`
+                        : 'http://localhost:8000';
+
+                    // Fix: Backend mounts router at root, so path is /history/{id}
+                    const res = await fetch(`${baseUrl}/history/${sessionId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.history && Array.isArray(data.history)) {
+                            // Map logic matches: `${role === 'user' ? '👤' : '🤖'} ${text}`
+                            const lines = data.history.map((msg: { role: string, text: string }) =>
+                                `${msg.role === 'user' ? '👤' : '🤖'} ${msg.text}`
+                            );
+                            setTranscript(lines);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch history:", e);
+                }
+            };
+            fetchHistory();
+        }
+
         playNextChunkRef.current = () => {
             if (audioQueueRef.current.length === 0) {
                 isPlayingRef.current = false;
@@ -54,7 +92,7 @@ export function VoiceClient() {
 
             source.start();
         };
-    }, []);
+    }, [sessionId]);
 
     // Handle incoming audio chunks
     useEffect(() => {
@@ -79,7 +117,12 @@ export function VoiceClient() {
             audioQueueRef.current = [];
             isPlayingRef.current = false;
         });
-    }, [setOnAudioChunk, setOnClearBuffer]);
+
+        // Handle transcripts
+        setOnTranscript((role: string, text: string) => {
+            setTranscript(prev => [...prev, `${role === 'user' ? '👤' : '🤖'} ${text}`]);
+        });
+    }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
 
     const requestMicrophoneAccess = async () => {
         try {
@@ -95,7 +138,7 @@ export function VoiceClient() {
 
             // Initialize AudioContext
             const audioContext = new AudioContext({ sampleRate: 48000 });
-            await audioContext.audioWorklet.addModule('/audio-processor.js');
+            await audioContext.audioWorklet.addModule(`/audio-processor.js?t=${Date.now()}`);
 
             const source = audioContext.createMediaStreamSource(stream);
             const analyser = audioContext.createAnalyser();
@@ -106,6 +149,7 @@ export function VoiceClient() {
             const workletNode = new AudioWorkletNode(audioContext, 'audio-downsampler');
 
             workletNode.port.onmessage = (event) => {
+                // console.log("[VoiceClient] Audio chunk received from worklet", event.data.byteLength); // DEBUG
                 // Send to WebSocket
                 sendAudio(event.data);
             };

@@ -1,0 +1,47 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from .architect import list_adrs, read_adr, search_rules
+from .project import list_stories, get_project_info, list_runbooks
+from .git import get_git_status, get_git_diff, get_git_log
+from .qa import run_backend_tests, run_frontend_lint
+from .security import scan_secrets_in_content
+from .observability import get_recent_logs
+from .meta import draft_new_tool, list_capabilities
+from .docs import list_docs, read_doc, search_docs
+
+def get_all_tools():
+    """
+    Return a list of all initialized tools for the agent.
+    """
+    base_tools = [
+        # Architect
+        list_adrs, read_adr, search_rules,
+        # Project
+        list_stories, get_project_info, list_runbooks,
+        # Git
+        get_git_status, get_git_diff, get_git_log,
+        # QA
+        run_backend_tests, run_frontend_lint,
+        # Security
+        scan_secrets_in_content,
+        # Observability
+        get_recent_logs,
+        # Meta
+        draft_new_tool, list_capabilities,
+        # Docs
+        list_docs, read_doc, search_docs
+    ]
+    
+    return base_tools

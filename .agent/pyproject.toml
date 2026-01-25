@@ -2,8 +2,7 @@
 name = "backend"
 version = "0.1.0"
 description = "Backend implementation"
-authors = [{ name = "Your Name", email = "you@example.com" }]
-dependencies = [
+authors = [{ name = "Justin Cook", email = "jhcook@secnix.com" }]
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
     "SQLAlchemy>=2.0",
@@ -15,11 +14,7 @@ dependencies = [
     "passlib>=1.7",
     "bcrypt>=4.0",
     "httpx>=0.25.0",
-    "deepgram-sdk>=3.0",
     "respx>=0.20.0",
-    "prometheus-client>=0.17.0",
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
     "keyring>=24.0.0",
     "cryptography>=41.0.0",
     "modelcontextprotocol>=0.1.0",
@@ -27,10 +22,20 @@ dependencies = [
     "pytest-asyncio>=0.23.0",
     "anyio>=4.0.0",
     "python-dotenv>=1.0.0",
-    # LangGraph & LangChain for conversational agent
+    "supabase>=2.0.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+voice = [
+    "deepgram-sdk>=3.0",
+    "prometheus-client>=0.17.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=1.0.0",
     "langchain>=0.3.0",
-    # LLM providers (install based on which you use)
     "langchain-openai>=0.2.0",
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
@@ -40,9 +45,9 @@ dependencies = [
     "scipy>=1.11.0",
     # Faster-whisper for offline STT - Disabled due to Python 3.14 incompatibility (av/Cython)
     "faster-whisper>=1.0.0",
-    "supabase>=2.0.0",
-    "typer>=0.12.0",
-    "rich>=13.0.0",
+]
+admin = [
+    "PyYAML>=6.0",
 ]
 requires-python = ">=3.10"
 

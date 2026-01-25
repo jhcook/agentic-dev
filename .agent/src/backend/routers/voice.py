@@ -64,43 +64,70 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info(f"Voice session started: {session_id}", extra={"correlation_id": session_id})
     
     orchestrator = VoiceOrchestrator(session_id)
-    audio_queue = asyncio.Queue()
     
-    async def sender_task():
-        """Background task to stream audio chunks to the client."""
+    # Unified output queue for audio and JSON events
+    output_queue = asyncio.Queue()
+
+    # Callback to route Orchestrator events (tool calls, transcripts) to client
+    def on_event_callback(event_type: str, payload: dict):
+        # We use put_nowait because this is called synchronously from orchestrator
+        output_queue.put_nowait(("json", {"type": event_type, **payload}))
+    
+    orchestrator.on_event = on_event_callback
+    
+    # DEBUG: Send greeting to verify output path
+    try:
+        greeting = await orchestrator.tts.speak("System ready. I am listening.")
+        await output_queue.put(("audio", greeting))
+    except Exception as e:
+        logger.error(f"Failed to generate greeting: {e}")
+    
+    async def unified_sender_task():
+        """Background task to stream audio and events to the client."""
         try:
             while True:
-                chunk = await audio_queue.get()
-                if chunk is None:  # Sentinel
+                item = await output_queue.get()
+                if item is None:  # Sentinel
                     break
-                await websocket.send_bytes(chunk)
-                audio_queue.task_done()
+                
+                msg_type, data = item
+                if msg_type == "audio":
+                    await websocket.send_bytes(data)
+                elif msg_type == "json":
+                    await websocket.send_json(data)
+
+                output_queue.task_done()
         except Exception as e:
             logger.error(f"Sender task error: {e}")
 
     async def process_input_background(data: bytes):
         """Worker to process audio and push response to queue."""
         try:
+            logger.info(f"Received audio packet: {len(data)}")
             async for audio_chunk in orchestrator.process_audio(data):
-                await audio_queue.put(audio_chunk)
+                await output_queue.put(("audio", audio_chunk))
         except Exception as e:
             logger.error(f"Processing error: {e}")
 
-    sender_future = asyncio.create_task(sender_task())
+    sender_future = asyncio.create_task(unified_sender_task())
     
     try:
         while True:
             # 1. Receive (Wait for input)
             data = await websocket.receive_bytes()
+            logger.info(f"Packet received: {len(data)}")
             
-            # Rate limit check
-            if not check_rate_limit(session_id):
-                await websocket.send_json({"error": "Rate limit exceeded."})
-                continue
+            # Rate limit check - DISABLED for streaming audio
+            # if not check_rate_limit(session_id):
+            #     await websocket.send_json({"error": "Rate limit exceeded."})
+            #     continue
             
             # 2. VAD & Interrupt Check
             # We check VAD synchronously on the chunk before processing
-            if orchestrator.process_vad(data):
+            is_speech = orchestrator.process_vad(data)
+            logger.info(f"VAD Check: {is_speech} (Speaking: {orchestrator.is_speaking.is_set()})")
+            
+            if is_speech:
                 # If valid speech detected while we are speaking...
                 if orchestrator.is_speaking.is_set():
                     logger.info(f"Interrupt detected in session {session_id}")
@@ -109,10 +136,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     orchestrator.interrupt()
                     
                     # B. Clear Output Queue (Backend buffer)
-                    while not audio_queue.empty():
+                    while not output_queue.empty():
                         try:
-                            audio_queue.get_nowait()
-                            audio_queue.task_done()
+                            output_queue.get_nowait()
+                            output_queue.task_done()
                         except asyncio.QueueEmpty:
                             break
                     
@@ -125,6 +152,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # We don't await here, to keep reading input (VAD)
             asyncio.create_task(process_input_background(data))
             
+            logger.info(f"Processing complete for packet from session {session_id}")
+            
     except WebSocketDisconnect:
         logger.info(f"Voice session ended: {session_id}", extra={"correlation_id": session_id})
     except Exception as e:
@@ -132,5 +161,13 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=1011)
     finally:
         # Cleanup
-        await audio_queue.put(None) # Stop sender
+        await output_queue.put(None) # Stop sender
         await sender_future
+
+
+@router.get("/history/{session_id}")
+async def get_history(session_id: str):
+    """Get chat history for a session."""
+    from backend.voice.orchestrator import get_chat_history
+    history = await get_chat_history(session_id)
+    return {"history": history}

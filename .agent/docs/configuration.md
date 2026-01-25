@@ -229,6 +229,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 **Tip**: Verify your keys and view available models:
+
 ```bash
 agent list-models
 agent list-models anthropic
@@ -426,22 +427,26 @@ description: Conduct thorough code review
    gh pr checkout <PR_NUMBER>
    ```
 
-2. **Run local preflight**
+1. **Run local preflight**
+
    ```bash
    agent preflight --story <STORY_ID> --ai
    ```
 
-3. **Review code changes**
+2. **Review code changes**
+
    ```bash
    git diff main...HEAD
    ```
 
-4. **Check test coverage**
+3. **Check test coverage**
+
    ```bash
    pytest --cov=src tests/
    ```
 
-5. **Approve or request changes**
+4. **Approve or request changes**
+
    ```bash
    gh pr review --approve
    # Or
@@ -449,12 +454,14 @@ description: Conduct thorough code review
    ```
 
 ## Checklist
+
 - [ ] Code follows style guide
 - [ ] Tests added for new functionality
 - [ ] Documentation updated
 - [ ] No security issues
 - [ ] Performance acceptable
 EOF
+
 ```
 
 Use the workflow:
@@ -523,7 +530,11 @@ preflight:
   stage: test
   image: python:3.11
   script:
+    # Install in editable mode
     - pip install -e .agent/
+    # Install with Optional Capabilities
+    # pip install -e ".agent/[voice]" # Conversational Agent
+    # pip install -e ".agent/[admin]" # Admin Console
     - export STORY_ID=$(echo $CI_COMMIT_REF_NAME | grep -oE '[A-Z]+-[0-9]+')
     - .agent/bin/agent preflight --story $STORY_ID --ai
   artifacts:
