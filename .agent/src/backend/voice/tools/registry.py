@@ -19,6 +19,7 @@ from .qa import run_backend_tests, run_frontend_lint
 from .security import scan_secrets_in_content
 from .observability import get_recent_logs
 from .meta import draft_new_tool, list_capabilities
+from .docs import list_docs, read_doc, search_docs
 
 def get_all_tools():
     """
@@ -38,7 +39,9 @@ def get_all_tools():
         # Observability
         get_recent_logs,
         # Meta
-        draft_new_tool, list_capabilities
+        draft_new_tool, list_capabilities,
+        # Docs
+        list_docs, read_doc, search_docs
     ]
     
     return base_tools

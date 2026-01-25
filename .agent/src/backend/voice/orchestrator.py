@@ -214,7 +214,7 @@ class VoiceOrchestrator:
         
         # Audio accumulation buffer for STT (file-based API needs larger chunks)
         self.audio_buffer = bytearray()
-        self.buffer_duration_ms = 600  # 0.6 seconds (Reduced from 1500 to fix starvation)
+        self.buffer_duration_ms = 2000  # 2.0 seconds (Increased from 600ms for STT context)
         self.sample_rate = 16000
         self.bytes_per_sample = 2  # Int16
         self.target_buffer_size = int(

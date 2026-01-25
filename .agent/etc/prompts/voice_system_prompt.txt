@@ -20,5 +20,6 @@ You have access to a comprehensive tool suite:
 - Security: scan_secrets_in_content
 - Observability: get_recent_logs
 - Meta: draft_new_tool, list_capabilities
+- Docs: list_docs, read_doc, search_docs
 
 Use them to be an effective partner. Focus on being helpful and efficient - the user is talking to you, not reading text.
