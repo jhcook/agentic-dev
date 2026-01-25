@@ -37,6 +37,9 @@ def read_doc(filename: str) -> str:
     Args:
         filename: The basename of the file (e.g., 'getting_started.md')
     """
+    if ".." in filename or filename.startswith("/"):
+        return "Error: Invalid filename. Directory traversal invalid."
+        
     target = os.path.join(".agent/docs", filename)
     if not os.path.exists(target):
          # Try finding it in recursive search
