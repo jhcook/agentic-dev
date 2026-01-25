@@ -12,10 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { Layout } from './components/Layout'
 import { VoiceClient } from './components/VoiceClient'
+import { ConfigEditor } from './components/ConfigEditor'
+import { PromptStudio } from './components/PromptStudio'
+import { ActivityLog } from './components/ActivityLog'
+import { useViewStore } from './store/viewStore'
 
 function App() {
-  return <VoiceClient />
+  const { activeView } = useViewStore()
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'voice':
+        return <VoiceClient />
+      case 'config':
+        return <ConfigEditor />
+      case 'prompts':
+        return <PromptStudio />
+      case 'logs':
+        return <ActivityLog />
+      default:
+        return <VoiceClient />
+    }
+  }
+
+  return <Layout>{renderView()}</Layout>
 }
 
 export default App
