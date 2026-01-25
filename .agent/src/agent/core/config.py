@@ -45,6 +45,9 @@ class Config:
         self.adrs_dir = self.agent_dir / "adrs"
         self.logs_dir = self.agent_dir / "logs"
         self.backups_dir = self.agent_dir / "backups"
+        self.storage_dir = self.agent_dir / "storage"
+        self.models_dir = self.storage_dir  # Models live in storage now via VAD logical change, or we can keep separate
+
 
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"

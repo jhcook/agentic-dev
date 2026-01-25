@@ -24,7 +24,13 @@ class VADProcessor:
     """
     Voice Activity Detection using Silero VAD (ONNX).
     """
-    def __init__(self, model_path: str = "silero_vad.onnx", threshold: float = 0.5, sampling_rate: int = 16000):
+    def __init__(self, model_path: str = None, threshold: float = 0.5, sampling_rate: int = 16000, min_speech_duration_ms: int = 250): # Threshold 0.5 (Echo resistant), Duration 250ms
+        if model_path is None:
+            try:
+                from agent.core.config import config
+                model_path = str(config.storage_dir / "silero_vad.onnx")
+            except Exception:
+                model_path = ".agent/storage/silero_vad.onnx"
         self.model_path = model_path
         self.threshold = threshold
         self.sampling_rate = sampling_rate
@@ -45,52 +51,15 @@ class VADProcessor:
             return
 
         if not os.path.exists(self.model_path):
-            self._download_model()
-
-        if not os.path.exists(self.model_path):
-             # Download failed
-             return
-
-        try:
-            # Suppress excessive ONNX warnings
-            sess_options = self.ort.SessionOptions()
-            sess_options.log_severity_level = 3
-            self.session = self.ort.InferenceSession(self.model_path, sess_options)
-        except Exception as e:
-            logger.error(f"Failed to initialize VAD session: {e}", exc_info=True)
-            raise
-
-    def _download_model(self):
-        import ssl
-        import shutil
-        
-        logger.info(f"Downloading Silero VAD model to {self.model_path}...")
-        url = "https://github.com/snakers4/silero-vad/raw/v4.0/files/silero_vad.onnx"
-        
-        try:
-            # Try standard secure context first
-            context = ssl.create_default_context()
-            with urllib.request.urlopen(url, context=context) as response, open(self.model_path, 'wb') as out_file:
-                shutil.copyfileobj(response, out_file)
-            logger.info("Download complete (verified SSL).")
-            return
-            
-        except Exception as e:
-            logger.warning(f"Standard download failed: {e}. Retrying with unverified SSL context...")
-            
+            logger.info(f"Downloading Silero VAD model to {self.model_path}...")
+            # Updated URL - the model is in the releases
+            url = "https://github.com/snakers4/silero-vad/releases/download/v5.0/silero_vad.onnx"
             try:
-                # Fallback: Unverified context (common issue on macOS python without certs installed)
-                context = ssl._create_unverified_context()
-                with urllib.request.urlopen(url, context=context) as response, open(self.model_path, 'wb') as out_file:
-                    shutil.copyfileobj(response, out_file)
-                logger.info("Download complete (unverified SSL).")
-                
-            except Exception as e2:
-                logger.error(f"Failed to download VAD model: {e2}", exc_info=True)
-                # Cleanup partial
-                if os.path.exists(self.model_path):
-                    os.remove(self.model_path)
-                logger.warning("VAD will be disabled.")
+                urllib.request.urlretrieve(url, self.model_path)
+                logger.info("Download complete.")
+            except Exception as e:
+                logger.warning(f"Failed to download VAD model: {e}. VAD will be disabled.")
+                return  # Don't raise, just disable VAD
 
         try:
             # Suppress excessive ONNX warnings

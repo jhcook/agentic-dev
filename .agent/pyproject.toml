@@ -29,6 +29,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     # LangGraph & LangChain for conversational agent
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=1.0.0",
     "langchain>=0.3.0",
     # LLM providers (install based on which you use)
     "langchain-openai>=0.2.0",

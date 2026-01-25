@@ -29,6 +29,7 @@ export function useVoiceWebSocket(url: string) {
     const reconnectTimerRef = useRef<number | null>(null);
     const onAudioChunkRef = useRef<((chunk: ArrayBuffer) => void) | null>(null);
     const onClearBufferRef = useRef<(() => void) | null>(null);
+    const onTranscriptRef = useRef<((role: string, text: string) => void) | null>(null);
     const connectFnRef = useRef<(() => void) | null>(null);
 
     const connect = useCallback(() => {
@@ -50,6 +51,10 @@ export function useVoiceWebSocket(url: string) {
                     if (msg.type === 'clear_buffer') {
                         console.log('[Voice] Clear buffer received (barge-in)');
                         onClearBufferRef.current?.();
+                    } else if (msg.type === 'transcript') {
+                        // @ts-ignore - dynamic payload
+                        const { role, text } = msg;
+                        onTranscriptRef.current?.(role, text);
                     }
                 } catch (err) {
                     console.error('[Voice] Failed to parse message:', err);
@@ -96,7 +101,10 @@ export function useVoiceWebSocket(url: string) {
 
     const sendAudio = useCallback((data: ArrayBuffer) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+            // console.log("[useVoiceWebSocket] Sending audio bytes:", data.byteLength); // DEBUG
             wsRef.current.send(data);
+        } else {
+            console.warn("[useVoiceWebSocket] WebSocket not open, dropping audio");
         }
     }, []);
 
@@ -106,6 +114,10 @@ export function useVoiceWebSocket(url: string) {
 
     const setOnClearBuffer = useCallback((callback: () => void) => {
         onClearBufferRef.current = callback;
+    }, []);
+
+    const setOnTranscript = useCallback((callback: (role: string, text: string) => void) => {
+        onTranscriptRef.current = callback;
     }, []);
 
     useEffect(() => {
@@ -121,6 +133,7 @@ export function useVoiceWebSocket(url: string) {
         disconnect,
         sendAudio,
         setOnAudioChunk,
-        setOnClearBuffer
+        setOnClearBuffer,
+        setOnTranscript
     };
 }

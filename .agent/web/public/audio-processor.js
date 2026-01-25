@@ -36,9 +36,9 @@ class AudioDownsamplerProcessor extends AudioWorkletProcessor {
             this.buffer.push(inputData[Math.floor(i)]);
         }
 
-        // Send chunks of ~100ms (1600 samples at 16kHz)
-        while (this.buffer.length >= 1600) {
-            const chunk = this.buffer.splice(0, 1600);
+        // Send chunks of ~96ms (1536 samples at 16kHz) - Required for Silero VAD (512, 1024, or 1536)
+        while (this.buffer.length >= 1536) {
+            const chunk = this.buffer.splice(0, 1536);
             const pcm16 = new Int16Array(chunk.length);
 
             // Convert float32 [-1, 1] to int16 [-32768, 32767]
