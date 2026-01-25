@@ -146,16 +146,44 @@ class ProcessManager:
 
         console.print("[bold yellow]Stopping services...[/bold yellow]")
         
+        import time
+
         for name, pid in pids.items():
             try:
-                os.kill(pid, signal.SIGTERM)
-                console.print(f"  Sent SIGTERM to {name} ({pid})")
+                # 1. Try Graceful Shutdown (SIGTERM)
+                if sys.platform != "win32":
+                    os.killpg(pid, signal.SIGTERM)
+                else:
+                    os.kill(pid, signal.SIGTERM)
+                
+                console.print(f"  Sent SIGTERM to {name} ({pid})...")
+                
+                # 2. Wait up to 3s for exit
+                for _ in range(30):
+                    time.sleep(0.1)
+                    try:
+                        os.kill(pid, 0) # Check if still exists
+                    except ProcessLookupError:
+                        break # Process is gone
+                else:
+                    # 3. Force Kill (SIGKILL)
+                    console.print(f"  [bold red]Process {name} did not exit. Sending SIGKILL...[/bold red]")
+                    if sys.platform != "win32":
+                        try:
+                            os.killpg(pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    else:
+                        try:
+                            os.kill(pid, signal.SIGKILL)    
+                        except ProcessLookupError:
+                            pass
+                        
             except ProcessLookupError:
-                console.print(f"  Process {name} ({pid}) not found.")
+                console.print(f"  Process {name} ({pid}) already gone.")
             except Exception as e:
                 console.print(f"  Error stopping {name}: {e}")
 
-        # Wait a bit? Or just assume it works.
         self._clean_pid_file()
         console.print("[bold green]Services stopped.[/bold green]")
 

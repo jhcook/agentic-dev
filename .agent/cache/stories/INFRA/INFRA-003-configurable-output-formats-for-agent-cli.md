@@ -1,7 +1,7 @@
 # INFRA-003: Configurable Output Formats for Agent CLI
 
 ## State
-COMMITTED
+INFRA-003-003-003-003-003-003-003-003-003-003-003-003-003-003-003-003-003-003
 
 ## Problem Statement
 Currently, the `agent` CLI outputs data in a "pretty print" format using Rich tables, which is excellent for human readability but problematic for:

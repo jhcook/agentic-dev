@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from backend.routers import voice, admin
+from backend.routers import voice, admin, governance
 from backend.admin.logger import log_bus
 import json
 import time
@@ -22,6 +22,7 @@ app = FastAPI(title="Agentic Voice Backend")
 
 app.include_router(voice.router)
 app.include_router(admin.router)
+app.include_router(governance.router)
 
 @app.websocket("/ws/admin/logs")
 async def admin_logs_websocket(websocket: WebSocket):

@@ -93,10 +93,11 @@ async def websocket_endpoint(websocket: WebSocket):
             # 1. Receive (Wait for input)
             data = await websocket.receive_bytes()
             
-            # Rate limit check
-            if not check_rate_limit(session_id):
-                await websocket.send_json({"error": "Rate limit exceeded."})
-                continue
+            # Rate limit check - DISABLED for streaming audio
+            # Sending 10 chunks/sec triggers this instantly.
+            # if not check_rate_limit(session_id):
+            #    await websocket.send_json({"error": "Rate limit exceeded."})
+            #    continue
             
             # 2. VAD & Interrupt Check
             # We check VAD synchronously on the chunk before processing

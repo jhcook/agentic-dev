@@ -221,6 +221,7 @@ class VoiceOrchestrator:
             Synthesized audio response chunks
         """
         # Accumulate audio chunks
+        logger.info(f"Received audio chunk: {len(audio_chunk)} bytes")
         self.audio_buffer.extend(audio_chunk)
         
         # Only process when we have enough audio (~1.5 seconds)
