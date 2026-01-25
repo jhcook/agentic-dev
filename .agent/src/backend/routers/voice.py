@@ -67,63 +67,91 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_queue = asyncio.Queue()
     
     async def sender_task():
-        """Background task to stream audio chunks to the client."""
+        """Background task to stream audio and events to the client."""
         try:
             while True:
-                chunk = await audio_queue.get()
-                if chunk is None:  # Sentinel
-                    break
-                await websocket.send_bytes(chunk)
-                audio_queue.task_done()
+                # Merge queues or use a priority selector?
+                # Simple round-robin for now
+                
+                # 1. Check Audio
+                try:
+                    chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.01)
+                    if chunk is None: break
+                    await websocket.send_bytes(chunk)
+                    audio_queue.task_done()
+                except asyncio.TimeoutError:
+                    pass
+                
+                # 2. Check Events (Transcript Sync)
+                # We need a way to get events from orchestrator.
+                # For MVP, we'll let orchestrator emit to log_bus and we intercept?
+                # Or better, we pass a callback to orchestrator.
+                pass
+                
         except Exception as e:
             logger.error(f"Sender task error: {e}")
+
+    # Better approach: Shared Queue for everything
+    # (type, data) tuple
+    output_queue = asyncio.Queue()
+    
+    async def unified_sender():
+        try:
+            while True:
+                item = await output_queue.get()
+                if item is None: break
+                
+                msg_type, data = item
+                
+                if msg_type == "audio":
+                    await websocket.send_bytes(data)
+                elif msg_type == "json":
+                    await websocket.send_json(data)
+                    
+                output_queue.task_done()
+        except Exception as e:
+            logger.error(f"Unified sender error: {e}")
+
+    # Pass a callback to orchestrator to emit events
+    def on_event(event_type: str, payload: dict):
+        # "transcript.user", "transcript.agent", "tool.start", "tool.end"
+        asyncio.create_task(output_queue.put(("json", {"type": event_type, "payload": payload})))
+        
+    # We need to monkeypatch or inject this into orchestrator instance
+    orchestrator.on_event = on_event 
 
     async def process_input_background(data: bytes):
         """Worker to process audio and push response to queue."""
         try:
             async for audio_chunk in orchestrator.process_audio(data):
-                await audio_queue.put(audio_chunk)
+                await output_queue.put(("audio", audio_chunk))
         except Exception as e:
             logger.error(f"Processing error: {e}")
 
-    sender_future = asyncio.create_task(sender_task())
+    sender_future = asyncio.create_task(unified_sender())
     
     try:
         while True:
             # 1. Receive (Wait for input)
             data = await websocket.receive_bytes()
             
-            # Rate limit check - DISABLED for streaming audio
-            # Sending 10 chunks/sec triggers this instantly.
-            # if not check_rate_limit(session_id):
-            #    await websocket.send_json({"error": "Rate limit exceeded."})
-            #    continue
-            
-            # 2. VAD & Interrupt Check
-            # We check VAD synchronously on the chunk before processing
+            # 2. Interrupt Check
             if orchestrator.process_vad(data):
-                # If valid speech detected while we are speaking...
                 if orchestrator.is_speaking.is_set():
                     logger.info(f"Interrupt detected in session {session_id}")
-                    
-                    # A. Stop Generation
                     orchestrator.interrupt()
                     
-                    # B. Clear Output Queue (Backend buffer)
-                    while not audio_queue.empty():
+                    # Clear Queue
+                    while not output_queue.empty():
                         try:
-                            audio_queue.get_nowait()
-                            audio_queue.task_done()
+                            output_queue.get_nowait()
+                            output_queue.task_done()
                         except asyncio.QueueEmpty:
                             break
                     
-                    # C. Clear Client Buffer (Frontend buffer)
-                    # We send a JSON control frame. Client must distinguish bytes vs text.
-                    # Or use a special byte sequence? JSON is safer if client expects it.
                     await websocket.send_json({"type": "clear_buffer"})
             
-            # 3. Offload Processing
-            # We don't await here, to keep reading input (VAD)
+            # 3. Offload
             asyncio.create_task(process_input_background(data))
             
     except WebSocketDisconnect:
@@ -132,6 +160,5 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Voice session error: {e}", extra={"correlation_id": session_id})
         await websocket.close(code=1011)
     finally:
-        # Cleanup
-        await audio_queue.put(None) # Stop sender
+        await output_queue.put(None)
         await sender_future
