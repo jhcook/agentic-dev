@@ -30,11 +30,17 @@ def list_adrs() -> str:
     # Also check docs/ if it exists.
     
     # Implementation: Search .agent/rules first as they are governance requirements
-    files = glob.glob(".agent/rules/*.md*")
-    if not files:
-        return "No rules found in .agent/rules."
+    # Also search standard docs path
+    search_paths = [".agent/rules/*.md*", ".agent/docs/architecture/decisions/*.md*"]
+    all_files = []
     
-    return "\n".join([os.path.basename(f) for f in files])
+    for path in search_paths:
+        all_files.extend(glob.glob(path))
+        
+    if not all_files:
+        return "No ADRs or rules found."
+    
+    return "\n".join(sorted([os.path.basename(f) for f in all_files]))
 
 @tool
 def read_adr(filename: str) -> str:

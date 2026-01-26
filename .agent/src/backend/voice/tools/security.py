@@ -14,24 +14,38 @@
 
 from langchain_core.tools import tool
 import re
+import os
 
 @tool
-def scan_secrets_in_content(content: str) -> str:
+def scan_file_for_secrets(file_path: str) -> str:
     """
-    Scan text content for potential secrets (API keys, tokens).
-    Returns proper findings without revealing the secret itself.
+    Scan a specific file for potential secrets (API keys, tokens).
+    Args:
+        file_path: Path to the file to scan.
     """
+    if not os.path.exists(file_path):
+        return "File not found."
+        
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+    except Exception as e:
+        return f"Error reading file: {e}"
+
     # Simple regex patterns for demo
     patterns = {
         "API Key": r"(?i)(api[_-]?key|sk-[a-zA-Z0-9]{20,})",
         "Token": r"(?i)token",
-        "Secret": r"(?i)secret"
+        "Secret": r"(?i)secret",
+        "Email": r"[^@]+@[^@]+\.[^@]+",
+        "IP Address": r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
     }
     findings = []
     lines = content.splitlines()
     for line_idx, line in enumerate(lines):
         for name, pattern in patterns.items():
             if re.search(pattern, line):
+                # Redact the actual secret in output, just show line number
                 findings.append(f"Potential {name} found at line {line_idx+1}")
                 
     if not findings:
