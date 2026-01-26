@@ -18,6 +18,10 @@ The Agent supports multiple voice providers for Speech-to-Text (STT) and Text-to
 - **Google Cloud Speech**: Requires Service Account JSON (encrypted in secrets).
 - **Local/Whisper**: Offline support (beta).
 
+### Configuration
+
+For detailed configuration (including how to switch providers in `voice.yaml`), see [Backend Voice Documentation](.agent/docs/backend_voice.md#configuration).
+
 ### Setup
 
 Run the onboarding wizard to configure providers securely:
