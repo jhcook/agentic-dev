@@ -138,40 +138,45 @@ export function VoiceClient() {
         // Handle transcripts
         setOnTranscript((role: string, text: string, partial?: boolean) => {
             setTranscript(prev => {
-                const last = prev[prev.length - 1];
+                if (prev.length === 0) {
+                    return [{ role, text, partial }];
+                }
 
-                // If it's a partial update for the *same* role as the last message, update it
-                if (partial && last && last.role === role && last.partial) {
+                const last = prev[prev.length - 1];
+                const isAssistantMerge = role === 'assistant' && last.role === 'assistant';
+
+                if (isAssistantMerge) {
+                    // Always merge consecutive assistant messages into one bubble for voice
                     const newHistory = [...prev];
-                    newHistory[newHistory.length - 1] = { ...last, text: last.text + text };
+
+                    if (partial) {
+                        // If the last was already a partial of the same stream, append
+                        // If the last was a final and we got a new partial, append with space
+                        const joiner = (last.partial === false) ? ' ' : '';
+                        newHistory[newHistory.length - 1] = {
+                            ...last,
+                            text: last.text + joiner + text,
+                            partial: true
+                        };
+                    } else {
+                        // Received final text. For assistent, just update the last one and mark final.
+                        // But use the text provided (which is full text in some cases or just a chunk)
+                        // Backend sends FULL text for assistant when partial=False
+                        newHistory[newHistory.length - 1] = {
+                            ...last,
+                            text: text,
+                            partial: false
+                        };
+                    }
                     return newHistory;
                 }
 
-                // If we get a final update (partial=false) matching the last message, verify/replace text
-                // OR simpler: just append new messages if context switched
-
-                // Basic logic:
-                // 1. If partial match last, append
-                // 2. Else new message
-
-                // Actually, backend sends "partial" chunks.
-                // If partial was sent before, we appended. 
-                // If now we get partial=False (final), we might want to just ensure it's marked final.
-
-                if (last && last.role === role && last.partial) {
-                    // We are streaming this message
-                    if (partial) {
-                        // Append more text
-                        const newHistory = [...prev];
-                        newHistory[newHistory.length - 1] = { ...last, text: last.text + text };
-                        return newHistory;
-                    } else {
-                        // Finalize it (backend sent full text? Or just the chunk with partial=False?)
-                        // Backend sends full text with partial=False at the end
-                        const newHistory = [...prev];
-                        newHistory[newHistory.length - 1] = { ...last, text: text, partial: false };
-                        return newHistory;
-                    }
+                // If user message and last was partial user, append?
+                // Usually user messages come in one go from STT, but just in case:
+                if (role === 'user' && last.role === 'user' && last.partial) {
+                    const newHistory = [...prev];
+                    newHistory[newHistory.length - 1] = { ...last, text: last.text + text, partial };
+                    return newHistory;
                 }
 
                 // New message start

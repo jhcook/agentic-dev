@@ -56,27 +56,19 @@ AGENT_TOKENS = Counter(
     ["model", "type"]
 )
 
-# Voice-optimized system prompt
-VOICE_SYSTEM_PROMPT = """You are a helpful voice assistant and expert developer.
+def _load_system_prompt() -> str:
+    """Load the voice system prompt from the etc/prompts directory."""
+    try:
+        prompt_path = config.etc_dir / "prompts" / "voice_system_prompt.txt"
+        if prompt_path.exists():
+            return prompt_path.read_text().strip()
+    except Exception as e:
+        logger.warning(f"Failed to load voice_system_prompt.txt: {e}")
+    
+    # Fallback to a basic prompt if file loading fails
+    return "You are a helpful voice assistant. Be concise."
 
-Your primary goal is to assist the user by using the available tools effectively.
-If the user asks for a capability you don't have, writing a new tool is the preferred solution.
-
-IMPORTANT RULES:
-1.  **Tool First**: Always check your available tools (`list_capabilities`) before answering.
-2.  **Self-Correction**: If you don't have a tool, CREATE IT. You are a Python expert. 
-    -   Write the Python code for the tool yourself.
-    -   Use `create_tool(file_path="filename.py", code="...")` to deploy it.
-    -   Note: You can ONLY create tools in `custom/`. Do not try to write elsewhere.
-    -   Your code will be scanned for security risks (e.g. `subprocess`, `os.system`). Avoid them unless necessary (use `# NOQA: SECURITY_RISK` override if authorized).
-    -   Then USE the new tool immediately.
-    -   Do not ask the user for code; you generate it.
-3.  **Inspect to Understand**: If unsure how a tool works, use `read_tool_source` to read its code.
-4.  **Brief Responses**: Keep spoken responses concise (under 75 words). Don't read code out loud.
-5.  **Voice Persona**: Speak slowly, clearly, and casually.
-
-You can remember history and provide contextual responses."""
-
+VOICE_SYSTEM_PROMPT = _load_system_prompt()
 
 def _get_voice_config() -> dict:
     """Load voice configuration from voice.yaml."""
@@ -267,7 +259,8 @@ class VoiceOrchestrator:
             from backend.voice.vad import VADProcessor
             v_agg = config.get_value(voice_config, "vad.aggressiveness")
             if v_agg is None: v_agg = 1
-            self.vad = VADProcessor(aggressiveness=v_agg, sample_rate=self.sample_rate)
+            # Ensure int for webrtcvad
+            self.vad = VADProcessor(aggressiveness=int(float(v_agg)), sample_rate=self.sample_rate)
         except Exception as e:
             logger.warning(f"VAD initialization failed: {e}. Interrupts disabled.")
             self.vad = None
