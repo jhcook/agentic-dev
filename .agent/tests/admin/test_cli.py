@@ -29,7 +29,7 @@ def test_start_success(process_manager):
          patch.object(process_manager, "_get_pids", return_value=None), \
          patch.object(process_manager, "_write_pids") as mock_write, \
          patch.object(process_manager, "_is_port_in_use", return_value=False), \
-         patch("os.path.exists", return_value=True): # For .agent/web check
+         patch("os.path.exists", side_effect=lambda p: True if p in [".agent/src/web", ".venv/bin/python"] else False):
         
         mock_backend = MagicMock()
         mock_backend.pid = 123
@@ -43,6 +43,7 @@ def test_start_success(process_manager):
         assert mock_popen.call_count == 2
         # Verify backend call
         args_be, kwargs_be = mock_popen.call_args_list[0]
+        assert ".venv/bin/python" in args_be[0]
         assert "uvicorn" in args_be[0]
         assert kwargs_be["cwd"] == ".agent/src"
         
