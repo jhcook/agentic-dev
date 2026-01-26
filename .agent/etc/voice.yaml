@@ -1,12 +1,24 @@
 llm:
   provider: gemini
-  model: gemini-2.0-flash 
+  model: gemini-2.0-flash
 stt:
-  provider: deepgram_streaming
-  model: nova-2
+  provider: google
+  model: default
 tts:
-  provider: deepgram
-  model: aura-orion-en  # Australian English accent
+  provider: google
+  model: en-US-Neural2-F
+# stt:
+#   provider: deepgram_streaming
+#   model: nova-2
+# tts:
+#   provider: deepgram
+#   model: aura-orion-en  # Australian English accent
 whisper:
   model_size: tiny
   device: auto
+
+# Audio and VAD Tuning
+vad:
+  aggressiveness: 1      # 0 (Least aggressive) to 3 (Most aggressive)
+  rms_threshold: 300     # Minimum volume level (RMS) to process audio as speech
+  silence_threshold: 0.7 # Seconds of silence to trigger response

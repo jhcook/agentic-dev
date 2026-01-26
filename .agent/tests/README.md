@@ -4,23 +4,27 @@ Unit and integration tests for the `.agent` system utilities.
 
 ## Running Tests
 
-### Run all agent tests:
+### Run all agent tests
+
 ```bash
 cd .agent
 pytest tests/
 ```
 
-### Run specific test file:
+### Run specific test file
+
 ```bash
 pytest tests/test_count_tokens.py
 ```
 
-### Run with coverage:
+### Run with coverage
+
 ```bash
 pytest tests/ --cov=lib --cov-report=html
 ```
 
-### Run with verbose output:
+### Run with verbose output
+
 ```bash
 pytest tests/ -v
 ```
@@ -29,10 +33,15 @@ pytest tests/ -v
 
 ```
 .agent/tests/
-├── __init__.py              # Package marker
-├── conftest.py              # Pytest fixtures and configuration
-├── test_count_tokens.py     # Tests for token counting utility
-└── README.md                # This file
+├── admin/          # Admin console backend tests
+├── cli/            # CLI interface and onboarding tests
+├── commands/       # Implementation of agent commands
+├── core/           # Core logic (AI, VAD, configuration)
+├── integration/    # Multi-component integration tests
+├── sync/           # Synchronization and database tests
+├── voice/          # Voice interaction and audio processing tests
+├── conftest.py     # Shared fixtures
+└── README.md
 ```
 
 ## Requirements

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -23,7 +24,14 @@ from typer.testing import CliRunner
 # Add src to path if needed (though pytest usually handles this)
 sys.path.append(str(Path.cwd() / "src"))
 
-from agent.commands.onboard import onboard
+from agent.commands.onboard import (
+    onboard,
+    app as onboard_app,
+    check_dependencies,
+    configure_api_keys,
+    ensure_agent_directory,
+    ensure_gitignore,
+)
 
 runner = CliRunner()
 
@@ -471,7 +479,6 @@ def test_onboard_migration(
         # OpenAI: Already configured
         # Gemini: Migrated
         # Anthropic: Skipped
-        
         assert "[WARN] Google Gemini key found in environment" in result.stdout
         assert "[OK] Migrated Google Gemini key" in result.stdout
         

@@ -106,9 +106,11 @@ Configure thresholds in `.agent/etc/voice.yaml`:
 
 ```yaml
 stt:
-  provider: deepgram
+  provider: google # or 'azure', 'deepgram', 'deepgram_streaming'
+  model: default
 tts:
-  provider: deepgram
+  provider: google # or 'azure', 'deepgram'
+  model: en-US-Neural2-F
 whisper:
   model_size: tiny
 ```
@@ -126,6 +128,36 @@ The system supports two distinct modes for Deepgram STT:
    - **How**: Maintains a persistent WebSocket to Deepgram. Audio is pushed in small chunks as it arrives.
    - **Pros**: Lowest possible latency, real-time feedback.
    - **Cons**: Sensitive to network interruptions, higher resource usage for idle connections.
+
+### New Providers (Google & Azure)
+
+Support for Google Cloud Speech and Azure Cognitive Services has been added.
+
+#### Google Cloud Speech
+
+- **Authentication**: Uses Service Account JSON.
+- **Security**: JSON content is stored encrypted in Secret Manager.
+- **Configuration**: Set `provider: google` in `voice.yaml`.
+
+#### Azure Speech Services
+
+- **Authentication**: Uses Subscription Key and Region.
+- **Security**: Key and Region are stored encrypted in Secret Manager.
+- **Configuration**: Set `provider: azure` in `voice.yaml`.
+
+### Secrets Management
+
+The voice provides rely on the internal Secret Manager. Run `agent onboard` to set these up interactively.
+For manual configuration (advanced), the following keys are used:
+
+| Service | Secret Key | Description |
+| :--- | :--- | :--- |
+| `deepgram` | `api_key` | Deepgram API Key. |
+| `azure` | `key` | Azure Speech Service Subscription Key. |
+| `azure` | `region` | Azure Region (e.g. `eastus`). |
+| `google` | `application_credentials_json` | **Content** of the Service Account JSON file. |
+
+> **Security Note**: Never commit these values to `config.yaml` or version control. Use the Secret Manager exclusively.
 
 ---
 
@@ -181,7 +213,3 @@ async def run_client():
 ### 1. Tool Integration (INFRA-036)
 
 Equip the `VoiceOrchestrator` agent with tools (e.g. `lookup_documentation`, `check_status`) using the LangGraph tool-calling interface.
-
-### 2. Multi-Provider Support (INFRA-037)
-
-Add adapters for Google Cloud Speech and Azure Cognitive Services to `backend.speech.providers`.

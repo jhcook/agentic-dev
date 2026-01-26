@@ -16,7 +16,11 @@
 export default {
     content: [
         "./index.html",
-        "./src/**/*.{js,ts,jsx,tsx}",
+        "./*.{js,ts,jsx,tsx}",
+        "./components/**/*.{ts,tsx}",
+        "./hooks/**/*.{ts,tsx}",
+        "./lib/**/*.{ts,tsx}",
+        "./store/**/*.{ts,tsx}",
     ],
     theme: {
         extend: {},

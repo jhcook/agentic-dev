@@ -17,7 +17,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 type VoiceState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
 interface VoiceMessage {
-    type: 'clear_buffer' | 'status';
+    type: 'clear_buffer' | 'status' | 'transcript';
+    state?: VoiceState;
     data?: unknown;
 }
 
@@ -51,6 +52,11 @@ export function useVoiceWebSocket(url: string) {
                     if (msg.type === 'clear_buffer') {
                         console.log('[Voice] Clear buffer received (barge-in)');
                         onClearBufferRef.current?.();
+                    } else if (msg.type === 'status') {
+                        if (msg.state) {
+                            console.log('[Voice] Status update:', msg.state);
+                            setState(msg.state);
+                        }
                     } else if (msg.type === 'transcript') {
                         // @ts-expect-error - dynamic payload
                         const { role, text } = msg;
