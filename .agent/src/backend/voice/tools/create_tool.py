@@ -34,8 +34,11 @@ def create_tool(file_path: str, code: str) -> str:
     # Enforce directory constraint - relative to this file
     # This file is in .../backend/voice/tools/create_tool.py
     # Custom tools are in .../backend/voice/tools/custom/
-    custom_dir = os.path.join(os.path.dirname(__file__), "custom")
-    base_dir = os.path.abspath(custom_dir)
+    
+    # Resolving __file__ to absolute path immediately to prevent relative CWD confusion
+    current_file = os.path.abspath(__file__)
+    custom_dir = os.path.join(os.path.dirname(current_file), "custom")
+    base_dir = custom_dir # It is already absolute
     
     # Handle both full paths provided by agent or relative filenames
     # Check if the input path is already an absolute path that starts with our base_dir
