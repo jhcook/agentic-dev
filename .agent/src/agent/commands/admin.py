@@ -109,8 +109,8 @@ class ProcessManager:
         )
 
         # 2. Start Frontend (Vite)
-        if not os.path.exists(".agent/web"):
-             console.print("[bold red]Error: '.agent/web' directory not found.[/bold red]")
+        if not os.path.exists(".agent/src/web"):
+             console.print("[bold red]Error: '.agent/src/web' directory not found.[/bold red]")
              backend_proc.terminate()
              raise typer.Exit(1)
 
@@ -123,7 +123,7 @@ class ProcessManager:
             frontend_cmd,
             stdout=frontend_log,
             stderr=subprocess.STDOUT,
-            cwd=".agent/web",
+            cwd=".agent/src/web",
             start_new_session=True # Detach
         )
 

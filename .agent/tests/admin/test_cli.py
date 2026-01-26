@@ -16,6 +16,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from agent.commands.admin import ProcessManager
 import signal
+import sys
 
 @pytest.fixture
 def process_manager():
@@ -48,19 +49,26 @@ def test_start_success(process_manager):
         # Verify frontend call
         args_fe, kwargs_fe = mock_popen.call_args_list[1]
         assert args_fe[0] == ["npm", "run", "dev"]
-        assert kwargs_fe["cwd"] == ".agent/web"
+        assert kwargs_fe["cwd"] == ".agent/src/web"
         
         mock_write.assert_called_with(123, 456)
 
 def test_stop_success(process_manager):
     """Test stopping processes."""
     with patch.object(process_manager, "_get_pids", return_value={"backend_pid": 123, "frontend_pid": 456}), \
-         patch("os.kill") as mock_kill, \
+         patch("os.kill", side_effect=ProcessLookupError) as mock_kill, \
+         patch("os.killpg") as mock_killpg, \
          patch.object(process_manager, "_clean_pid_file") as mock_clean:
          
         process_manager.stop()
         
-        assert mock_kill.call_count == 2
-        mock_kill.assert_any_call(123, signal.SIGTERM)
-        mock_kill.assert_any_call(456, signal.SIGTERM)
+        if sys.platform != "win32":
+            assert mock_killpg.call_count == 2
+            mock_killpg.assert_any_call(123, signal.SIGTERM)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+        else:
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(123, signal.SIGTERM)
+            mock_kill.assert_any_call(456, signal.SIGTERM)
+        
         mock_clean.assert_called_once()

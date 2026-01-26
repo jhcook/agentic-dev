@@ -38,7 +38,7 @@ def test_run_backend_tests():
         assert ".venv/bin/pytest" in args or "pytest" in args
 
 def test_run_frontend_lint_missing_dir():
-    with patch("os.path.exists", side_effect=lambda p: False if ".agent/web" in p else True):
+    with patch("os.path.exists", side_effect=lambda p: False if ".agent/src/web" in p else True):
         # Tool call with no args
         result = run_frontend_lint.invoke({})
         assert "not found" in result
