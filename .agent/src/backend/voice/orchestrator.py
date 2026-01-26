@@ -431,10 +431,10 @@ class VoiceOrchestrator:
             # 1. Listen (STT)
             text_input = await self.stt.listen(audio_data, sample_rate=self.sample_rate)
             
-            logger.info(f"STT Transcript: '{text_input}'")
+            logger.debug(f"STT Transcript: '{text_input}'")
             
             if not text_input or len(text_input.strip()) < 2:
-                logger.info("Ignoring empty/short transcript.")
+                logger.debug("Ignoring empty/short transcript.")
                 return
                 
             # Echo Suppression
