@@ -47,10 +47,10 @@ def run_frontend_lint() -> str:
     Run linting on the frontend.
     """
     try:
-        # Repo structure: .agent/web
-        web_dir = ".agent/web"
+        # Repo structure: .agent/src/web
+        web_dir = ".agent/src/web"
         if not os.path.exists(web_dir):
-            return "Web directory (.agent/web) not found."
+            return "Web directory (.agent/src/web) not found."
             
         result = subprocess.run(
             ["npm", "run", "lint"], 
