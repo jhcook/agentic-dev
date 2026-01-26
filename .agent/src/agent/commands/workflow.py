@@ -33,6 +33,7 @@ def pr(
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, openai)."
     ),
+    ai: bool = typer.Option(False, "--ai", help="Enable AI to generate a detailed PR body summary."),
 ):
     """
     Open a GitHub Pull Request for the current branch.
@@ -77,10 +78,48 @@ def pr(
     if story_id and story_id not in title:
         title = f"[{story_id}] {title}"
         
-    tpl = "## Story Link\n{story_link}\n\n## Changes\n- {summary}\n\n## Governance Checks\n✅ Preflight Passed"
+    tpl = "### Story Link\n{story_link}\n\n### Changes\n- {summary}\n\n### Governance Checks\n✅ Preflight Passed"
+    
+    story_link = "N/A"
+    if story_id:
+        from agent.core.config import config
+        # Attempt to find the story file
+        matches = list(config.stories_dir.rglob(f"*{story_id}*.md"))
+        if matches:
+            # Use relative path for linking
+            rel_path = matches[0].relative_to(config.repo_root)
+            story_link = f"[{story_id}]({rel_path})"
+        else:
+            story_link = story_id
+
+    summary = commit_msg
+    if ai:
+        console.print("[dim]🤖 AI is generating a PR summary...[/dim]")
+        try:
+             # Get diff compared to main
+             diff_content = subprocess.check_output(["git", "diff", f"{target_branch}...HEAD"], text=True)
+             if diff_content:
+                 from agent.core.ai import ai_service
+                 from agent.core.utils import scrub_sensitive_data
+                 
+                 # Initialize provider if specified
+                 if provider:
+                     ai_service.set_provider(provider)
+                     
+                 scrubbed_diff = scrub_sensitive_data(diff_content)
+                 
+                 sys_prompt = "You are a senior developer. Generate a concise, high-level summary of the changes in this PR using bullet points. Focus on technical impact and key features. Use Markdown."
+                 user_prompt = f"STORY ID: {story_id}\n\nDIFF:\n{scrubbed_diff[:8000]}" # Cap context
+                 
+                 generated = ai_service.complete(sys_prompt, user_prompt)
+                 if generated:
+                     summary = generated.strip()
+        except Exception as e:
+             console.print(f"[yellow]⚠️  AI PR summary generation failed: {e}[/yellow]")
+
     body = tpl.format(
-        story_link=story_id if story_id else "N/A",
-        summary=commit_msg
+        story_link=story_link,
+        summary=summary
     )
     
     gh_args = ["gh", "pr", "create", "--title", title, "--body", body, "--base", target_branch]
