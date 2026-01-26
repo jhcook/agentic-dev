@@ -75,12 +75,8 @@ async def websocket_endpoint(websocket: WebSocket):
     
     orchestrator.on_event = on_event_callback
     
-    # DEBUG: Send greeting to verify output path
-    try:
-        greeting = await orchestrator.tts.speak("System ready. I am listening.")
-        await output_queue.put(("audio", greeting))
-    except Exception as e:
-        logger.error(f"Failed to generate greeting: {e}")
+    # 1. Start Orchestrator Background Worker
+    orchestrator.run_background(output_queue)
     
     async def unified_sender_task():
         """Background task to stream audio and events to the client."""
@@ -100,59 +96,17 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception as e:
             logger.error(f"Sender task error: {e}")
 
-    async def process_input_background(data: bytes):
-        """Worker to process audio and push response to queue."""
-        try:
-            logger.info(f"Received audio packet: {len(data)}")
-            async for audio_chunk in orchestrator.process_audio(data):
-                await output_queue.put(("audio", audio_chunk))
-        except Exception as e:
-            logger.error(f"Processing error: {e}")
-
     sender_future = asyncio.create_task(unified_sender_task())
     
     try:
         while True:
             # 1. Receive (Wait for input)
             data = await websocket.receive_bytes()
-            logger.info(f"Packet received: {len(data)}")
             
-            # Rate limit check - DISABLED for streaming audio
-            # if not check_rate_limit(session_id):
-            #     await websocket.send_json({"error": "Rate limit exceeded."})
-            #     continue
-            
-            # 2. VAD & Interrupt Check
-            # We check VAD synchronously on the chunk before processing
-            is_speech = orchestrator.process_vad(data)
-            logger.info(f"VAD Check: {is_speech} (Speaking: {orchestrator.is_speaking.is_set()})")
-            
-            if is_speech:
-                # If valid speech detected while we are speaking...
-                if orchestrator.is_speaking.is_set():
-                    logger.info(f"Interrupt detected in session {session_id}")
-                    
-                    # A. Stop Generation
-                    orchestrator.interrupt()
-                    
-                    # B. Clear Output Queue (Backend buffer)
-                    while not output_queue.empty():
-                        try:
-                            output_queue.get_nowait()
-                            output_queue.task_done()
-                        except asyncio.QueueEmpty:
-                            break
-                    
-                    # C. Clear Client Buffer (Frontend buffer)
-                    # We send a JSON control frame. Client must distinguish bytes vs text.
-                    # Or use a special byte sequence? JSON is safer if client expects it.
-                    await websocket.send_json({"type": "clear_buffer"})
-            
-            # 3. Offload Processing
-            # We don't await here, to keep reading input (VAD)
-            asyncio.create_task(process_input_background(data))
-            
-            logger.info(f"Processing complete for packet from session {session_id}")
+            # 2. Sequential Processing
+            # We push every chunk to the orchestrator.
+            # Its worker loop handles VAD, Endpointing, and Barge-in sequentially.
+            orchestrator.push_audio(data)
             
     except WebSocketDisconnect:
         logger.info(f"Voice session ended: {session_id}", extra={"correlation_id": session_id})
@@ -161,6 +115,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=1011)
     finally:
         # Cleanup
+        orchestrator.stop()
         await output_queue.put(None) # Stop sender
         await sender_future
 

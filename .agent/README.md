@@ -6,7 +6,7 @@ This directory (`.agent/`) contains the complete governance framework.
 
 ## 📁 Directory Structure
 
-```
+```shell
 .agent/
 ├── bin/agent              # CLI executable wrapper
 ├── src/                   # Core Python implementation
@@ -34,7 +34,7 @@ This directory (`.agent/`) contains the complete governance framework.
 
 Agent enforces a strict structured workflow to ensure quality:
 
-```
+```text
 Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementation
 ```
 
@@ -50,7 +50,7 @@ Your code is reviewed by 9 specialized AI agents, each with a specific focus:
 > **New**: With MCP Tool Integration, these agents can now dynamically inspect the environment (read files, check issues) during review.
 
 | Role | Focus Area |
-|------|-----------|
+| ---- | ---------- |
 | **@Architect** | System design, ADR compliance, boundaries |
 | **@QA** | Test coverage, testing strategies |
 | **@Security** | Secrets, vulnerabilities, security posture |
@@ -139,7 +139,7 @@ agent secret set gemini api_key
 agent secret list
 ```
 
-**Auto-Unlock (Keyring Integration)**
+#### Auto-Unlock (Keyring Integration)
 
 To avoid entering your master password repeatedly:
 
@@ -151,7 +151,7 @@ agent secret login
 agent secret logout
 ```
 
-**Headless / CI Mode**
+#### Headless / CI Mode
 
 For automated environments (CI/CD) where no keyring is available:
 

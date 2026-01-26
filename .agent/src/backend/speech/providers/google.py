@@ -36,27 +36,8 @@ class GoogleSTT:
         else:
             # Security: Strictly enforce Secret Manager usage. No ADC fallback.
             logger.error("GoogleSTT: No credentials provided.")
-            self.client = None # Or raise ValueError? Factory handles disabled state via try/catch?
-            # Factory catches ImportError/Exception. So raising ValueError is safe and correct.
+            self.client = None 
             raise ValueError("GoogleSTT requires credentials_json from Secret Manager.")
-
-class GoogleTTS:
-    def __init__(self, credentials_json: Optional[str] = None):
-        if credentials_json:
-            import json
-            try:
-                info = json.loads(credentials_json)
-                self.client = texttospeech.TextToSpeechAsyncClient.from_service_account_info(info)
-            except json.JSONDecodeError:
-                logger.error("GoogleTTS: Invalid JSON credentials.")
-                self.client = None
-            except Exception as e:
-                 logger.error(f"GoogleTTS: Client init failed: {e}")
-                 self.client = None
-        else:
-             # Security: Strictly enforce Secret Manager usage.
-             logger.error("GoogleTTS: No credentials provided.")
-             raise ValueError("GoogleTTS requires credentials_json from Secret Manager.")
 
     async def listen(self, audio_data: bytes, sample_rate: int = 16000) -> str:
         """
@@ -90,29 +71,34 @@ class GoogleTTS:
 
     async def health_check(self) -> bool:
         """
-        Verifies connectivity to Google Cloud by attempting to list recognizers or just validate client.
-        Note: SpeechAsyncClient doesn't have a cheap 'ping'. We'll assume if we can create the client and auth, it's ok.
-        Or try a very simple empty recognition if possible? No, that costs money/errors.
-        We will rely on proper initialization check.
+        Verifies connectivity to Google Cloud.
         """
         try:
             # Check if transport is open/valid
             if not self.client: return False
+            # Ideally we would ping, but client instantiation is a good enough proxy for config validity
             return True
         except Exception:
             return False
 
 
 class GoogleTTS:
-    def __init__(self, credentials_path: Optional[str] = None, credentials_json: Optional[str] = None):
+    def __init__(self, credentials_json: Optional[str] = None):
         if credentials_json:
             import json
-            info = json.loads(credentials_json)
-            self.client = texttospeech.TextToSpeechAsyncClient.from_service_account_info(info)
-        elif credentials_path:
-            self.client = texttospeech.TextToSpeechAsyncClient.from_service_account_json(credentials_path)
+            try:
+                info = json.loads(credentials_json)
+                self.client = texttospeech.TextToSpeechAsyncClient.from_service_account_info(info)
+            except json.JSONDecodeError:
+                logger.error("GoogleTTS: Invalid JSON credentials.")
+                self.client = None
+            except Exception as e:
+                 logger.error(f"GoogleTTS: Client init failed: {e}")
+                 self.client = None
         else:
-            self.client = texttospeech.TextToSpeechAsyncClient()
+             # Security: Strictly enforce Secret Manager usage.
+             logger.error("GoogleTTS: No credentials provided.")
+             raise ValueError("GoogleTTS requires credentials_json from Secret Manager.")
 
     async def speak(self, text: str, language_code: str = "en-US") -> bytes:
         """
@@ -145,10 +131,9 @@ class GoogleTTS:
 
     async def health_check(self) -> bool:
         """
-        Verifies connectivity by listing voices (low cost/free operation usually).
+        Verifies connectivity by listing voices.
         """
         try:
-            # Listing voices is a good health check
             await self.client.list_voices(request=texttospeech.ListVoicesRequest(language_code="en-US"))
             return True
         except Exception as e:

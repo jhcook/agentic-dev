@@ -15,6 +15,7 @@
 import asyncio
 import logging
 import time
+import re
 from typing import Optional, AsyncGenerator
 
 from langgraph.prebuilt import create_react_agent
@@ -27,6 +28,13 @@ from agent.core.config import config
 from agent.core.secrets import get_secret
 
 logger = logging.getLogger(__name__)
+# Explicitly add handler for backend logging to capture TRACEs in admin_backend.log
+if not logger.handlers:
+    sh = logging.StreamHandler()
+    sh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(sh)
+    logger.setLevel(logging.INFO)
+
 tracer = trace.get_tracer(__name__)
 
 # Metrics
@@ -175,7 +183,7 @@ async def get_chat_history(session_id: str) -> list[dict]:
     return history
 
 class VoiceOrchestrator:
-    """Orchestrates voice interaction flow with LangGraph agent."""
+    """Orchestrates voice interaction flow with LangGraph agent using Sequential Queueing."""
     
     def __init__(self, session_id: str):
         """
@@ -206,25 +214,52 @@ class VoiceOrchestrator:
             checkpointer=self.checkpointer
         )
         
-        # Event callback (injected by router)
+        # Injected dependencies
         self.on_event = None
+        self.output_queue: Optional[asyncio.Queue] = None
+        
+        # Load voice settings
+        voice_config_path = config.etc_dir / "voice.yaml"
+        voice_config = config.load_yaml(voice_config_path) if voice_config_path.exists() else {}
+        
+        # Queues & Tasks
+        self.input_queue = asyncio.Queue()
+        self.worker_task: Optional[asyncio.Task] = None
         
         # State
         self.is_speaking = asyncio.Event()
+        self.is_running = False
         
-        # Audio accumulation buffer for STT (file-based API needs larger chunks)
+        # Audio accumulator
         self.audio_buffer = bytearray()
-        self.buffer_duration_ms = 2000  # 2.0 seconds (Increased from 600ms for STT context)
+        
+        # Generation Tracking
+        self.current_generation_id = 0
+        self.pipeline_task: Optional[asyncio.Task] = None
+        
+        # VAD Endpointing State
+        self.speech_active = False          # Has user started speaking?
+        self.silence_start_time = None      # When did silence begin?
+        self.last_speech_time = time.time() # Last time speech was detected
+        
+        # Tuning Parameters
+        self.SILENCE_THRESHOLD = config.get_value(voice_config, "vad.silence_threshold") or 0.7
+        self.MAX_RECORDING_DURATION = 15.0  # Max seconds before forcing process
+        self.MIN_SPEECH_DURATION = 0.1      # Min speech to trigger 'active' state
+        
+        # Audio Gate
+        self.RMS_THRESHOLD = config.get_value(voice_config, "vad.rms_threshold") or 300
+        
+        # Telemetry info
+        self.bytes_per_sample = 2
         self.sample_rate = 16000
-        self.bytes_per_sample = 2  # Int16
-        self.target_buffer_size = int(
-            (self.buffer_duration_ms / 1000) * self.sample_rate * self.bytes_per_sample
-        )  # ~19.2KB for 0.6s at 16kHz
         
         # VAD
         try:
             from backend.voice.vad import VADProcessor
-            self.vad = VADProcessor()
+            v_agg = config.get_value(voice_config, "vad.aggressiveness")
+            if v_agg is None: v_agg = 1
+            self.vad = VADProcessor(aggressiveness=v_agg, sample_rate=self.sample_rate)
         except Exception as e:
             logger.warning(f"VAD initialization failed: {e}. Interrupts disabled.")
             self.vad = None
@@ -239,81 +274,166 @@ class VoiceOrchestrator:
             "VOICE_STT_PROVIDER", 
             config.get_value(voice_config, "stt.provider") or "deepgram"
         ).lower()
+
+    def run_background(self, output_queue: asyncio.Queue):
+        """Start the background worker loop."""
+        self.output_queue = output_queue
+        self.is_running = True
+        self.worker_task = asyncio.create_task(self._process_loop())
+        logger.info(f"Orchestrator worker started for session {self.session_id}")
+
+    def stop(self):
+        """Stop the background worker."""
+        self.is_running = False
+        if self.worker_task:
+            self.worker_task.cancel()
+        if self.pipeline_task:
+            self.pipeline_task.cancel()
+        logger.info(f"Orchestrator worker stopped for session {self.session_id}")
+
+    def push_audio(self, audio_chunk: bytes):
+        """Push raw audio chunk to the input queue for sequential processing."""
+        self.input_queue.put_nowait(audio_chunk)
+
+    async def _process_loop(self):
+        """Infinite loop consuming audio packets and running the state machine."""
+        try:
+            while self.is_running:
+                # 1. Get next packet
+                audio_chunk = await self.input_queue.get()
+                if audio_chunk is None: break # Sentinel
+                
+                # 2. Update State machine
+                await self._process_audio_chunk(audio_chunk)
+                
+                self.input_queue.task_done()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Orchestrator loop error: {e}", exc_info=True)
+
+    async def _process_audio_chunk(self, audio_chunk: bytes):
+        """Internal VAD Logic - Decides when to trigger the pipeline."""
+        now = time.time()
         
-    def _sanitize_user_input(self, text: str) -> str:
-        """
-        Sanitize user input to prevent prompt injection attacks.
+        # Calculate Volume (RMS) for debugging
+        import struct
+        import math
+        count = len(audio_chunk) / 2
+        format = "%dh" % count
+        shorts = struct.unpack(format, audio_chunk)
+        sum_squares = sum(s*s for s in shorts)
+        rms = math.sqrt(sum_squares / count) if count > 0 else 0
         
-        Args:
-            text: Raw transcribed text
-            
-        Returns:
-            Sanitized text safe for LLM
-        """
-        # Remove potential system instruction attempts
-        forbidden_phrases = [
-            "ignore previous", "ignore all previous", "system:", 
-            "assistant:", "you are now", "new instructions"
-        ]
-        
-        sanitized = text
-        text_lower = text.lower()
-        for phrase in forbidden_phrases:
-            if phrase in text_lower:
-                # Redact the phrase
-                start = text_lower.find(phrase)
-                end = start + len(phrase)
-                sanitized = sanitized[:start] + "[redacted]" + sanitized[end:]
-                text_lower = sanitized.lower()
-        
-        # Hard limit on input length
-        return sanitized[:1000]
-        
-    async def process_audio(self, audio_chunk: bytes) -> AsyncGenerator[bytes, None]:
-        """
-        Process audio: Accumulate → STT → Agent → Buffer → TTS
-        
-        Args:
-            audio_chunk: Raw audio bytes from microphone (Int16 PCM, 16kHz)
-            
-        Yields:
-            Synthesized audio response chunks
-        """
-        # Accumulate audio chunks
+        # Trace first packet
+        if len(self.audio_buffer) == 0:
+             logger.debug(f"AUDIO_TRACE[{self.session_id}]: First packet. Size={len(audio_chunk)} Volume={rms:.2f}")
+             
         self.audio_buffer.extend(audio_chunk)
         
-        # Only process when we have enough audio (~1.5 seconds)
-        if len(self.audio_buffer) < self.target_buffer_size:
+        # 1. Run VAD (with volume gate)
+        has_speech = False
+        if rms > self.RMS_THRESHOLD:
+            has_speech = self.process_vad(audio_chunk)
+        
+        # 2. Update State Machine & Handle Barge-in
+        if has_speech:
+            if not self.speech_active:
+                 logger.debug(f"VAD_TRACE[{self.session_id}]: Speech START. Vol={rms:.2f}")
+                 
+            # BARGE-IN: If user speaks while we are still generating/speaking
+            if self.is_speaking.is_set():
+                logger.info(f"BARGE_IN[{self.session_id}]: User interrupted agent.")
+                self.interrupt()
+                # Use a specific event to tell client to purge its local buffers
+                if self.on_event:
+                    self.on_event("clear_buffer", {"generation_id": self.current_generation_id})
+            
+            self.speech_active = True
+            self.silence_start_time = None
+            self.last_speech_time = now
+        else:
+            if self.speech_active and self.silence_start_time is None:
+                self.silence_start_time = now
+                logger.debug(f"VAD_TRACE[{self.session_id}]: Speech STOP (Silence start)")
+        
+        # 3. Check Triggers
+        should_process = False
+        trigger_reason = ""
+        current_buffer_seconds = len(self.audio_buffer) / (self.sample_rate * self.bytes_per_sample)
+        
+        # A: Smart Endpoint
+        if self.speech_active and self.silence_start_time:
+            silence_duration = now - self.silence_start_time
+            if silence_duration > self.SILENCE_THRESHOLD:
+                should_process = True
+                trigger_reason = f"Smart Endpoint ({silence_duration:.2f}s silence)"
+        
+        # B: Constant Noise Valve
+        if self.speech_active and not self.silence_start_time:
+            if current_buffer_seconds > 8.0:
+                 should_process = True
+                 trigger_reason = f"Noise Valve ({current_buffer_seconds:.2f}s constant sound)"
+
+        # C: Deaf Valve (Only if not already speaking/generating)
+        if not self.speech_active and not self.is_speaking.is_set():
+            if current_buffer_seconds > 3.0:
+                should_process = True
+                trigger_reason = f"Deaf Valve ({current_buffer_seconds:.2f}s no speech)"
+
+        # D: Hard Limit
+        if current_buffer_seconds > self.MAX_RECORDING_DURATION:
+            should_process = True
+            trigger_reason = "Hard Limit reached"
+            
+        # 4. Trigger Pipeline
+        if should_process:
+            logger.debug(f"STATE_TRACE[{self.session_id}]: {trigger_reason}")
+            
+            # Extract collected audio
+            accumulated_audio = bytes(self.audio_buffer)
+            
+            # Reset State COMPLETELY
+            self.audio_buffer.clear()
+            self.speech_active = False
+            self.silence_start_time = None
+            
+            # Execute pipeline (Non-blocking)
+            if self.pipeline_task and not self.pipeline_task.done():
+                self.pipeline_task.cancel()
+                
+            self.current_generation_id += 1
+            self.pipeline_task = asyncio.create_task(
+                self._run_pipeline(accumulated_audio, self.current_generation_id)
+            )
+
+    async def _run_pipeline(self, audio_data: bytes, generation_id: int):
+        """Execute the STT -> AI -> TTS pipeline and push to output_queue."""
+        if not self.output_queue:
             return
-        
-        # Extract accumulated audio and reset buffer
-        accumulated_audio = bytes(self.audio_buffer)
-        self.audio_buffer.clear()
-        
+
+        if self.on_event:
+            self.on_event("status", {"state": "thinking"})
+
         with tracer.start_as_current_span("voice.agent.process") as span:
             span.set_attribute("session_id", self.session_id)
             span.set_attribute("voice.provider", self.stt_provider_name)
-            span.set_attribute("audio_size_bytes", len(accumulated_audio))
+            span.set_attribute("audio_size_bytes", len(audio_data))
             
             # 1. Listen (STT)
-            text_input = await self.stt.listen(accumulated_audio)
+            text_input = await self.stt.listen(audio_data, sample_rate=self.sample_rate)
             
             logger.info(f"STT Transcript: '{text_input}'")
             
-            # Filter empty or very short inputs (noise hallucinations)
             if not text_input or len(text_input.strip()) < 2:
                 logger.info("Ignoring empty/short transcript.")
                 return
                 
-            # Echo Suppression: Check if input matches what we just said
-            # Simple containment check
-            if hasattr(self, 'last_agent_text') and self.last_agent_text:
+            # Echo Suppression
+            if self.last_agent_text:
                 normalized_input = text_input.lower().strip()
                 normalized_last = self.last_agent_text.lower().strip()
-                # If input is a substring of the last output (common in echo)
                 if normalized_input in normalized_last or normalized_last in normalized_input:
-                     # Check length ratio to avoid false positives on simple words like "Yes"
-                     # If the match is substantial (>50% overlap or identical)
                      if len(normalized_input) > 5 and (normalized_input == normalized_last or normalized_input in normalized_last):
                          logger.info(f"Ignoring potential echo: '{text_input}' matches last output.")
                          return
@@ -334,6 +454,10 @@ class VoiceOrchestrator:
                 text_stream = self._invoke_agent(text_input)
                 sentence_stream = buffer.process(text_stream)
                 
+                # Update status to speaking as soon as we have a stream
+                if self.on_event:
+                    self.on_event("status", {"state": "speaking"})
+
                 async for sentence in sentence_stream:
                     # CHECK INTERRUPT
                     if not self.is_speaking.is_set():
@@ -344,52 +468,56 @@ class VoiceOrchestrator:
                     
                     # 3. Speak (TTS)
                     audio_output = await self.tts.speak(sentence)
-                    yield audio_output
+                    
+                    # FINAL CHECK: Did an interrupt happen during TTS synthesis?
+                    if not self.is_speaking.is_set() or generation_id != self.current_generation_id:
+                        logger.info(f"Discarding audio for obsolete generation {generation_id}")
+                        break
+
+                    # Push to shared output queue
+                    await self.output_queue.put(("audio", audio_output))
                     
                     await asyncio.sleep(0.01)
                     
             finally:
                 self.is_speaking.clear()
+                if self.on_event:
+                    self.on_event("status", {"state": "listening"})
 
     def process_vad(self, audio_chunk: bytes) -> bool:
-        """
-        Check if audio chunk contains speech.
-        """
+        """Check if audio chunk contains speech."""
         try:
             return self.vad.process(audio_chunk)
         except Exception:
             return False
 
     def interrupt(self):
-        """
-        Signal to stop speaking immediately.
-        """
+        """Signal to stop speaking immediately."""
         if self.is_speaking.is_set():
             logger.warning("Interrupt signal received! Stopping generation.")
             self.is_speaking.clear()
-            # We also need to reset VAD state to avoid noise
+            
+            # Cancel active pipeline task if it exists
+            if self.pipeline_task and not self.pipeline_task.done():
+                self.pipeline_task.cancel()
+                self.pipeline_task = None
+
             if self.vad:
                 self.vad.reset()
+            # Do NOT clear audio_buffer. We want to keep the speech that caused the interrupt.
+            # We also don't reset speech_active because the user is currently middle-of-sentence.
+            # We DO reset silence_start_time just in case.
+            self.silence_start_time = None
     
     async def _invoke_agent(self, user_input: str) -> AsyncGenerator[str, None]:
-        """
-        Invoke LangGraph agent with streaming.
-        
-        Args:
-            user_input: Transcribed user speech
-            
-        Yields:
-            Agent's text response chunks
-        """
+        """Invoke LangGraph agent with streaming."""
         start = time.time()
         status = "success"
         
-        # Emit User Transcript
         if self.on_event:
             self.on_event("transcript", {"role": "user", "text": user_input})
         
         try:
-            # Sanitize input first
             safe_input = self._sanitize_user_input(user_input)
             
             config = {
@@ -399,42 +527,40 @@ class VoiceOrchestrator:
             
             full_response = ""
             
-            # Use astream for progressive response
             async for chunk in self.agent.astream(
                 {"messages": [("user", safe_input)]},
                 config=config,
                 stream_mode="messages" 
             ):
-                # Langgraph 'messages' mode yields (message, metadata) tuple or similar depending on version
-                # Usually chunk is (message, metadata) where message is AIMessageChunk
-                # Or chunk is the raw update.
-                
-                # Check for AIMessageChunk
                 if isinstance(chunk, tuple):
-                    chunk = chunk[0] # The message object
+                    chunk = chunk[0]
                 
                 if hasattr(chunk, 'content') and chunk.content:
-                    # Increment token metric (approx)
                     AGENT_TOKENS.labels(model=self.model_name, type="completion").inc(1)
                     content = str(chunk.content)
                     full_response += content
                     yield content
             
-            # Emit Agent Transcript (Final)
             if self.on_event and full_response:
                 self.on_event("transcript", {"role": "assistant", "text": full_response})
-                self.last_agent_text = full_response # Store for echo cancellation
+                self.last_agent_text = full_response
 
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
             
         except Exception as e:
             status = "error"
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
-            logger.error(
-                f"Agent invocation failed: {e}",
-                extra={"session_id": self.session_id, "error": str(e)}
-            )
-            # Fallback
+            logger.error(f"Agent invocation failed: {e}")
             yield "I'm sorry, I encountered an error."
         finally:
             AGENT_LATENCY.labels(model=self.model_name).observe(time.time() - start)
+
+    def _sanitize_user_input(self, text: str) -> str:
+        """Sanitize user input."""
+        forbidden_phrases = ["ignore previous", "ignore all previous", "system:", "assistant:", "set context", "you are now"]
+        sanitized = text
+        for phrase in forbidden_phrases:
+            # Case-insensitive replacement
+            sanitized = re.sub(re.escape(phrase), "[redacted]", sanitized, flags=re.IGNORECASE)
+        return sanitized[:1000]
+

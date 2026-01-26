@@ -23,6 +23,7 @@ export function VoiceClient() {
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+    const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const audioQueueRef = useRef<AudioBuffer[]>([]);
     const isPlayingRef = useRef(false);
     const playNextChunkRef = useRef<(() => void) | null>(null);
@@ -55,12 +56,10 @@ export function VoiceClient() {
                         ? `${protocol}//${host}`
                         : 'http://localhost:8000';
 
-                    // Fix: Backend mounts router at root, so path is /history/{id}
                     const res = await fetch(`${baseUrl}/history/${sessionId}`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.history && Array.isArray(data.history)) {
-                            // Map logic matches: `${role === 'user' ? '👤' : '🤖'} ${text}`
                             const lines = data.history.map((msg: { role: string, text: string }) =>
                                 `${msg.role === 'user' ? '👤' : '🤖'} ${msg.text}`
                             );
@@ -77,17 +76,22 @@ export function VoiceClient() {
         playNextChunkRef.current = () => {
             if (audioQueueRef.current.length === 0) {
                 isPlayingRef.current = false;
+                activeSourceRef.current = null;
                 return;
             }
 
             isPlayingRef.current = true;
             const buffer = audioQueueRef.current.shift()!;
             const source = audioContextRef.current!.createBufferSource();
+            activeSourceRef.current = source;
             source.buffer = buffer;
             source.connect(audioContextRef.current!.destination);
 
             source.onended = () => {
-                playNextChunkRef.current?.();
+                if (activeSourceRef.current === source) {
+                    activeSourceRef.current = null;
+                    playNextChunkRef.current?.();
+                }
             };
 
             source.start();
@@ -115,6 +119,17 @@ export function VoiceClient() {
             // Clear playback queue on barge-in
             console.log('[Voice] Clearing audio queue (barge-in)');
             audioQueueRef.current = [];
+
+            // Stop active playback immediately
+            if (activeSourceRef.current) {
+                try {
+                    activeSourceRef.current.stop();
+                } catch (e) {
+                    // Ignore if already stopped
+                }
+                activeSourceRef.current = null;
+            }
+
             isPlayingRef.current = false;
         });
 
@@ -138,9 +153,20 @@ export function VoiceClient() {
 
             // Initialize AudioContext
             const audioContext = new AudioContext({ sampleRate: 48000 });
+
+            // Ensure context is running (fixes potential 'suspended' state on start)
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+
             await audioContext.audioWorklet.addModule(`/audio-processor.js?t=${Date.now()}`);
 
             const source = audioContext.createMediaStreamSource(stream);
+
+            // Add a GainNode to boost the mic signal by 2x for better STT recognition
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 2.0;
+
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 2048;
             const bufferLength = analyser.frequencyBinCount;
@@ -149,13 +175,14 @@ export function VoiceClient() {
             const workletNode = new AudioWorkletNode(audioContext, 'audio-downsampler');
 
             workletNode.port.onmessage = (event) => {
-                // console.log("[VoiceClient] Audio chunk received from worklet", event.data.byteLength); // DEBUG
                 // Send to WebSocket
                 sendAudio(event.data);
             };
 
-            source.connect(analyser);
-            source.connect(workletNode);
+            // Pipeline: source -> gain -> analyser -> worklet
+            source.connect(gainNode);
+            gainNode.connect(analyser);
+            gainNode.connect(workletNode);
 
             // Update waveform visualization
             const updateWaveform = () => {
@@ -179,6 +206,7 @@ export function VoiceClient() {
         audioContextRef.current?.close();
         audioContextRef.current = null;
         workletNodeRef.current = null;
+        activeSourceRef.current = null;
         audioQueueRef.current = [];
         isPlayingRef.current = false;
         disconnect();

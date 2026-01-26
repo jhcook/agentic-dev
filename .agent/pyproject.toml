@@ -3,6 +3,8 @@ name = "backend"
 version = "0.1.0"
 description = "Backend implementation"
 authors = [{ name = "Justin Cook", email = "jhcook@secnix.com" }]
+requires-python = ">=3.10"
+dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
     "SQLAlchemy>=2.0",
@@ -40,7 +42,9 @@ voice = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
     # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility (onnxruntime)
-    # "kokoro-onnx>=0.3.1",
+    "kokoro-onnx>=0.3.1",
+    "onnxruntime>=1.16.0",
+    "webrtcvad>=2.0.10",
     "soundfile>=0.12.1",
     "scipy>=1.11.0",
     # Faster-whisper for offline STT - Disabled due to Python 3.14 incompatibility (av/Cython)
@@ -52,7 +56,6 @@ voice = [
 admin = [
     "PyYAML>=6.0",
 ]
-requires-python = ">=3.10"
 
 [build-system]
 requires = ["poetry-core"]
