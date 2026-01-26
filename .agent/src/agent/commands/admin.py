@@ -88,9 +88,16 @@ class ProcessManager:
         backend_log = (self.log_dir / "admin_backend.log").open("w")
         frontend_log = (self.log_dir / "admin_frontend.log").open("w")
 
+        # Determine python executable
+        # Prefer local .venv if it exists
+        if os.path.exists(".venv/bin/python"):
+             python_exec = os.path.abspath(".venv/bin/python")
+        else:
+             python_exec = sys.executable
+
         # 1. Start Backend (Uvicorn)
         backend_cmd = [
-            sys.executable, "-m", "uvicorn",
+            python_exec, "-m", "uvicorn",
             "backend.main:app",
             "--host", "127.0.0.1",
             "--port", "8000",
