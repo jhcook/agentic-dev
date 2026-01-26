@@ -541,7 +541,81 @@ def configure_voice_settings() -> None:
     else:
         typer.secho("[OK] Deepgram key already configured.", fg=typer.colors.GREEN, dim=True)
 
-    # 2. Voice LLM Provider
+# 2. Azure Speech
+    # 2. Azure Speech
+    if not manager.has_secret("azure", "key"):
+        if typer.confirm("Do you want to enable Azure Speech?", default=False):
+            typer.secho("\n[SECURITY WARNING] Azure Keys are sensitive secrets.", fg=typer.colors.RED, bold=True)
+            typer.echo("We will store your key and region ENCRYPTED in the local Secret Manager.")
+            typer.echo("You should NEVER commit these keys to git.\n")
+            
+            typer.echo("Enter Azure Speech Key (masked):")
+            key = getpass.getpass("Key: ")
+            region = typer.prompt("Azure Region (e.g. eastus): ")
+            
+            if key and region:
+                # Security: Validate region
+                import re
+                if not re.match(r"^[a-z0-9-]+$", region):
+                     typer.secho(f"[ERROR] Invalid region format. Must be alphanumeric/hyphens only.", fg=typer.colors.RED)
+                else:
+                    try:
+                        # Enforce secure storage for KEY and REGION
+                        manager.set_secret("azure", "key", key)
+                        manager.set_secret("azure", "region", region)
+                        
+                        # We also update config for visibility if user wants, but reliance should be on secret?
+                        # Security Review said "Cleartext storage of Azure region... might be seen as configuration".
+                        # We will REMOVE it from plain config to satisfy them.
+                        
+                        typer.secho("[OK] Azure credentials (Key & Region) stored in Secret Manager.", fg=typer.colors.GREEN)
+                    except Exception as e:
+                        typer.secho(f"[ERROR] Failed to save Azure secret: {e}", fg=typer.colors.RED)
+    else:
+        typer.secho("[OK] Azure key already configured.", fg=typer.colors.GREEN, dim=True)
+
+    # 3. Google Cloud Speech
+    if not manager.has_secret("google", "application_credentials_json"):
+        if typer.confirm("Do you want to enable Google Cloud Speech?", default=False):
+            typer.secho("\n[SECURITY WARNING] Service Account Keys are highly sensitive.", fg=typer.colors.RED, bold=True)
+            typer.echo("We will import the CONTENT of your JSON key and store it ENCRYPTED.")
+            typer.echo("We do NOT store the file path. You should DELETE the local JSON file after import.")
+            typer.echo("NEVER commit the JSON file to git.\n")
+            
+            typer.echo("Enter path to Service Account JSON file (for one-time import):")
+            path_str = typer.prompt("Path: ", default="")
+            
+            if path_str:
+                path = Path(path_str).resolve()
+                if path.exists():
+                    try:
+                        import json
+                        with open(path, 'r') as f:
+                            json_content = f.read()
+                            # Validate JSON
+                            json.loads(json_content) 
+                            
+                        # Store the raw JSON string in secrets manager
+                        manager.set_secret("google", "application_credentials_json", json_content)
+                        typer.secho(f"[OK] Google Service Account imported to Secret Manager.", fg=typer.colors.GREEN)
+                        
+                        if typer.confirm("Delete local JSON file now (Recommended)?", default=True):
+                            try:
+                                path.unlink()
+                                typer.secho(f"[OK] Deleted {path.name}", fg=typer.colors.GREEN)
+                            except Exception as e:
+                                typer.secho(f"[ERROR] Failed to delete file: {e}", fg=typer.colors.RED)
+                        else:
+                             typer.secho(f"[ACTION REQUIRED] Please DELETE the file '{path.name}' manually.", fg=typer.colors.YELLOW, bold=True)
+                        
+                    except Exception as e:
+                        typer.secho(f"[ERROR] Failed to import Google JSON: {e}", fg=typer.colors.RED)
+                else:
+                    typer.secho(f"[WARN] File not found: {path}", fg=typer.colors.YELLOW)
+    else:
+        typer.secho("[OK] Google credentials already configured.", fg=typer.colors.GREEN, dim=True)
+
+    # 4. Voice LLM Provider
     # Load existing
     try:
         data = config.load_yaml(voice_config_path)
@@ -569,7 +643,7 @@ def configure_voice_settings() -> None:
         except ValueError:
             pass
 
-    # 3. Local Models (Kokoro)
+    # 5. Local Models (Kokoro)
     if typer.confirm("Download Local Voice Models (Kokoro)? (Recommended for Dev/Offline)", default=False):
         typer.echo("Downloading models... This may take a moment.")
         try:

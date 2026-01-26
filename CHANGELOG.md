@@ -18,3 +18,8 @@
 - **GitHub MCP Support**: Integrated `@modelcontextprotocol/server-github` for interaction with GitHub repositories and issues.
 - **mcp command**: Added `agent mcp start` and `agent mcp run` commands.
 - **Onboarding**: Updated `agent onboard` to allow choosing between MCP and `gh` CLI.
+- **Additional Voice Providers** (INFRA-037):
+  - Added support for **Google Cloud Speech** (Async STT/TTS).
+  - Added support for **Azure Speech Services** (STT/TTS).
+  - Updated `agent onboard` to securely prompt and encrypt keys for new providers.
+  - Refactored voice factory to use a dynamic registry pattern.

@@ -229,9 +229,16 @@ class VoiceOrchestrator:
             logger.warning(f"VAD initialization failed: {e}. Interrupts disabled.")
             self.vad = None
         
-        # Get model name for metrics
+        # Get model and provider names for metrics/telemetry
         voice_config = _get_voice_config()
         self.model_name = config.get_value(voice_config, "llm.model") or "gpt-4o-mini"
+        
+        # Resolve STT provider name for telemetry (Env > Config > Default)
+        import os
+        self.stt_provider_name = os.getenv(
+            "VOICE_STT_PROVIDER", 
+            config.get_value(voice_config, "stt.provider") or "deepgram"
+        ).lower()
         
     def _sanitize_user_input(self, text: str) -> str:
         """
@@ -285,6 +292,7 @@ class VoiceOrchestrator:
         
         with tracer.start_as_current_span("voice.agent.process") as span:
             span.set_attribute("session_id", self.session_id)
+            span.set_attribute("voice.provider", self.stt_provider_name)
             span.set_attribute("audio_size_bytes", len(accumulated_audio))
             
             # 1. Listen (STT)
