@@ -30,22 +30,25 @@ def list_stories(status: str = "OPEN") -> str:
     
     for fpath in glob.glob(pattern, recursive=True):
         try:
-             # Basic check of content or just listing
-             # For speed, just list filenames for now
+             filename = os.path.basename(fpath)
              if status == "ALL":
-                 matches.append(os.path.basename(fpath))
+                 matches.append(filename)
                  continue
                  
-             # Deep check requires reading file... skipping for performance in voice 
-             # unless requested? 
-             # Let's just return all for MVP
-             matches.append(os.path.basename(fpath))
+             # Check content for status
+             with open(fpath, 'r') as f:
+                 content = f.read()
+                 # Simple check for "Status: <status>" or "State: <status>"
+                 # Case insensitive check
+                 if f"State: {status}" in content or f"Status: {status}" in content or \
+                    f"State:\n{status}" in content or f"Status:\n{status}" in content:
+                     matches.append(filename)
         except:
             continue
             
     if not matches:
-        return "No stories found."
-    return "\n".join(matches[:10]) # Limit to 10
+        return f"No stories found with status '{status}'."
+    return "\n".join(matches[:20]) # Limit to 20
 
 @tool
 def get_project_info() -> str:

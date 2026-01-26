@@ -14,11 +14,14 @@
 
 from .architect import list_adrs, read_adr, search_rules
 from .project import list_stories, get_project_info, list_runbooks
-from .git import get_git_status, get_git_diff, get_git_log
+from .git import get_git_status, get_git_diff, get_git_log, get_git_branch
 from .qa import run_backend_tests, run_frontend_lint
-from .security import scan_secrets_in_content
+from .security import scan_file_for_secrets
 from .observability import get_recent_logs
-from .meta import draft_new_tool, list_capabilities
+from .create_tool import create_tool
+from .list_capabilities import list_capabilities
+from .read_tool_source import read_tool_source
+from .get_installed_packages import get_installed_packages
 from .docs import list_docs, read_doc, search_docs
 
 def get_all_tools():
@@ -31,15 +34,15 @@ def get_all_tools():
         # Project
         list_stories, get_project_info, list_runbooks,
         # Git
-        get_git_status, get_git_diff, get_git_log,
+        get_git_status, get_git_diff, get_git_log, get_git_branch,
         # QA
         run_backend_tests, run_frontend_lint,
         # Security
-        scan_secrets_in_content,
+        scan_file_for_secrets,
         # Observability
         get_recent_logs,
         # Meta
-        draft_new_tool, list_capabilities,
+        create_tool, list_capabilities, read_tool_source, get_installed_packages,
         # Docs
         list_docs, read_doc, search_docs
     ]

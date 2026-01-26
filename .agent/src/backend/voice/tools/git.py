@@ -74,3 +74,19 @@ def get_git_log(limit: int = 5) -> str:
         return result.stdout
     except subprocess.CalledProcessError as e:
         return f"Error getting git log: {e}"
+@tool
+def get_git_branch() -> str:
+    """
+    Get the current active git branch name.
+    Useful for inferring the current story or task context.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        return result.stdout.strip() or "HEAD (detached)"
+    except subprocess.CalledProcessError as e:
+        return f"Error getting git branch: {e}"

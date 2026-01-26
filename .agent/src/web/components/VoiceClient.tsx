@@ -19,7 +19,7 @@ import { WaveformVisualizer } from './WaveformVisualizer';
 export function VoiceClient() {
     const [hasPermission, setHasPermission] = useState(false);
     const [audioData, setAudioData] = useState<Float32Array | null>(null);
-    const [transcript, setTranscript] = useState<string[]>([]);
+    const [transcript, setTranscript] = useState<Array<{ role: string; text: string; partial?: boolean }>>([]);
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -27,6 +27,7 @@ export function VoiceClient() {
     const audioQueueRef = useRef<AudioBuffer[]>([]);
     const isPlayingRef = useRef(false);
     const playNextChunkRef = useRef<(() => void) | null>(null);
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     // Persistent Session ID
     const [sessionId] = useState(() => {
@@ -60,9 +61,11 @@ export function VoiceClient() {
                     if (res.ok) {
                         const data = await res.json();
                         if (data.history && Array.isArray(data.history)) {
-                            const lines = data.history.map((msg: { role: string, text: string }) =>
-                                `${msg.role === 'user' ? '👤' : '🤖'} ${msg.text}`
-                            );
+                            const lines = data.history.map((msg: { role: string, text: string }) => ({
+                                role: msg.role,
+                                text: msg.text,
+                                partial: false
+                            }));
                             setTranscript(lines);
                         }
                     }
@@ -134,10 +137,59 @@ export function VoiceClient() {
         });
 
         // Handle transcripts
-        setOnTranscript((role: string, text: string) => {
-            setTranscript(prev => [...prev, `${role === 'user' ? '👤' : '🤖'} ${text}`]);
+        setOnTranscript((role: string, text: string, partial?: boolean) => {
+            setTranscript(prev => {
+                if (prev.length === 0) {
+                    return [{ role, text, partial }];
+                }
+
+                const last = prev[prev.length - 1];
+                const isAssistantMerge = role === 'assistant' && last.role === 'assistant';
+
+                if (isAssistantMerge) {
+                    // Always merge consecutive assistant messages into one bubble for voice
+                    const newHistory = [...prev];
+
+                    if (partial) {
+                        // If the last was already a partial of the same stream, append
+                        // If the last was a final and we got a new partial, append with space
+                        const joiner = (last.partial === false) ? ' ' : '';
+                        newHistory[newHistory.length - 1] = {
+                            ...last,
+                            text: last.text + joiner + text,
+                            partial: true
+                        };
+                    } else {
+                        // Received final text. For assistent, just update the last one and mark final.
+                        // But use the text provided (which is full text in some cases or just a chunk)
+                        // Backend sends FULL text for assistant when partial=False
+                        newHistory[newHistory.length - 1] = {
+                            ...last,
+                            text: text,
+                            partial: false
+                        };
+                    }
+                    return newHistory;
+                }
+
+                // If user message and last was partial user, append?
+                // Usually user messages come in one go from STT, but just in case:
+                if (role === 'user' && last.role === 'user' && last.partial) {
+                    const newHistory = [...prev];
+                    newHistory[newHistory.length - 1] = { ...last, text: last.text + text, partial };
+                    return newHistory;
+                }
+
+                // New message start
+                return [...prev, { role, text, partial }];
+            });
         });
     }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
+
+    // Auto-scroll to bottom of transcript
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [transcript]);
 
     const requestMicrophoneAccess = async () => {
         try {
@@ -286,9 +338,12 @@ export function VoiceClient() {
                         <div className="w-full max-w-4xl mb-6 p-4 bg-gray-800 rounded-lg max-h-64 overflow-y-auto">
                             <h2 className="text-lg font-semibold mb-2">Transcript</h2>
                             <div className="space-y-2">
-                                {transcript.map((line, i) => (
-                                    <p key={i} className="text-gray-300">{line}</p>
+                                {transcript.map((msg, i) => (
+                                    <p key={i} className={`text-gray-300 ${msg.partial ? 'opacity-80 animate-pulse' : ''}`}>
+                                        {msg.role === 'user' ? '👤' : '🤖'} {msg.text}
+                                    </p>
                                 ))}
+                                <div ref={transcriptEndRef} />
                             </div>
                         </div>
                     )}

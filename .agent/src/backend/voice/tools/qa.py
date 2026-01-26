@@ -23,6 +23,10 @@ def run_backend_tests(path: str = "tests/") -> str:
     Args:
         path: Test path (default: 'tests/')
     """
+    # Validation
+    if not os.path.exists(path):
+        return f"Error: Test path '{path}' does not exist."
+        
     try:
         # Security: Use list format for subprocess
         # Check if .venv exists, otherwise try system pytest
@@ -35,8 +39,12 @@ def run_backend_tests(path: str = "tests/") -> str:
             check=False 
         )
         output = result.stdout + result.stderr
+        
+        # Add summary logic if output is huge
         if len(output) > 2000:
-            return output[:2000] + "\n... (truncated)"
+            summary = output.splitlines()[-5:] # Last 5 lines usually have summary
+            return output[:2000] + "\n... (truncated)\n" + "\n".join(summary)
+            
         return output
     except Exception as e:
         return f"failed to run tests: {e}"
