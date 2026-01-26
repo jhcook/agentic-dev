@@ -27,6 +27,7 @@ export function VoiceClient() {
     const audioQueueRef = useRef<AudioBuffer[]>([]);
     const isPlayingRef = useRef(false);
     const playNextChunkRef = useRef<(() => void) | null>(null);
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     // Persistent Session ID
     const [sessionId] = useState(() => {
@@ -185,6 +186,11 @@ export function VoiceClient() {
         });
     }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
 
+    // Auto-scroll to bottom of transcript
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [transcript]);
+
     const requestMicrophoneAccess = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -337,6 +343,7 @@ export function VoiceClient() {
                                         {msg.role === 'user' ? '👤' : '🤖'} {msg.text}
                                     </p>
                                 ))}
+                                <div ref={transcriptEndRef} />
                             </div>
                         </div>
                     )}

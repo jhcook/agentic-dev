@@ -19,6 +19,6 @@ whisper:
 
 # Audio and VAD Tuning
 vad:
-  aggressiveness: 0      # 0 (Least aggressive) to 3 (Most aggressive)
+  aggressiveness: 0.5    # 0 (Least aggressive) to 3 (Most aggressive)
   rms_threshold: 300     # Minimum volume level (RMS) to process audio as speech
   silence_threshold: 0.7 # Seconds of silence to trigger response

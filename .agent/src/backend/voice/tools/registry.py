@@ -14,7 +14,7 @@
 
 from .architect import list_adrs, read_adr, search_rules
 from .project import list_stories, get_project_info, list_runbooks
-from .git import get_git_status, get_git_diff, get_git_log
+from .git import get_git_status, get_git_diff, get_git_log, get_git_branch
 from .qa import run_backend_tests, run_frontend_lint
 from .security import scan_file_for_secrets
 from .observability import get_recent_logs
@@ -34,7 +34,7 @@ def get_all_tools():
         # Project
         list_stories, get_project_info, list_runbooks,
         # Git
-        get_git_status, get_git_diff, get_git_log,
+        get_git_status, get_git_diff, get_git_log, get_git_branch,
         # QA
         run_backend_tests, run_frontend_lint,
         # Security
