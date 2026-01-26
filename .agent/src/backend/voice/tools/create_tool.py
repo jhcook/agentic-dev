@@ -31,19 +31,23 @@ def create_tool(file_path: str, code: str) -> str:
                    Example: 'my_new_tool.py' or 'integrations/slack_tool.py'
         code: The valid Python code for the tool.
     """
-    # Enforce directory constraint
-    custom_dir = ".agent/src/backend/voice/tools/custom"
+    # Enforce directory constraint - relative to this file
+    # This file is in .../backend/voice/tools/create_tool.py
+    # Custom tools are in .../backend/voice/tools/custom/
+    custom_dir = os.path.join(os.path.dirname(__file__), "custom")
     base_dir = os.path.abspath(custom_dir)
     
     # Handle both full paths provided by agent or relative filenames
-    if not file_path.startswith(custom_dir):
-        # Assume it's just a filename relative to custom dir
-        target_path = os.path.abspath(os.path.join(base_dir, file_path))
+    # Check if the input path is already an absolute path that starts with our base_dir
+    if os.path.isabs(file_path) and file_path.startswith(base_dir):
+        target_path = file_path
     else:
-        target_path = os.path.abspath(file_path)
+        # Assume relative to custom directory if not absolute matching base
+        # Strip any leading directory components if they were trying to be clever with relative paths
+        clean_name = os.path.basename(file_path)
+        target_path = os.path.join(base_dir, clean_name)
 
     # Security: Path Traversal Check & Containment
-    # Must use os.path.commonpath or explicit prefix check on resolved paths
     if not target_path.startswith(base_dir):
         return f"Error: Security violation. Tools can only be created in {custom_dir}."
         
@@ -72,21 +76,13 @@ def create_tool(file_path: str, code: str) -> str:
         logger.info(f"Tool created at {target_path}")
         
         # Hot Reload Logic
-        # Infer module name relative to .agent/src for importlib
         try:
-             # target_path is like /abs/.../.agent/src/backend/voice/tools/custom/foo.py
-             # We want backend.voice.tools.custom.foo
-             
-             # Find .agent/src in path
-             src_marker = ".agent/src"
-             idx = target_path.find(src_marker)
-             if idx == -1:
-                 msg = "Error: Could not determine module path for hot reload."
-                 logger.error(msg)
-                 return msg
-                 
-             rel_path = target_path[idx + len(src_marker) + 1:] # +1 for slash
-             module_name = rel_path.replace("/", ".").replace(".py", "")
+             # We know the module path because we enforced the directory structure
+             # File is at .../backend/voice/tools/custom/<filename>.py
+             # Module is backend.voice.tools.custom.<filename>
+             filename = os.path.basename(target_path)
+             module_param = os.path.splitext(filename)[0]
+             module_name = f"backend.voice.tools.custom.{module_param}"
              
              if module_name in sys.modules:
                 importlib.reload(sys.modules[module_name])
@@ -96,10 +92,10 @@ def create_tool(file_path: str, code: str) -> str:
                 status = "Imported new module."
                 
              logger.info(f"Hot reload successful for {module_name}")
-             return f"Success: Tool created at {file_path}. {status}"
+             return f"Success: Tool created at {target_path}. {status}"
              
         except Exception as e:
-            msg = f"Created file at {file_path}, but failed to hot-reload: {e}"
+            msg = f"Created file at {target_path}, but failed to hot-reload: {e}"
             logger.error(f"Hot reload failed: {e}")
             return msg
             

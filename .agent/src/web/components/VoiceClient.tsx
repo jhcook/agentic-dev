@@ -19,7 +19,7 @@ import { WaveformVisualizer } from './WaveformVisualizer';
 export function VoiceClient() {
     const [hasPermission, setHasPermission] = useState(false);
     const [audioData, setAudioData] = useState<Float32Array | null>(null);
-    const [transcript, setTranscript] = useState<string[]>([]);
+    const [transcript, setTranscript] = useState<Array<{ role: string; text: string; partial?: boolean }>>([]);
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -60,9 +60,11 @@ export function VoiceClient() {
                     if (res.ok) {
                         const data = await res.json();
                         if (data.history && Array.isArray(data.history)) {
-                            const lines = data.history.map((msg: { role: string, text: string }) =>
-                                `${msg.role === 'user' ? '👤' : '🤖'} ${msg.text}`
-                            );
+                            const lines = data.history.map((msg: { role: string, text: string }) => ({
+                                role: msg.role,
+                                text: msg.text,
+                                partial: false
+                            }));
                             setTranscript(lines);
                         }
                     }
@@ -134,8 +136,47 @@ export function VoiceClient() {
         });
 
         // Handle transcripts
-        setOnTranscript((role: string, text: string) => {
-            setTranscript(prev => [...prev, `${role === 'user' ? '👤' : '🤖'} ${text}`]);
+        setOnTranscript((role: string, text: string, partial?: boolean) => {
+            setTranscript(prev => {
+                const last = prev[prev.length - 1];
+
+                // If it's a partial update for the *same* role as the last message, update it
+                if (partial && last && last.role === role && last.partial) {
+                    const newHistory = [...prev];
+                    newHistory[newHistory.length - 1] = { ...last, text: last.text + text };
+                    return newHistory;
+                }
+
+                // If we get a final update (partial=false) matching the last message, verify/replace text
+                // OR simpler: just append new messages if context switched
+
+                // Basic logic:
+                // 1. If partial match last, append
+                // 2. Else new message
+
+                // Actually, backend sends "partial" chunks.
+                // If partial was sent before, we appended. 
+                // If now we get partial=False (final), we might want to just ensure it's marked final.
+
+                if (last && last.role === role && last.partial) {
+                    // We are streaming this message
+                    if (partial) {
+                        // Append more text
+                        const newHistory = [...prev];
+                        newHistory[newHistory.length - 1] = { ...last, text: last.text + text };
+                        return newHistory;
+                    } else {
+                        // Finalize it (backend sent full text? Or just the chunk with partial=False?)
+                        // Backend sends full text with partial=False at the end
+                        const newHistory = [...prev];
+                        newHistory[newHistory.length - 1] = { ...last, text: text, partial: false };
+                        return newHistory;
+                    }
+                }
+
+                // New message start
+                return [...prev, { role, text, partial }];
+            });
         });
     }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
 
@@ -286,8 +327,10 @@ export function VoiceClient() {
                         <div className="w-full max-w-4xl mb-6 p-4 bg-gray-800 rounded-lg max-h-64 overflow-y-auto">
                             <h2 className="text-lg font-semibold mb-2">Transcript</h2>
                             <div className="space-y-2">
-                                {transcript.map((line, i) => (
-                                    <p key={i} className="text-gray-300">{line}</p>
+                                {transcript.map((msg, i) => (
+                                    <p key={i} className={`text-gray-300 ${msg.partial ? 'opacity-80 animate-pulse' : ''}`}>
+                                        {msg.role === 'user' ? '👤' : '🤖'} {msg.text}
+                                    </p>
                                 ))}
                             </div>
                         </div>

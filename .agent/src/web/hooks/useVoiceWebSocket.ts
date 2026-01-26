@@ -30,7 +30,7 @@ export function useVoiceWebSocket(url: string) {
     const reconnectTimerRef = useRef<number | null>(null);
     const onAudioChunkRef = useRef<((chunk: ArrayBuffer) => void) | null>(null);
     const onClearBufferRef = useRef<(() => void) | null>(null);
-    const onTranscriptRef = useRef<((role: string, text: string) => void) | null>(null);
+    const onTranscriptRef = useRef<((role: string, text: string, partial?: boolean) => void) | null>(null);
     const connectFnRef = useRef<(() => void) | null>(null);
 
     const connect = useCallback(() => {
@@ -59,8 +59,8 @@ export function useVoiceWebSocket(url: string) {
                         }
                     } else if (msg.type === 'transcript') {
                         // @ts-expect-error - dynamic payload
-                        const { role, text } = msg;
-                        onTranscriptRef.current?.(role, text);
+                        const { role, text, partial } = msg;
+                        onTranscriptRef.current?.(role, text, partial);
                     }
                 } catch (err) {
                     console.error('[Voice] Failed to parse message:', err);
@@ -122,7 +122,7 @@ export function useVoiceWebSocket(url: string) {
         onClearBufferRef.current = callback;
     }, []);
 
-    const setOnTranscript = useCallback((callback: (role: string, text: string) => void) => {
+    const setOnTranscript = useCallback((callback: (role: string, text: string, partial?: boolean) => void) => {
         onTranscriptRef.current = callback;
     }, []);
 

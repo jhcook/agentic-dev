@@ -547,10 +547,15 @@ class VoiceOrchestrator:
                     AGENT_TOKENS.labels(model=self.model_name, type="completion").inc(1)
                     content = str(chunk.content)
                     full_response += content
+                    
+                    if self.on_event:
+                         self.on_event("transcript", {"role": "assistant", "text": content, "partial": True})
+                         
                     yield content
             
             if self.on_event and full_response:
-                self.on_event("transcript", {"role": "assistant", "text": full_response})
+                # Send one final non-partial event to solidify the text (optional, but good for sync)
+                self.on_event("transcript", {"role": "assistant", "text": full_response, "partial": False})
                 self.last_agent_text = full_response
 
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
