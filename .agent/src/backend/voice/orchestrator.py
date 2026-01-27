@@ -16,6 +16,7 @@ import asyncio
 import logging
 import time
 import re
+from typing import Optional, AsyncGenerator
 from datetime import datetime, timedelta
 import json
 
@@ -162,18 +163,23 @@ async def get_chat_history(session_id: str) -> list[dict]:
     
     # MemorySaver has .get(config) -> StateSnapshot
     snapshot = GLOBAL_MEMORY.get(config)
+    logger.info(f"DEBUG[get_chat_history]: session={session_id} snapshot_found={bool(snapshot)}")
     if not snapshot:
+        logger.warning(f"DEBUG[get_chat_history]: No snapshot found for {session_id}")
         return []
         
     # Correctly access messages from CheckpointTuple
     # snapshot is a CheckpointTuple with .checkpoint (dict)
     try:
         messages = snapshot.checkpoint["channel_values"].get("messages", [])
+        logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in checkpoint['channel_values']")
     except (AttributeError, KeyError):
         # Fallback for alternative structures
         try:
             messages = snapshot.values.get("messages", [])
+            logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in snapshot.values")
         except (AttributeError, TypeError):
+            logger.error(f"DEBUG[get_chat_history]: Failed to extract messages. Keys: {dir(snapshot)}")
             messages = []
             
     history = []
@@ -221,6 +227,7 @@ def _persist_session_history(session_id: str, history: list[dict]):
                 "timestamp": datetime.utcnow().isoformat(),
                 "history": history
             }, f, indent=2)
+        logger.info(f"Persisted session {session_id} history to {file_path}")
     except Exception as e:
         logger.warning(f"Failed to persist session {session_id}: {e}")
 
@@ -683,13 +690,23 @@ class VoiceOrchestrator:
                          
                     yield content
             
+            if self.on_event and full_response:
                 # Send one final non-partial event to solidify the text (optional, but good for sync)
                 self.on_event("transcript", {"role": "assistant", "text": full_response, "partial": False})
                 self.last_agent_text = full_response
                 
-                # Persist history for offline review
-                history = await get_chat_history(self.session_id)
-                _persist_session_history(self.session_id, history)
+                # Persist history for offline review (Directly from agent state)
+                try:
+                    state = self.agent.get_state(config)
+                    messages = state.values.get("messages", [])
+                    history = []
+                    for msg in messages:
+                        if msg.type not in ["human", "ai"]: continue
+                        role = "user" if msg.type == "human" else "assistant"
+                        history.append({"role": role, "text": str(msg.content)})
+                    _persist_session_history(self.session_id, history)
+                except Exception as e:
+                    logger.error(f"Failed to extract/persist history: {e}")
 
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
             
