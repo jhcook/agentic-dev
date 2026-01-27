@@ -97,8 +97,11 @@ def get_git_branch() -> str:
             text=True, 
             check=True
         )
-        return result.stdout.strip() or "HEAD (detached)"
+        branch_name = result.stdout.strip() or "HEAD (detached)"
+        logger.info(f"Tool get_git_branch returned: {branch_name}")
+        return f"Current Git Branch: {branch_name}"
     except subprocess.CalledProcessError as e:
+        logger.error(f"Tool get_git_branch failed: {e}")
         return f"Error getting git branch: {e}"
 
 @tool

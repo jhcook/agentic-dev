@@ -16,7 +16,8 @@ import asyncio
 import logging
 import time
 import re
-from typing import Optional, AsyncGenerator
+from datetime import datetime, timedelta
+import json
 
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -206,6 +207,22 @@ async def get_chat_history(session_id: str) -> list[dict]:
         })
         
     return history
+
+def _persist_session_history(session_id: str, history: list[dict]):
+    """Persist chat history to disk for review."""
+    try:
+        storage_dir = config.agent_dir / "storage" / "voice_sessions"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = storage_dir / f"{session_id}.json"
+        with open(file_path, 'w') as f:
+            json.dump({
+                "session_id": session_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "history": history
+            }, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist session {session_id}: {e}")
 
 def strip_markdown_for_tts(text: str) -> str:
     """Removes markdown elements and technical junk that should not be spoken."""
@@ -666,10 +683,13 @@ class VoiceOrchestrator:
                          
                     yield content
             
-            if self.on_event and full_response:
                 # Send one final non-partial event to solidify the text (optional, but good for sync)
                 self.on_event("transcript", {"role": "assistant", "text": full_response, "partial": False})
                 self.last_agent_text = full_response
+                
+                # Persist history for offline review
+                history = await get_chat_history(self.session_id)
+                _persist_session_history(self.session_id, history)
 
             AGENT_REQUESTS.labels(model=self.model_name, status=status).inc()
             

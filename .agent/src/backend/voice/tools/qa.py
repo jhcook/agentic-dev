@@ -97,7 +97,11 @@ def shell_command(command: str, cwd: str = ".") -> str:
         span.set_attribute("cwd", cwd)
         try:
             # Security: Prevent escaping project root if possible
-            if ".." in cwd or cwd.startswith("/"):
+            # Resolve CWD to absolute path, defaulting to Repo Root if "."
+            if cwd == ".":
+                cwd = os.getcwd()
+            
+            if ".." in cwd or (cwd.startswith("/") and not cwd.startswith(os.getcwd())):
                 return "Error: Working directory must be within project root."
             
             # We will split the command into a list safely
