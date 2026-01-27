@@ -2,6 +2,11 @@
 
 This repository contains the backend services for the Agentic Voice application.
 
+## Features
+
+- **Voice Agent**: A fully capable voice assistant with bi-directional audio, VAD, and secure tools. [Documentation](docs/features/voice-agent.md)
+- **Governance**: Automated preflight checks.
+
 ## Getting Started
 
 1. **Clone the repository:**

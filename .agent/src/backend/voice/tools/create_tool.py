@@ -41,18 +41,19 @@ def create_tool(file_path: str, code: str) -> str:
     base_dir = custom_dir # It is already absolute
     
     # Handle both full paths provided by agent or relative filenames
-    # Check if the input path is already an absolute path that starts with our base_dir
-    if os.path.isabs(file_path) and file_path.startswith(base_dir):
-        target_path = file_path
+    if os.path.isabs(file_path):
+        target_path = os.path.normpath(file_path)
     else:
-        # Assume relative to custom directory if not absolute matching base
-        # Strip any leading directory components if they were trying to be clever with relative paths
-        clean_name = os.path.basename(file_path)
-        target_path = os.path.join(base_dir, clean_name)
+        target_path = os.path.normpath(os.path.join(base_dir, file_path))
 
     # Security: Path Traversal Check & Containment
-    if not target_path.startswith(base_dir):
-        return f"Error: Security violation. Tools can only be created in {custom_dir}."
+    # Use commonpath to correctly handle cases where a path is a prefix but not a parent (e.g. /custom vs /custom_suffix)
+    # commonpath raises if paths are on different drives, so we wrap
+    try:
+        if os.path.commonpath([base_dir, target_path]) != base_dir:
+             return f"Error: Security violation. Tools can only be created in {custom_dir}."
+    except ValueError:
+         return f"Error: Security violation. Invalid path."
         
     # Syntax Validation
     try:

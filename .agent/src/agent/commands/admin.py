@@ -35,6 +35,7 @@ class ProcessManager:
         self.pid_file = PID_FILE
         self.log_dir = LOG_DIR
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.stopping = False
 
     def _is_port_in_use(self, port: int) -> bool:
         """Checks if a port is in use."""
@@ -146,53 +147,77 @@ class ProcessManager:
 
     def stop(self):
         """Stops the running processes."""
-        pids = self._get_pids()
-        if not pids:
-            console.print("[yellow]Agent Console is not running (no PID file found).[/yellow]")
+        if self.stopping:
             return
+        self.stopping = True
 
-        console.print("[bold yellow]Stopping services...[/bold yellow]")
-        
-        import time
+        # Ignore Ctrl+C (SIGINT) during shutdown to prevent interruption/tracebacks
+        original_sigint = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-        for name, pid in pids.items():
-            try:
-                # 1. Try Graceful Shutdown (SIGTERM)
-                if sys.platform != "win32":
-                    os.killpg(pid, signal.SIGTERM)
-                else:
-                    os.kill(pid, signal.SIGTERM)
-                
-                console.print(f"  Sent SIGTERM to {name} ({pid})...")
-                
-                # 2. Wait up to 3s for exit
-                for _ in range(30):
-                    time.sleep(0.1)
-                    try:
-                        os.kill(pid, 0) # Check if still exists
-                    except ProcessLookupError:
-                        break # Process is gone
-                else:
-                    # 3. Force Kill (SIGKILL)
-                    console.print(f"  [bold red]Process {name} did not exit. Sending SIGKILL...[/bold red]")
+        try:
+            pids = self._get_pids()
+            if not pids:
+                console.print("[yellow]Agent Console is not running (no PID file found).[/yellow]")
+                return
+
+            console.print("[bold yellow]Stopping services...[/bold yellow]")
+            
+            import time
+
+            for name, pid in pids.items():
+                try:
+                    # 1. Try Graceful Shutdown (SIGTERM)
                     if sys.platform != "win32":
-                        try:
-                            os.killpg(pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
+                        os.killpg(pid, signal.SIGTERM)
                     else:
+                        os.kill(pid, signal.SIGTERM)
+                    
+                    console.print(f"  Sent SIGTERM to {name} ({pid})...")
+                    
+                    # 2. Wait up to 5s for exit (50 * 0.1s)
+                    for _ in range(50):
                         try:
-                            os.kill(pid, signal.SIGKILL)    
+                            time.sleep(0.1)
+                        except KeyboardInterrupt:
+                            pass # Force wait
+                            
+                        try:
+                            os.kill(pid, 0) # Check if still exists
                         except ProcessLookupError:
-                            pass
-                        
-            except ProcessLookupError:
-                console.print(f"  Process {name} ({pid}) already gone.")
-            except Exception as e:
-                console.print(f"  Error stopping {name}: {e}")
+                            break # Process is gone
+                        except OSError as e:
+                            if e.errno == 1: # EPERM: Process exists but zombie/no perm
+                                # If it's a zombie, we can't kill it, so waiting is futile.
+                                # Treat as "gone" for our purposes or break to force kill attempt (which might fail too)
+                                # Better to break and try force kill, catching EPERM there.
+                                break 
+                            pass # Other errors, keep waiting?
+                    else:
+                        # 3. Force Kill (SIGKILL)
+                        console.print(f"  [bold red]Process {name} did not exit. Sending SIGKILL...[/bold red]")
+                        if sys.platform != "win32":
+                            try:
+                                os.killpg(pid, signal.SIGKILL)
+                            except (ProcessLookupError, OSError):
+                                pass
+                        else:
+                            try:
+                                os.kill(pid, signal.SIGKILL)    
+                            except (ProcessLookupError, OSError):
+                                pass
+                            
+                except ProcessLookupError:
+                    console.print(f"  Process {name} ({pid}) already gone.")
+                except Exception as e:
+                    console.print(f"  Error stopping {name}: {e}")
 
-        self._clean_pid_file()
-        console.print("[bold green]Services stopped.[/bold green]")
+            self._clean_pid_file()
+            console.print("[bold green]Services stopped.[/bold green]")
+        finally:
+            # Restore signal handler (though usually we exit right after)
+            signal.signal(signal.SIGINT, original_sigint)
+            self.stopping = False
 
     def status(self):
         """Checks the status of the processes."""
@@ -218,6 +243,10 @@ class ProcessManager:
             os.kill(pids["frontend_pid"], 0)
             return True
         except ProcessLookupError:
+            return False
+        except OSError as e:
+            if e.errno == 1: # EPERM means it exists
+                return True
             return False
         except Exception:
             return False # Conservative

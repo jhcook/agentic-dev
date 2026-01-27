@@ -70,3 +70,85 @@ def list_runbooks() -> str:
     """List all implementation runbooks."""
     files = glob.glob(".agent/cache/runbooks/**/*.md", recursive=True)
     return "\n".join([os.path.basename(f) for f in files])
+
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+def _is_safe_path(path: str) -> bool:
+    """
+    Ensure path is within the project root.
+    """
+    try:
+        # Resolve absolute paths
+        abs_path = os.path.abspath(path)
+        root_path = os.path.abspath(os.getcwd())
+        
+        # Use commonpath to check containment
+        return os.path.commonpath([root_path, abs_path]) == root_path
+    except Exception:
+        return False
+
+@tool
+def read_file(path: str) -> str:
+    """
+    Read the content of any file in the repository.
+    Args:
+        path: Path to the file relative to the project root.
+    """
+    with tracer.start_as_current_span("tool.read_file") as span:
+        span.set_attribute("file.path", path)
+        try:
+            if not _is_safe_path(path):
+                span.set_status(trace.Status(trace.StatusCode.ERROR))
+                span.record_exception(Exception("Path traversal attempt"))
+                return "Error: Access denied. Path must be within the project root."
+                
+            if not os.path.exists(path):
+                return f"Error: File '{path}' not found."
+                
+            if os.path.isdir(path):
+                return f"Error: '{path}' is a directory. Use list tools instead."
+                
+            with open(path, 'r') as f:
+                content = f.read()
+                
+            span.set_attribute("file.size", len(content))
+            
+            if len(content) > 5000:
+                return content[:5000] + "\n... (truncated)"
+            return content
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR))
+            return f"Error reading file: {e}"
+
+@tool
+def write_file(path: str, content: str) -> str:
+    """
+    Write or overwrite a file in the repository.
+    Args:
+        path: Path to the file relative to the project root.
+        content: The text content to write.
+    """
+    with tracer.start_as_current_span("tool.write_file") as span:
+        span.set_attribute("file.path", path)
+        span.set_attribute("file.size", len(content))
+        try:
+            if not _is_safe_path(path):
+                return "Error: Access denied. Path must be within the project root."
+            
+            # Prevent overwriting critical system files
+            forbidden = [".agent/etc/secrets.yaml", ".env", ".git/"]
+            if any(f in path for f in forbidden):
+                 return "Error: Writing to this sensitive file is restricted."
+                 
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                f.write(content)
+                
+            return f"Successfully wrote to {path}"
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR))
+            return f"Error writing file: {e}"

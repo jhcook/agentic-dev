@@ -20,6 +20,7 @@ from typing import Optional, AsyncGenerator
 
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import ToolMessage, AIMessage
 from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
@@ -163,7 +164,17 @@ async def get_chat_history(session_id: str) -> list[dict]:
     if not snapshot:
         return []
         
-    messages = snapshot.values.get("messages", [])
+    # Correctly access messages from CheckpointTuple
+    # snapshot is a CheckpointTuple with .checkpoint (dict)
+    try:
+        messages = snapshot.checkpoint["channel_values"].get("messages", [])
+    except (AttributeError, KeyError):
+        # Fallback for alternative structures
+        try:
+            messages = snapshot.values.get("messages", [])
+        except (AttributeError, TypeError):
+            messages = []
+            
     history = []
     
     for msg in messages:
@@ -175,12 +186,51 @@ async def get_chat_history(session_id: str) -> list[dict]:
         if msg.type not in ["human", "ai"]:
             continue
             
+        # Robust content handling (handle lists/multimodal)
+        content = msg.content
+        if isinstance(content, list):
+            # Extract text parts
+            text_parts = []
+            for part in content:
+                if isinstance(part, str):
+                    text_parts.append(part)
+                elif isinstance(part, dict) and "text" in part:
+                    text_parts.append(part["text"])
+            text = " ".join(text_parts)
+        else:
+            text = str(content) if content is not None else ""
+            
         history.append({
             "role": role,
-            "text": msg.content
+            "text": text
         })
         
     return history
+
+def strip_markdown_for_tts(text: str) -> str:
+    """Removes markdown elements and technical junk that should not be spoken."""
+    # 1. Remove triple-backtick code blocks and their content
+    text = re.sub(r'```[\s\S]*?```', ' ', text)
+    # 2. Remove HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # 3. Remove URLs
+    text = re.sub(r'http\S+', '', text)
+    # 4. Remove internal markdown syntax but keep words
+    # Remove markers like [text](link) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # 5. Remove bold/italic markers
+    text = text.replace('**', '').replace('__', '').replace('*', '').replace('_', '')
+    # 6. Remove inline code markers
+    text = text.replace('`', '')
+    # 7. Remove bullets and headers
+    text = re.sub(r'^\s*[#\-\+\*]+\s+', ' ', text, flags=re.MULTILINE)
+    # 8. Remove common technical symbols that cause artifacts in TTS
+    # (brackets, braces, pipes, repeated dashes/equals)
+    text = re.sub(r'[\[\]\{\}\|\\]', ' ', text)
+    text = re.sub(r'[-=]{2,}', ' ', text)
+    # 9. Collapse multiple newlines/spaces into single spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 class VoiceOrchestrator:
     """Orchestrates voice interaction flow with LangGraph agent using Sequential Queueing."""
@@ -247,8 +297,6 @@ class VoiceOrchestrator:
         self.MAX_RECORDING_DURATION = 15.0  # Max seconds before forcing process
         self.MIN_SPEECH_DURATION = 0.1      # Min speech to trigger 'active' state
         
-        # Audio Gate
-        self.RMS_THRESHOLD = config.get_value(voice_config, "vad.rms_threshold") or 300
         
         # Telemetry info
         self.bytes_per_sample = 2
@@ -260,7 +308,18 @@ class VoiceOrchestrator:
             v_agg = config.get_value(voice_config, "vad.aggressiveness")
             if v_agg is None: v_agg = 1
             # Ensure int for webrtcvad
-            self.vad = VADProcessor(aggressiveness=int(float(v_agg)), sample_rate=self.sample_rate)
+            v_threshold = config.get_value(voice_config, "vad.threshold")
+            if v_threshold is None: v_threshold = 0.5
+            
+            # VAD Initialization with optional Autotuning
+            v_autotune = config.get_value(voice_config, "vad.autotune") or False
+            
+            self.vad = VADProcessor(
+                aggressiveness=int(float(v_agg)), 
+                sample_rate=self.sample_rate,
+                threshold=float(v_threshold),
+                autotune=bool(v_autotune)
+            )
         except Exception as e:
             logger.warning(f"VAD initialization failed: {e}. Interrupts disabled.")
             self.vad = None
@@ -317,38 +376,38 @@ class VoiceOrchestrator:
         """Internal VAD Logic - Decides when to trigger the pipeline."""
         now = time.time()
         
-        # Calculate Volume (RMS) for debugging
-        import struct
-        import math
-        count = len(audio_chunk) / 2
-        format = "%dh" % count
-        shorts = struct.unpack(format, audio_chunk)
-        sum_squares = sum(s*s for s in shorts)
-        rms = math.sqrt(sum_squares / count) if count > 0 else 0
         
         # Trace first packet
         if len(self.audio_buffer) == 0:
-             logger.debug(f"AUDIO_TRACE[{self.session_id}]: First packet. Size={len(audio_chunk)} Volume={rms:.2f}")
+             logger.debug(f"AUDIO_TRACE[{self.session_id}]: First packet. Size={len(audio_chunk)}")
              
         self.audio_buffer.extend(audio_chunk)
         
-        # 1. Run VAD (with volume gate)
-        has_speech = False
-        if rms > self.RMS_THRESHOLD:
-            has_speech = self.process_vad(audio_chunk)
+        # 1. Run VAD (Unified Gate & Engine)
+        has_speech = self.process_vad(audio_chunk)
         
         # 2. Update State Machine & Handle Barge-in
         if has_speech:
+            # Calculate RMS for trace logging only when speech is suspected
+            import struct
+            import math
+            count = len(audio_chunk) / 2
+            format = "%dh" % count
+            shorts = struct.unpack(format, audio_chunk)
+            sum_squares = sum(s*s for s in shorts)
+            rms = math.sqrt(sum_squares / count) if count > 0 else 0
+
             if not self.speech_active:
                  logger.debug(f"VAD_TRACE[{self.session_id}]: Speech START. Vol={rms:.2f}")
                  
             # BARGE-IN: If user speaks while we are still generating/speaking
             if self.is_speaking.is_set():
-                logger.info(f"BARGE_IN[{self.session_id}]: User interrupted agent.")
+                logger.info(f"BARGE_IN_DETECTED[{self.session_id}]: User speech detected (RMS={rms:.0f}) during agent output. Triggering interrupt...")
                 self.interrupt()
-                # Use a specific event to tell client to purge its local buffers
                 if self.on_event:
                     self.on_event("clear_buffer", {"generation_id": self.current_generation_id})
+            else:
+                logger.debug(f"SPEECH_DETECTED[{self.session_id}]: Vol={rms:.0f}")
             
             self.speech_active = True
             self.silence_start_time = None
@@ -402,16 +461,70 @@ class VoiceOrchestrator:
             # Execute pipeline (Non-blocking)
             if self.pipeline_task and not self.pipeline_task.done():
                 self.pipeline_task.cancel()
+                try:
+                    # Vital: Wait for the task to actually finish/cleanup to prevent state races
+                    await self.pipeline_task
+                except asyncio.CancelledError:
+                    pass
                 
             self.current_generation_id += 1
             self.pipeline_task = asyncio.create_task(
                 self._run_pipeline(accumulated_audio, self.current_generation_id)
             )
 
+    def _heal_chat_history(self, session_id: str):
+        """
+        Detects all orphaned tool calls in history and injects error ToolMessages
+        to satisfy LangGraph validation requirements.
+        """
+        config = {"configurable": {"thread_id": session_id}}
+        state = self.agent.get_state(config)
+        if not state or not state.values:
+            return
+
+        messages = state.values.get("messages", [])
+        if not messages:
+            return
+
+        # Track all tool call IDs seen in AIMessages vs fulfilled by ToolMessages
+        all_tool_call_ids = set()
+        fulfilled_tool_call_ids = set()
+
+        for msg in messages:
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    all_tool_call_ids.add(tc.get('id'))
+            elif isinstance(msg, ToolMessage):
+                fulfilled_tool_call_ids.add(msg.tool_call_id)
+
+        orphaned_ids = all_tool_call_ids - fulfilled_tool_call_ids
+        
+        if orphaned_ids:
+            logger.warning(
+                f"REPAIR: Found {len(orphaned_ids)} orphaned tool calls in session {session_id}. "
+                f"Injecting healing ToolMessages for IDs: {orphaned_ids}"
+            )
+            healing_messages = []
+            for tc_id in orphaned_ids:
+                if tc_id:
+                    healing_messages.append(ToolMessage(
+                        tool_call_id=tc_id,
+                        content="Error: Tool execution was interrupted by user or higher-level process.",
+                        status="error"
+                    ))
+            
+            if healing_messages:
+                # Update the state with the healing messages. 
+                # In LangGraph, update_state with as_node=None defaults to appending to 'messages'.
+                self.agent.update_state(config, {"messages": healing_messages})
+
     async def _run_pipeline(self, audio_data: bytes, generation_id: int):
         """Execute the STT -> AI -> TTS pipeline and push to output_queue."""
         if not self.output_queue:
             return
+            
+        # Heal state before invocation to prevent INVALID_CHAT_HISTORY
+        self._heal_chat_history(self.session_id)
 
         if self.on_event:
             self.on_event("status", {"state": "thinking"})
@@ -467,16 +580,23 @@ class VoiceOrchestrator:
                         
                     logger.debug(f"Synthesizing sentence: {sentence}")
                     
+                    # Filter markdown for TTS
+                    spoken_sentence = strip_markdown_for_tts(sentence)
+                    if not spoken_sentence:
+                        logger.debug("Skipping empty sentence after markdown strip.")
+                        continue
+
                     # 3. Speak (TTS)
-                    audio_output = await self.tts.speak(sentence)
+                    audio_output = await self.tts.speak(spoken_sentence)
                     
                     # FINAL CHECK: Did an interrupt happen during TTS synthesis?
                     if not self.is_speaking.is_set() or generation_id != self.current_generation_id:
                         logger.info(f"Discarding audio for obsolete generation {generation_id}")
                         break
 
-                    # Push to shared output queue
-                    await self.output_queue.put(("audio", audio_output))
+                    # Push to shared output queue with generation_id prefixing
+                    # We send a tuple (type, (gen_id, data))
+                    await self.output_queue.put(("audio", (generation_id, audio_output)))
                     
                     await asyncio.sleep(0.01)
                     
@@ -569,4 +689,92 @@ class VoiceOrchestrator:
             # Case-insensitive replacement
             sanitized = re.sub(re.escape(phrase), "[redacted]", sanitized, flags=re.IGNORECASE)
         return sanitized[:1000]
+
+    async def handle_text_input(self, text: str):
+        """
+        Processes manual text input from the UI.
+        Interrupts any current generation and triggers the pipeline.
+        """
+        logger.info(f"Processing manual text input: {text[:50]}...")
+        
+        # 1. Interrupt any current generation
+        self.interrupt()
+        # Wait for pipeline to potentially clean up if it was running (though interrupt() just signals)
+        # interrupt() cancels the task, but doesn't await it. We should await if we can.
+        if self.pipeline_task and not self.pipeline_task.done():
+             try:
+                 await self.pipeline_task
+             except asyncio.CancelledError:
+                 pass
+        
+        # 2. Reset state
+        self.audio_buffer.clear()
+        self.speech_active = False
+        self.silence_start_time = None
+        
+        # 3. Trigger pipeline with new generation ID
+        self.current_generation_id += 1
+        
+        # 4. We bypass STT and call the generation logic directly
+        # But we create a wrapper or just use _run_pipeline's inner part?
+        # Actually _run_pipeline does STT. Let's create a specialized task or refactor.
+        
+        # Refactor: _run_pipeline should take text optionally
+        self.pipeline_task = asyncio.create_task(
+            self._run_pipeline_text(text, self.current_generation_id)
+        )
+
+    async def _run_pipeline_text(self, text_input: str, generation_id: int):
+        """Execute the Agent -> TTS part of the pipeline directly."""
+        if not self.output_queue:
+            return
+            
+        # Heal state before invocation
+        self._heal_chat_history(self.session_id)
+
+        if self.on_event:
+            self.on_event("status", {"state": "thinking"})
+
+        with tracer.start_as_current_span("voice.agent.process_text") as span:
+            span.set_attribute("session_id", self.session_id)
+            span.set_attribute("input_length", len(text_input))
+            
+            logger.info(
+                "Manual text input processing",
+                extra={"session_id": self.session_id, "length": len(text_input), "text": text_input}
+            )
+            
+            # 2. Pipeline: Agent -> Buffer -> TTS
+            from backend.voice.buffer import SentenceBuffer
+            buffer = SentenceBuffer()
+            
+            self.is_speaking.set()
+            
+            try:
+                text_stream = self._invoke_agent(text_input)
+                sentence_stream = buffer.process(text_stream)
+                
+                if self.on_event:
+                    self.on_event("status", {"state": "speaking"})
+
+                async for sentence in sentence_stream:
+                    if not self.is_speaking.is_set():
+                        break
+                        
+                    spoken_sentence = strip_markdown_for_tts(sentence)
+                    if not spoken_sentence:
+                        continue
+
+                    audio_output = await self.tts.speak(spoken_sentence)
+                    
+                    if not self.is_speaking.is_set() or generation_id != self.current_generation_id:
+                        break
+
+                    await self.output_queue.put(("audio", (generation_id, audio_output)))
+                    await asyncio.sleep(0.01)
+                    
+            finally:
+                self.is_speaking.clear()
+                if self.on_event:
+                    self.on_event("status", {"state": "listening"})
 

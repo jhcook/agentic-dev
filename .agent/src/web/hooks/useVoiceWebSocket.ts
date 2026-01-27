@@ -114,6 +114,14 @@ export function useVoiceWebSocket(url: string) {
         }
     }, []);
 
+    const sendText = useCallback((text: string) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'text', text }));
+        } else {
+            console.warn("[useVoiceWebSocket] WebSocket not open, dropping text");
+        }
+    }, []);
+
     const setOnAudioChunk = useCallback((callback: (chunk: ArrayBuffer) => void) => {
         onAudioChunkRef.current = callback;
     }, []);
@@ -138,6 +146,7 @@ export function useVoiceWebSocket(url: string) {
         connect,
         disconnect,
         sendAudio,
+        sendText,
         setOnAudioChunk,
         setOnClearBuffer,
         setOnTranscript

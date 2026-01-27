@@ -31,7 +31,17 @@ def get_git_status() -> str:
             text=True, 
             check=True
         )
-        return result.stdout or "Working tree clean."
+        output = result.stdout or "Working tree clean."
+        
+        # Enforce summarization for Voice context
+        lines = output.strip().split('\n')
+        if len(lines) > 10:
+            summary = f"Checking git status... ({len(lines)} files changed).\n"
+            summary += "Top 5 changes:\n" + "\n".join(lines[:5])
+            summary += f"\n...and {len(lines) - 5} more."
+            return summary
+            
+        return output
     except subprocess.CalledProcessError as e:
         return f"Error checking git status: {e}"
 
@@ -90,3 +100,32 @@ def get_git_branch() -> str:
         return result.stdout.strip() or "HEAD (detached)"
     except subprocess.CalledProcessError as e:
         return f"Error getting git branch: {e}"
+
+@tool
+def git_stage_changes(files: list[str] = None) -> str:
+    """
+    Stage files for commit.
+    Args:
+        files: List of file paths to stage. Defaults to ["."] (all changes).
+    """
+    targets = files if files else ["."]
+    
+    try:
+        cmd = ["git", "add"] + targets
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Summarize for voice
+        if "." in targets:
+            return "Staged all changes."
+        elif len(targets) > 3:
+            return f"Staged {len(targets)} files."
+        else:
+            return f"Staged: {', '.join(targets)}"
+            
+    except subprocess.CalledProcessError as e:
+        return f"Error staging changes: {e}"

@@ -19,6 +19,8 @@ whisper:
 
 # Audio and VAD Tuning
 vad:
-  aggressiveness: 0.5    # 0 (Least aggressive) to 3 (Most aggressive)
+  aggressiveness: 1      # 0 (Least aggressive) to 3 (Most aggressive)
   rms_threshold: 300     # Minimum volume level (RMS) to process audio as speech
-  silence_threshold: 0.7 # Seconds of silence to trigger response
+  silence_threshold: 2.0 # Seconds of silence to trigger response
+  threshold: 0.4         # Silero VAD confidence threshold (0.0-1.0)
+  autotune: true         # Enable adaptive noise floor estimation

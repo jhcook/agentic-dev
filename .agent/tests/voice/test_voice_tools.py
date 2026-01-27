@@ -31,7 +31,7 @@ def test_run_backend_tests():
         mock_run.return_value.returncode = 0
         
         # Use invoke with args dict
-        result = run_backend_tests.invoke({"path": "tests/"})
+        result = run_backend_tests.invoke({"path": ".agent/tests/"})
         assert "Test passed" in result
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]

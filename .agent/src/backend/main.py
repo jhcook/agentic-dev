@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from backend.routers import governance
 from backend.admin.logger import log_bus
 import logging
@@ -22,6 +22,47 @@ import time
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agentic Voice Backend")
+
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+class PermissiveASGIMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            # 1. Log Origin
+            headers = dict(scope.get("headers", []))
+            origin = headers.get(b"origin", b"").decode("utf-8")
+            logger.info(f"HTTP Request: {scope.get('path')} | Origin: {origin}")
+            
+            # 2. Add CORS headers to response
+            async def send_wrapper(message):
+                if message["type"] == "http.response.start":
+                    headers = dict(message.get("headers", []))
+                    if origin:
+                        headers[b"access-control-allow-origin"] = origin.encode("utf-8")
+                        headers[b"access-control-allow-credentials"] = b"true"
+                        headers[b"access-control-allow-methods"] = b"*"
+                        headers[b"access-control-allow-headers"] = b"*"
+                    message["headers"] = [[k, v] for k, v in headers.items()]
+                await send(message)
+            
+            await self.app(scope, receive, send_wrapper)
+            
+        elif scope["type"] == "websocket":
+            # 1. Log Origin (Handshake)
+            headers = dict(scope.get("headers", []))
+            origin = headers.get(b"origin", b"").decode("utf-8")
+            logger.info(f"WebSocket Handshake: {scope.get('path')} | Origin: {origin}")
+            
+            # 2. Allow everything (No-op, just pass through)
+            # If something else was blocking it, this wrapper helps us see it.
+            await self.app(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+app.add_middleware(PermissiveASGIMiddleware)
 
 # Optional: Voice Capabilities
 try:

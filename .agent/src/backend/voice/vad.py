@@ -19,6 +19,9 @@ import time
 import requests
 import numpy as np
 from typing import Optional
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
 
 # Try importing prometheus_client, handle if missing (though it should be present)
 try:
@@ -55,18 +58,21 @@ class VADProcessor:
     2. Automatically falls back to Google's WebRTC VAD if Silero fails to initialize 
        (e.g., missing dependencies, download failure, integrity check failure).
     """
-    def __init__(self, aggressiveness: int = 1, sample_rate: int = 16000, threshold: float = 0.5):
+
+    def __init__(self, aggressiveness: int = 3, sample_rate: int = 16000, threshold: float = 0.5, autotune: bool = False):
         """
         Initialize the VAD Processor.
 
         Args:
-            aggressiveness (int): WebRTC VAD aggressiveness (0-3). Higher is more aggressive in filtering non-speech.
+            aggressiveness (int): WebRTC VAD aggressiveness (0-3). 3 is most aggressive (filters most non-speech).
             sample_rate (int): Audio sample rate in Hz. Default 16000.
             threshold (float): Silero VAD probability threshold (0.0-1.0). Default 0.5.
+            autotune (bool): If True, dynamically adjusts energy threshold based on ambient noise.
         """
         self.sample_rate = sample_rate
         self.aggressiveness = aggressiveness
         self.threshold = threshold
+        self.autotune = autotune
         
         # State for Silero
         self.silero_session = None
@@ -76,6 +82,19 @@ class VADProcessor:
         # State for WebRTC
         self.webrtc_vad = None
         self.webrtc_buffer = bytearray()
+        
+        # State for Energy Fallback / Autotuning
+        self.use_energy = False
+        self.ambient_noise_level = 0.0    # Dynamically estimated
+        self.peak_rms = 1000.0           # Track loudest recent signal for scaling
+        self.noise_alpha = 0.99          # Slow smoothing for noise floor
+        self.peak_alpha = 0.999          # Very slow smoothing for peak
+        
+        # Calibration Phase
+        self.calibrated = False
+        self.calibration_frames = 0
+        self.CALIBRATION_REQUIRED = 25   # Observe ~500ms of environment first
+        
         self.frame_duration_ms = 20
         self.frame_size_bytes = int(sample_rate * (self.frame_duration_ms / 1000.0) * 2)
         
@@ -86,7 +105,7 @@ class VADProcessor:
         if METRICS_AVAILABLE:
             VAD_INIT_TIME.observe(duration)
             
-        logger.info(f"event='vad_initialized' duration_ms={duration*1000:.2f}")
+        logger.info(f"event='vad_initialized' duration_ms={duration*1000:.2f} autotune={autotune}")
 
     def _initialize(self):
         """Initialize VAD implementations, preferring Silero."""
@@ -102,8 +121,12 @@ class VADProcessor:
                 VAD_INIT_COUNT.labels(implementation='webrtc').inc()
                 VAD_FALLBACK_COUNT.inc()
              return
-             
-        logger.error("event='vad_initialization_failed' status='critical'")
+
+        # Final Fallback: Energy-based (Simple RMS)
+        # This ensures the system works even if VAD libs are missing/incompatible.
+        logger.warning("event='vad_fallback' implementation='energy_threshold' status='active_fallback'")
+        self.use_energy = True
+        return
 
     def _try_initialize_silero(self) -> bool:
         """Attempt to initialize Silero VAD (ONNX)."""
@@ -227,20 +250,83 @@ class VADProcessor:
         """
         start_time = time.time()
         result = False
-        impl = 'unknown'
+        impl = 'energy'
         
+        # 1. Global Adaptive Energy Gate (Autotuning)
+        # This part runs for EVERY chunk to maintain the noise floor.
+        audio_int16 = np.frombuffer(audio_chunk, dtype=np.int16)
+        if len(audio_int16) == 0:
+            return False
+            
+        squared = np.square(audio_int16.astype(np.float64))
+        rms = np.sqrt(np.mean(squared))
+        
+        # Calibration / Noise Floor Tracking
+        if not self.calibrated:
+            self.calibration_frames += 1
+            if self.calibration_frames == 1:
+                self.ambient_noise_level = rms
+            else:
+                self.ambient_noise_level = (self.ambient_noise_level * 0.8) + (rms * 0.2)
+            
+            if self.calibration_frames >= self.CALIBRATION_REQUIRED:
+                self.calibrated = True
+                logger.info(f"event='vad_calibrated' noise_floor={self.ambient_noise_level:.2f}")
+            # Don't trigger speech during calibration
+            return False 
+
+        # Update peak and noise floor if autotune is enabled
+        if self.autotune:
+            self.peak_rms = max(self.peak_rms * self.peak_alpha, rms)
+            
+            # Dynamic Threshold Calculation
+            # 2.2x Noise floor or absolute minimum
+            snr_threshold = self.ambient_noise_level * 2.2
+            abs_min = 700.0
+            dynamic_threshold = max(snr_threshold, abs_min)
+            
+            # GATE: If RMS is below dynamic threshold, it's definitely not speech.
+            if rms < dynamic_threshold:
+                # Update noise floor slowly during silence
+                self.ambient_noise_level = (self.ambient_noise_level * self.noise_alpha) + (rms * (1.0 - self.noise_alpha))
+                return False
+        else:
+            # Static minimal gate if autotune is off (RMS 300)
+            if rms < 300:
+                return False
+
+        # 2. High-Accuracy VAD Engines
+        # If we passed the energy gate, let the models decide.
         if self.silero_session:
             result = self._process_silero(audio_chunk)
             impl = 'silero'
         elif self.webrtc_vad:
             result = self._process_webrtc(audio_chunk)
             impl = 'webrtc'
+        else:
+            # Fallback to pure energy detection (since we already passed the gate above)
+            result = True
+            impl = 'energy'
             
+        # If the high-accuracy engines say "no speech" despite the volume,
+        # use this as a chance to update our noise floor (helps adapt to constant loud noise).
+        if not result and self.autotune:
+            # We use a slightly different alpha if it was rejected by a model vs pure silence
+            # but for now, the same noise_alpha is fine for simplicity.
+            self.ambient_noise_level = (self.ambient_noise_level * self.noise_alpha) + (rms * (1.0 - self.noise_alpha))
+
         # Observability: Log latency metrics
         if METRICS_AVAILABLE:
             duration = time.time() - start_time
             VAD_PROCESSING_TIME.labels(implementation=impl).observe(duration)
              
+        # Trace detected speech events for debugging
+        if result:
+             with tracer.start_as_current_span("vad.voice_detected") as span:
+                 span.set_attribute("implementation", impl)
+                 span.set_attribute("rms", rms)
+                 span.set_attribute("noise_floor", self.ambient_noise_level)
+
         return result
 
     def _process_silero(self, audio_chunk: bytes) -> bool:
@@ -290,6 +376,66 @@ class VADProcessor:
                 logger.error(f"event='webrtc_processing_error' error='{e}'")
                 
         return speech_found
+
+    def _process_energy(self, audio_chunk: bytes) -> bool:
+        """
+        Adaptive Energy-based VAD.
+        Calculates RMS and compares against a dynamic threshold that adapts to 
+        ambient noise and microphone gain.
+        """
+        try:
+            audio_int16 = np.frombuffer(audio_chunk, dtype=np.int16)
+            squared = np.square(audio_int16.astype(np.float64))
+            rms = np.sqrt(np.mean(squared))
+            
+            # 1. Calibration Phase (First ~500ms of session)
+            if self.autotune and not self.calibrated:
+                self.calibration_frames += 1
+                # Aggressively build noise floor during calibration
+                if self.calibration_frames == 1:
+                    self.ambient_noise_level = rms
+                else:
+                    self.ambient_noise_level = (self.ambient_noise_level * 0.8) + (rms * 0.2)
+                
+                if self.calibration_frames >= self.CALIBRATION_REQUIRED:
+                    self.calibrated = True
+                    logger.info(f"event='vad_calibrated' noise_floor={self.ambient_noise_level:.2f}")
+                return False # Silence during calibration
+                
+            # 2. Main Processing
+            if self.autotune:
+                # Update Peak Tracker (slowly decay)
+                self.peak_rms = max(self.peak_rms * self.peak_alpha, rms)
+                
+                # Dynamic Threshold Logic:
+                # We need a clear "Signal-to-Noise Ratio" (SNR).
+                # The threshold should be well above the noise floor, 
+                # but also relative to how loud the user actually is (peak).
+                # 2.2x Noise floor (Lowered from 3.0 for easier barge-in)
+                snr_threshold = self.ambient_noise_level * 2.2
+                # Absolute minimum (Lowered from 1200 for quiet mics)
+                abs_min = 700.0
+                
+                dynamic_threshold = max(snr_threshold, abs_min)
+                
+                is_speech = rms > dynamic_threshold
+                
+                # If NOT speech, continue tracking noise floor slowly to adapt to 
+                # background changes (like a fan turning on).
+                if not is_speech:
+                    self.ambient_noise_level = (self.ambient_noise_level * self.noise_alpha) + (rms * (1.0 - self.noise_alpha))
+                
+                if is_speech:
+                     logger.debug(f"Energy VAD (Auto): Speech! RMS={rms:.0f} Thresh={dynamic_threshold:.0f} Noise={self.ambient_noise_level:.0f}")
+                return is_speech
+            else:
+                # Static Threshold fallback (2000)
+                ENERGY_THRESHOLD = 2000.0
+                return rms > ENERGY_THRESHOLD
+                
+        except Exception as e:
+            logger.error(f"Energy VAD processing failed: {e}")
+            return True # Fail open
 
     def reset(self):
         """Reset VAD state."""

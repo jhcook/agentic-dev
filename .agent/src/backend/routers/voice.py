@@ -14,6 +14,8 @@
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
+import struct
+import json
 from uuid import uuid4
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -88,7 +90,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 msg_type, data = item
                 if msg_type == "audio":
-                    await websocket.send_bytes(data)
+                    gen_id, audio_data = data
+                    # Pack 4-byte generation ID (Big-Endian) + audio data
+                    payload = struct.pack(">I", gen_id) + audio_data
+                    await websocket.send_bytes(payload)
                 elif msg_type == "json":
                     await websocket.send_json(data)
 
@@ -100,19 +105,32 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         while True:
-            # 1. Receive (Wait for input)
-            data = await websocket.receive_bytes()
+            # Receive (Wait for input)
+            message = await websocket.receive()
             
-            # 2. Sequential Processing
-            # We push every chunk to the orchestrator.
-            # Its worker loop handles VAD, Endpointing, and Barge-in sequentially.
-            orchestrator.push_audio(data)
+            if message["type"] == "websocket.disconnect":
+                break
+                
+            if "bytes" in message:
+                # Binary audio chunk
+                orchestrator.push_audio(message["bytes"])
+            elif "text" in message:
+                # JSON control message or text input
+                try:
+                    data = json.loads(message["text"])
+                    if data.get("type") == "text":
+                        text_input = data.get("text")
+                        if text_input:
+                            logger.info(f"Manual text input received: {text_input[:50]}...")
+                            # We create an async task for text invocation so it doesn't block the loop
+                            asyncio.create_task(orchestrator.handle_text_input(text_input))
+                except json.JSONDecodeError:
+                    logger.warning(f"Received malformed text message: {message['text'][:50]}")
             
     except WebSocketDisconnect:
-        logger.info(f"Voice session ended: {session_id}", extra={"correlation_id": session_id})
+        logger.info(f"Voice session ended: {session_id}")
     except Exception as e:
-        logger.error(f"Voice session error: {e}", extra={"correlation_id": session_id})
-        await websocket.close(code=1011)
+        logger.error(f"Voice session error: {e}", exc_info=True)
     finally:
         # Cleanup
         orchestrator.stop()

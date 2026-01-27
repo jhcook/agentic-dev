@@ -1,70 +1,61 @@
-# Copyright 2026 Justin Cook
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-
 import pytest
-import webrtcvad
+from unittest.mock import MagicMock, patch
+import numpy as np
 from backend.voice.vad import VADProcessor
 
-def test_vad_initialization():
-    processor = VADProcessor(aggressiveness=1)
-    assert processor.sample_rate == 16000
-    assert processor.frame_duration_ms == 20
-    assert processor.frame_size_bytes == 640 # 16000 * 0.02 * 2
+# Mock OpenTelemetry
+@pytest.fixture(autouse=True)
+def mock_otel():
+    with patch('backend.voice.vad.tracer') as mock_tracer:
+        mock_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+        yield mock_tracer
 
-def test_vad_process_silence():
-    processor = VADProcessor(aggressiveness=3)
-    # 20ms of silence
-    chunk = b"\x00" * 640
-    is_speech = processor.process(chunk)
-    assert not is_speech
+def test_vad_initialization_defaults():
+    vad = VADProcessor()
+    assert vad.aggressiveness == 3
+    assert vad.threshold == 0.5
+    assert vad.autotune is False
 
-def test_vad_process_synthetic_speech():
-    processor = VADProcessor(aggressiveness=0)
-    # Generate some 100Hz square wave audio (alternating 1/-1)
-    # This is "signal" and should be detected by VAD if aggressiveness is low
-    # 16000 Hz, 100Hz wave means 160 samples per period
-    chunk = bytearray()
-    for i in range(320): # Two periods
-        if (i // 80) % 2 == 0:
-            val = 5000 # 16-bit PCM
-        else:
-            val = -5000
-        chunk.extend(val.to_bytes(2, byteorder='little', signed=True))
+def test_vad_autotune_logic():
+    vad = VADProcessor(autotune=True)
+    # Mock audio chunk (silence)
+    chunk = np.zeros(16000, dtype=np.int16).tobytes()
     
-    # 640 bytes = 320 samples
-    is_speech = processor.process(bytes(chunk))
-    # Note: webrtcvad might not detect square waves as speech, but it's more likely than flat zero
-    # Actually, let's just assert it runs and returns a boolean
-    assert isinstance(is_speech, bool)
+    # Run calibration
+    for _ in range(30):
+        vad.process(chunk)
+        
+    assert vad.calibrated is True
+    assert vad.ambient_noise_level == 0.0
 
-def test_vad_partial_frame():
-    processor = VADProcessor()
-    # 10ms of audio (not enough for a frame)
-    chunk = b"\x00" * 320
-    is_speech = processor.process(chunk)
-    assert not is_speech
-    assert len(processor.buffer) == 320
+def test_energy_fallback():
+    vad = VADProcessor()
+    # Force energy mode
+    vad.use_energy = True
+    vad.silero_session = None
+    vad.webrtc_vad = None
     
-    # Add another 10ms
-    is_speech = processor.process(chunk)
-    # Now it should have processed 1 frame of silence
-    assert not is_speech
-    assert len(processor.buffer) == 0
+    # Force calibrated state to avoid warmup period
+    vad.calibrated = True
 
-def test_vad_reset():
-    processor = VADProcessor()
-    processor.buffer.extend(b"\x00" * 320)
-    processor.reset()
-    assert len(processor.buffer) == 0
+    # Silence
+    chunk_silence = np.zeros(1000, dtype=np.int16).tobytes()
+    assert vad.process(chunk_silence) is False
+    
+    # Loud noise (simulate speech)
+    # Max amplitude is 32767
+    chunk_loud = (np.ones(1000, dtype=np.int16) * 10000).tobytes()
+    assert vad.process(chunk_loud) is True
+
+def test_otel_tracing_on_process():
+    vad = VADProcessor()
+    vad.use_energy = True # Simplest path
+    vad.calibrated = True
+    
+    chunk_loud = (np.ones(1000, dtype=np.int16) * 10000).tobytes()
+    vad.process(chunk_loud)
+    
+    # Verify tracer was called
+    from backend.voice.vad import tracer
+    tracer.start_as_current_span.assert_called()

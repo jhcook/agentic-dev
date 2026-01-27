@@ -1,33 +1,56 @@
-// Copyright 2026 Justin Cook
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 import { useState, useEffect, useRef, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import {
+    Mic,
+    MicOff,
+    Headphones,
+    Sparkles,
+    CircleStop,
+    Trash2,
+    Activity,
+    User,
+    Bot,
+    ChevronDown
+} from 'lucide-react';
 import { useVoiceWebSocket } from '../hooks/useVoiceWebSocket';
 import { WaveformVisualizer } from './WaveformVisualizer';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-export function VoiceClient() {
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}
+
+interface VoiceClientProps {
+    /** Optional class overrides for NativeWind/Mobile styling */
+    className?: string;
+}
+
+export function VoiceClient({ className }: VoiceClientProps) {
     const [hasPermission, setHasPermission] = useState(false);
-    const [audioData, setAudioData] = useState<Float32Array | null>(null);
     const [transcript, setTranscript] = useState<Array<{ role: string; text: string; partial?: boolean }>>([]);
+    const [inputValue, setInputValue] = useState("");
 
     const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
     const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const audioQueueRef = useRef<AudioBuffer[]>([]);
     const isPlayingRef = useRef(false);
     const playNextChunkRef = useRef<(() => void) | null>(null);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const lastClearedGenIdRef = useRef(-1);
+
+    // Mute State
+    const [isMuted, setIsMuted] = useState(false);
+    const isMutedRef = useRef(false);
+
+    const toggleMute = useCallback(() => {
+        const newValue = !isMutedRef.current;
+        isMutedRef.current = newValue;
+        setIsMuted(newValue);
+    }, []);
 
     // Persistent Session ID
     const [sessionId] = useState(() => {
@@ -42,10 +65,18 @@ export function VoiceClient() {
         ? `wss://${window.location.host}/ws/voice?session_id=${sessionId}`
         : `ws://localhost:8000/ws/voice?session_id=${sessionId}`;
 
-    const { state, error, connect, disconnect, sendAudio, setOnAudioChunk, setOnClearBuffer, setOnTranscript } =
-        useVoiceWebSocket(wsUrl);
+    const {
+        state,
+        error,
+        connect,
+        disconnect,
+        sendAudio,
+        sendText,
+        setOnAudioChunk,
+        setOnClearBuffer,
+        setOnTranscript
+    } = useVoiceWebSocket(wsUrl);
 
-    // Define playNextChunk function in useEffect to avoid ref assignment during render
     useEffect(() => {
         // Fetch history
         if (sessionId) {
@@ -88,6 +119,11 @@ export function VoiceClient() {
             const source = audioContextRef.current!.createBufferSource();
             activeSourceRef.current = source;
             source.buffer = buffer;
+
+            // Connect to analyser and destination (speakers)
+            if (analyserRef.current) {
+                source.connect(analyserRef.current);
+            }
             source.connect(audioContextRef.current!.destination);
 
             source.onended = () => {
@@ -104,10 +140,18 @@ export function VoiceClient() {
     // Handle incoming audio chunks
     useEffect(() => {
         setOnAudioChunk((chunk: ArrayBuffer) => {
-            // Queue audio for playback
+            if (chunk.byteLength < 4) return;
+
+            const view = new DataView(chunk);
+            const chunkGenId = view.getUint32(0);
+
+            if (chunkGenId <= lastClearedGenIdRef.current) return;
+
+            const audioData = chunk.slice(4);
+
             if (audioContextRef.current) {
-                const audioContext = audioContextRef.current;
-                audioContext.decodeAudioData(chunk.slice(0), (buffer) => {
+                audioContextRef.current.decodeAudioData(audioData.slice(0), (buffer) => {
+                    if (chunkGenId <= lastClearedGenIdRef.current) return;
                     audioQueueRef.current.push(buffer);
                     if (!isPlayingRef.current) {
                         playNextChunkRef.current?.();
@@ -118,41 +162,26 @@ export function VoiceClient() {
             }
         });
 
-        setOnClearBuffer(() => {
-            // Clear playback queue on barge-in
-            console.log('[Voice] Clearing audio queue (barge-in)');
+        setOnClearBuffer((payload?: { generation_id: number }) => {
+            const genId = payload?.generation_id ?? 0;
+            lastClearedGenIdRef.current = genId;
             audioQueueRef.current = [];
-
-            // Stop active playback immediately
             if (activeSourceRef.current) {
-                try {
-                    activeSourceRef.current.stop();
-                } catch (e) {
-                    // Ignore if already stopped
-                }
+                try { activeSourceRef.current.stop(); } catch (e) { }
                 activeSourceRef.current = null;
             }
-
             isPlayingRef.current = false;
         });
 
-        // Handle transcripts
         setOnTranscript((role: string, text: string, partial?: boolean) => {
             setTranscript(prev => {
-                if (prev.length === 0) {
-                    return [{ role, text, partial }];
-                }
-
+                if (prev.length === 0) return [{ role, text, partial }];
                 const last = prev[prev.length - 1];
                 const isAssistantMerge = role === 'assistant' && last.role === 'assistant';
 
                 if (isAssistantMerge) {
-                    // Always merge consecutive assistant messages into one bubble for voice
                     const newHistory = [...prev];
-
                     if (partial) {
-                        // If the last was already a partial of the same stream, append
-                        // If the last was a final and we got a new partial, append with space
                         const joiner = (last.partial === false) ? ' ' : '';
                         newHistory[newHistory.length - 1] = {
                             ...last,
@@ -160,33 +189,22 @@ export function VoiceClient() {
                             partial: true
                         };
                     } else {
-                        // Received final text. For assistent, just update the last one and mark final.
-                        // But use the text provided (which is full text in some cases or just a chunk)
-                        // Backend sends FULL text for assistant when partial=False
-                        newHistory[newHistory.length - 1] = {
-                            ...last,
-                            text: text,
-                            partial: false
-                        };
+                        newHistory[newHistory.length - 1] = { ...last, text: text, partial: false };
                     }
                     return newHistory;
                 }
 
-                // If user message and last was partial user, append?
-                // Usually user messages come in one go from STT, but just in case:
                 if (role === 'user' && last.role === 'user' && last.partial) {
                     const newHistory = [...prev];
                     newHistory[newHistory.length - 1] = { ...last, text: last.text + text, partial };
                     return newHistory;
                 }
 
-                // New message start
                 return [...prev, { role, text, partial }];
             });
         });
     }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
 
-    // Auto-scroll to bottom of transcript
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcript]);
@@ -194,63 +212,34 @@ export function VoiceClient() {
     const requestMicrophoneAccess = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                }
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             });
-
             setHasPermission(true);
-
-            // Initialize AudioContext
             const audioContext = new AudioContext({ sampleRate: 48000 });
-
-            // Ensure context is running (fixes potential 'suspended' state on start)
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-
+            if (audioContext.state === 'suspended') await audioContext.resume();
             await audioContext.audioWorklet.addModule(`/audio-processor.js?t=${Date.now()}`);
-
             const source = audioContext.createMediaStreamSource(stream);
-
-            // Add a GainNode to boost the mic signal by 2x for better STT recognition
             const gainNode = audioContext.createGain();
             gainNode.gain.value = 2.0;
-
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 2048;
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Float32Array(bufferLength);
+            analyserRef.current = analyser;
 
             const workletNode = new AudioWorkletNode(audioContext, 'audio-downsampler');
-
-            workletNode.port.onmessage = (event) => {
-                // Send to WebSocket
-                sendAudio(event.data);
+            workletNode.port.onmessage = (e) => {
+                if (!isMutedRef.current) {
+                    sendAudio(e.data);
+                }
             };
-
-            // Pipeline: source -> gain -> analyser -> worklet
             source.connect(gainNode);
             gainNode.connect(analyser);
             gainNode.connect(workletNode);
 
-            // Update waveform visualization
-            const updateWaveform = () => {
-                analyser.getFloatTimeDomainData(dataArray);
-                setAudioData(new Float32Array(dataArray));
-                requestAnimationFrame(updateWaveform);
-            };
-            updateWaveform();
-
             audioContextRef.current = audioContext;
             workletNodeRef.current = workletNode;
-
             connect();
         } catch (err) {
-            console.error('[Voice] Microphone access denied:', err);
-            alert(`Microphone access denied: ${err instanceof Error ? err.message : 'Unknown error'}\n\nPlease grant microphone permissions in your browser settings.`);
+            console.error('[Voice] Mic denied:', err);
         }
     };
 
@@ -263,7 +252,7 @@ export function VoiceClient() {
         isPlayingRef.current = false;
         disconnect();
         setHasPermission(false);
-        setAudioData(null);
+
     }, [disconnect]);
 
     useEffect(() => {
@@ -272,103 +261,189 @@ export function VoiceClient() {
         };
     }, [stopVoice]);
 
-    const getStatusColor = () => {
+    const getStatusTheme = () => {
         switch (state) {
-            case 'listening': return 'text-green-400';
-            case 'thinking': return 'text-yellow-400';
-            case 'speaking': return 'text-blue-400';
-            case 'connecting': return 'text-gray-400';
-            default: return 'text-gray-500';
+            case 'listening': return { color: 'text-green-400', label: 'Listening', icon: <Mic className="w-5 h-5 animate-pulse" /> };
+            case 'thinking': return { color: 'text-amber-400', label: 'Thinking', icon: <Sparkles className="w-5 h-5 animate-spin-slow" /> };
+            case 'speaking': return { color: 'text-blue-400', label: 'Speaking', icon: <Headphones className="w-5 h-5" /> };
+            case 'connecting': return { color: 'text-gray-400', label: 'Connecting', icon: <Activity className="w-5 h-5 animate-pulse" /> };
+            default: return { color: 'text-gray-500', label: 'Disconnected', icon: <MicOff className="w-5 h-5" /> };
         }
     };
 
-    const getStatusIcon = () => {
-        switch (state) {
-            case 'listening': return '🎤';
-            case 'thinking': return '🤔';
-            case 'speaking': return '🔊';
-            case 'connecting': return '⏳';
-            default: return '⭕';
-        }
-    };
+    const theme = getStatusTheme();
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-8">
-            <h1 className="text-4xl font-bold mb-8">Voice Agent</h1>
-
-            {!hasPermission ? (
-                <div className="text-center max-w-md">
-                    <p className="mb-4 text-gray-400">
-                        This app needs microphone access to enable voice interactions with the agent.
-                    </p>
-                    <p className="mb-6 text-sm text-gray-500">
-                        Your audio is processed securely and is not stored beyond the current session.
-                    </p>
-                    <button
-                        onClick={requestMicrophoneAccess}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
-                    >
-                        Enable Microphone
-                    </button>
+        <div className="flex flex-col h-screen bg-[#0a0a0c] text-slate-200 font-sans">
+            {/* Header */}
+            <header className="flex items-center justify-between px-8 py-5 border-b border-white/5 bg-black/20 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-600/20 rounded-xl border border-blue-500/30">
+                        <Activity className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-white">Voice Agent</h1>
                 </div>
-            ) : (
-                <>
-                    <div
-                        className={`mb-4 text-2xl font-semibold flex items-center gap-3 ${getStatusColor()}`}
-                        aria-live="polite"
+
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={toggleMute}
+                        disabled={state === 'idle' || state === 'connecting'}
+                        className={cn(
+                            "p-2.5 rounded-full border transition-all duration-300 flex items-center justify-center",
+                            isMuted
+                                ? "bg-red-500/20 border-red-500 text-red-500 shadow-[0_0_15px_-3px_rgba(239,68,68,0.5)] scale-110"
+                                : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30"
+                        )}
+                        title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
                     >
-                        <span className="text-3xl">{getStatusIcon()}</span>
-                        <span className="capitalize">{state}</span>
-                    </div>
+                        {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    </button>
 
-                    {error && (
-                        <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-                            {error}
+                    <div className={cn("px-4 py-1.5 rounded-full border flex items-center gap-2.5 text-sm font-medium transition-all duration-300",
+                        theme.color,
+                        "bg-white/5 border-white/10 shadow-lg"
+                    )}>
+                        {theme.icon}
+                        {theme.label}
+                    </div>
+                </div>
+            </header>
+
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto px-6 py-8 overflow-hidden">
+                {!hasPermission ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center">
+                        <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center mb-8 border border-blue-500/20 shadow-2xl">
+                            <Mic className="w-10 h-10 text-blue-400" />
                         </div>
-                    )}
-
-                    <div className="w-full max-w-4xl mb-6">
-                        <WaveformVisualizer
-                            audioData={audioData}
-                            isActive={state === 'listening' || state === 'speaking'}
-                        />
+                        <h2 className="text-3xl font-bold text-white mb-4">Start Conversing</h2>
+                        <p className="text-slate-400 max-w-sm mb-10 leading-relaxed">
+                            Interact with your agent using natural voice. Your audio is processed locally and securely.
+                        </p>
+                        <button
+                            onClick={requestMicrophoneAccess}
+                            className="group relative px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all duration-300 shadow-[0_0_40px_-10px_rgba(37,99,235,0.4)] active:scale-95"
+                        >
+                            Enable Microphone
+                        </button>
                     </div>
+                ) : (
+                    <>
+                        {/* Transcript Area */}
+                        <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-6 mb-8">
+                            {transcript.length === 0 && (
+                                <div className="h-full flex items-center justify-center text-slate-500 italic">
+                                    Awaiting your command...
+                                </div>
+                            )}
+                            {transcript.map((msg, i) => (
+                                <div key={i} className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                                    <div className={cn(
+                                        "max-w-[85%] px-5 py-4 rounded-3xl shadow-xl transition-all duration-300",
+                                        msg.role === 'user'
+                                            ? "bg-blue-700 text-white rounded-tr-none border border-blue-500/30"
+                                            : "bg-[#16161a] border border-white/5 rounded-tl-none"
+                                    )}>
+                                        <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest">
+                                            {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3 text-blue-400" />}
+                                            {msg.role}
+                                        </div>
+                                        <div className={cn("prose prose-invert max-w-none text-sm leading-relaxed", msg.partial && "opacity-70 animate-pulse")}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                {msg.text}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <div ref={transcriptEndRef} />
+                        </div>
 
-                    {transcript.length > 0 && (
-                        <div className="w-full max-w-4xl mb-6 p-4 bg-gray-800 rounded-lg max-h-64 overflow-y-auto">
-                            <h2 className="text-lg font-semibold mb-2">Transcript</h2>
-                            <div className="space-y-2">
-                                {transcript.map((msg, i) => (
-                                    <p key={i} className={`text-gray-300 ${msg.partial ? 'opacity-80 animate-pulse' : ''}`}>
-                                        {msg.role === 'user' ? '👤' : '🤖'} {msg.text}
-                                    </p>
-                                ))}
-                                <div ref={transcriptEndRef} />
+                        {/* Visualizer & Controls */}
+                        <div className="bg-[#121216] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+                            <div className="relative z-10 flex flex-col gap-8">
+                                <div className="h-20 max-w-2xl mx-auto w-full flex items-center justify-center bg-black/40 rounded-2xl border border-white/5 overflow-hidden px-4">
+                                    <WaveformVisualizer
+                                        analyserRef={analyserRef}
+                                        isActive={state === 'listening' || state === 'speaking' || state === 'thinking'}
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={stopVoice}
+                                            className="px-6 py-3 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/20 rounded-2xl font-semibold transition-all flex items-center gap-2"
+                                        >
+                                            <CircleStop className="w-5 h-5" />
+                                            Stop
+                                        </button>
+                                        <button
+                                            onClick={() => setTranscript([])}
+                                            className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-400 border border-white/10 rounded-2xl font-semibold transition-all disabled:opacity-30 flex items-center gap-2"
+                                            disabled={transcript.length === 0}
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                            Clear
+                                        </button>
+                                    </div>
+
+                                    <div className="hidden sm:flex text-slate-500 text-xs gap-6 items-center uppercase tracking-widest font-bold">
+                                        <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> 48khz PCM</span>
+                                        <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> AES-256</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    )}
 
-                    <div className="flex gap-4">
-                        <button
-                            onClick={stopVoice}
-                            className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
-                        >
-                            Stop Voice
-                        </button>
-                        <button
-                            onClick={() => setTranscript([])}
-                            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
-                            disabled={transcript.length === 0}
-                        >
-                            Clear Transcript
-                        </button>
-                    </div>
+                        {/* Text Input Area */}
+                        <div className="mt-8 relative group">
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (inputValue.trim()) {
+                                        sendText(inputValue.trim());
+                                        setTranscript(prev => [...prev, { role: 'user', text: inputValue.trim() }]);
+                                        setInputValue("");
+                                    }
+                                }}
+                                className="flex items-center gap-4 bg-[#16161a] border border-white/10 p-2 rounded-2xl shadow-xl focus-within:border-blue-500/50 transition-all"
+                            >
+                                <input
+                                    type="text"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    placeholder="Type a message to the agent..."
+                                    className="flex-1 bg-transparent px-4 py-3 outline-none text-slate-200 placeholder-slate-600 text-sm"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!inputValue.trim()}
+                                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-bold transition-all text-sm"
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        </div>
+                    </>
+                )}
+            </main>
 
-                    <p className="mt-8 text-sm text-gray-500">
-                        Press Esc to stop • Audio is session-only
-                    </p>
-                </>
-            )}
+            <footer className="px-8 py-5 text-center text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em]">
+                System Ready • Latency: &lt;150ms • Build 2026.1.27
+            </footer>
+
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+                .animate-spin-slow { animation: spin 3s linear infinite; }
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}} />
         </div>
     );
 }

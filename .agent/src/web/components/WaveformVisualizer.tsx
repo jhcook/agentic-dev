@@ -15,54 +15,90 @@
 import { useEffect, useRef } from 'react';
 
 interface WaveformVisualizerProps {
-    audioData: Float32Array | null;
+    analyserRef: React.RefObject<AnalyserNode | null>;
     isActive: boolean;
 }
 
-export function WaveformVisualizer({ audioData, isActive }: WaveformVisualizerProps) {
+export function WaveformVisualizer({ analyserRef, isActive }: WaveformVisualizerProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const animationFrameRef = useRef<number | null>(null);
 
     useEffect(() => {
-        if (!canvasRef.current) return;
+        if (!canvasRef.current || !containerRef.current) return;
 
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d')!;
-        const { width, height } = canvas;
+        const ctx = canvas.getContext('2d', { alpha: false })!; // Optimization: no alpha where possible
+
+        const resize = () => {
+            if (containerRef.current) {
+                canvas.width = containerRef.current.clientWidth * window.devicePixelRatio;
+                canvas.height = containerRef.current.clientHeight * window.devicePixelRatio;
+            }
+        };
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Persistent data array for frequencies
+        const dataArray = new Uint8Array(1024); // Matches 2048 fftSize
 
         const draw = () => {
-            // Clear
-            ctx.fillStyle = '#1f2937'; // dark:bg-gray-800
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear background
+            ctx.fillStyle = '#121216';
             ctx.fillRect(0, 0, width, height);
 
-            if (audioData && audioData.length > 0) {
-                // Draw waveform
-                ctx.strokeStyle = isActive ? '#3b82f6' : '#6b7280'; // blue-500 or gray-500
-                ctx.lineWidth = 2;
-                ctx.beginPath();
+            const analyser = analyserRef.current;
 
-                const step = Math.ceil(audioData.length / width);
-                const amp = height / 2;
+            if (analyser && isActive) {
+                analyser.getByteFrequencyData(dataArray);
 
-                for (let i = 0; i < width; i++) {
-                    const slice = audioData.slice(i * step, (i + 1) * step);
-                    if (slice.length === 0) continue;
+                // Focus on frequencies up to ~10kHz (roughly 40% of the 24kHz window)
+                const zoomFactor = 0.4;
+                const dataLen = Math.floor(dataArray.length * zoomFactor);
 
-                    const min = Math.min(...Array.from(slice));
-                    const max = Math.max(...Array.from(slice));
+                const barWidth = 6 * window.devicePixelRatio;
+                const gap = 3 * window.devicePixelRatio;
+                const numBars = Math.floor(width / (barWidth + gap));
 
-                    ctx.moveTo(i, (1 + min) * amp);
-                    ctx.lineTo(i, (1 + max) * amp);
+                const segmentHeight = 3 * window.devicePixelRatio;
+                const segmentGap = 1.5 * window.devicePixelRatio;
+                const numSegments = Math.floor(height / (segmentHeight + segmentGap));
+
+                for (let i = 0; i < numBars; i++) {
+                    const dataIdx = Math.floor((i / numBars) * dataLen);
+                    const val = dataArray[dataIdx] / 255.0;
+
+                    const activeSegments = Math.floor(val * numSegments);
+                    const x = i * (barWidth + gap);
+
+                    for (let j = 0; j < numSegments; j++) {
+                        const y = height - (j + 1) * (segmentHeight + segmentGap);
+
+                        const ratio = j / numSegments;
+                        let color = '#22c55e'; // Green-500
+                        if (ratio > 0.8) color = '#ef4444'; // Red-500
+                        else if (ratio > 0.6) color = '#eab308'; // Yellow-500
+
+                        if (j < activeSegments) {
+                            ctx.fillStyle = color;
+                        } else {
+                            ctx.fillStyle = 'rgba(30, 41, 59, 0.3)';
+                        }
+
+                        ctx.fillRect(x, y, barWidth, segmentHeight);
+                    }
                 }
-
-                ctx.stroke();
             } else {
-                // Draw center line when no audio
-                ctx.strokeStyle = '#374151'; // gray-700
+                // Dim "quiet" state with a simple line
+                ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(0, height / 2);
-                ctx.lineTo(width, height / 2);
+                ctx.moveTo(0, height - 10);
+                ctx.lineTo(width, height - 10);
                 ctx.stroke();
             }
 
@@ -72,19 +108,20 @@ export function WaveformVisualizer({ audioData, isActive }: WaveformVisualizerPr
         draw();
 
         return () => {
+            window.removeEventListener('resize', resize);
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [audioData, isActive]);
+    }, [analyserRef, isActive]); // Only rerun if analyser target changes (rare) or isActive toggle
 
     return (
-        <canvas
-            ref={canvasRef}
-            width={800}
-            height={200}
-            className="w-full h-48 bg-gray-800 rounded-lg"
-            aria-label="Audio waveform visualization"
-        />
+        <div ref={containerRef} className="w-full h-full">
+            <canvas
+                ref={canvasRef}
+                className="w-full h-full"
+                aria-label="Audio frequency visualizer"
+            />
+        </div>
     );
 }

@@ -29,9 +29,17 @@ def scan_file_for_secrets(file_path: str) -> str:
     try:
         with open(file_path, 'r') as f:
             content = f.read()
+        return scan_secrets_in_content.invoke({"content": content})
     except Exception as e:
         return f"Error reading file: {e}"
 
+@tool
+def scan_secrets_in_content(content: str) -> str:
+    """
+    Scan text content for potential secrets (API keys, tokens).
+    Args:
+        content: The text string to scan.
+    """
     # Simple regex patterns for demo
     patterns = {
         "API Key": r"(?i)(api[_-]?key|sk-[a-zA-Z0-9]{20,})",

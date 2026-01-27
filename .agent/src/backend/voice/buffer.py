@@ -29,33 +29,79 @@ class SentenceBuffer:
 
     async def process(self, token_stream: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
         """
-        Consumes a stream of tokens and yields full sentences.
-        
-        Args:
-            token_stream: Async generator yielding strings (tokens/chunks).
-            
-        Yields:
-            Complete sentences as strings.
+        Consumes a stream of tokens and yields full sentences, 
+        automatically skipping technical noise and code blocks.
         """
         async for token in token_stream:
             self.buffer += token
             
-            # Check if we have a full sentence
-            sentences = self.sentence_end_pattern.split(self.buffer)
+            # 1. Strip ALL complete code blocks immediately.
+            self.buffer = re.sub(r'```[\s\S]*?```', ' ', self.buffer)
             
-            # If we have more than 1 split, it means we found delimiters.
-            # The last element is the incomplete remainder (buffer).
+            # 2. Check for an incomplete block.
+            parts = self.buffer.split('```')
+            if len(parts) % 2 == 0:
+                process_limit = len(self.buffer) - len(parts[-1]) - 3
+                text_to_process = self.buffer[:process_limit]
+                remainder = self.buffer[process_limit:] # Starts with ```
+            else:
+                text_to_process = self.buffer
+                remainder = ""
+
+            # 3. Check for full segments (including newlines as break-points for logs)
+            # We treat newlines as hard sentence breaks for technical data.
+            sentences = re.split(r'(?<=[.?!])\s+|\n', text_to_process)
+            
             if len(sentences) > 1:
-                # All except last are complete sentences
-                for sentence in sentences[:-1]:
-                    sentence = sentence.strip()
-                    if sentence:
-                        yield sentence
+                # All except last are complete
+                for s in sentences[:-1]:
+                    if self._is_speakable(s):
+                        yield s.strip()
                 
-                # Keep the remainder
-                self.buffer = sentences[-1]
+                self.buffer = sentences[-1] + remainder
+            else:
+                pass        
+
+        # End of stream: yield whatever is left, BUT FILTER IT
+        final = self.buffer.strip()
+        if final and self._is_speakable(final):
+            yield final
+            
+        self.buffer = ""
+
+    def _is_speakable(self, text: str) -> bool:
+        """
+        Aggressive heuristic to skip technical noise, logs, and structured data.
+        """
+        s = text.strip()
+        if not s: return False
         
-        # End of stream: yield whatever is left
-        if self.buffer.strip():
-            yield self.buffer.strip()
-            self.buffer = ""
+        # 1. Skip code block markers
+        if '```' in s: return False
+            
+        # 2. Git Status patterns (e.g., "M path/to/file")
+        if re.match(r'^[MADRCU\?G\s]{1,3}\s+[\.\w/-]+$', s): return False
+        
+        # 3. Terminal Command patterns (starts with $, >, or looks like a command)
+        if s.startswith('$ ') or s.startswith('> '): return False
+        if re.match(r'^[\w-]+(\s+--?[\w-]+)+', s): return False # Command with flags
+        
+        # 4. Path patterns (multiple separators, no spaces)
+        if s.count('/') >= 2 and ' ' not in s: return False
+        if s.count('\\') >= 2 and ' ' not in s: return False
+            
+        # 5. File Lists (all words have extensions or separators)
+        words = s.split()
+        if len(words) > 2 and all(re.search(r'[\./\\]', w) for w in words):
+            return False
+            
+        # 6. JSON / YAML detection
+        if s.startswith('{') and s.endswith('}'): return False
+        if s.startswith('[') and s.endswith(']'): return False
+        if ': ' in s and not any(c in s for c in '.?!'): # Key-value pair without punctuation
+            return False
+
+        # 7. No ASCII letters (only symbols/numbers)
+        if not any(c.isalpha() for c in s): return False
+
+        return True

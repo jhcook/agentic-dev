@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn>=0.23.0",
     "SQLAlchemy>=2.0",
     "psycopg2-binary>=2.9",
-    "python-dotenv>=1.0",
+    "python-dotenv>=1.0.0",
     "requests>=2.31.0",
     "fastapi-users>=12.0",
     "fastapi-users-db-sqlalchemy>=4.1",
@@ -23,37 +23,45 @@ dependencies = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "anyio>=4.0.0",
-    "python-dotenv>=1.0.0",
     "supabase>=2.0.0",
     "typer>=0.12.0",
-    "rich>=13.0.0",
+    "prometheus-client>=0.17.0",
+    # OpenTelemetry API is lightweight and often used in core for tracing hooks
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
 ]
 
 [project.optional-dependencies]
-voice = [
-    "deepgram-sdk>=3.0",
-    "prometheus-client>=0.17.0",
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
+ai = [
+    "openai>=1.0.0",
+    "anthropic>=0.3.0",
+    "google-genai>=0.1.0",
     "langgraph>=0.2.0",
     "langgraph-checkpoint-sqlite>=1.0.0",
     "langchain>=0.3.0",
-    "langchain-openai>=0.2.0",
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
-    # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility (onnxruntime)
-    "kokoro-onnx>=0.3.1",
-    "onnxruntime>=1.16.0",
-    "webrtcvad>=2.0.10",
+    "langchain-openai>=0.2.0",
+]
+
+voice = [
+    "deepgram-sdk>=3.0",
+    "google-cloud-speech>=2.0.0",
+    "google-cloud-texttospeech>=2.0.0",
+    "azure-cognitiveservices-speech>=1.33.0",
+    "numpy>=1.26.0",
     "soundfile>=0.12.1",
     "scipy>=1.11.0",
-    # Faster-whisper for offline STT - Disabled due to Python 3.14 incompatibility (av/Cython)
+    
+    # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility
+    # "kokoro-onnx>=0.3.1",
+    "onnxruntime>=1.16.0",
+    "webrtcvad>=2.0.10",
     # "faster-whisper>=1.0.0",
-    "google-cloud-speech>=2.15.0",
-    "google-cloud-texttospeech>=2.14.0",
-    "azure-cognitiveservices-speech>=1.33.0",
 ]
+
 admin = [
+    "rich>=13.0.0",
     "PyYAML>=6.0",
 ]
 

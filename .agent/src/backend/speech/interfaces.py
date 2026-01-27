@@ -88,7 +88,7 @@ class TTSProvider(Protocol):
 
 class DisabledSTT:
     """Fallback STT provider that does nothing."""
-    async def listen(self, audio_data: bytes) -> str:
+    async def listen(self, audio_data: bytes, **kwargs) -> str:
         return ""
     
     async def stream(self, audio_stream: AsyncGenerator[bytes, None]) -> AsyncGenerator[str, None]:

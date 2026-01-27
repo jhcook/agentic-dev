@@ -35,6 +35,7 @@ from agent.commands import (
     visualize,
     workflow,
     admin,
+    importer,
 )
 from agent.commands import list as list_cmd
 from agent.sync import cli as sync_cli
@@ -53,6 +54,7 @@ app.add_typer(config.app, name="config")
 app.add_typer(secret.app, name="secret")
 app.add_typer(mcp.app, name="mcp")
 app.add_typer(admin.app, name="admin")
+app.add_typer(importer.app, name="import")
 
 app.command(name="new-story")(story.new_story)
 app.command(name="new-plan")(plan.new_plan)
