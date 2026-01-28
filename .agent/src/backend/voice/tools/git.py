@@ -190,12 +190,13 @@ def git_stage_changes(files: list[str] = None) -> str:
         return f"Error staging changes: {e}"
 
 @tool
-def run_commit(message: str = None) -> str:
+def run_commit(message: str = None, config: RunnableConfig = None) -> str:
     """
     Commit staged changes to the repository.
     If no message is provided, AI generation will be used.
     """
     try:
+        session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
 
         # Use robust shell activation pattern
         base_cmd = "source .venv/bin/activate && agent commit --yes"
@@ -208,16 +209,27 @@ def run_commit(message: str = None) -> str:
             cmd = f"{base_cmd} --ai"
              
         # Execute with shell to support source
-        result = subprocess.run(
+        process = subprocess.Popen(
             cmd,
             shell=True,
             executable='/bin/zsh',
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            check=False
+            bufsize=1
         )
         
-        if result.returncode == 0:
+        output_buffer = []
+        
+        # Stream output
+        for line in iter(process.stdout.readline, ''):
+            if line:
+                EventBus.publish(session_id, "console", line)
+                output_buffer.append(line)
+        
+        process.wait()
+        
+        if process.returncode == 0:
             # Fetch the commit details
             log_result = subprocess.run(
                 ["git", "log", "-1", "--stat"],
@@ -227,7 +239,7 @@ def run_commit(message: str = None) -> str:
             )
             return f"Commit successful.\n\n{log_result.stdout}"
         else:
-            return f"Error committing changes:\n{result.stderr}\n{result.stdout}"
+            return f"Error committing changes:\n{''.join(output_buffer)}"
             
     except Exception as e:
         return f"Failed to run commit: {e}"

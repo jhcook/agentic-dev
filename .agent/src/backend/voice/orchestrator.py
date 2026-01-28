@@ -477,7 +477,9 @@ class VoiceOrchestrator:
                     if audio_chunk is None: break # Sentinel
                     
                     if audio_chunk == b'__MUTE__SENTINEL__':
-                        if self.speech_active:
+                        # Force flush if speech active OR significant audio buffered
+                        # 3200 bytes = 0.1s at 16khz/16bit
+                        if self.speech_active or len(self.audio_buffer) > 3200:
                             logger.info(f"STATE_TRACE[{self.session_id}]: Mute Forced Flush")
                             
                             # FLUSH LOGIC

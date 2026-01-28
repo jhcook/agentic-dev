@@ -1,9 +1,3 @@
-import pytest
-import threading
-import time
-from backend.voice.events import EventBus
-from collections import defaultdict
-
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +11,12 @@ from collections import defaultdict
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import pytest
+import threading
+import time
+from backend.voice.events import EventBus
+from collections import defaultdict
 
 @pytest.fixture(autouse=True)
 def reset_event_bus():

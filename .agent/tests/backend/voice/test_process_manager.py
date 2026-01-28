@@ -1,9 +1,3 @@
-import pytest
-import subprocess
-from unittest.mock import MagicMock, patch
-from backend.voice.process_manager import ProcessLifecycleManager
-import threading
-
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +11,12 @@ import threading
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import pytest
+import subprocess
+from unittest.mock import MagicMock, patch
+from backend.voice.process_manager import ProcessLifecycleManager
+import threading
 
 @pytest.fixture(autouse=True)
 def cleanup_manager():

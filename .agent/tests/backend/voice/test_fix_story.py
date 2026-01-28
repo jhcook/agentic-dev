@@ -1,7 +1,3 @@
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
-from backend.voice.tools.fix_story import validate_and_fix_story
-
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +11,10 @@ from backend.voice.tools.fix_story import validate_and_fix_story
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import pytest
+from unittest.mock import MagicMock, patch, mock_open
+from backend.voice.tools.fix_story import validate_and_fix_story
 
 @pytest.fixture
 def mock_deps():
