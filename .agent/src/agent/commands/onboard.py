@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 import typer
+from opentelemetry import trace   # <--- Added
+
 
 # Note: This command requires `typer` and `python-dotenv`.
 # Ensure they are added to your project's dependencies.
@@ -34,6 +36,8 @@ from agent.core.secrets import (
 )
 
 console = Console()
+tracer = trace.get_tracer(__name__)  # <--- Added
+
 
 # REQUIRED_KEYS removed, driven by PROVIDERS constant from service.py
 
@@ -51,7 +55,7 @@ def check_dependencies() -> None:
     typer.echo("[INFO] Checking for required system dependencies...")
     # As per @Security review, add any binary dependencies here. e.g., `git`
     dependencies = ["git", "python3", "gh"]
-    recommended = []
+    recommended = ["node", "npm"]
 
     all_found = True
     for dep in dependencies:
@@ -666,6 +670,53 @@ def configure_voice_settings() -> None:
 
 
 
+
+def setup_frontend() -> None:
+    """Installs frontend dependencies using npm."""
+    typer.echo("\n[INFO] Setting up Frontend...")
+
+    web_dir = AGENT_DIR / "src" / "web"
+    
+    # 1. Check if npm is installed
+    if not shutil.which("npm"):
+        typer.secho(
+            "[WARN] 'npm' not found. Skipping frontend setup.",
+            fg=typer.colors.YELLOW
+        )
+        typer.echo("The Agent Admin Console frontend may not work until you install Node.js and run 'npm install' manually.")
+        return
+
+    # 2. Check directory
+    if not web_dir.exists():
+        typer.secho(
+            f"[WARN] Web directory not found at {web_dir}. Skipping frontend setup.",
+            fg=typer.colors.YELLOW
+        )
+        return
+
+    # 3. Install dependencies
+    typer.echo("Installing Node dependencies... (this may take a minute)")
+    try:
+        with tracer.start_as_current_span("agent.onboard.setup_frontend.npm_install") as span:
+             span.set_attribute("cwd", str(web_dir))
+             subprocess.run(
+                ["npm", "install"],
+                cwd=web_dir,
+                check=True,
+                capture_output=False  # Let user see progress
+             )
+             span.set_attribute("status", "success")
+             
+        typer.secho("[OK] Frontend dependencies installed.", fg=typer.colors.GREEN)
+    except subprocess.CalledProcessError as e:
+        typer.secho(
+            f"[ERROR] Failed to run 'npm install': {e}",
+            fg=typer.colors.RED
+        )
+        typer.echo("You may need to resolve this manually to use the Admin Console.")
+
+
+
 def run_verification() -> None:
     """Verifies AI connectivity with a Hello World prompt."""
     typer.echo("\n[INFO] Verifying AI connectivity...")
@@ -760,6 +811,7 @@ def onboard() -> None:
         check_github_auth() # Now safe to use secrets if needed? Actually I just save preference.
         configure_agent_settings()
         configure_voice_settings()
+        setup_frontend()
         run_verification()
         
         typer.secho(
