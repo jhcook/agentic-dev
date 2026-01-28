@@ -94,7 +94,7 @@ This provides **backward compatibility** - existing environment variables contin
 - May require elevated permissions
 - Less portable across environments
 
-**Decision**: Rejected for first iteration due to complexity. May revisit for future enhancement.
+**Decision**: **Accepted**. We implemented this for credentials (the Master Password itself) rather than individual secrets. This provides a balance of convenience (auto-unlock) and portability (file-based secrets).
 
 ### Option B: External Secret Manager (HashiCorp Vault, AWS Secrets Manager)
 **Description**: Integrate with enterprise secret management solutions.
@@ -138,11 +138,26 @@ This provides **backward compatibility** - existing environment variables contin
 5. **Backward Compatibility**: Environment variables still work
 6. **Rotation Support**: Easy to update secrets via CLI
 
+
+### Auto-Unlock Mechanisms
+
+To improve developer experience (reducing password prompts) and support CI/CD, the following auto-unlock mechanisms are implemented:
+
+1.  **System Keyring**:
+    *   The Master Password is securely stored in the OS Keychain (macOS/Windows/Linux) using the `keyring` library.
+    *   Service Name: `agent-cli`
+    *   Username: `master_key`
+    *   On initialization/login, the CLI attempts to retrieve this key to auto-unlock.
+
+2.  **CI/CD Environment Variable**:
+    *   `AGENT_MASTER_KEY`: If set, this environment variable is used to unlock the vault.
+    *   **Use Case**: Automated pipelines where interactive entry is impossible.
+
 ### Negative
-1. **Master Password**: Users must remember/secure master password
-2. **Unlock Required**: Some operations require unlocking first
-3. **Additional Dependency**: Requires `cryptography` Python package
-4. **Recovery**: Lost master password means re-creating all secrets
+1.  **Master Password**: Users must remember/secure master password
+2.  **Unlock Required**: Some operations require unlocking first (mitigated by Auto-Unlock)
+3.  **Additional Dependency**: Requires `cryptography` and `keyring` Python packages
+4.  **Recovery**: Lost master password means re-creating all secrets (unless backed up via env vars)
 
 ### Mitigations
 - Password strength requirements reduce brute-force risk

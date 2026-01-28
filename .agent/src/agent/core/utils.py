@@ -285,3 +285,16 @@ GOVERNANCE RULES:
     except Exception as e:
         console.print(f"[yellow]⚠️  AI Story matching failed: {e}[/yellow]")
         return None
+
+def sanitize_id(input_str: str) -> str:
+    """
+    Sanitize spoken or input IDs (e.g. "Web Dash 001" -> "WEB-001")
+    """
+    if not input_str:
+        return ""
+    # Normalize
+    s = input_str.upper()
+    s = s.replace(" DASH ", "-").replace(" MINUS ", "-")
+    # Remove all whitespace
+    s = re.sub(r"\s+", "", s)
+    return s

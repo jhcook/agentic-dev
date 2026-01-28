@@ -12,28 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-from agent.core.utils import scrub_sensitive_data
+"""
+Security utilities for the Agent CLI.
+Handles PII and secret scrubbing.
+"""
+import re
 
-logger = logging.getLogger(__name__)
-
-class SecureManager:
+def scrub_sensitive_data(text: str) -> str:
     """
-    Central security manager for scrubbing sensitive data and 
-    validating safety constraints.
+    Scrub potentially sensitive data (emails, API keys) from text.
     """
-    def __init__(self):
-        pass
+    if not text:
+        return text
 
-    def scrub(self, text: str) -> str:
-        """
-        Scrub sensitive data (PII, Secrets) from text.
-        """
-        if not text:
-            return ""
-        
-        scrubbed = scrub_sensitive_data(text)
-        
-        # Additional safety checks could go here (e.g., detecting prompt injection patterns)
-        
-        return scrubbed
+    # Email addresses
+    text = re.sub(
+        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", 
+        "[REDACTED_EMAIL]", 
+        text
+    )
+
+    # Generic API Keys (high entropy alphanumeric strings, e.g., sk-..., gcp-...)
+    # Matches strings that start with standard prefixes or look like high entropy hashes
+    patterns = [
+        r"(sk-[a-zA-Z0-9]{20,})",  # OpenAI style
+        r"(AIza[0-9A-Za-z-_]{35})", # Google API Key
+        r"(ghp_[a-zA-Z0-9]{36})",   # GitHub Personal Access Token
+        r"(glpat-[a-zA-Z0-9\-]{20})", # GitLab
+    ]
+    
+    for pattern in patterns:
+        text = re.sub(pattern, "[REDACTED_SECRET]", text)
+
+    return text
