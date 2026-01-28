@@ -127,6 +127,10 @@ export function VoiceClient({ className }: VoiceClientProps) {
                 }
             } else if (type === 'vad_state') {
                 setVadSettings(prev => ({ ...prev, ...data }));
+            } else if (type === 'open_url') {
+                if (data && data.url) {
+                    window.open(data.url, '_blank');
+                }
             }
         });
     }, [setOnEvent]);

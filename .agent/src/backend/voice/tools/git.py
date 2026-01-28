@@ -258,7 +258,19 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
     EventBus.publish(session_id, "console", f"> Starting PR Creation (ID: {process_id})...\n")
     
     try:
-        # Build command
+        # 1. Ensure branch is pushed
+        # Use .func to bypass Tool wrapper overhead/validation for internal call
+        push_result = git_push_branch.func(config=config)
+        # Even if it returns error text, we might want to try PR anyway? 
+        # But user said "ensure if HEAD is not pushed... do a push".
+        # If push failed, PR creation might fail too.
+        # Check output for success?
+        if "Error" in push_result or "Failed" in push_result:
+             EventBus.publish(session_id, "console", f"⚠️  Push Result: {push_result}\nContinuing with PR...\n")
+        else:
+             EventBus.publish(session_id, "console", f"✅ {push_result}\n")
+
+        # 2. Build PR command
         cmd_parts = ["source .venv/bin/activate && agent pr"]
         if story_id:
             cmd_parts.append(f"--story {story_id}")
@@ -289,15 +301,29 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
         # Background reader
         def read_output():
             import threading
+            import re
+            
+            pr_url = None
+            
             try:
                 for line in iter(process.stdout.readline, ''):
                     EventBus.publish(session_id, "console", f"[{process_id}] {line}")
+                    
+                    # Search for PR URL
+                    # Example: https://github.com/org/repo/pull/123
+                    if not pr_url:
+                        match = re.search(r'(https://github\.com/[^/]+/[^/]+/pull/\d+)', line)
+                        if match:
+                            pr_url = match.group(1)
                 
                 process.stdout.close()
                 rc = process.wait()
                 
                 if rc == 0:
                     EventBus.publish(session_id, "console", f"\n✅ PR Created Successfully (ID: {process_id}).\n")
+                    if pr_url:
+                        EventBus.publish(session_id, "console", f"Opening: {pr_url}\n")
+                        EventBus.publish(session_id, "open_url", {"url": pr_url})
                 else:
                     EventBus.publish(session_id, "console", f"\n❌ PR Creation Failed (ID: {process_id}).\n")
             except Exception as e:
@@ -313,3 +339,64 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
         
     except Exception as e:
         return f"Failed to start PR creation: {e}"
+
+@tool
+def git_push_branch(config: RunnableConfig = None) -> str:
+    """
+    Push the current branch to origin.
+    Automatically handles setting the upstream branch if it's missing.
+    """
+    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    EventBus.publish(session_id, "console", "> Pushing to origin...\n")
+
+    try:
+        # 1. Attempt standard push
+        process = subprocess.Popen(
+            ["git", "push"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate()
+        
+        # Stream output
+        if stdout: EventBus.publish(session_id, "console", stdout)
+        if stderr: EventBus.publish(session_id, "console", stderr)
+
+        # 2. Check for "no upstream" error
+        # Typical message: "fatal: The current branch ... has no upstream branch."
+        if process.returncode != 0 and "no upstream branch" in (stderr + stdout):
+            EventBus.publish(session_id, "console", "⚠️  Upstream not set. Setting upstream to origin...\n")
+            
+            # Get current branch
+            branch_proc = subprocess.run(
+                ["git", "branch", "--show-current"], 
+                capture_output=True, text=True, check=True
+            )
+            current_branch = branch_proc.stdout.strip()
+            
+            # Retry with --set-upstream
+            cmd = ["git", "push", "--set-upstream", "origin", current_branch]
+            retry_proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            out, err = retry_proc.communicate()
+            
+            if out: EventBus.publish(session_id, "console", out)
+            if err: EventBus.publish(session_id, "console", err)
+            
+            if retry_proc.returncode == 0:
+                return f"Successfully pushed and set upstream for '{current_branch}'."
+            else:
+                return f"Failed to push even after setting upstream.\n{err}"
+
+        elif process.returncode == 0:
+            return "Successfully pushed to origin."
+        else:
+            return f"Error pushing branch:\n{stderr}"
+
+    except Exception as e:
+        return f"System error during push: {e}"
