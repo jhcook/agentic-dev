@@ -175,7 +175,19 @@ Imports for heavy voice libraries (`deepgram-sdk`, `faster-whisper`, `kokoro-onn
 
 ### 3. VAD Resilience
 
-VAD initialization is non-fatal. If the Silero model cannot be downloaded (404s or network timeout), the system warns the user and continues in standard "push-to-talk" style mode without interrupts.
+- VAD initialization is non-fatal. If the Silero model cannot be downloaded (404s or network timeout), the system warns the user and continues in standard "push-to-talk" style mode without interrupts.
+
+### 4. Process Lifecycle Management
+
+To prevent "orphaned" processes (e.g. `agent preflight` running in the background after the server stops), the system uses a singleton `ProcessLifecycleManager`.
+- **Registry**: Tools register their `subprocess.Popen` instances.
+- **Cleanup**: An `atexit` handler ensures all registered child processes are forcibly terminated when the main agent process exits.
+
+### 5. Thread-Safe Event Dispatching
+
+Tools often run in background threads (managed by LangGraph) to avoid blocking the main asyncio loop. The `VoiceOrchestrator` implements thread-safe event ingestion:
+- **EventBus**: Tools publish events (logs, status) synchronously.
+- **Orchestrator**: Uses `loop.call_soon_threadsafe` to bridge these events back into the main `asyncio` loop for WebSocket streaming. This prevents `RuntimeError: no running event loop` crashes.
 
 ---
 

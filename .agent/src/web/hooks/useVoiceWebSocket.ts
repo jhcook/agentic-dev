@@ -31,6 +31,7 @@ export function useVoiceWebSocket(url: string) {
     const onAudioChunkRef = useRef<((chunk: ArrayBuffer) => void) | null>(null);
     const onClearBufferRef = useRef<(() => void) | null>(null);
     const onTranscriptRef = useRef<((role: string, text: string, partial?: boolean) => void) | null>(null);
+    const onEventRef = useRef<((type: string, data: any) => void) | null>(null);
     const connectFnRef = useRef<(() => void) | null>(null);
 
     const connect = useCallback(() => {
@@ -48,7 +49,11 @@ export function useVoiceWebSocket(url: string) {
         ws.onmessage = (event) => {
             if (typeof event.data === 'string') {
                 try {
-                    const msg: VoiceMessage = JSON.parse(event.data);
+                    const msg = JSON.parse(event.data);
+
+                    // Dispatch to generic handler if set
+                    onEventRef.current?.(msg.type, msg.data || msg);
+
                     if (msg.type === 'clear_buffer') {
                         console.log('[Voice] Clear buffer received (barge-in)');
                         onClearBufferRef.current?.();
@@ -58,10 +63,10 @@ export function useVoiceWebSocket(url: string) {
                             setState(msg.state);
                         }
                     } else if (msg.type === 'transcript') {
-                        // @ts-expect-error - dynamic payload
                         const { role, text, partial } = msg;
                         onTranscriptRef.current?.(role, text, partial);
                     }
+                    // 'console' and 'vad_state' are handled by setOnEvent subscribers
                 } catch (err) {
                     console.error('[Voice] Failed to parse message:', err);
                 }
@@ -107,7 +112,6 @@ export function useVoiceWebSocket(url: string) {
 
     const sendAudio = useCallback((data: ArrayBuffer) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-            // console.log("[useVoiceWebSocket] Sending audio bytes:", data.byteLength); // DEBUG
             wsRef.current.send(data);
         } else {
             console.warn("[useVoiceWebSocket] WebSocket not open, dropping audio");
@@ -119,6 +123,12 @@ export function useVoiceWebSocket(url: string) {
             wsRef.current.send(JSON.stringify({ type: 'text', text }));
         } else {
             console.warn("[useVoiceWebSocket] WebSocket not open, dropping text");
+        }
+    }, []);
+
+    const sendJson = useCallback((data: any) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify(data));
         }
     }, []);
 
@@ -134,6 +144,10 @@ export function useVoiceWebSocket(url: string) {
         onTranscriptRef.current = callback;
     }, []);
 
+    const setOnEvent = useCallback((callback: (type: string, data: any) => void) => {
+        onEventRef.current = callback;
+    }, []);
+
     useEffect(() => {
         return () => {
             disconnect();
@@ -147,8 +161,10 @@ export function useVoiceWebSocket(url: string) {
         disconnect,
         sendAudio,
         sendText,
+        sendJson,
         setOnAudioChunk,
         setOnClearBuffer,
-        setOnTranscript
+        setOnTranscript,
+        setOnEvent
     };
 }

@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import typer
-from opentelemetry import trace   # <--- Added
+from opentelemetry import trace
 
 
 # Note: This command requires `typer` and `python-dotenv`.
@@ -36,7 +36,7 @@ from agent.core.secrets import (
 )
 
 console = Console()
-tracer = trace.get_tracer(__name__)  # <--- Added
+tracer = trace.get_tracer(__name__)
 
 
 # REQUIRED_KEYS removed, driven by PROVIDERS constant from service.py
@@ -672,7 +672,14 @@ def configure_voice_settings() -> None:
 
 
 def setup_frontend() -> None:
-    """Installs frontend dependencies using npm."""
+    """
+    Installs frontend dependencies using npm.
+    
+    Observability:
+    - Uses OpenTelemetry to trace the installation duration and success/failure.
+    - All telemetry is strictly local/stdio unless an exporter is explicitly configured by the user.
+    - No PII is captured.
+    """
     typer.echo("\n[INFO] Setting up Frontend...")
 
     web_dir = AGENT_DIR / "src" / "web"
@@ -708,6 +715,28 @@ def setup_frontend() -> None:
              span.set_attribute("status", "success")
              
         typer.secho("[OK] Frontend dependencies installed.", fg=typer.colors.GREEN)
+        
+        # 4. Security Audit
+        # 4. Security Audit
+        typer.echo("Running security audit on dependencies...")
+        try:
+             process = subprocess.Popen(
+                ["npm", "audit", "--audit-level=high"],
+                cwd=web_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
+             )
+             
+             if process.stdout:
+                 for line in process.stdout:
+                     console.print(line, end="")
+            
+             process.wait()
+             
+        except Exception:
+             typer.secho("[WARN] Failed to run security audit.", fg=typer.colors.YELLOW)
+             
     except subprocess.CalledProcessError as e:
         typer.secho(
             f"[ERROR] Failed to run 'npm install': {e}",

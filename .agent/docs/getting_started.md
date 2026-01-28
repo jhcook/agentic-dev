@@ -13,14 +13,28 @@ This guide will help you get up and running with the Agent CLI in less than 10 m
 
 ## Installation
 
-### 1. Install Dependencies
+### 1. Create Virtual Environment (Required)
+
+The Agent CLI requires a virtual environment named `.venv` in the project root to ensure tools can reliably find dependencies.
 
 ```bash
 # Navigate to your repository
 cd /path/to/your/repo
 
-# Install the agent package and its dependencies
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate it
+source .venv/bin/activate
+
+# Install the agent package
 pip install -e .agent/
+
+# OR: Install with Voice Support (Recommended for Voice Agent)
+pip install -e ".agent/[voice]"
+
+# OR: Install with ALL features (Voice + Advanced AI)
+pip install -e ".agent/[voice,ai]"
 ```
 
 The agent requires (automatically installed):

@@ -211,6 +211,38 @@ agent run-ui-tests --filter "login"
 
 ---
 
+## `agent workflow` — Agentic Workflows
+
+The CLI provides commands to drive the Agentic Workflow (Stories -> Plans -> Runbooks -> Implementation).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `agent new-story [ID]` | Create a new user story (interactive). |
+| `agent new-runbook <STORY_ID>` | Generate an implementation runbook for a committed story. |
+| `agent implement <RUNBOOK_ID>` | Implement a feature from an accepted runbook. |
+| `agent pr` | Create a Pull Request with automated preflight checks. |
+| `agent commit` | Commit changes using conventional commits (optionally with `--ai`). |
+
+### Usage Examples
+
+```bash
+# 1. Create a Story
+agent new-story WEB-101
+
+# 2. Planning (Create Runbook)
+agent new-runbook WEB-101
+
+# 3. Implementation
+agent implement WEB-101
+
+# 4. Create PR
+agent pr --story WEB-101
+```
+
+---
+
 ## `--provider` Option
 
 ### Purpose

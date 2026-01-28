@@ -124,6 +124,10 @@ async def websocket_endpoint(websocket: WebSocket):
                             logger.info(f"Manual text input received: {text_input[:50]}...")
                             # We create an async task for text invocation so it doesn't block the loop
                             asyncio.create_task(orchestrator.handle_text_input(text_input))
+                    else:
+                        # Forward other control events (update_settings, etc.)
+                        logger.info(f"Routing client event: {data.get('type')}")
+                        orchestrator.handle_client_event(data.get("type"), data)
                 except json.JSONDecodeError:
                     logger.warning(f"Received malformed text message: {message['text'][:50]}")
             

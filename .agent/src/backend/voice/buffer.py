@@ -20,54 +20,90 @@ class SentenceBuffer:
     """
     Buffers text tokens and yields full sentences.
     Designed for use in an async streaming pipeline.
+    State aware to suppress code blocks.
     """
     def __init__(self):
         self.buffer = ""
-        # Split on ., ?, !, or newline, keeping the delimiter.
-        # This regex looks for these chars followed by space or end of string.
+        self.in_code_block = False
         self.sentence_end_pattern = re.compile(r'(?<=[.?!])\s+')
 
     async def process(self, token_stream: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
         """
-        Consumes a stream of tokens and yields full sentences, 
-        automatically skipping technical noise and code blocks.
+        Consumes a stream of tokens and yields full sentences.
+        Suppresses content within markdown code blocks (``` ... ```).
         """
         async for token in token_stream:
+            # 1. Handle Code Block Toggling
+            # We process token by token or small chunks.
+            # If we see ``` and we are NOT in block, we enter block.
+            # If we see ``` and we ARE in block, we exit block.
+            
+            # Simple approach: Check for marker in token (or buffer accumulation)
             self.buffer += token
             
-            # 1. Strip ALL complete code blocks immediately.
-            self.buffer = re.sub(r'```[\s\S]*?```', ' ', self.buffer)
-            
-            # 2. Check for an incomplete block.
-            parts = self.buffer.split('```')
-            if len(parts) % 2 == 0:
-                process_limit = len(self.buffer) - len(parts[-1]) - 3
-                text_to_process = self.buffer[:process_limit]
-                remainder = self.buffer[process_limit:] # Starts with ```
-            else:
-                text_to_process = self.buffer
-                remainder = ""
-
-            # 3. Check for full segments (including newlines as break-points for logs)
-            # We treat newlines as hard sentence breaks for technical data.
-            sentences = re.split(r'(?<=[.?!])\s+|\n', text_to_process)
-            
-            if len(sentences) > 1:
-                # All except last are complete
-                for s in sentences[:-1]:
-                    if self._is_speakable(s):
-                        yield s.strip()
+            # Check for toggle markers
+            while '```' in self.buffer:
+                # Found a marker.
+                before, _, after = self.buffer.partition('```')
                 
-                self.buffer = sentences[-1] + remainder
+                if not self.in_code_block:
+                    # We were OUT, now entering IN.
+                    # 'before' is valid text. Yield it if it forms sentences.
+                    if before:
+                        # Process 'before' as valid text
+                        for s in self._extract_sentences(before):
+                             yield s
+                    
+                    # We are now IN code block. 
+                    self.in_code_block = True
+                    self.buffer = after # Continue processing 'after' with new state
+                else:
+                    # We were IN, now exiting OUT.
+                    # 'before' is code content. DISCARD IT.
+                    # We are now OUT of code block.
+                    self.in_code_block = False
+                    self.buffer = after # Continue processing 'after'
+            
+            if self.in_code_block:
+                # If inside a code block, discard content but safeguard potential markers
+                if len(self.buffer) > 3:
+                     # Keep trailing backticks just in case it's the start of a marker
+                     stripped = self.buffer.rstrip('`')
+                     backticks = self.buffer[len(stripped):]
+                     self.buffer = backticks
             else:
-                pass        
+                # We are OUT side. 'buffer' contains potentially valid text.
+                # Extract complete sentences.
+                completed_sentences, remainder = self._split_sentences_robust(self.buffer)
+                for s in completed_sentences:
+                    if self._is_speakable(s):
+                        yield s
+                self.buffer = remainder
 
-        # End of stream: yield whatever is left, BUT FILTER IT
-        final = self.buffer.strip()
-        if final and self._is_speakable(final):
-            yield final
+        # End of stream
+        if not self.in_code_block and self.buffer:
+            if self._is_speakable(self.buffer):
+                yield self.buffer.strip()
             
         self.buffer = ""
+        self.in_code_block = False
+
+    def _split_sentences_robust(self, text: str):
+        """Splits text into [complete_sentences], remainder."""
+        # Split on [.?!] followed by space or newline
+        parts = re.split(r'(?<=[.?!])\s+', text)
+        if len(parts) == 1:
+            return [], parts[0]
+            
+        return parts[:-1], parts[-1]
+
+    def _extract_sentences(self, text: str):
+        """Yields speakable sentences from a closed chunk of text."""
+        sentences = re.split(r'(?<=[.?!])\s+|\n', text)
+        for s in sentences:
+            s_stripped = s.strip()
+            if s_stripped and self._is_speakable(s_stripped):
+                yield s_stripped
 
     def _is_speakable(self, text: str) -> bool:
         """
@@ -76,7 +112,7 @@ class SentenceBuffer:
         s = text.strip()
         if not s: return False
         
-        # 1. Skip code block markers
+        # 1. Skip code block markers (redundant but safe)
         if '```' in s: return False
             
         # 2. Git Status patterns (e.g., "M path/to/file")
@@ -98,7 +134,7 @@ class SentenceBuffer:
         # 6. JSON / YAML detection
         if s.startswith('{') and s.endswith('}'): return False
         if s.startswith('[') and s.endswith(']'): return False
-        if ': ' in s and not any(c in s for c in '.?!'): # Key-value pair without punctuation
+        if ': ' in s and not any(c in s for c in '.?!'): # Key-value pair
             return False
 
         # 7. No ASCII letters (only symbols/numbers)

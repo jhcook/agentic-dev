@@ -152,3 +152,91 @@ def write_file(path: str, content: str) -> str:
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             return f"Error writing file: {e}"
+
+@tool
+def apply_license_headers(path: str = ".") -> str:
+    """
+    Recursively apply Apache 2.0 license headers to all .py, .ts, and .tsx files
+    in the specified path (defaults to project root).
+    Skips files that already have the header.
+    """
+    HEADER_PY = '''# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+'''
+
+    HEADER_JS = '''/*
+ * Copyright 2026 Justin Cook
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+'''
+
+    try:
+        updated_count = 0
+        skipped_count = 0
+        
+        # Normalize path
+        start_dir = os.path.abspath(path)
+        
+        for root, dirs, files in os.walk(start_dir):
+            if ".venv" in root or "node_modules" in root or ".git" in root or "__pycache__" in root:
+                continue
+                
+            for file in files:
+                ext = os.path.splitext(file)[1]
+                if ext not in ['.py', '.ts', '.tsx']:
+                    continue
+                    
+                full_path = os.path.join(root, file)
+                
+                # Determine header type
+                if ext == '.py':
+                    header = HEADER_PY
+                    marker = "Licensed under the Apache License"
+                else:
+                    header = HEADER_JS
+                    marker = "Licensed under the Apache License"
+                
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                    if marker in content:
+                        skipped_count += 1
+                        continue
+                        
+                    # Prepend
+                    new_content = header + "\n" + content
+                    
+                    with open(full_path, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    
+                    updated_count += 1
+                except Exception as e:
+                    print(f"Failed to process {full_path}: {e}")
+                    
+        return f"License Application Complete:\n- Updated: {updated_count} files\n- Skipped: {skipped_count} files (already licensed)"
+        
+    except Exception as e:
+        return f"Error applying licenses: {e}"

@@ -65,6 +65,10 @@ admin = [
     "PyYAML>=6.0",
 ]
 
+[project.scripts]
+agent = "agent.main:app"
+
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
