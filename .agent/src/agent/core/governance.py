@@ -309,8 +309,10 @@ def find_stagnant_files(repo_path: Path, months: int = 6, ignore_patterns: List[
                     file_path = repo_path / line
                     
                     # Check if file is ignored
-                    if ignore_patterns and any(re.search(pattern, str(file_path), re.IGNORECASE) for pattern in ignore_patterns):
-                        continue
+                    if ignore_patterns:
+                        rel_path = str(file_path.relative_to(repo_path))
+                        if any(fnmatch.fnmatch(rel_path, p) for p in ignore_patterns):
+                            continue
 
                     if file_path.is_file():  # Ensure it's a file and not a directory
                         files_by_date[file_path] = current_date
@@ -496,8 +498,10 @@ def check_license_headers(repo_path: Path, all_files: List[Path], ignore_pattern
         if file_path.suffix not in EXTENSIONS:
             continue
 
-        if ignore_patterns and any(re.search(pattern, str(file_path), re.IGNORECASE) for pattern in ignore_patterns):
-            continue
+        if ignore_patterns:
+             rel_path = str(file_path.relative_to(repo_path))
+             if any(fnmatch.fnmatch(rel_path, p) for p in ignore_patterns):
+                 continue
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
