@@ -131,8 +131,9 @@ def convene_council_full(
     full_diff: str,
     report_file: Optional[Path] = None,
     mode: str = "gatekeeper", # gatekeeper | consultative
-    council_identifier: str = "default"
-) -> str:
+    council_identifier: str = "default",
+    user_question: Optional[str] = None
+) -> Dict:
     """
     Run the AI Governance Council review. Handles provider switching and re-chunking.
     Supports ReAct Agent Loop if tools are enabled for the council.
@@ -179,6 +180,9 @@ def convene_council_full(
 
         overall_verdict = "PASS"
         report = f"# Governance Preflight Report\n\nStory: {story_id}\n\n"
+        if user_question:
+            report += f"## ❓ User Question\n{user_question}\n\n"
+            
         json_roles = []
         
         
@@ -243,6 +247,10 @@ def convene_council_full(
                     
                     for i, chunk in enumerate(diff_chunks):
                         if mode == "consultative":
+                            task_instruction = "Provide expert consultation."
+                            if user_question:
+                                task_instruction += f"\nSpecific Question/Request: {user_question}"
+                            
                             system_prompt = f"""You are the {role_name} Agent in the Governance Council.
 Your specific focus is: {focus_area}
 
@@ -253,7 +261,7 @@ INPUTS:
 4. Code Diff (Chunk {i+1}/{len(diff_chunks)})
 
 TASK:
-Provide expert consultation on the changes.
+{task_instruction}
 Do NOT act as a gatekeeper. Provide HELPFUL ADVICE.
 
 OUTPUT:
@@ -424,5 +432,9 @@ CODE DIFF CHUNK:
             report += "## 🟢 FINAL VERDICT: PASS\nAll agents approved this change.\n"
             console.print(f"Full report saved to: [underline]{log_file}[/underline]")
             
-    return overall_verdict
+    return {
+        "verdict": overall_verdict,
+        "log_file": log_file,
+        "json_report": json_report
+    }
 

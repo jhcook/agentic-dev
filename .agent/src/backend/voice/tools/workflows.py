@@ -118,15 +118,18 @@ def run_impact(files: str = None, config: RunnableConfig = None) -> str:
     return _run_interactive_command(cmd, "impact", config, "Impact analysis started. Follow along below.")
 
 @tool
-def run_panel(question: str, config: RunnableConfig = None) -> str:
+def run_panel(question: str, apply_advice: bool = False, config: RunnableConfig = None) -> str:
     """
     Consult the AI Governance Panel.
     Args:
         question: The question or design decision to review.
+        apply_advice: If True, automatically updates the Story/Runbook with the panel's advice.
     """
     # Escape quotes
     safe_q = question.replace('"', '\\"')
     cmd = f'agent panel "{safe_q}"'
+    if apply_advice:
+        cmd += " --apply"
     return _run_interactive_command(cmd, "panel", config, "Governance panel convened. Follow along below.")
 
 @tool

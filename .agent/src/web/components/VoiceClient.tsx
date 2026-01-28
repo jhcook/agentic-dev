@@ -25,7 +25,6 @@ import {
     Activity,
     User,
     Bot,
-    ChevronDown
 } from 'lucide-react';
 import { useVoiceWebSocket } from '../hooks/useVoiceWebSocket';
 import { WaveformVisualizer } from './WaveformVisualizer';
@@ -43,6 +42,7 @@ interface VoiceClientProps {
 
 export function VoiceClient({ className }: VoiceClientProps) {
     const [hasPermission, setHasPermission] = useState(false);
+    // Modified Transcript Type to include 'console' role implicitly via string
     const [transcript, setTranscript] = useState<Array<{ role: string; text: string; partial?: boolean }>>([]);
     const [inputValue, setInputValue] = useState("");
 
@@ -55,12 +55,11 @@ export function VoiceClient({ className }: VoiceClientProps) {
     const playNextChunkRef = useRef<(() => void) | null>(null);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const lastClearedGenIdRef = useRef(-1);
+    const currentGenerationRef = useRef<number>(0);
 
     // Mute State
     const [isMuted, setIsMuted] = useState(false);
     const isMutedRef = useRef(false);
-
-
 
     // Persistent Session ID
     const [sessionId] = useState(() => {
@@ -110,21 +109,25 @@ export function VoiceClient({ className }: VoiceClientProps) {
         rms_peak: 0
     });
 
-    // Console / Streaming Logic
-    const [consoleOutput, setConsoleOutput] = useState<string>("");
-    const consoleEndRef = useRef<HTMLDivElement>(null);
-    const currentGenerationRef = useRef<number>(0);
-
-
-
+    // Event Handler: Console & VAD
     useEffect(() => {
         setOnEvent((type, data) => {
             if (type === 'console') {
-                setConsoleOutput(prev => prev + data);
-                // Auto-scroll
-                if (consoleEndRef.current) {
-                    consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                }
+                setTranscript(prev => {
+                    // Check if we should start a new bubble
+                    // Heuristic: If data starts with "> " (command start), force new bubble
+                    // Or if existing last message is NOT console, force new bubble
+                    const isCommandStart = data.trim().startsWith("> ");
+
+                    if (prev.length > 0 && prev[prev.length - 1].role === 'console' && !isCommandStart) {
+                        const last = prev[prev.length - 1];
+                        const newHistory = [...prev];
+                        newHistory[newHistory.length - 1] = { ...last, text: last.text + data };
+                        return newHistory;
+                    } else {
+                        return [...prev, { role: 'console', text: data }];
+                    }
+                });
             } else if (type === 'vad_state') {
                 setVadSettings(prev => ({ ...prev, ...data }));
             } else if (type === 'open_url') {
@@ -144,6 +147,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
         });
     };
 
+    // History Fetch
     useEffect(() => {
         if (sessionId) {
             const fetchHistory = async () => {
@@ -173,6 +177,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
             fetchHistory();
         }
 
+        // Audio Player Logic
         playNextChunkRef.current = () => {
             if (audioQueueRef.current.length === 0) {
                 isPlayingRef.current = false;
@@ -202,7 +207,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
         };
     }, [sessionId]);
 
-    // ... (Audio Chunk & Transcript Handlers unchanged) ...
+    // Audio Chunk & Transcript Handlers
     useEffect(() => {
         setOnAudioChunk((chunk: ArrayBuffer) => {
             if (chunk.byteLength < 4) return;
@@ -238,8 +243,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
             setTranscript(prev => {
                 if (prev.length === 0) return [{ role, text, partial }];
                 const last = prev[prev.length - 1];
-                const isAssistantMerge = role === 'assistant' && last.role === 'assistant';
 
+                // Merge logic for assistant (streaming)
+                const isAssistantMerge = role === 'assistant' && last.role === 'assistant';
                 if (isAssistantMerge) {
                     const newHistory = [...prev];
                     if (partial) {
@@ -255,9 +261,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
                     return newHistory;
                 }
 
-                // Add console output to previous message if it exists and related? No, keep separate for now.
-                // Or better, render consoleOutput separately.
-
+                // Merge logic for user (partial speech)
                 if (role === 'user' && last.role === 'user' && last.partial) {
                     const newHistory = [...prev];
                     newHistory[newHistory.length - 1] = { ...last, text: last.text + text, partial };
@@ -269,11 +273,11 @@ export function VoiceClient({ className }: VoiceClientProps) {
         });
     }, [setOnAudioChunk, setOnClearBuffer, setOnTranscript]);
 
+    // Auto-scroll on transcript change
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [transcript, consoleOutput]); // Auto scroll on console output too
+    }, [transcript]);
 
-    // ... (Microphone Access Code unchanged) ...
     const requestMicrophoneAccess = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -302,7 +306,6 @@ export function VoiceClient({ className }: VoiceClientProps) {
 
             audioContextRef.current = audioContext;
             workletNodeRef.current = workletNode;
-            // Delay connect slightly to ensure processor is ready? No, connect immediate.
             connect();
         } catch (err) {
             console.error('[Voice] Mic denied:', err);
@@ -453,54 +456,58 @@ export function VoiceClient({ className }: VoiceClientProps) {
                     <>
                         {/* Transcript Area */}
                         <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-6 mb-8">
-                            {transcript.length === 0 && !consoleOutput && (
+                            {transcript.length === 0 && (
                                 <div className="h-full flex items-center justify-center text-slate-500 italic">
                                     Awaiting your command...
                                 </div>
                             )}
-                            {transcript.map((msg, i) => (
-                                <div key={i} className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
-                                    <div className={cn(
-                                        "max-w-[85%] px-5 py-4 rounded-3xl shadow-xl transition-all duration-300",
-                                        msg.role === 'user'
-                                            ? "bg-blue-700 text-white rounded-tr-none border border-blue-500/30"
-                                            : "bg-[#16161a] border border-white/5 rounded-tl-none"
-                                    )}>
-                                        <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest">
-                                            {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3 text-blue-400" />}
-                                            {msg.role}
+                            {transcript.map((msg, i) => {
+                                // Console Output Render
+                                if (msg.role === 'console') {
+                                    return (
+                                        <div key={i} className="flex w-full justify-start animate-fade-in-up">
+                                            <div className="max-w-full w-full px-5 py-4 rounded-3xl bg-[#0d0d10] border border-white/10 shadow-xl font-mono text-xs overflow-x-auto">
+                                                <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest text-amber-500">
+                                                    <Activity className="w-3 h-3" />
+                                                    Terminal Output
+                                                </div>
+                                                <pre className="whitespace-pre-wrap text-slate-400 leading-relaxed">
+                                                    {msg.text}
+                                                </pre>
+                                            </div>
                                         </div>
-                                        <div className={cn("prose prose-invert max-w-none text-sm leading-relaxed", msg.partial && "opacity-70 animate-pulse")}>
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                {msg.text}
-                                            </ReactMarkdown>
+                                    );
+                                }
+                                // Standard Chat Render
+                                return (
+                                    <div key={i} className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                                        <div className={cn(
+                                            "max-w-[85%] px-5 py-4 rounded-3xl shadow-xl transition-all duration-300",
+                                            msg.role === 'user'
+                                                ? "bg-blue-700 text-white rounded-tr-none border border-blue-500/30"
+                                                : "bg-[#16161a] border border-white/5 rounded-tl-none"
+                                        )}>
+                                            <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest">
+                                                {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3 text-blue-400" />}
+                                                {msg.role}
+                                            </div>
+                                            <div className={cn("prose prose-invert max-w-none text-sm leading-relaxed", msg.partial && "opacity-70 animate-pulse")}>
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {msg.text}
+                                                </ReactMarkdown>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-
-                            {/* Console Stream Output */}
-                            {consoleOutput && (
-                                <div className="flex w-full justify-start animate-fade-in-up">
-                                    <div className="max-w-full w-full px-5 py-4 rounded-3xl bg-[#0d0d10] border border-white/10 shadow-xl font-mono text-xs overflow-x-auto">
-                                        <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest text-amber-500">
-                                            <Activity className="w-3 h-3" />
-                                            Terminal Output
-                                        </div>
-                                        <pre className="whitespace-pre-wrap text-slate-400 leading-relaxed">
-                                            {consoleOutput}
-                                        </pre>
-                                        <div ref={consoleEndRef} />
-                                    </div>
-                                </div>
-                            )}
-
+                                )
+                            })}
                             <div ref={transcriptEndRef} />
                         </div>
 
                         {/* Visualizer & Controls */}
                         <div className="bg-[#121216] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden group">
-                            {/* ... Visualizer code unchanged ... */}
+                            {/* BG Glow */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/20 rounded-full blur-[80px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000 pointer-events-none" />
+
                             <div className="relative z-10 flex flex-col gap-8">
                                 <div className="h-20 max-w-2xl mx-auto w-full flex items-center justify-center bg-black/40 rounded-2xl border border-white/5 overflow-hidden px-4">
                                     <WaveformVisualizer
@@ -519,9 +526,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
                                             Stop
                                         </button>
                                         <button
-                                            onClick={() => { setTranscript([]); setConsoleOutput(""); }}
+                                            onClick={() => { setTranscript([]); }}
                                             className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-400 border border-white/10 rounded-2xl font-semibold transition-all disabled:opacity-30 flex items-center gap-2"
-                                            disabled={transcript.length === 0 && !consoleOutput}
+                                            disabled={transcript.length === 0}
                                         >
                                             <Trash2 className="w-5 h-5" />
                                             Clear
@@ -537,7 +544,6 @@ export function VoiceClient({ className }: VoiceClientProps) {
                         </div>
 
                         {/* Text Input Area */}
-                        {/* ... (Text Input unchanged) ... */}
                         <div className="mt-8 relative group">
                             <form
                                 onSubmit={(e) => {
