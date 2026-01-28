@@ -5,6 +5,42 @@ This document provides details about the AI-related commands in the CLI (`implem
 ---
 ---
 
+## `agent audit` — Governance Audit
+
+Execute a comprehensive governance audit of the repository to ensure traceability, identify stagnant code, and flag orphaned artifacts.
+
+### Usage
+
+```bash
+# Run audit (fails if score < 80%)
+agent audit
+
+# Run audit with strict failure on ANY error
+agent audit --fail-on-error
+
+# Custom traceability threshold
+agent audit --min-traceability 90
+
+# Output report to custom file
+agent audit --output reports/audit-Q1.md
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--fail-on-error` | Exit with non-zero code if *any* governance issues are found. |
+| `--min-traceability <int>` | Minimum % of files that must be governed (Default: 80). |
+| `--stagnant-months <int>` | Months before un-governed code is considered stagnant (Default: 6). |
+| `--output <path>` | Path to save the Markdown report. |
+
+### Configuration
+
+- **`.auditignore`**: Add file patterns here to exclude them from the audit (e.g. `legacy/**`).
+- **`.gitignore`**: Files ignored by git are automatically excluded.
+
+---
+
 ## `agent sync` — Artifact Synchronization
 
 Synchronize artifacts (stories, plans, runbooks) between your local cache and the remote Supabase backend.

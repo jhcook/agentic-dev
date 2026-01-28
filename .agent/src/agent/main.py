@@ -12,163 +12,106 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import subprocess
-from pathlib import Path
-
 import typer
-from rich.console import Console
 
 from agent.commands import (
+    admin,
     adr,
+    audit,
     check,
     config,
     implement,
     lint,
+    list as list_cmd,
     match,
     mcp,
+    onboard,
     plan,
-    query,
     runbook,
     secret,
     story,
-    visualize,
     workflow,
-    admin,
-    importer,
-)
-from agent.commands import list as list_cmd
-from agent.sync import cli as sync_cli
-
-
-console = Console(stderr=True)
-
-app = typer.Typer(
-    name="agent",
-    help="Governed workflow CLI for the Inspected application",
-    add_completion=False,
-    pretty_exceptions_enable=False,  # Disable stack traces for users
 )
 
-app.add_typer(config.app, name="config")
-app.add_typer(secret.app, name="secret")
-app.add_typer(mcp.app, name="mcp")
-app.add_typer(admin.app, name="admin")
-app.add_typer(importer.app, name="import")
+app = typer.Typer()
 
-app.command(name="new-story")(story.new_story)
-app.command(name="new-plan")(plan.new_plan)
-app.command(name="new-adr")(adr.new_adr)
-app.command(name="new-runbook")(runbook.new_runbook)
-app.command(name="implement")(implement.implement)
 
-app.command(name="list-stories")(list_cmd.list_stories)
-app.command(name="list-plans")(list_cmd.list_plans)
-app.command(name="list-runbooks")(list_cmd.list_runbooks)
-app.command(name="list-models")(list_cmd.list_models)
+@app.command()
+def hello(name: str):
+    """
+    Say hello.
+    """
+    print(f"Hello {name}")
 
-app.command(name="validate-story")(check.validate_story)
-app.command(name="preflight")(check.preflight)
-app.command(name="impact")(check.impact)
-app.command(name="panel")(check.panel)
+
+# Governance & Quality
+app.command()(lint.lint)
+app.command()(check.preflight)
+app.command()(check.impact)
+app.command()(check.panel)
 app.command(name="run-ui-tests")(check.run_ui_tests)
-app.command(name="match-story")(match.match_story)
+app.command("audit")(audit.audit)
 
-app.command(name="pr")(workflow.pr)
-app.command(name="commit")(workflow.commit)
-app.command(name="lint")(lint.lint)
-app.command(name="query")(query.query)
-
-# Register visualize Click group with Typer
-# visualize.py uses Click @click.group(), so we register the Click group directly
-
-@app.command(name="visualize", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def visualize_cmd(ctx: typer.Context):
-    """
-    Generate Mermaid diagrams of project artifacts.
-    
-    Subcommands:
-      graph  - Generate full dependency graph
-      flow   - Show flow for a specific story
-    """
-    # Forward to the Click group
-    from click.testing import CliRunner
-    
-    # Use Click's invoke directly
-    runner = CliRunner()
-    result = runner.invoke(visualize.visualize, ctx.args)
-    typer.echo(result.output)
-    if result.exit_code != 0:
-        raise typer.Exit(code=result.exit_code)
-
-try:
-    from agent.commands import onboard
-    app.command(name="onboard")(onboard.onboard)
-except ImportError:
-    pass
-
-app.add_typer(sync_cli.app, name="sync")
-
-def setup_logging():
-    """Configure global logging to file and console."""
-    log_dir = Path(".agent/logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "agent.log"
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_file),
-            # Note: We rely on Rich Console for stdout, so we don't add a StreamHandler here
-            # to avoid duplicate/ugly output in the terminal.
-        ]
-    )
-
-console = Console()
-
-@app.callback(invoke_without_command=True)
-def main(
-    version: bool = typer.Option(
-        None, "--version", help="Show version and exit"
-    ),
-    provider: str = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, openai)"
-    ),
+@app.command("fix")
+def fix_cmd(
+    path: str = typer.Argument(None, help="Specific file or directory"),
+    apply: bool = typer.Option(True, "--apply", help="Apply fixes automatically")
 ):
     """
-    Agent CLI - Governance and Workflow Automation
+    Automatically fix linting errors (wrapper for 'lint --fix').
     """
-    setup_logging()
+    # Lazy import
+    from agent.commands import lint
+    from pathlib import Path
+    
+    target_path = Path(path) if path else None
+    lint.lint(path=target_path, fix=apply)
 
-    if version:
-        ver = "unknown"
-        try:
-            ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"]).decode().strip()
-        except Exception:
-            try:
-                # Fallback to file
-                # .agent/src/agent/main.py -> .agent/src/VERSION
-                version_file = Path(__file__).parent.parent / "VERSION"
-                if version_file.exists():
-                    ver = version_file.read_text().strip()
-            except Exception:
-                pass
-        
-        if ver == "unknown":
-             ver = "v0.1.0" # Legacy fallback
 
-        typer.echo(f"Agent CLI {ver}")
-        raise typer.Exit()
+# Workflows
+app.command()(workflow.commit)
+app.command()(workflow.pr)
+app.command()(implement.implement)
+app.command(name="new-story")(story.new_story)
+app.command(name="story")(story.new_story)  # Alias
+app.command(name="new-runbook")(runbook.new_runbook)
+app.command(name="runbook")(runbook.new_runbook) # Alias
+app.command(name="new-adr")(adr.new_adr)
+app.command(name="adr")(adr.new_adr) # Alias
 
-    if provider:
-        try:
-            from agent.core.ai import ai_service
-            ai_service.set_provider(provider)
-        except (ValueError, RuntimeError):
-            # Error message already printed by set_provider
-            raise typer.Exit(code=1)
+# Infrastructure
+app.command(name="onboard")(onboard.onboard)
+
+@app.command(name="sync")
+def sync_cmd(cursor: str = None):
+    """
+    Sync artifacts to the local database.
+    """
+    try:
+        from agent.sync import main as sync_module
+        sync_module.sync_data(cursor=cursor)
+    except ImportError as e:
+        typer.echo(f"Error loading sync module: {e}")
+        typer.echo("Missing dependency? Try 'pip install memory_profiler'")
+        raise typer.Exit(1)
+
+# Sub-commands (Typer Apps)
+app.add_typer(admin.app, name="admin")
+app.add_typer(config.app, name="config")
+app.add_typer(mcp.app, name="mcp")
+app.add_typer(secret.app, name="secret")
+
+# List Commands
+app.command("list-stories")(list_cmd.list_stories)
+app.command("list-plans")(list_cmd.list_plans)
+app.command("list-runbooks")(list_cmd.list_runbooks)
+app.command("list-models")(list_cmd.list_models)
+
+# Helper Commands
+app.command("match-story")(match.match_story)
+app.command("validate-story")(check.validate_story)
+app.command("new-plan")(plan.new_plan)
+
 
 if __name__ == "__main__":
     app()
-

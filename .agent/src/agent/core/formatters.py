@@ -12,180 +12,161 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from agent.core.governance import AuditResult
+from datetime import datetime
+
+def format_audit_report(result: AuditResult) -> str:
+    """Generate AUDIT-<Date>.md markdown report."""
+    report = f"""# Governance Audit Report - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## Summary
+
+This report provides an overview of the governance status of the repository. It assesses traceability, identifies stagnant code, and flags orphaned governance artifacts.
+
+- **Overall Traceability Score:** {get_health_indicator(result.traceability_score)} {result.traceability_score:.2f}%
+- **Ungoverned Files:** {len(result.ungoverned_files)}
+- **Stagnant Files:** {len(result.stagnant_files)}
+- **Orphaned Artifacts:** {len(result.orphaned_artifacts)}
+- **Errors:** {len(result.errors)}
+
+## Detailed Findings
+
+### Traceability
+
+- **Score:** {get_health_indicator(result.traceability_score)} {result.traceability_score:.2f}%
+
+The traceability score indicates the percentage of files that are linked to a story or runbook. A lower score indicates a higher risk of ungoverned code.
+
+#### Ungoverned Files (Top 10)
+
+These files are not traceable to a story or runbook and should be reviewed.
+
 """
-Output formatters for agent CLI commands.
+    if result.ungoverned_files:
+        report += "| File | \n| --- | \n"
+        for file in result.ungoverned_files[:10]:
+            report += f"| {file} |\n"
+    else:
+        report += "No ungoverned files found.\n"
 
-This module provides utilities to format data in various output formats
-including JSON, CSV, YAML, Markdown, plain text, and TSV.
+    report += """
+### Stagnant Code
+
+These files have not been modified in a while and may represent dead code or technical debt.
+
 """
+    if result.stagnant_files:
+        report += "| File | Last Modified | Days Old |\n|---|---|---|\n"
+        for file in result.stagnant_files[:10]:
+            report += f"| {file['path']} | {file['last_modified']} | {file['days_old']} |\n"
+    else:
+        report += "No stagnant files found.\n"
 
-import csv
-import json
-from io import StringIO
-from typing import Any, Dict, List
+    report += """
+### Orphaned Artifacts
 
-import yaml
+These stories or plans are in an open state but have not been updated recently.
+
+"""
+    if result.orphaned_artifacts:
+        report += "| Artifact | State | Last Activity | Days Old |\n|---|---|---|---|\n"
+        for artifact in result.orphaned_artifacts[:10]:
+            report += f"| {artifact['path']} | {artifact['state']} | {artifact['last_activity']} | {artifact['days_old']} |\n"
+    else:
+        report += "No orphaned artifacts found.\n"
+        
+    report += """
+### Errors
+
+The following errors were encountered during the audit.
+
+"""
+    if result.errors:
+        report += "| Error |\n|---|\n"
+        for error in result.errors:
+            report += f"| {error} |\n"
+    else:
+        report += "No errors found.\n"
+
+    return report
 
 
-def format_data(format_name: str, data: List[Dict[str, Any]]) -> str:
+def get_health_indicator(score: float) -> str:
+    """Return a health indicator based on the score."""
+    if score >= 80:
+        return "✅"
+    elif score >= 50:
+        return "⚠️"
+    else:
+        return "❌"
+
+
+def format_data(format_type: str, data: list[dict[str, any]]) -> str:
     """
-    Route data to the appropriate formatter based on format name.
+    Format a list of dictionaries into the specified string format.
     
     Args:
-        format_name: The output format (json, csv, yaml, markdown, plain, tsv, pretty)
-        data: List of dictionaries to format
+        format_type: One of 'json', 'csv', 'yaml', 'markdown', 'plain', 'tsv'.
+        data: List of dictionaries to format.
         
     Returns:
-        Formatted string output
+        Formatted string.
         
     Raises:
-        ValueError: If format_name is not supported
-    """
-    formatters = {
-        "json": format_json,
-        "csv": format_csv,
-        "yaml": format_yaml,
-        "markdown": format_markdown,
-        "plain": format_plain,
-        "tsv": format_tsv,
-        "pretty": format_pretty,
-    }
-    
-    formatter = formatters.get(format_name.lower())
-    if not formatter:
-        valid_formats = ", ".join(formatters.keys())
-        raise ValueError(
-            f"Unsupported format: {format_name}. "
-            f"Valid formats are: {valid_formats}"
-        )
-    
-    return formatter(data)
-
-
-def format_json(data: List[Dict[str, Any]]) -> str:
-    """Format data as JSON."""
-    return json.dumps(data, indent=2, ensure_ascii=False)
-
-
-def format_csv(data: List[Dict[str, Any]]) -> str:
-    """
-    Format data as CSV with proper escaping to prevent CSV injection.
-    
-    Fields starting with special characters (=, +, -, @) are prefixed
-    with a single quote to prevent formula injection in spreadsheet software.
+        ValueError: If format is unknown or data serialization fails.
     """
     if not data:
         return ""
-    
-    output = StringIO()
-    fieldnames = list(data[0].keys()) if data else []
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    
-    writer.writeheader()
-    
-    # Sanitize data to prevent CSV injection
-    sanitized_data = []
-    for row in data:
-        sanitized_row = {}
-        for key, value in row.items():
-            str_value = str(value)
-            # Prevent CSV injection by escaping formula characters
-            if str_value and str_value[0] in ('=', '+', '-', '@'):
-                str_value = "'" + str_value
-            sanitized_row[key] = str_value
-        sanitized_data.append(sanitized_row)
-    
-    writer.writerows(sanitized_data)
-    return output.getvalue()
 
+    if format_type.lower() == "json":
+        import json
+        return json.dumps(data, indent=2, default=str)
 
-def format_yaml(data: List[Dict[str, Any]]) -> str:
-    """Format data as YAML."""
-    return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    elif format_type.lower() == "yaml":
+        import yaml
+        return yaml.dump(data, sort_keys=False, default_flow_style=False)
 
+    elif format_type.lower() in ["csv", "tsv"]:
+        import csv
+        import io
+        
+        output = io.StringIO()
+        if not data:
+            return ""
+            
+        keys = data[0].keys()
+        delimiter = "\t" if format_type.lower() == "tsv" else ","
+        writer = csv.DictWriter(output, fieldnames=keys, delimiter=delimiter)
+        writer.writeheader()
+        writer.writerows(data)
+        return output.getvalue()
 
-def format_markdown(data: List[Dict[str, Any]]) -> str:
-    """Format data as a Markdown table."""
-    if not data:
-        return ""
-    
-    fieldnames = list(data[0].keys())
-    
-    # Header
-    lines = []
-    lines.append("| " + " | ".join(fieldnames) + " |")
-    lines.append("| " + " | ".join(["---"] * len(fieldnames)) + " |")
-    
-    # Rows
-    for row in data:
-        values = [str(row.get(field, "")) for field in fieldnames]
-        # Escape pipe characters in values
-        values = [v.replace("|", "\\|") for v in values]
-        lines.append("| " + " | ".join(values) + " |")
-    
-    return "\n".join(lines)
+    elif format_type.lower() == "markdown":
+        if not data:
+            return ""
+        
+        keys = list(data[0].keys())
+        # Header
+        md = "| " + " | ".join(keys) + " |\n"
+        md += "| " + " | ".join(["---"] * len(keys)) + " |\n"
+        
+        # Rows
+        for row in data:
+            values = [str(row.get(k, "")) for k in keys]
+            md += "| " + " | ".join(values) + " |\n"
+        return md
 
+    elif format_type.lower() == "plain":
+        # Simple key=value format
+        lines = []
+        for row in data:
+            lines.append(" ".join(f"{k}={v}" for k, v in row.items()))
+        return "\n".join(lines)
+        
+    elif format_type.lower() == "pretty":
+        # Usually handled by Rich in the caller, but if called here, return JSON as fallback
+        import json
+        return json.dumps(data, indent=2, default=str)
 
-def format_plain(data: List[Dict[str, Any]]) -> str:
-    """Format data as plain text with tab-separated columns."""
-    if not data:
-        return ""
-    
-    fieldnames = list(data[0].keys())
-    
-    lines = []
-    # Header
-    lines.append("\t".join(fieldnames))
-    
-    # Rows
-    for row in data:
-        values = [str(row.get(field, "")) for field in fieldnames]
-        lines.append("\t".join(values))
-    
-    return "\n".join(lines)
-
-
-def format_tsv(data: List[Dict[str, Any]]) -> str:
-    """
-    Format data as TSV (Tab-Separated Values) with proper escaping.
-    
-    Similar to CSV but uses tabs as delimiters. Also prevents injection.
-    """
-    if not data:
-        return ""
-    
-    output = StringIO()
-    fieldnames = list(data[0].keys()) if data else []
-    writer = csv.DictWriter(output, fieldnames=fieldnames, delimiter='\t')
-    
-    writer.writeheader()
-    
-    # Sanitize data to prevent TSV injection
-    sanitized_data = []
-    for row in data:
-        sanitized_row = {}
-        for key, value in row.items():
-            str_value = str(value)
-            # Prevent injection by escaping formula characters
-            if str_value and str_value[0] in ('=', '+', '-', '@'):
-                str_value = "'" + str_value
-            sanitized_row[key] = str_value
-        sanitized_data.append(sanitized_row)
-    
-    writer.writerows(sanitized_data)
-    return output.getvalue()
-
-
-def format_pretty(data: List[Dict[str, Any]]) -> str:
-    """
-    Format data as a Rich table (pretty print).
-    
-    Note: This returns the table markup as a string. For live rendering,
-    use console.print(table) directly in the command.
-    """
-    if not data:
-        return "(No data)"
-    
-    # For pretty format, we'll return JSON as a fallback
-    # The actual Rich table rendering should be done in the command
-    return json.dumps(data, indent=2, ensure_ascii=False)
+    else:
+        raise ValueError(f"Unknown format: {format_type}")

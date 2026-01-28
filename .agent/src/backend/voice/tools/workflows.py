@@ -19,6 +19,12 @@ from backend.voice.process_manager import ProcessLifecycleManager
 import subprocess
 import threading
 import time
+import re
+from agent.core.utils import sanitize_id
+
+def _sanitize_id(input_str: str) -> str:
+    # Deprecated: Use agent.core.utils.sanitize_id
+    return sanitize_id(input_str)
 
 def _run_interactive_command(command: str, alias_prefix: str, config: RunnableConfig, start_message: str) -> str:
     """
@@ -79,7 +85,8 @@ def run_new_story(story_id: str = None, config: RunnableConfig = None) -> str:
     """
     cmd = "agent new-story"
     if story_id:
-        cmd += f" {story_id}"
+        clean_id = _sanitize_id(story_id)
+        cmd += f" {clean_id}"
     return _run_interactive_command(cmd, "story", config, "Story creation started. Follow along below.")
 
 @tool
@@ -89,7 +96,8 @@ def run_new_runbook(story_id: str, config: RunnableConfig = None) -> str:
     Args:
         story_id: The ID of the committed story (e.g., 'WEB-001').
     """
-    cmd = f"agent new-runbook {story_id}"
+    clean_id = _sanitize_id(story_id)
+    cmd = f"agent new-runbook {clean_id}"
     return _run_interactive_command(cmd, "runbook", config, "Runbook generation started. Follow along below.")
 
 @tool
@@ -99,8 +107,10 @@ def run_implement(runbook_id: str, config: RunnableConfig = None) -> str:
     Args:
         runbook_id: The ID of the accepted runbook (e.g., 'WEB-001').
     """
-    cmd = f"agent implement {runbook_id}"
-    return _run_interactive_command(cmd, "implement", config, "Implementation started. Follow along below.")
+    clean_id = _sanitize_id(runbook_id)
+    # Always apply changes when implementing via voice
+    cmd = f"agent implement {clean_id} --apply"
+    return _run_interactive_command(cmd, "implement", config, "Implementation started (with --apply). Follow along below.")
 
 @tool
 def run_impact(files: str = None, config: RunnableConfig = None) -> str:

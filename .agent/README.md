@@ -1,227 +1,37 @@
-# Agent Governance Framework
+# Agentic Development Tool
 
-> **Governance by Code**: Enforce architectural standards, compliance (SOC2/GDPR), and quality assurance through an intelligent CLI that acts as your development team's governance layer.
+This tool is designed to streamline and enhance the development process through automation and governance. It provides a suite of commands for linting, checking, fixing, and explaining code, as well as managing stories and conducting governance audits.
 
-This directory (`.agent/`) contains the complete governance framework.
+## Commands
 
-## 📁 Directory Structure
+### `agent lint`
 
-```shell
-.agent/
-├── bin/agent              # CLI executable wrapper
-├── src/                   # Core Python implementation
-│   ├── agent/
-│   │   ├── commands/      # CLI command modules
-│   │   └── core/          # Core logic (AI, routing, config)
-├── cache/                 # Local artifact cache (Synced via Supabase)
-│   ├── stories/           # Feature definitions
-│   ├── plans/             # High-level epics
-│   └── runbooks/          # Implementation guides
-├── templates/             # Markdown templates
-├── rules/                 # Global governance rules (Markdown)
-├── instructions/          # Role-specific AI instructions
-├── compliance/            # SOC2/GDPR documentation
-├── workflows/             # Workflow definitions
-├── etc/                   # Configuration
-│   ├── agents.yaml        # Agent role definitions
-│   └── router.yaml        # AI Model routing config
-└── logs/                  # Execution & Preflight logs
-```
+Lints the codebase to identify and report style issues and potential errors. This command helps maintain code quality and consistency.
 
-## 🧠 Core Concepts
+### `agent check`
 
-### Story-Driven Development
+Performs static analysis to detect potential bugs, security vulnerabilities, and code smells. This command ensures code reliability and security.
 
-Agent enforces a strict structured workflow to ensure quality:
+### `agent fix`
 
-```text
-Plan (APPROVED) → Stories (COMMITTED) → Runbooks (ACCEPTED) → Implementation
-```
+Automatically fixes certain types of linting errors and code smells. This command speeds up the development process by automating routine corrections.
 
-1. **Plans**: High-level epics or Requests for Comments (RFCs).
-2. **Stories**: Individual units of work with rigorous Acceptance Criteria.
-3. **Runbooks**: AI-generated step-by-step implementation guides.
-4. **Implementation**: AI-assisted code generation based on the Runbook.
+### `agent explain`
 
-### The AI Governance Panel
+Explains complex code snippets in plain language, making it easier for developers to understand unfamiliar code.
 
-Your code is reviewed by 9 specialized AI agents, each with a specific focus:
+### `agent preflight`
 
-> **New**: With MCP Tool Integration, these agents can now dynamically inspect the environment (read files, check issues) during review.
+Validates the agent's configuration before the agent is deployed to address governance concerns.
 
-| Role | Focus Area |
-| ---- | ---------- |
-| **@Architect** | System design, ADR compliance, boundaries |
-| **@QA** | Test coverage, testing strategies |
-| **@Security** | Secrets, vulnerabilities, security posture |
-| **@Product** | Acceptance criteria, user value |
-| **@Observability** | Metrics, tracing, logging |
-| **@Docs** | Documentation synchronization |
-| **@Compliance** | SOC2, GDPR enforcement |
-| **@Mobile** | React Native, Expo patterns |
-| **@Web** | Next.js, SEO, accessibility |
-| **@Backend** | FastAPI, Python, API contracts |
+### `agent story`
 
-## 🚀 Workflows
+Aids in managing and tracking user stories throughout the development lifecycle.
 
-### 1. Creating a Feature
+### `agent audit`
 
-```bash
-# 1. Create a story
-agent new-story
+Executes a governance audit of the repository to assess traceability, identify stagnant code, and flag orphaned governance artifacts. This command helps ensure compliance and maintain code quality.
 
-# 2. Analyze Impact (Optional but recommended)
-agent impact WEB-001 --ai --update-story
+See [Command Documentation](docs/commands.md) for full usage options (e.g., `--fail-on-error`, `.auditignore`).
 
-# 2. Generate runbook (AI analyzes story + rules)
-agent new-runbook WEB-001
-
-# 3. Run preflight (AI Governance Panel reviews)
-agent preflight --story WEB-001 --ai
-
-# 4. Commit (AI generates conventional commit)
-agent commit --story WEB-001 --ai
-
-# 5. Create PR
-agent pr --story WEB-001
-```
-
-### 2. Synchronization
-
-The agent supports syncing artifacts to a centralized Supabase backend for team collaboration.
-
-```bash
-# Push changes
-agent sync push
-
-# Pull changes
-agent sync pull
-
-# Check status
-agent sync status
-```
-
-**Credentials**: Set `SUPABASE_ACCESS_TOKEN` in `.env` or `.agent/secrets/supabase_access_token`.
-
-## ⚙️ Configuration
-
-### AI Providers
-
-1. **Google Gemini** (Recommended): Set `GEMINI_API_KEY` (Uses `gemini-1.5-pro`).
-2. **OpenAI**: Set `OPENAI_API_KEY` (Uses `gpt-4o`).
-3. **GitHub CLI** (Fallback): Uses `gh models run`.
-
-### AI Model Discovery
-
-Check which models are available to your agent:
-
-```bash
-agent list-models
-agent list-models openai
-```
-
-### Secret Management
-
-Store API keys encrypted instead of in environment variables:
-
-```bash
-# Initialize (first time)
-agent secret init
-
-# Import existing env vars
-agent secret import openai
-agent secret import supabase
-
-# Or set manually
-agent secret set gemini api_key
-
-# List stored secrets
-agent secret list
-```
-
-#### Auto-Unlock (Keyring Integration)
-
-To avoid entering your master password repeatedly:
-
-```bash
-# Securely store master password in OS Keychain
-agent secret login
-
-# Remove from Keychain
-agent secret logout
-```
-
-#### Headless / CI Mode
-
-For automated environments (CI/CD) where no keyring is available:
-
-```bash
-export AGENT_MASTER_KEY="your-master-password"
-agent preflight --ai
-```
-
-See [ADR-006](adrs/ADR-006-encrypted-secret-management.md) for details.
-
-### Router Configuration
-
-Customize model selection in `.agent/etc/router.yaml`:
-
-```yaml
-tiers:
-  smart:
-    providers: ["gemini", "openai"]
-  fast:
-    providers: ["gemini-flash", "gpt-4o-mini"]
-```
-
-**Manage Configuration via CLI:**
-
-The `agent config` command allows you to view and modify configuration files without direct editing.
-
-```bash
-# List all configurations
-agent config list
-
-# Get a value (defaults to router.yaml)
-agent config get models.gpt-4o.tier
-
-# Get a value from a specific file (prefix routing)
-agent config get agents.team.0.role
-
-# Set a value (updates file safely with backup)
-agent config set settings.default_tier advanced
-```
-
-## 🛠️ Development & Testing
-
-If you are contributing to the Agent framework itself:
-
-```bash
-# Install Core (Governance checks only)
-pip install -e .agent/
-
-# Install with Voice Capabilities (Conversational Agent, VAD, STT/TTS)
-pip install -e ".agent/[voice]"
-
-# Install with Admin Console Capabilities
-pip install -e ".agent/[admin]"
-
-# Install dev dependencies
-brew install shellcheck
-npm install -g eslint
-
-# Run Tests
-PYTHONPATH=.agent/src pytest .agent/tests/
-
-# Linting
-agent lint --all --fix
-```
-
-## 📚 Detailed Documentation
-
-For specific guides, see the `docs/` folder:
-
-- [Getting Started](docs/getting_started.md)
-- [Commands Reference](docs/commands.md)
-- [Governance System](docs/governance.md)
-- [Rules & Instructions](docs/rules_and_instructions.md)
+Usage:

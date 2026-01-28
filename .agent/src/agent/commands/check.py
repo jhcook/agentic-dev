@@ -188,7 +188,23 @@ def preflight(
             
             # Find all test files
             all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
-            all_test_files = [f.relative_to(Path.cwd()) for f in all_test_files if ".agent" not in f.parts and "node_modules" not in f.parts]
+            # Filter matches, but ALLOW .agent/tests while excluding other .agent internals and node_modules
+            filtered_tests = []
+            for f in all_test_files:
+                rel_path = f.relative_to(Path.cwd())
+                parts = rel_path.parts
+                
+                # Exclude node_modules
+                if "node_modules" in parts:
+                    continue
+                
+                # logic to exclude .agent UNLESS it's .agent/tests
+                if ".agent" in parts and "tests" not in parts:
+                    continue
+                    
+                filtered_tests.append(rel_path)
+            
+            all_test_files = filtered_tests
             
             relevant_tests = set()
             
@@ -403,7 +419,6 @@ def preflight(
         # Sticking to full council as per requirement.
         
         result = convene_council_full(
-            console=console,
             story_id=story_id,
             story_content=story_content,
             rules_content=rules_content,
@@ -411,7 +426,8 @@ def preflight(
             full_diff=full_diff,
             report_file=report_file,
             mode="gatekeeper",
-            council_identifier="preflight"
+            council_identifier="preflight",
+            progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
         )
         if result["verdict"] in ["BLOCK", "FAIL"]:
              # convene_council_full handles printing the error/report location
@@ -672,7 +688,6 @@ def panel(
     instructions_content = scrub_sensitive_data(instructions_content)
 
     result = convene_council_full(
-        console=console,
         story_id=story_id,
         story_content=scrubbed_content,
         rules_content=rules_content,
@@ -680,7 +695,8 @@ def panel(
         full_diff=full_diff,
         mode="consultative",
         council_identifier="panel",
-        user_question=question
+        user_question=question,
+        progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
     )
     
     # 5. Apply Advice
@@ -709,12 +725,25 @@ Return ONLY the full updated markdown content of the document.
 """
         updated_content = ai_service.get_completion(prompt)
         
+        # Clean up markdown formatting if present (strip code blocks)
+        if updated_content:
+            content = updated_content.strip()
+            if content.startswith("```"):
+                lines = content.splitlines()
+                # Remove first line if it's a code block start
+                if lines[0].strip().startswith("```"):
+                    lines = lines[1:]
+                # Remove last line if it's a code block end
+                if lines and lines[-1].strip().startswith("```"):
+                    lines = lines[:-1]
+                updated_content = "\n".join(lines).strip()
+        
         # Safety check: ensure content is not empty
         if updated_content and len(updated_content) > 100:
             target_file.write_text(updated_content)
             console.print(f"[bold green]✅ Applied advice to {target_file.name}[/bold green]")
         else:
-             console.print(f"[bold red]❌ Failed to generate valid update (Content empty or too short).[/bold red]")
+             console.print("[bold red]❌ Failed to generate valid update (Content empty or too short).[/bold red]")
 
 def run_ui_tests(
     story_id: Optional[str] = typer.Argument(None, help="The ID of the story (for context/logging)."),
