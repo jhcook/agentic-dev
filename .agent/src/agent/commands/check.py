@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -401,7 +402,7 @@ def preflight(
         # For now, we still run the full council, or we could specialize.
         # Sticking to full council as per requirement.
         
-        verdict = convene_council_full(
+        result = convene_council_full(
             console=console,
             story_id=story_id,
             story_content=story_content,
@@ -412,7 +413,7 @@ def preflight(
             mode="gatekeeper",
             council_identifier="preflight"
         )
-        if verdict in ["BLOCK", "FAIL"]:
+        if result["verdict"] in ["BLOCK", "FAIL"]:
              # convene_council_full handles printing the error/report location
              raise typer.Exit(code=1)
     
@@ -571,24 +572,49 @@ Risks identified: {total_impacted} files depend on changed code
 
 
 def panel(
-    story_id: Optional[str] = typer.Argument(None, help="The ID of the story. If excluded, infers from content."),
+    input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai).")
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
+    apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook.")
 ):
     """
-    Convening the Governance Panel to review changes.
+    Convening the Governance Panel to review changes or discuss design.
     """
     # 0. Configure Provider Override if set
     if provider:
         ai_service.set_provider(provider)
-        
+    
+    # Smart Argument Parsing
+    story_id = None
+    question = None
+    
+    if input_arg:
+        # Check if input looks like a simple Story ID (e.g. "INFRA-123", "WEB-001")
+        if re.match(r"^[A-Z]+-\d+$", input_arg.strip(), re.IGNORECASE):
+            story_id = input_arg.upper()
+        else:
+            # Assume it's a question/instruction
+            question = input_arg
+            # Try to extract ID from question
+            match = re.search(r"([A-Z]+-\d+)", input_arg, re.IGNORECASE)
+            if match:
+                story_id = match.group(1).upper()
+
     if not story_id:
         story_id = infer_story_id()
         if not story_id:
-             console.print("[bold red]❌ Story ID is required (and could not be inferred).[/bold red]")
-             raise typer.Exit(code=1)
+             # If we have a question but no story ID, maybe we can proceed?
+             # But the tool relies on Story/Runbook context. 
+             # Let's prompt or error.
+             if question:
+                 console.print(f"[yellow]⚠️  Could not identify a linked Story ID from '{question}'.[/yellow]")
+             else:
+                 console.print("[bold red]❌ Story ID is required (and could not be inferred).[/bold red]")
+                 raise typer.Exit(code=1)
 
     console.print(f"[bold cyan]🤖 Convening the Governance Panel for {story_id}...[/bold cyan]")
+    if question:
+        console.print(f"[dim]❓ Question: {question}[/dim]")
 
     # 1. Get Changed Files
     if base:
@@ -598,10 +624,10 @@ def panel(
         
     result = subprocess.run(cmd, capture_output=True, text=True)
     files = result.stdout.strip().splitlines()
+    files = [f for f in files if f] # Filter empty strings
     
-    if not files or files == ['']:
-        console.print("[yellow]⚠️  No files to review. Did you stage your changes?[/yellow]")
-        return
+    if not files:
+        console.print("[yellow]⚠️  No staged changes found. Proceeding in Design Review mode (Document Context Only).[/yellow]")
 
     # 2. Get Full Diff
     diff_cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
@@ -610,15 +636,30 @@ def panel(
     if not full_diff:
         full_diff = ""
 
-    # 3. Load Context
+    # 3. Load Context & Target File
     story_content = ""
-    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-        if file_path.name.startswith(story_id):
+    target_file = None
+    
+    # Try finding Runbook first (priority for implementation phase)
+    # Check common locations or use basic glob
+    for file_path in config.runbooks_dir.rglob(f"{story_id}*.md"):
+        if story_id in file_path.name:
+            target_file = file_path
             story_content = file_path.read_text(errors="ignore")
+            console.print(f"[dim]📄 Found Runbook: {file_path.name}[/dim]")
             break
+            
+    # Fallback to Story
+    if not target_file:
+        for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+            if file_path.name.startswith(story_id):
+                target_file = file_path
+                story_content = file_path.read_text(errors="ignore")
+                console.print(f"[dim]📄 Found Story: {file_path.name}[/dim]")
+                break
     
     if not story_content:
-         console.print(f"[yellow]⚠️  Story {story_id} file not found. Reviewing without specific story context.[/yellow]")
+         console.print(f"[yellow]⚠️  Story/Runbook for {story_id} not found. Reviewing without specific document context.[/yellow]")
 
     full_context = context_loader.load_context()
     rules_content = full_context.get("rules", "")
@@ -626,20 +667,54 @@ def panel(
     
     # 4. Scrum & Run
     full_diff = scrub_sensitive_data(full_diff)
-    story_content = scrub_sensitive_data(story_content)
+    scrubbed_content = scrub_sensitive_data(story_content)
     rules_content = scrub_sensitive_data(rules_content)
     instructions_content = scrub_sensitive_data(instructions_content)
 
-    convene_council_full(
+    result = convene_council_full(
         console=console,
         story_id=story_id,
-        story_content=story_content,
+        story_content=scrubbed_content,
         rules_content=rules_content,
         instructions_content=instructions_content,
         full_diff=full_diff,
         mode="consultative",
-        council_identifier="panel"
+        council_identifier="panel",
+        user_question=question
     )
+    
+    # 5. Apply Advice
+    if apply and target_file and result["log_file"]:
+        console.print(f"\n[bold magenta]🏗️  Applying advice to {target_file.name}...[/bold magenta]")
+        
+        log_path = result["log_file"]
+        report_text = log_path.read_text()
+        
+        prompt = f"""You are an Expert Technical Writer and Architect.
+        
+TASK:
+Update the following document based on the advice from the Governance Panel.
+Appy the advice intelligently. Do not just append it. Integrate it into the relevant sections.
+If the advice suggests changes to code, do NOT change code, but update the plan/spec to reflect the need for changes.
+Maintain the original document structure/headers.
+
+DOCUMENT ({target_file.name}):
+{story_content}
+
+GOVERNANCE ADVICE:
+{report_text}
+
+OUTPUT:
+Return ONLY the full updated markdown content of the document.
+"""
+        updated_content = ai_service.get_completion(prompt)
+        
+        # Safety check: ensure content is not empty
+        if updated_content and len(updated_content) > 100:
+            target_file.write_text(updated_content)
+            console.print(f"[bold green]✅ Applied advice to {target_file.name}[/bold green]")
+        else:
+             console.print(f"[bold red]❌ Failed to generate valid update (Content empty or too short).[/bold red]")
 
 def run_ui_tests(
     story_id: Optional[str] = typer.Argument(None, help="The ID of the story (for context/logging)."),
