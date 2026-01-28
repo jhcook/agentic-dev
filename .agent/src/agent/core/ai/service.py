@@ -478,8 +478,10 @@ class AIService:
             try:
                 if provider == "gemini":
                     # Re-initialize client per request to avoid stiff/dead sockets
-                    gemini_key = os.getenv("GOOGLE_GEMINI_API_KEY") or os.getenv(
-                        "GEMINI_API_KEY"
+                    gemini_key = (
+                        get_secret("api_key", service="gemini") 
+                        or os.getenv("GOOGLE_GEMINI_API_KEY") 
+                        or os.getenv("GEMINI_API_KEY")
                     )
                     from google import genai
                     from google.genai import types

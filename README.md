@@ -41,6 +41,7 @@ This command will prompt for necessary API keys and securely store them in the p
 
 - **Data Retention**: Voice data sent to cloud providers (Google/Azure) is transient and processed only for the requested transcription/synthesis. This application *does not* store user audio or transcripts persistently unless explicitly configured for debugging (which is disabled by default in production).
 - **PII Handling**: Avoid speaking PII. While the providers are enterprise-grade and SOC2 compliant, this application treats voice data as sensitive. Logs are sanitized to exclude full transcripts in production.
+- **Telemetry**: The CLI uses OpenTelemetry for local performance tracing (e.g., installation times). Traces are written to stdio/local logs and **are not exported** to any external server unless explicitly configured by the user. No PII is captured in traces.
 - **User Rights (Deletion)**:
   - **Local Data**: Use `rm -rf .agent/logs/*` to delete all local session logs.
   - **Cloud Data**: Data sent to Google/Azure via API is typically not retained for training by default (refer to Google Cloud data logging and Azure Cognitive Services privacy policies). Consumers can opt-out of logging in their respective cloud consoles.

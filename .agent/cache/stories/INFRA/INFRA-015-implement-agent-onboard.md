@@ -18,6 +18,7 @@ As a new developer, I want to run a single command `agent onboard` that checks m
 - [ ] **Environment Init**: Ensures `.agent/` directory and children exist. Handles edge cases gracefully.
 - [ ] **Security Check**: Verifies that `.gitignore` exists and includes `.env`.
 - [ ] **Verification**: Runs a "Hello World" AI completion to verify credentials and connectivity.
+- [ ] **Frontend Setup**: Checks for `node` and `npm`, and runs `npm install` in `.agent/src/web` if present.
 - [ ] **Tour**: Displays a guided tour of core commands (`agent story`, `agent preflight`, `agent pr`) upon completion.
 
 ## Non-Functional Requirements

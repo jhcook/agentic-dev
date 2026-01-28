@@ -134,6 +134,11 @@ def onboard():
     _init_workspace()
     _setup_env_file()
     _verify_gitignore()
+    _check_dependencies()
+    _init_workspace()
+    _setup_env_file()
+    _verify_gitignore()
+    _setup_frontend() # New step
     _run_health_check()
 
     typer.secho("\n🚀 Onboarding Complete! 🚀", fg=typer.colors.CYAN)
