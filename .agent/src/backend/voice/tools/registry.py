@@ -14,8 +14,9 @@
 
 from .architect import list_adrs, read_adr, search_rules
 from .project import list_stories, get_project_info, list_runbooks, read_file, write_file
-from .git import get_git_status, get_git_diff, get_git_log, get_git_branch
-from .qa import run_backend_tests, run_frontend_lint, shell_command
+from .git import get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr
+from .qa import run_backend_tests, run_frontend_lint, shell_command, run_preflight
+from .interactive_shell import start_interactive_shell, send_shell_input
 from .security import scan_file_for_secrets
 from .observability import get_recent_logs
 from .create_tool import create_tool
@@ -23,6 +24,8 @@ from .list_capabilities import list_capabilities
 from .read_tool_source import read_tool_source
 from .get_installed_packages import get_installed_packages
 from .docs import list_docs, read_doc, search_docs
+from .workflows import run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice
+from .fix_story import validate_and_fix_story
 
 import os
 import sys
@@ -41,9 +44,10 @@ def get_all_tools():
         # Project
         list_stories, get_project_info, list_runbooks, read_file, write_file,
         # Git
-        get_git_status, get_git_diff, get_git_log, get_git_branch,
+        get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr,
         # QA
-        run_backend_tests, run_frontend_lint, shell_command,
+        run_backend_tests, run_frontend_lint, shell_command, run_preflight,
+        start_interactive_shell, send_shell_input,
         # Security
         scan_file_for_secrets,
         # Observability
@@ -51,7 +55,10 @@ def get_all_tools():
         # Meta
         create_tool, list_capabilities, read_tool_source, get_installed_packages,
         # Docs
-        list_docs, read_doc, search_docs
+        list_docs, read_doc, search_docs,
+        # Workflows
+        run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice,
+        validate_and_fix_story
     ]
     
     # Dynamic Loading from 'custom' directory

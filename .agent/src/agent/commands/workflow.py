@@ -143,7 +143,8 @@ def commit(
     runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Runbook ID."),
     message: Optional[str] = typer.Option(None, "--message", "-m", help="Commit message."),
     ai: bool = typer.Option(False, "--ai", help="Enable AI to infer story and generate commit message."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation/editing.")
 ):
     """
     Commit changes with a governed message.
@@ -203,7 +204,7 @@ def commit(
         except Exception as e:
              console.print(f"[yellow]⚠️  AI commit message generation failed: {e}[/yellow]")
 
-    if is_interactive:
+    if is_interactive and not yes:
         message = Prompt.ask("Commit message", default=message or "")
     
     if not message:

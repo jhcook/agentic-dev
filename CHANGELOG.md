@@ -18,6 +18,11 @@
 - **GitHub MCP Support**: Integrated `@modelcontextprotocol/server-github` for interaction with GitHub repositories and issues.
 - **mcp command**: Added `agent mcp start` and `agent mcp run` commands.
 - **Onboarding**: Updated `agent onboard` to allow choosing between MCP and `gh` CLI.
+- **Improved Voice Agent Process Management** (INFRA-041):
+  - Real-time streaming of subprocess output (e.g. `npm audit`, `preflight`) via EventBus.
+  - **Interactive Shell**: Support for running interactive commands via voice.
+  - **Thread Safety**: Implemented thread storage for EventBus.
+  - **Strict Secrets**: Removed environment variable fallback for API keys to enforce secure storage.
 - **Additional Voice Providers** (INFRA-037):
   - Added support for **Google Cloud Speech** (Async STT/TTS).
   - Added support for **Azure Speech Services** (STT/TTS).

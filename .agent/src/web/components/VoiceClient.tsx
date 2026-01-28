@@ -1,3 +1,17 @@
+// Copyright 2026 Justin Cook
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -46,11 +60,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
     const [isMuted, setIsMuted] = useState(false);
     const isMutedRef = useRef(false);
 
-    const toggleMute = useCallback(() => {
-        const newValue = !isMutedRef.current;
-        isMutedRef.current = newValue;
-        setIsMuted(newValue);
-    }, []);
+
 
     // Persistent Session ID
     const [sessionId] = useState(() => {
@@ -72,13 +82,65 @@ export function VoiceClient({ className }: VoiceClientProps) {
         disconnect,
         sendAudio,
         sendText,
+        sendJson,
         setOnAudioChunk,
         setOnClearBuffer,
-        setOnTranscript
+        setOnTranscript,
+        setOnEvent
     } = useVoiceWebSocket(wsUrl);
 
+    const toggleMute = useCallback(() => {
+        const newValue = !isMutedRef.current;
+        isMutedRef.current = newValue;
+        setIsMuted(newValue);
+        // Notify backend to flush buffer if muting
+        sendJson({
+            type: 'mute_changed',
+            muted: newValue
+        });
+    }, [sendJson]);
+
+    // VAD Settings State
+    const [showSettings, setShowSettings] = useState(false);
+    const [vadSettings, setVadSettings] = useState({
+        autotune: true,
+        aggressiveness: 3,
+        threshold: 0.5,
+        noise_floor: 0,
+        rms_peak: 0
+    });
+
+    // Console / Streaming Logic
+    const [consoleOutput, setConsoleOutput] = useState<string>("");
+    const consoleEndRef = useRef<HTMLDivElement>(null);
+    const currentGenerationRef = useRef<number>(0);
+
+
+
     useEffect(() => {
-        // Fetch history
+        setOnEvent((type, data) => {
+            if (type === 'console') {
+                setConsoleOutput(prev => prev + data);
+                // Auto-scroll
+                if (consoleEndRef.current) {
+                    consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+            } else if (type === 'vad_state') {
+                setVadSettings(prev => ({ ...prev, ...data }));
+            }
+        });
+    }, [setOnEvent]);
+
+    const updateVadSetting = (key: string, value: any) => {
+        const newSettings = { ...vadSettings, [key]: value };
+        setVadSettings(newSettings);
+        sendJson({
+            ...newSettings,
+            type: 'update_settings'
+        });
+    };
+
+    useEffect(() => {
         if (sessionId) {
             const fetchHistory = async () => {
                 try {
@@ -120,7 +182,6 @@ export function VoiceClient({ className }: VoiceClientProps) {
             activeSourceRef.current = source;
             source.buffer = buffer;
 
-            // Connect to analyser and destination (speakers)
             if (analyserRef.current) {
                 source.connect(analyserRef.current);
             }
@@ -137,34 +198,30 @@ export function VoiceClient({ className }: VoiceClientProps) {
         };
     }, [sessionId]);
 
-    // Handle incoming audio chunks
+    // ... (Audio Chunk & Transcript Handlers unchanged) ...
     useEffect(() => {
         setOnAudioChunk((chunk: ArrayBuffer) => {
             if (chunk.byteLength < 4) return;
-
             const view = new DataView(chunk);
             const chunkGenId = view.getUint32(0);
-
             if (chunkGenId <= lastClearedGenIdRef.current) return;
-
             const audioData = chunk.slice(4);
-
             if (audioContextRef.current) {
                 audioContextRef.current.decodeAudioData(audioData.slice(0), (buffer) => {
                     if (chunkGenId <= lastClearedGenIdRef.current) return;
                     audioQueueRef.current.push(buffer);
-                    if (!isPlayingRef.current) {
-                        playNextChunkRef.current?.();
-                    }
-                }).catch((err) => {
-                    console.error('[Voice] Failed to decode audio:', err);
-                });
+                    if (!isPlayingRef.current) { playNextChunkRef.current?.(); }
+                }).catch((err) => { console.error('[Voice] Failed to decode audio:', err); });
             }
         });
 
         setOnClearBuffer((payload?: { generation_id: number }) => {
-            const genId = payload?.generation_id ?? 0;
-            lastClearedGenIdRef.current = genId;
+            console.log("[Voice] Interrupt received. Clearing buffer.", payload);
+            if (payload && typeof payload.generation_id === 'number') {
+                currentGenerationRef.current = payload.generation_id + 1;
+            } else {
+                currentGenerationRef.current++;
+            }
             audioQueueRef.current = [];
             if (activeSourceRef.current) {
                 try { activeSourceRef.current.stop(); } catch (e) { }
@@ -194,6 +251,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
                     return newHistory;
                 }
 
+                // Add console output to previous message if it exists and related? No, keep separate for now.
+                // Or better, render consoleOutput separately.
+
                 if (role === 'user' && last.role === 'user' && last.partial) {
                     const newHistory = [...prev];
                     newHistory[newHistory.length - 1] = { ...last, text: last.text + text, partial };
@@ -207,8 +267,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [transcript]);
+    }, [transcript, consoleOutput]); // Auto scroll on console output too
 
+    // ... (Microphone Access Code unchanged) ...
     const requestMicrophoneAccess = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -237,6 +298,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
 
             audioContextRef.current = audioContext;
             workletNodeRef.current = workletNode;
+            // Delay connect slightly to ensure processor is ready? No, connect immediate.
             connect();
         } catch (err) {
             console.error('[Voice] Mic denied:', err);
@@ -252,14 +314,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
         isPlayingRef.current = false;
         disconnect();
         setHasPermission(false);
-
     }, [disconnect]);
 
-    useEffect(() => {
-        return () => {
-            stopVoice();
-        };
-    }, [stopVoice]);
+    useEffect(() => { return () => { stopVoice(); }; }, [stopVoice]);
 
     const getStatusTheme = () => {
         switch (state) {
@@ -274,7 +331,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
     const theme = getStatusTheme();
 
     return (
-        <div className="flex flex-col h-screen bg-[#0a0a0c] text-slate-200 font-sans">
+        <div className="flex flex-col h-screen bg-[#0a0a0c] text-slate-200 font-sans relative">
             {/* Header */}
             <header className="flex items-center justify-between px-8 py-5 border-b border-white/5 bg-black/20 backdrop-blur-md">
                 <div className="flex items-center gap-3">
@@ -285,6 +342,15 @@ export function VoiceClient({ className }: VoiceClientProps) {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className={cn("p-2.5 rounded-full border transition-all duration-300",
+                            showSettings ? "bg-blue-600/20 border-blue-500 text-blue-400" : "bg-white/5 border-white/10 text-slate-400 hover:text-white")}
+                        title="VAD Settings"
+                    >
+                        <Activity className="w-5 h-5" />
+                    </button>
+
                     <button
                         onClick={toggleMute}
                         disabled={state === 'idle' || state === 'connecting'}
@@ -309,6 +375,58 @@ export function VoiceClient({ className }: VoiceClientProps) {
                 </div>
             </header>
 
+            {/* Settings Poppover */}
+            {showSettings && (
+                <div className="absolute top-20 right-8 z-50 w-80 bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 backdrop-blur-xl">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-blue-400" /> VAD Settings
+                    </h3>
+
+                    <div className="space-y-6">
+                        {/* Autotune Toggle */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-400">Autotune</span>
+                            <button
+                                onClick={() => updateVadSetting('autotune', !vadSettings.autotune)}
+                                className={cn("w-10 h-5 rounded-full relative transition-colors", vadSettings.autotune ? "bg-blue-600" : "bg-white/10")}
+                            >
+                                <div className={cn("absolute top-1 w-3 h-3 rounded-full bg-white transition-all", vadSettings.autotune ? "left-6" : "left-1")} />
+                            </button>
+                        </div>
+
+                        {/* Threshold Slider (Sensitivity) */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-slate-500">
+                                <span>Sensitivity (RMS Thresh)</span>
+                                <span>{vadSettings.threshold}</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0" max="1.0" step="0.05"
+                                value={vadSettings.threshold}
+                                onChange={(e) => updateVadSetting('threshold', parseFloat(e.target.value))}
+                                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            />
+                        </div>
+
+                        {/* Live Meters */}
+                        <div className="space-y-2 pt-2 border-t border-white/5">
+                            <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Live Metrics</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="bg-black/30 p-2 rounded">
+                                    <div className="text-slate-500">Noise Floor</div>
+                                    <div className="text-blue-400 font-mono">{vadSettings.noise_floor.toFixed(0)}</div>
+                                </div>
+                                <div className="bg-black/30 p-2 rounded">
+                                    <div className="text-slate-500">Peak RMS</div>
+                                    <div className="text-green-400 font-mono">{vadSettings.rms_peak.toFixed(0)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Main Content */}
             <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto px-6 py-8 overflow-hidden">
                 {!hasPermission ? (
@@ -331,7 +449,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
                     <>
                         {/* Transcript Area */}
                         <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-6 mb-8">
-                            {transcript.length === 0 && (
+                            {transcript.length === 0 && !consoleOutput && (
                                 <div className="h-full flex items-center justify-center text-slate-500 italic">
                                     Awaiting your command...
                                 </div>
@@ -356,13 +474,29 @@ export function VoiceClient({ className }: VoiceClientProps) {
                                     </div>
                                 </div>
                             ))}
+
+                            {/* Console Stream Output */}
+                            {consoleOutput && (
+                                <div className="flex w-full justify-start animate-fade-in-up">
+                                    <div className="max-w-full w-full px-5 py-4 rounded-3xl bg-[#0d0d10] border border-white/10 shadow-xl font-mono text-xs overflow-x-auto">
+                                        <div className="flex items-center gap-2 mb-2 opacity-60 text-xs font-bold uppercase tracking-widest text-amber-500">
+                                            <Activity className="w-3 h-3" />
+                                            Terminal Output
+                                        </div>
+                                        <pre className="whitespace-pre-wrap text-slate-400 leading-relaxed">
+                                            {consoleOutput}
+                                        </pre>
+                                        <div ref={consoleEndRef} />
+                                    </div>
+                                </div>
+                            )}
+
                             <div ref={transcriptEndRef} />
                         </div>
 
                         {/* Visualizer & Controls */}
                         <div className="bg-[#121216] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
+                            {/* ... Visualizer code unchanged ... */}
                             <div className="relative z-10 flex flex-col gap-8">
                                 <div className="h-20 max-w-2xl mx-auto w-full flex items-center justify-center bg-black/40 rounded-2xl border border-white/5 overflow-hidden px-4">
                                     <WaveformVisualizer
@@ -381,9 +515,9 @@ export function VoiceClient({ className }: VoiceClientProps) {
                                             Stop
                                         </button>
                                         <button
-                                            onClick={() => setTranscript([])}
+                                            onClick={() => { setTranscript([]); setConsoleOutput(""); }}
                                             className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-400 border border-white/10 rounded-2xl font-semibold transition-all disabled:opacity-30 flex items-center gap-2"
-                                            disabled={transcript.length === 0}
+                                            disabled={transcript.length === 0 && !consoleOutput}
                                         >
                                             <Trash2 className="w-5 h-5" />
                                             Clear
@@ -399,6 +533,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
                         </div>
 
                         {/* Text Input Area */}
+                        {/* ... (Text Input unchanged) ... */}
                         <div className="mt-8 relative group">
                             <form
                                 onSubmit={(e) => {
@@ -431,6 +566,7 @@ export function VoiceClient({ className }: VoiceClientProps) {
                 )}
             </main>
 
+            {/* Footer */}
             <footer className="px-8 py-5 text-center text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em]">
                 System Ready • Latency: &lt;150ms • Build 2026.1.27
             </footer>
@@ -443,6 +579,8 @@ export function VoiceClient({ className }: VoiceClientProps) {
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
                 .animate-spin-slow { animation: spin 3s linear infinite; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
+                @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
             `}} />
         </div>
     );

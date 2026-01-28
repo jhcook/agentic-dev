@@ -10,7 +10,9 @@ This repository contains the backend services for the Agentic Voice application.
 ## Getting Started
 
 1. **Clone the repository:**
-2. **Onboard:** Run `agent onboard` to set up dependencies and credentials.
+2. **Setup Environment:** Create a virtual environment named `.venv` (`python3 -m venv .venv && source .venv/bin/activate`).
+3. **Install:** Run `pip install -e ".agent/[voice]"` to install with voice features.
+4. **Onboard:** Run `agent onboard` to set up dependencies and credentials.
 
 ## Voice Configuration
 

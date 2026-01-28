@@ -15,7 +15,12 @@
 from langchain_core.tools import tool
 import subprocess
 import os
+import threading
+import time
 from opentelemetry import trace
+from langchain_core.runnables import RunnableConfig
+from backend.voice.events import EventBus
+from backend.voice.process_manager import ProcessLifecycleManager
 
 tracer = trace.get_tracer(__name__)
 
@@ -34,11 +39,16 @@ def run_backend_tests(path: str = ".agent/tests/") -> str:
         try:
             # Security: Use list format for subprocess
             # Check if .venv exists, otherwise try system pytest
-            cmd = [".venv/bin/pytest", path] if os.path.exists(".venv") else ["pytest", path]
-            span.set_attribute("cmd", " ".join(cmd))
+            # Robust command with environment activation
+            cmd_str = f"source .venv/bin/activate && pytest {path}"
+            
+            # Use shell=True to support 'source'
+            span.set_attribute("cmd", cmd_str)
             
             result = subprocess.run(
-                cmd, 
+                cmd_str,
+                shell=True,
+                executable='/bin/zsh', 
                 capture_output=True, 
                 text=True,
                 check=False 
@@ -84,7 +94,7 @@ def run_frontend_lint() -> str:
         return f"Error: {e}"
 
 @tool
-def shell_command(command: str, cwd: str = ".") -> str:
+def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -> str:
     """
     Execute a shell command from the project root or a specific directory.
     Use this for package installation (npm install, pip install) or running utilities.
@@ -92,32 +102,56 @@ def shell_command(command: str, cwd: str = ".") -> str:
         command: The shell command to run (e.g. 'ls -la', 'pip install requests')
         cwd: Working directory relative to project root (default: '.')
     """
+    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    EventBus.publish(session_id, "console", f"> Executing: {command}\n")
+
     with tracer.start_as_current_span("tool.shell_command") as span:
         span.set_attribute("command", command)
         span.set_attribute("cwd", cwd)
         try:
             # Security: Prevent escaping project root if possible
-            # Resolve CWD to absolute path, defaulting to Repo Root if "."
             if cwd == ".":
                 cwd = os.getcwd()
             
             if ".." in cwd or (cwd.startswith("/") and not cwd.startswith(os.getcwd())):
                 return "Error: Working directory must be within project root."
             
-            # We will split the command into a list safely
-            import shlex
-            cmd_args = shlex.split(command)
+            final_command = command
+            if os.path.exists(".venv/bin/activate"):
+                final_command = f"source .venv/bin/activate && {command}"
             
-            result = subprocess.run(
-                cmd_args,
+            process = subprocess.Popen(
+                final_command,
                 cwd=cwd,
-                capture_output=True,
+                shell=True,
+                executable='/bin/zsh', 
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, # Merge stderr into stdout
                 text=True,
-                check=False
+                bufsize=1
             )
+
+            # Register process for cleanup
+            ProcessLifecycleManager.instance().register(process, f"shell-{command[:10]}")
             
-            output = result.stdout + result.stderr
-            span.set_attribute("exit_code", result.returncode)
+            full_output = []
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    EventBus.publish(session_id, "console", line)
+                    full_output.append(line)
+                
+                process.stdout.close()
+                return_code = process.wait(timeout=300) # 5 min timeout for installs
+                
+            except subprocess.TimeoutExpired:
+                process.kill()
+                EventBus.publish(session_id, "console", "\n[ERROR] Command timed out after 300s.")
+                return "Error: Command timed out."
+            finally:
+                ProcessLifecycleManager.instance().unregister(process)
+
+            output = "".join(full_output)
+            span.set_attribute("exit_code", return_code)
             
             if len(output) > 5000:
                  return output[:5000] + "\n... (truncated)"
@@ -125,4 +159,93 @@ def shell_command(command: str, cwd: str = ".") -> str:
         except Exception as e:
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
+            EventBus.publish(session_id, "console", f"\n[ERROR] Exception: {e}\n")
             return f"Error executing shell command: {e}"
+
+@tool
+def run_preflight(story_id: str = None, config: RunnableConfig = None) -> str:
+    """
+    Run the Agent preflight governance checks with AI analysis.
+    Use this when a user asks to 'run preflight' or 'check compliance'.
+    Args:
+        story_id: Optional Story ID (e.g. 'INFRA-015')
+    """
+    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    
+    # Notify start
+    EventBus.publish(session_id, "console", f"> Starting Preflight for {story_id or 'all'}...\n")
+
+    # PRE-CHECK: Ensure we have a valid Story ID to avoid interactive prompts
+    current_branch = "unknown"
+    try:
+        current_branch = subprocess.check_output(
+            ["git", "branch", "--show-current"], 
+            text=True
+        ).strip()
+    except Exception:
+        pass
+
+    # If no explicit story_id and we are on a protected branch, the CLI will prompt (and hang)
+    # We must fail fast.
+    if not story_id and current_branch in ["main", "master", "develop", "prod"]:
+        return (
+            f"Error: You are on branch '{current_branch}' and did not provide a Story ID. "
+            "Please specify a story (e.g., 'run preflight for INFRA-015') or switch to a story branch."
+        )
+
+    # Generate ID for interaction
+    process_id = f"preflight-{story_id or 'check'}-{int(time.time())}"
+    
+    # Notify start
+    EventBus.publish(session_id, "console", f"> Starting Interactive Preflight (ID: {process_id})...\n")
+
+    with tracer.start_as_current_span("tool.run_preflight") as span:
+        try:
+            # Build command string with activation
+            story_arg = f"--story {story_id}" if story_id else ""
+            command = f"source .venv/bin/activate && agent preflight --ai {story_arg}"
+            
+            # Use shell=True to support 'source'
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                executable='/bin/zsh',
+                cwd=None, # Inherit process CWD
+                stdin=subprocess.PIPE,  # ENABLE INPUT
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, 
+                text=True,
+                bufsize=1
+            )
+            
+            # Register process for cleanup and interaction (send_shell_input)
+            ProcessLifecycleManager.instance().register(process, process_id)
+            
+            # Background reader thread (Non-blocking)
+            def read_output():
+                try:
+                    for line in iter(process.stdout.readline, ''):
+                        EventBus.publish(session_id, "console", f"[{process_id}] {line}")
+                    
+                    process.stdout.close()
+                    rc = process.wait()
+                    
+                    if rc == 0:
+                        EventBus.publish(session_id, "console", f"\n✅ Preflight {process_id} Passed.\n")
+                    else:
+                        EventBus.publish(session_id, "console", f"\n❌ Preflight {process_id} Failed (Code {rc}).\n")
+                        
+                except Exception as e:
+                    EventBus.publish(session_id, "console", f"\n[{process_id}] Error: {e}")
+                finally:
+                    ProcessLifecycleManager.instance().unregister(process_id)
+
+            t = threading.Thread(target=read_output, daemon=True)
+            t.start()
+            
+            return "Preflight checks started. Follow along below."
+
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR))
+            return f"Error running preflight: {e}"

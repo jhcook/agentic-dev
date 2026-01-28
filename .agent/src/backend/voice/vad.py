@@ -238,6 +238,37 @@ class VADProcessor:
             logger.error(f"event='webrtc_init_failed' error='{e}'")
             return False
 
+    def update_params(self, aggressiveness: int = None, threshold: float = None, autotune: bool = None, rms_threshold: float = None):
+        """Runtime update of VAD parameters."""
+        if aggressiveness is not None:
+            self.aggressiveness = aggressiveness
+            if self.webrtc_vad:
+                try:
+                    import webrtcvad
+                    self.webrtc_vad = webrtcvad.Vad(self.aggressiveness)
+                except: pass
+        
+        if threshold is not None:
+            self.threshold = threshold
+            
+        if autotune is not None:
+            self.autotune = autotune
+            # If turning autotune ON, reset floors? No, keep existing learnings.
+            
+        logger.info(f"VAD params updated: agg={self.aggressiveness} thresh={self.threshold} auto={self.autotune}")
+
+    def get_state(self) -> dict:
+        """Return current VAD state for UI telemetry."""
+        return {
+            "autotune": self.autotune,
+            "aggressiveness": self.aggressiveness,
+            "silero_threshold": self.threshold,
+            "silero_threshold": self.threshold,
+            "noise_floor": self.ambient_noise_level,
+            "snr_margin": self.peak_rms / (self.ambient_noise_level + 1e-6),
+            "rms_peak": self.peak_rms
+        }
+
     def process(self, audio_chunk: bytes) -> bool:
         """
         Process audio chunk for speech detection.
@@ -280,15 +311,27 @@ class VADProcessor:
             self.peak_rms = max(self.peak_rms * self.peak_alpha, rms)
             
             # Dynamic Threshold Calculation
-            # 2.2x Noise floor or absolute minimum
-            snr_threshold = self.ambient_noise_level * 2.2
-            abs_min = 700.0
-            dynamic_threshold = max(snr_threshold, abs_min)
+            # Lower multiplier to 1.75 (from 2.2) to be less aggressive against soft speech
+            # This means speech only needs to be ~75% louder than background noise
+            snr_threshold = self.ambient_noise_level * 1.75
+            abs_min = 250.0 # Lowered floor slightly
+            
+            # CLAMPING: Ensure threshold doesn't run away in noisy rooms
+            MAX_THRESHOLD = 2000.0
+            
+            # Additional Safety: Clamp the noise floor itself to prevent runaway adaptation
+            # If noise floor is > 1000, it's likely speech bleeding in or a very noisy room.
+            if self.ambient_noise_level > 1000:
+                self.ambient_noise_level = 1000
+            
+            dynamic_threshold = min(max(snr_threshold, abs_min), MAX_THRESHOLD)
             
             # GATE: If RMS is below dynamic threshold, it's definitely not speech.
             if rms < dynamic_threshold:
                 # Update noise floor slowly during silence
-                self.ambient_noise_level = (self.ambient_noise_level * self.noise_alpha) + (rms * (1.0 - self.noise_alpha))
+                # Use slower alpha (0.995 instead of 0.99) to resist sudden noise spikes
+                weighted_alpha = 0.995
+                self.ambient_noise_level = (self.ambient_noise_level * weighted_alpha) + (rms * (1.0 - weighted_alpha))
                 return False
         else:
             # Static minimal gate if autotune is off (RMS 300)
@@ -376,66 +419,6 @@ class VADProcessor:
                 logger.error(f"event='webrtc_processing_error' error='{e}'")
                 
         return speech_found
-
-    def _process_energy(self, audio_chunk: bytes) -> bool:
-        """
-        Adaptive Energy-based VAD.
-        Calculates RMS and compares against a dynamic threshold that adapts to 
-        ambient noise and microphone gain.
-        """
-        try:
-            audio_int16 = np.frombuffer(audio_chunk, dtype=np.int16)
-            squared = np.square(audio_int16.astype(np.float64))
-            rms = np.sqrt(np.mean(squared))
-            
-            # 1. Calibration Phase (First ~500ms of session)
-            if self.autotune and not self.calibrated:
-                self.calibration_frames += 1
-                # Aggressively build noise floor during calibration
-                if self.calibration_frames == 1:
-                    self.ambient_noise_level = rms
-                else:
-                    self.ambient_noise_level = (self.ambient_noise_level * 0.8) + (rms * 0.2)
-                
-                if self.calibration_frames >= self.CALIBRATION_REQUIRED:
-                    self.calibrated = True
-                    logger.info(f"event='vad_calibrated' noise_floor={self.ambient_noise_level:.2f}")
-                return False # Silence during calibration
-                
-            # 2. Main Processing
-            if self.autotune:
-                # Update Peak Tracker (slowly decay)
-                self.peak_rms = max(self.peak_rms * self.peak_alpha, rms)
-                
-                # Dynamic Threshold Logic:
-                # We need a clear "Signal-to-Noise Ratio" (SNR).
-                # The threshold should be well above the noise floor, 
-                # but also relative to how loud the user actually is (peak).
-                # 2.2x Noise floor (Lowered from 3.0 for easier barge-in)
-                snr_threshold = self.ambient_noise_level * 2.2
-                # Absolute minimum (Lowered from 1200 for quiet mics)
-                abs_min = 700.0
-                
-                dynamic_threshold = max(snr_threshold, abs_min)
-                
-                is_speech = rms > dynamic_threshold
-                
-                # If NOT speech, continue tracking noise floor slowly to adapt to 
-                # background changes (like a fan turning on).
-                if not is_speech:
-                    self.ambient_noise_level = (self.ambient_noise_level * self.noise_alpha) + (rms * (1.0 - self.noise_alpha))
-                
-                if is_speech:
-                     logger.debug(f"Energy VAD (Auto): Speech! RMS={rms:.0f} Thresh={dynamic_threshold:.0f} Noise={self.ambient_noise_level:.0f}")
-                return is_speech
-            else:
-                # Static Threshold fallback (2000)
-                ENERGY_THRESHOLD = 2000.0
-                return rms > ENERGY_THRESHOLD
-                
-        except Exception as e:
-            logger.error(f"Energy VAD processing failed: {e}")
-            return True # Fail open
 
     def reset(self):
         """Reset VAD state."""

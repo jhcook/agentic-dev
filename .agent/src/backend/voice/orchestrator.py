@@ -16,9 +16,12 @@ import asyncio
 import logging
 import time
 import re
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Any
 from datetime import datetime, timedelta
 import json
+from collections import deque
+
+
 
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -252,8 +255,18 @@ def strip_markdown_for_tts(text: str) -> str:
     # (brackets, braces, pipes, repeated dashes/equals)
     text = re.sub(r'[\[\]\{\}\|\\]', ' ', text)
     text = re.sub(r'[-=]{2,}', ' ', text)
-    # 9. Collapse multiple newlines/spaces into single spaces
+    
+    # 9. Remove file paths (e.g. /home/user/..., ./src/...)
+    text = re.sub(r'\/[\w\-\.\/]+', ' ', text)
+    text = re.sub(r'\.[\w\-\.\/]+', ' ', text) # Relative paths starting with .
+
+    # 10. Collapse multiple newlines/spaces into single spaces
     text = re.sub(r'\s+', ' ', text)
+    
+    # 11. Final Safety: If the remaining text is just numbers or single chars, silent it.
+    if len(text) < 3 and not re.match(r'[a-zA-Z]{2,}', text):
+        return ""
+        
     return text.strip()
 
 class VoiceOrchestrator:
@@ -268,6 +281,7 @@ class VoiceOrchestrator:
         """
         self.session_id = session_id
         self.last_agent_text = "" # For echo suppression
+        self.loop = None # Will be set in run_background
         self.stt, self.tts = get_voice_providers()
         
         # Initialize LLM (configurable via env)
@@ -306,6 +320,8 @@ class VoiceOrchestrator:
         
         # Audio accumulator
         self.audio_buffer = bytearray()
+        # Pre-roll buffer: 150 chunks * 20ms = 3.0s history (Increased to fix cutoff)
+        self.ring_buffer = deque(maxlen=150) 
         
         # Generation Tracking
         self.current_generation_id = 0
@@ -317,9 +333,9 @@ class VoiceOrchestrator:
         self.last_speech_time = time.time() # Last time speech was detected
         
         # Tuning Parameters
-        self.SILENCE_THRESHOLD = config.get_value(voice_config, "vad.silence_threshold") or 0.7
+        self.SILENCE_THRESHOLD = config.get_value(voice_config, "vad.silence_threshold") or 0.6
         self.MAX_RECORDING_DURATION = 15.0  # Max seconds before forcing process
-        self.MIN_SPEECH_DURATION = 0.1      # Min speech to trigger 'active' state
+        self.MIN_SPEECH_DURATION = 0.3      # Min speech to trigger 'active' state (Increased to 0.3s)
         
         
         # Telemetry info
@@ -362,35 +378,141 @@ class VoiceOrchestrator:
     def run_background(self, output_queue: asyncio.Queue):
         """Start the background worker loop."""
         self.output_queue = output_queue
+        
+        # Capture the running loop for thread-safe dispatch
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.error(f"Orchestrator run_background called without running loop for session {self.session_id}")
+            self.loop = None
+            
         self.is_running = True
+        
+        # Subscribe to EventBus for tool streaming
+        from backend.voice.events import EventBus
+        EventBus.subscribe(self.session_id, self._handle_bus_event)
+        
         self.worker_task = asyncio.create_task(self._process_loop())
         logger.info(f"Orchestrator worker started for session {self.session_id}")
 
     def stop(self):
         """Stop the background worker."""
         self.is_running = False
+        
+        from backend.voice.events import EventBus
+        EventBus.unsubscribe(self.session_id)
+        
         if self.worker_task:
             self.worker_task.cancel()
         if self.pipeline_task:
             self.pipeline_task.cancel()
         logger.info(f"Orchestrator worker stopped for session {self.session_id}")
 
+    def _handle_bus_event(self, event_type: str, data: Any):
+        """Forward internal bus events to the WebSocket output queue."""
+        if self.output_queue:
+            # We wrap it in a tuple (event_type, data) for the websocket handler
+            # But the websocket handler expects ('audio', ...) or ('transcript', ...).
+            # We need to ensure the websocket handler knows how to process generic events.
+            
+            # THREAD SAFETY FIX:
+            # We must use call_soon_threadsafe AND wrap the message in the "json" protocol 
+            # so the router knows how to send it.
+            # INJECT generation_id so client can group messages by turn.
+            payload = {
+                "type": event_type, 
+                "data": data,
+                "generation_id": self.current_generation_id
+            }
+            message_payload = ("json", payload)
+            
+            if self.loop and self.loop.is_running():
+                self.loop.call_soon_threadsafe(
+                    self.output_queue.put_nowait,
+                    message_payload
+                )
+            else:
+                try:
+                    asyncio.create_task(self.output_queue.put(message_payload))
+                except RuntimeError as e:
+                    logger.warning(f"EventBus dispatch failed (no loop): {e}")
+
     def push_audio(self, audio_chunk: bytes):
         """Push raw audio chunk to the input queue for sequential processing."""
         self.input_queue.put_nowait(audio_chunk)
+    
+    def handle_client_event(self, event_type: str, data: dict):
+        """Handle control events from the client (e.g. settings updates)."""
+        logger.info(f"Orchestrator received event: {event_type} data={data}")
+        if event_type == "update_settings":
+            if self.vad:
+                self.vad.update_params(
+                    aggressiveness=data.get("aggressiveness"),
+                    threshold=data.get("threshold"),
+                    autotune=data.get("autotune")
+                )
+                # Ack with new state immediately
+                self._broadcast_vad_state()
+        elif event_type == "mute_changed":
+            if data.get("muted", False):
+                logger.info("Mute enabled - injecting sentinel to flush audio buffer.")
+                # Wake up the loop with a sentinel to force processing check
+                self.input_queue.put_nowait(b'__MUTE__SENTINEL__')
+
+    def _broadcast_vad_state(self):
+        """Emit current VAD metrics to frontend."""
+        if self.vad and self.on_event:
+            state = self.vad.get_state()
+            self.on_event("vad_state", state)
 
     async def _process_loop(self):
         """Infinite loop consuming audio packets and running the state machine."""
         try:
+            last_telemetry = 0
             while self.is_running:
                 # 1. Get next packet
-                audio_chunk = await self.input_queue.get()
-                if audio_chunk is None: break # Sentinel
+                try:
+                    # Use timeout to allow periodic tasks (telemetry) even if no audio
+                    audio_chunk = await asyncio.wait_for(self.input_queue.get(), timeout=0.2)
+                    if audio_chunk is None: break # Sentinel
+                    
+                    if audio_chunk == b'__MUTE__SENTINEL__':
+                        if self.speech_active:
+                            logger.info(f"STATE_TRACE[{self.session_id}]: Mute Forced Flush")
+                            
+                            # FLUSH LOGIC
+                            accumulated_audio = bytes(self.audio_buffer)
+                            self.audio_buffer.clear()
+                            self.speech_active = False
+                            self.silence_start_time = None
+                            
+                            if self.pipeline_task and not self.pipeline_task.done():
+                                self.pipeline_task.cancel()
+                                try:
+                                    await self.pipeline_task
+                                except asyncio.CancelledError:
+                                    pass
+                                
+                            self.current_generation_id += 1
+                            self.pipeline_task = asyncio.create_task(
+                                self._run_pipeline(accumulated_audio, self.current_generation_id)
+                            )
+                        
+                        self.input_queue.task_done()
+                        continue
+
+                    # 2. Update State machine
+                    await self._process_audio_chunk(audio_chunk)
+                    self.input_queue.task_done()
+                except asyncio.TimeoutError:
+                    pass
                 
-                # 2. Update State machine
-                await self._process_audio_chunk(audio_chunk)
-                
-                self.input_queue.task_done()
+                # 3. Periodic Telemetry (5Hz)
+                now = time.time()
+                if now - last_telemetry > 0.2:
+                    self._broadcast_vad_state()
+                    last_telemetry = now
+                    
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -406,6 +528,7 @@ class VoiceOrchestrator:
              logger.debug(f"AUDIO_TRACE[{self.session_id}]: First packet. Size={len(audio_chunk)}")
              
         self.audio_buffer.extend(audio_chunk)
+        self.ring_buffer.append(audio_chunk)
         
         # 1. Run VAD (Unified Gate & Engine)
         has_speech = self.process_vad(audio_chunk)
@@ -423,6 +546,21 @@ class VoiceOrchestrator:
 
             if not self.speech_active:
                  logger.debug(f"VAD_TRACE[{self.session_id}]: Speech START. Vol={rms:.2f}")
+                 
+                 # PRE-ROLL INJECTION: Stitch missing history from ring buffer
+                 # If audio_buffer was recently cleared, it might miss the start of the word.
+                 full_ring = b''.join(self.ring_buffer)
+                 # We assume ring buffer contains "past" and audio_buffer contains "current session"
+                 # Actually, we just prepend the ring buffer content that ISN'T already in audio_buffer
+                 # But audio_buffer is cleared on processing. So if it's empty-ish, we inject.
+                 
+                 # Strategy: Just prepend the entire ring buffer (1s) if we are just starting.
+                 # Overlap handling: exact byte matching is expensive.
+                 # Heuristic: If audio_buffer size is small (< 1s), prepend ring buffer.
+                 if len(self.audio_buffer) < 32000: # 1s at 16khz 16bit
+                     logger.debug(f"PRE_ROLL: Injecting {len(full_ring)} bytes of history.")
+                     self.audio_buffer[0:0] = full_ring
+
                  
             # BARGE-IN: If user speaks while we are still generating/speaking
             if self.is_speaking.is_set():
@@ -461,7 +599,7 @@ class VoiceOrchestrator:
 
         # C: Deaf Valve (Only if not already speaking/generating)
         if not self.speech_active and not self.is_speaking.is_set():
-            if current_buffer_seconds > 3.0:
+            if current_buffer_seconds > 10.0:
                 should_process = True
                 trigger_reason = f"Deaf Valve ({current_buffer_seconds:.2f}s no speech)"
 
@@ -565,6 +703,8 @@ class VoiceOrchestrator:
             
             if not text_input or len(text_input.strip()) < 2:
                 logger.debug("Ignoring empty/short transcript.")
+                if self.on_event:
+                    self.on_event("status", {"state": "listening"})
                 return
                 
             # Echo Suppression
@@ -574,6 +714,8 @@ class VoiceOrchestrator:
                 if normalized_input in normalized_last or normalized_last in normalized_input:
                      if len(normalized_input) > 5 and (normalized_input == normalized_last or normalized_input in normalized_last):
                          logger.info(f"Ignoring potential echo: '{text_input}' matches last output.")
+                         if self.on_event:
+                             self.on_event("status", {"state": "listening"})
                          return
 
             logger.info(
@@ -654,12 +796,12 @@ class VoiceOrchestrator:
             # We DO reset silence_start_time just in case.
             self.silence_start_time = None
     
-    async def _invoke_agent(self, user_input: str) -> AsyncGenerator[str, None]:
+    async def _invoke_agent(self, user_input: str, emit_transcript: bool = True) -> AsyncGenerator[str, None]:
         """Invoke LangGraph agent with streaming."""
         start = time.time()
         status = "success"
         
-        if self.on_event:
+        if self.on_event and emit_transcript:
             self.on_event("transcript", {"role": "user", "text": user_input})
         
         try:
@@ -680,6 +822,12 @@ class VoiceOrchestrator:
                 if isinstance(chunk, tuple):
                     chunk = chunk[0]
                 
+                # CRITICAL FIX: Only speak AIMessages (actual agent text).
+                # Ignore ToolMessages (command outputs) and HumanMessages.
+                # Use string type check if import is tricky, but we imported AIMessage.
+                if not isinstance(chunk, AIMessage):
+                    continue
+
                 if hasattr(chunk, 'content') and chunk.content:
                     AGENT_TOKENS.labels(model=self.model_name, type="completion").inc(1)
                     content = str(chunk.content)
@@ -788,7 +936,7 @@ class VoiceOrchestrator:
             self.is_speaking.set()
             
             try:
-                text_stream = self._invoke_agent(text_input)
+                text_stream = self._invoke_agent(text_input, emit_transcript=False)
                 sentence_stream = buffer.process(text_stream)
                 
                 if self.on_event:

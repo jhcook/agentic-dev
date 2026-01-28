@@ -15,14 +15,16 @@
 from langchain_core.tools import tool
 import subprocess
 import logging
+from backend.voice.events import EventBus
+from langchain_core.runnables import RunnableConfig
 
 logger = logging.getLogger(__name__)
 
 @tool
-def get_git_status() -> str:
+def get_git_status(config: RunnableConfig = None) -> str:
     """
-    Get the current git status of the repository.
-    Useful for checking what files have changed or are untracked.
+    Get the current git status of the repository, categorized by Staged and Unstaged changes.
+    Useful for checking what is ready to commit vs what is work in progress.
     """
     try:
         result = subprocess.run(
@@ -31,22 +33,69 @@ def get_git_status() -> str:
             text=True, 
             check=True
         )
-        output = result.stdout or "Working tree clean."
-        
-        # Enforce summarization for Voice context
-        lines = output.strip().split('\n')
-        if len(lines) > 10:
-            summary = f"Checking git status... ({len(lines)} files changed).\n"
-            summary += "Top 5 changes:\n" + "\n".join(lines[:5])
-            summary += f"\n...and {len(lines) - 5} more."
-            return summary
+        if not result.stdout:
+            return "Working tree clean."
             
-        return output
+        lines = result.stdout.strip().split('\n')
+        
+        staged = []
+        unstaged = []
+        untracked = []
+        
+        for line in lines:
+            if len(line) < 3: continue
+            index_status = line[0]
+            work_status = line[1]
+            path = line[3:]
+            
+            # Logic:
+            # '??' -> Untracked
+            # Index != ' ' and != '?' -> Staged
+            # Work != ' ' and != '?' -> Unstaged
+            
+            if index_status == '?' and work_status == '?':
+                untracked.append(path)
+                continue
+                
+            if index_status != ' ':
+                staged.append(f"{index_status} {path}")
+                
+            if work_status != ' ':
+                unstaged.append(f"{work_status} {path}")
+
+        output = []
+        
+        if staged:
+            output.append(f"STAGED Changes ({len(staged)}):")
+            output.extend([f"  {item}" for item in staged[:10]])
+            if len(staged) > 10: output.append(f"  ...and {len(staged)-10} more")
+            output.append("")
+            
+        if unstaged:
+            output.append(f"UNSTAGED Changes ({len(unstaged)}):")
+            output.extend([f"  {item}" for item in unstaged[:10]])
+            if len(unstaged) > 10: output.append(f"  ...and {len(unstaged)-10} more")
+            output.append("")
+            
+        if untracked:
+            output.append(f"UNTRACKED Files ({len(untracked)}):")
+            output.extend([f"  {item}" for item in untracked[:5]])
+            if len(untracked) > 5: output.append(f"  ...and {len(untracked)-5} more")
+            
+        formatted_output = "\n".join(output)
+        
+        # Stream to console if session available
+        if config:
+            session_id = config.get("configurable", {}).get("thread_id", "unknown")
+            EventBus.publish(session_id, "console", "\n=== Git Status ===\n" + formatted_output + "\n")
+            
+        return formatted_output
+        
     except subprocess.CalledProcessError as e:
         return f"Error checking git status: {e}"
 
 @tool
-def get_git_diff() -> str:
+def get_git_diff(config: RunnableConfig = None) -> str:
     """
     Get the staged git diff. 
     Use this during preflight checks to see what is about to be committed.
@@ -60,9 +109,16 @@ def get_git_diff() -> str:
         )
         if not result.stdout:
             return "No staged changes."
+
+        # Stream to console (Full output)
+        if config:
+            session_id = config.get("configurable", {}).get("thread_id", "unknown")
+            EventBus.publish(session_id, "console", "\n=== Git Diff (Staged) ===\n" + result.stdout)
+
         # Truncate if too long (LLM context limit)
         if len(result.stdout) > 5000:
             return result.stdout[:5000] + "\n...[Truncated]"
+        
         return result.stdout
     except subprocess.CalledProcessError as e:
         return f"Error checking git diff: {e}"
@@ -132,3 +188,116 @@ def git_stage_changes(files: list[str] = None) -> str:
             
     except subprocess.CalledProcessError as e:
         return f"Error staging changes: {e}"
+
+@tool
+def run_commit(message: str = None) -> str:
+    """
+    Commit staged changes to the repository.
+    If no message is provided, AI generation will be used.
+    """
+    try:
+
+        # Use robust shell activation pattern
+        base_cmd = "source .venv/bin/activate && agent commit --yes"
+        
+        if message:
+            # Escape quotes in message
+            safe_message = message.replace('"', '\\"')
+            cmd = f'{base_cmd} -m "{safe_message}"'
+        else:
+            cmd = f"{base_cmd} --ai"
+             
+        # Execute with shell to support source
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            executable='/bin/zsh',
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            # Fetch the commit details
+            log_result = subprocess.run(
+                ["git", "log", "-1", "--stat"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            return f"Commit successful.\n\n{log_result.stdout}"
+        else:
+            return f"Error committing changes:\n{result.stderr}\n{result.stdout}"
+            
+    except Exception as e:
+        return f"Failed to run commit: {e}"
+
+@tool
+def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = None) -> str:
+    """
+    Create a GitHub Pull Request for the current branch/story.
+    Runs preflight checks automatically before creating the PR.
+    """
+    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    
+    # Generate ID
+    process_id = f"pr-{story_id or 'new'}-{int(subprocess.check_output(['date', '+%s']).decode().strip())}"
+    
+    EventBus.publish(session_id, "console", f"> Starting PR Creation (ID: {process_id})...\n")
+    
+    try:
+        # Build command
+        cmd_parts = ["source .venv/bin/activate && agent pr"]
+        if story_id:
+            cmd_parts.append(f"--story {story_id}")
+        if draft:
+            cmd_parts.append("--draft")
+        
+        # Always use AI for summary generation
+        cmd_parts.append("--ai")
+            
+        command = " ".join(cmd_parts)
+        
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            executable='/bin/zsh',
+            cwd=None,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        
+        # Register for interaction (e.g. preflight prompts)
+        from backend.voice.process_manager import ProcessLifecycleManager
+        ProcessLifecycleManager.instance().register(process, process_id)
+        
+        # Background reader
+        def read_output():
+            import threading
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    EventBus.publish(session_id, "console", f"[{process_id}] {line}")
+                
+                process.stdout.close()
+                rc = process.wait()
+                
+                if rc == 0:
+                    EventBus.publish(session_id, "console", f"\n✅ PR Created Successfully (ID: {process_id}).\n")
+                else:
+                    EventBus.publish(session_id, "console", f"\n❌ PR Creation Failed (ID: {process_id}).\n")
+            except Exception as e:
+                EventBus.publish(session_id, "console", f"[{process_id}] Error: {e}")
+            finally:
+                ProcessLifecycleManager.instance().unregister(process_id)
+
+        import threading
+        t = threading.Thread(target=read_output, daemon=True)
+        t.start()
+        
+        return "PR creation started. Follow along below."
+        
+    except Exception as e:
+        return f"Failed to start PR creation: {e}"
