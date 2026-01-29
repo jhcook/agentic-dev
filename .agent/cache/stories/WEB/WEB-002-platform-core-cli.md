@@ -18,6 +18,11 @@ As a Developer, I want to run `agent admin start` to launch the Management Conso
   - Use `asyncio.create_subprocess_exec` to manage Uvicorn and Vite processes concurrently.
   - Propagate `SIGINT` (Ctrl+C) to terminate both child processes cleanly (avoid zombies).
   - Check port availability (8000/5173) before starting.
+- [x] **Logging**: Implement standardized logging verbosity:
+  - `-v`: INFO (High-level agent logs).
+  - `-vv`: DEBUG (Detailed agent logs, libraries silenced).
+  - `-vvv`: TRACE (Full logs including third-party libraries).
+- [x] **Preflight**: Verify `agent pr` and preflight checks correctly display blocking reasons to the console on failure.
 - [ ] **Frontend Init**: Initialize `web/` directory with `vite` (React + TypeScript + TailwindCSS).
   - Configure `vite.config.ts` to proxy `/api` -> `http://127.0.0.1:8000` (avoids CORS complexity).
 - [ ] **Shell UI**: Create a basic Layout with Sidebar navigation (Voice, Config, Logs).

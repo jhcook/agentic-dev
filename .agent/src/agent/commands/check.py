@@ -514,7 +514,15 @@ def preflight(
             progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
         )
         if result["verdict"] in ["BLOCK", "FAIL"]:
-             # convene_council_full handles printing the error/report location
+             console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
+             roles = result.get("json_report", {}).get("roles", [])
+             for role in roles:
+                 if role["verdict"] == "BLOCK":
+                     console.print(f"\n[bold underline]{role['name']}[/bold underline]")
+                     for finding in role["findings"]:
+                         console.print(Panel(finding, border_style="red", title="Blocking Finding"))
+             
+             console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
              raise typer.Exit(code=1)
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")

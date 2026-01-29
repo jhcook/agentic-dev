@@ -15,14 +15,54 @@
 import logging
 from pathlib import Path
 
-# Configure default logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # logging.StreamHandler(sys.stdout) # Don't log to stdout as it interferes with pipeable output
-    ]
-)
+# Configure default logging (Default to WARNING to be quiet)
+# We do NOT call basicConfig here to avoid side effects on import.
+# Instead, we provide a setup function.
+
+def configure_logging(verbosity: int = 0):
+    """
+    Configure logging based on verbosity level.
+    0 = WARNING (default)
+    1 = INFO (-v)
+    2 = DEBUG (Agent DEBUG, Libraries WARNING) (-vv)
+    3 = DEBUG (Full DEBUG) (-vvv)
+    """
+    # Default: Root WARNING
+    root_level = logging.WARNING
+    agent_level = logging.WARNING
+    
+    if verbosity == 1:
+        # -v: Agent INFO, Root WARNING
+        agent_level = logging.INFO
+    elif verbosity == 2:
+        # -vv: Agent DEBUG, Root WARNING (keep libraries quiet)
+        agent_level = logging.DEBUG
+        root_level = logging.WARNING
+    elif verbosity >= 3:
+        # -vvv: Everything DEBUG
+        agent_level = logging.DEBUG
+        root_level = logging.DEBUG
+
+    # Remove existing handlers to avoid duplicates
+    root = logging.getLogger()
+    if root.handlers:
+        for handler in root.handlers:
+            root.removeHandler(handler)
+
+    logging.basicConfig(
+        level=root_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+             logging.StreamHandler()
+        ]
+    )
+    
+    # Set Agent level explicitly if different from root
+    logging.getLogger("agent").setLevel(agent_level)
+    
+    # For intermediate verbosity (-vv), explicitly silence chatty libraries if we want stricter control,
+    # but setting root to WARNING usually covers it. 
+    # However, if root is WARNING, agent needs to be set to DEBUG explicitly (done above).
 
 # Create a custom logger
 logger = logging.getLogger("agent")

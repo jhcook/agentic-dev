@@ -36,6 +36,15 @@ from agent.commands import (
 app = typer.Typer()
 
 
+@app.callback()
+def cli(
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Increase verbosity level.")
+) -> None:
+    """A CLI for managing and interacting with the AI agent."""
+    from agent.core.logger import configure_logging
+    configure_logging(verbose)
+
+
 @app.command()
 def hello(name: str):
     """

@@ -5,6 +5,17 @@ This document provides details about the AI-related commands in the CLI (`implem
 ---
 ---
 
+## Global Options
+
+The `agent` CLI supports the following global options across all commands:
+
+| Option | Shorthand | Description |
+|--------|-----------|-------------|
+| `--verbose` | `-v` | **INFO**: Show high-level agent logs. |
+| (repeat) | `-vv` | **DEBUG**: Show detailed agent logs (libraries silenced). |
+| (repeat) | `-vvv` | **TRACE**: Show all logs (including libraries like `httpx`). |
+| `--help` | | Show help message and exit. |
+
 ## `agent audit` — Governance Audit
 
 Execute a comprehensive governance audit of the repository to ensure traceability, identify stagnant code, and flag orphaned artifacts.
@@ -258,7 +269,7 @@ The CLI provides commands to drive the Agentic Workflow (Stories -> Plans -> Run
 | `agent new-story [ID]` | Create a new user story (interactive). |
 | `agent new-runbook <STORY_ID>` | Generate an implementation runbook for a committed story. |
 | `agent implement <RUNBOOK_ID>` | Implement a feature from an accepted runbook. |
-| `agent pr` | Create a Pull Request with automated preflight checks. |
+| `agent pr` | Create a Pull Request with automated preflight checks (displays blocking reasons on failure). |
 | `agent commit` | Commit changes using conventional commits (optionally with `--ai`). |
 
 ### Usage Examples
