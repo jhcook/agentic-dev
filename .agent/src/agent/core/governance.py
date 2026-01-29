@@ -195,11 +195,8 @@ def convene_council_full(
             try:
                 review = ai_service.complete(system_prompt, user_prompt)
                 review = scrub_sensitive_data(review) # Scrub AI output
-                if mode == "consultative":
-                    role_findings.append(review)
-                else:
-                    # Use precise regex to avoid false positives (e.g. "blocking I/O")
-                    if re.search(r"VERDICT:\s*BLOCK", review, re.IGNORECASE):
+                    # Use precise regex anchored to start of line to avoid false positives in descriptions
+                    if re.search(r"^VERDICT:\s*BLOCK", review, re.IGNORECASE | re.MULTILINE):
                         role_verdict = "BLOCK"
                         role_findings.append(review)
             except Exception as e:
@@ -209,19 +206,21 @@ def convene_council_full(
         role_data["findings"] = role_findings
         role_data["verdict"] = role_verdict
         
+        findings_text = "\n\n".join(role_findings)
+        
         if role_verdict == "BLOCK":
             overall_verdict = "BLOCK"
             if progress_callback:
                 progress_callback(f"❌ @{role_name}: BLOCK")
-            report += f"### ❌ @{role_name}: BLOCK\n\n".join(role_findings)
+            report += f"### ❌ @{role_name}: BLOCK\n\n{findings_text}\n\n"
         elif mode == "consultative":
                 if progress_callback:
                     progress_callback(f"ℹ️  @{role_name}: CONSULTED")
-                report += f"### ℹ️ @{role_name}: ADVICE\n\n".join(role_findings)
+                report += f"### ℹ️ @{role_name}: ADVICE\n\n{findings_text}\n\n"
         else:
             if progress_callback:
                 progress_callback(f"✅ @{role_name}: PASS")
-            report += f"### ✅ @{role_name}: PASS\n\n"
+            report += f"### ✅ @{role_name}: PASS\n\n{findings_text}\n\n"
             
         json_roles.append(role_data)
 
