@@ -195,6 +195,9 @@ def convene_council_full(
             try:
                 review = ai_service.complete(system_prompt, user_prompt)
                 review = scrub_sensitive_data(review) # Scrub AI output
+                if mode == "consultative":
+                    role_findings.append(review)
+                else:
                     # Use precise regex anchored to start of line to avoid false positives in descriptions
                     if re.search(r"^VERDICT:\s*BLOCK", review, re.IGNORECASE | re.MULTILINE):
                         role_verdict = "BLOCK"
