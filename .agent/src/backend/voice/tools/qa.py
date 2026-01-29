@@ -167,17 +167,18 @@ def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -
             return f"Error executing shell command: {e}"
 
 @tool
-def run_preflight(story_id: str = None, config: RunnableConfig = None) -> str:
+def run_preflight(story_id: str = None, interactive: bool = True, config: RunnableConfig = None) -> str:
     """
     Run the Agent preflight governance checks with AI analysis.
     Use this when a user asks to 'run preflight' or 'check compliance'.
     Args:
         story_id: Optional Story ID (e.g. 'INFRA-015')
+        interactive: Whether to enable interactive repair mode (default: True)
     """
     session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
     
     # Notify start
-    EventBus.publish(session_id, "console", f"> Starting Preflight for {story_id or 'all'}...\n")
+    EventBus.publish(session_id, "console", f"> Starting Preflight for {story_id or 'all'} (Interactive: {interactive})...\n")
 
     # PRE-CHECK: Ensure we have a valid Story ID to avoid interactive prompts
     current_branch = "unknown"
@@ -207,7 +208,8 @@ def run_preflight(story_id: str = None, config: RunnableConfig = None) -> str:
         try:
             # Build command string with activation
             story_arg = f"--story {story_id}" if story_id else ""
-            command = f"source .venv/bin/activate && agent preflight --ai {story_arg}"
+            interactive_arg = "--interactive" if interactive else ""
+            command = f"source .venv/bin/activate && agent preflight --ai {story_arg} {interactive_arg}"
             
             # Use shell=True to support 'source'
             process = subprocess.Popen(

@@ -25,7 +25,7 @@ from .read_tool_source import read_tool_source
 from .get_installed_packages import get_installed_packages
 from .docs import list_docs, read_doc, search_docs
 from .workflows import run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice
-from .fix_story import validate_and_fix_story
+from .fix_story import interactive_fix_story
 
 import os
 import sys
@@ -58,7 +58,7 @@ def get_all_tools():
         list_docs, read_doc, search_docs,
         # Workflows
         run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice,
-        validate_and_fix_story
+        interactive_fix_story
     ]
     
     # Dynamic Loading from 'custom' directory
