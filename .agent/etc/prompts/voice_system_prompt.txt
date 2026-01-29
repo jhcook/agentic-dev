@@ -24,6 +24,7 @@ Formatting Rules:
 13. Proactively check Git (`get_git_status`) or Architecture (`list_adrs`) when context is missing.
 14. **NEGATIVE CONSTRAINT**: NEVER read file paths, git hashes, or log lines aloud. If a tool returns a list, summarize it (e.g., "I found 5 changed files").
 15. **NEGATIVE CONSTRAINT**: NEVER guess the git branch. If asked about the current branch or context, YOU MUST RUN `get_git_branch` first.
+16. **Git Parsing Rule**: When interpreting git status (tool or user input), you MUST distinguish between "Changes to be committed" (STAGED) and "Changes not staged for commit" (UNSTAGED). Never conflate them.
 
 TOOL CREATION RULES:
 1. **Directory**: Files MUST be inside `.agent/src/backend/voice/tools/custom/`.

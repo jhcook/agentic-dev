@@ -14,6 +14,7 @@
 
 from langchain_core.tools import tool
 import subprocess
+import json
 import logging
 from backend.voice.events import EventBus
 from langchain_core.runnables import RunnableConfig
@@ -35,14 +36,17 @@ def get_git_status(config: RunnableConfig = None) -> str:
             check=True,
             cwd=str(agent_config.repo_root)
         )
+        
+        status_data = {
+            "staged": [],
+            "unstaged": [],
+            "untracked": []
+        }
+
         if not result.stdout:
-            return "Working tree clean."
+            return json.dumps({"status": "clean", "message": "Working tree clean."}, indent=2)
             
         lines = result.stdout.strip().split('\n')
-        
-        staged = []
-        unstaged = []
-        untracked = []
         
         for line in lines:
             if len(line) < 3: continue
@@ -56,45 +60,28 @@ def get_git_status(config: RunnableConfig = None) -> str:
             # Work != ' ' and != '?' -> Unstaged
             
             if index_status == '?' and work_status == '?':
-                untracked.append(path)
+                status_data["untracked"].append(path)
                 continue
                 
             if index_status != ' ':
-                staged.append(f"{index_status} {path}")
+                status_data["staged"].append(f"{index_status} {path}")
                 
             if work_status != ' ':
-                unstaged.append(f"{work_status} {path}")
+                status_data["unstaged"].append(f"{work_status} {path}")
 
-        output = []
-        
-        if staged:
-            output.append(f"STAGED Changes ({len(staged)}):")
-            output.extend([f"  {item}" for item in staged[:10]])
-            if len(staged) > 10: output.append(f"  ...and {len(staged)-10} more")
-            output.append("")
-            
-        if unstaged:
-            output.append(f"UNSTAGED Changes ({len(unstaged)}):")
-            output.extend([f"  {item}" for item in unstaged[:10]])
-            if len(unstaged) > 10: output.append(f"  ...and {len(unstaged)-10} more")
-            output.append("")
-            
-        if untracked:
-            output.append(f"UNTRACKED Files ({len(untracked)}):")
-            output.extend([f"  {item}" for item in untracked[:5]])
-            if len(untracked) > 5: output.append(f"  ...and {len(untracked)-5} more")
-            
-        formatted_output = "\n".join(output)
-        
-        # Stream to console if session available
+        # Stream summary to console if session available
         if config:
             session_id = config.get("configurable", {}).get("thread_id", "unknown")
-            EventBus.publish(session_id, "console", "\n=== Git Status ===\n" + formatted_output + "\n")
+            console_summary = "=== Git Status (JSON) ===\n"
+            if status_data["staged"]: console_summary += f"Staged: {len(status_data['staged'])}\n"
+            if status_data["unstaged"]: console_summary += f"Unstaged: {len(status_data['unstaged'])}\n"
+            if status_data["untracked"]: console_summary += f"Untracked: {len(status_data['untracked'])}\n"
+            EventBus.publish(session_id, "console", console_summary)
             
-        return formatted_output
+        return json.dumps(status_data, indent=2)
         
     except subprocess.CalledProcessError as e:
-        return f"Error checking git status: {e}"
+        return json.dumps({"error": str(e)})
 
 @tool
 def get_git_diff(config: RunnableConfig = None) -> str:

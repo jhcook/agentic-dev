@@ -52,20 +52,6 @@ app.command()(check.panel)
 app.command(name="run-ui-tests")(check.run_ui_tests)
 app.command("audit")(audit.audit)
 
-@app.command("fix")
-def fix_cmd(
-    path: str = typer.Argument(None, help="Specific file or directory"),
-    apply: bool = typer.Option(True, "--apply", help="Apply fixes automatically")
-):
-    """
-    Automatically fix linting errors (wrapper for 'lint --fix').
-    """
-    # Lazy import
-    from agent.commands import lint
-    from pathlib import Path
-    
-    target_path = Path(path) if path else None
-    lint.lint(path=target_path, fix=apply)
 
 
 # Workflows
@@ -73,11 +59,11 @@ app.command()(workflow.commit)
 app.command()(workflow.pr)
 app.command()(implement.implement)
 app.command(name="new-story")(story.new_story)
-app.command(name="story")(story.new_story)  # Alias
+
 app.command(name="new-runbook")(runbook.new_runbook)
-app.command(name="runbook")(runbook.new_runbook) # Alias
+
 app.command(name="new-adr")(adr.new_adr)
-app.command(name="adr")(adr.new_adr) # Alias
+
 
 # Infrastructure
 app.command(name="onboard")(onboard.onboard)
