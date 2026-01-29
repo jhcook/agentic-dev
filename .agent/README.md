@@ -1,37 +1,102 @@
 # Agentic Development Tool
 
-This tool is designed to streamline and enhance the development process through automation and governance. It provides a suite of commands for linting, checking, fixing, and explaining code, as well as managing stories and conducting governance audits.
+The **Agentic Development Tool** (`agent`) is an AI-powered CLI designed to automate, govern, and enhance the software development lifecycle. It enforces a strict "Story-Driven Development" workflow, ensuring that all code changes are traceable to approved requirements and comply with architectural and security standards.
 
-## Commands
+## Architecture Overview
 
-### `agent lint`
+The tool follows a layered architecture:
 
-Lints the codebase to identify and report style issues and potential errors. This command helps maintain code quality and consistency.
+- **CLI Layer** (`agent/commands/`): Handles user interaction, argument parsing (via Typer), and output formatting (via Rich).
+- **Core Layer** (`agent/core/`): Contains the business logic, AI service integration, and governance rules. This layer is decoupled from the CLI to support reusability.
+- **Infrastructure Layer** (`agent/infra/`): Manages file system operations, git integration, and external tool execution.
 
-### `agent check`
+### Key Components
 
-Performs static analysis to detect potential bugs, security vulnerabilities, and code smells. This command ensures code reliability and security.
+- **Smart AI Router**: Dynamically selects the best AI model (Gemini, OpenAI, Anthropic) based on task complexity and cost.
+- **Governance Engine**: Enforces preflight checks, ensuring stories are well-defined and code changes are safe.
+- **Interactive Repair**: Automatically detects and fixes governance failures using AI (see [ADR-015](adrs/ADR-015-interactive-preflight-repair.md)).
+- **Voice Integration**: Supports hands-free development via real-time voice commands (see [ADR-007](adrs/ADR-007-voice-service-abstraction-layer.md)).
 
-### `agent fix`
+## Installation
 
-Automatically fixes certain types of linting errors and code smells. This command speeds up the development process by automating routine corrections.
+Prerequisites: Python 3.11+, Node.js (for web/mobile checks), Git.
 
-### `agent explain`
+1. **Clone the repository**:
 
-Explains complex code snippets in plain language, making it easier for developers to understand unfamiliar code.
+   ```bash
+   git clone <repo_url>
+   cd <repo_dir>
+   ```
 
-### `agent preflight`
+2. **Set up the environment**:
 
-Validates the agent's configuration before the agent is deployed to address governance concerns.
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-### `agent story`
+3. **Install the CLI**:
 
-Aids in managing and tracking user stories throughout the development lifecycle.
+   ```bash
+   pip install -e .
+   ```
 
-### `agent audit`
+## Configuration
 
-Executes a governance audit of the repository to assess traceability, identify stagnant code, and flag orphaned governance artifacts. This command helps ensure compliance and maintain code quality.
+Configuration is managed via `.agent/config.yaml` (implementation pending) and environment variables.
 
-See [Command Documentation](docs/commands.md) for full usage options (e.g., `--fail-on-error`, `.auditignore`).
+- `AGENT_AI_PROVIDER`: Default AI provider (`gemini`, `openai`, `anthropic`).
+- `AGENT_API_KEY`: API key for the selected provider.
 
-Usage:
+Secrets are managed securely via the system keyring (see [ADR-006](adrs/ADR-006-encrypted-secret-management.md)).
+
+## Usage
+
+### Core Workflows
+
+- **Create a Story**:
+
+  ```bash
+  agent story new --title "Implement Feature X"
+  ```
+
+- **Run Preflight Checks**:
+
+  ```bash
+  agent preflight --story WEB-001 --ai
+  ```
+
+  Use `--interactive` to automatically fix schema violations.
+
+- **Check Code Quality**:
+
+  ```bash
+  agent check --story WEB-001
+  ```
+
+- **Audit Governance**:
+
+  ```bash
+  agent audit --output report.json
+  ```
+
+  Use `.auditignore` to exclude files from the audit.
+
+### Voice Mode
+
+Start the voice agent for hands-free assistance:
+
+```bash
+agent voice start
+```
+
+## Governance & Compliance
+
+This tool enforces **SOC2** and **GDPR** compliance by:
+
+- Scrubbing PII from all AI prompts.
+- ensuring all code changes are linked to a Story.
+- Maintaining a comprehensive audit trail.
+
+For more details on architectural decisions, see the [ADR Directory](adrs/).

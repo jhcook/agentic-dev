@@ -1,3 +1,4 @@
+
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,54 +19,43 @@ from backend.voice.events import EventBus
 import subprocess
 import re
 from pathlib import Path
+from typing import Optional
 
 # Try to import internal services. 
 # We assume the agent package is installed in the environment.
 try:
     from agent.core.config import config as agent_config
-    from agent.core.ai import ai_service
+    from agent.core.fixer import InteractiveFixer
 except ImportError:
     pass
 
 @tool
-def validate_and_fix_story(story_id: str, config: RunnableConfig = None) -> str:
+def interactive_fix_story(
+    story_id: str, 
+    apply_idx: Optional[int] = None, 
+    instructions: Optional[str] = None,
+    config: RunnableConfig = None
+) -> str:
     """
-    Validate a story's schema. If validation fails (missing sections), 
-    it attempts to use AI to generate the missing sections and fix the file.
+    Interactively fix a story schema using AI.
+    
+    modes:
+    1. ANALYZE (Default): If apply_idx is None, scans the story for errors and returns a list of suggested fixes.
+       Provide 'instructions' to guide the AI generation (e.g. "make it more detailed").
+       
+    2. APPLY: If apply_idx is provided (1-based index), applies that fix option immediately.
+    
     Args:
         story_id: The ID of the story (e.g. 'WEB-001').
+        apply_idx: Optional 1-based index of the fix option to apply.
+        instructions: Optional instructions for the AI ("Try again but...").
     """
     session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
-    EventBus.publish(session_id, "console", f"> Validating story {story_id}...\n")
+    EventBus.publish(session_id, "console", f"> Fixer invoked for {story_id} (Idx: {apply_idx}, Instr: {instructions})...\n")
     
-    # 1. Run Validation
-    def run_val():
-        return subprocess.run(
-            f"source .venv/bin/activate && agent validate-story {story_id}",
-            shell=True,
-            executable='/bin/zsh',
-            capture_output=True,
-            text=True
-        )
-
-    result = run_val()
+    fixer = InteractiveFixer()
     
-    if result.returncode == 0:
-        return f"Story {story_id} is valid."
-
-    # 2. Analyze failure
-    output = result.stdout + result.stderr
-    EventBus.publish(session_id, "console", f"[yellow]Validation failed. Attempting auto-fix...[/yellow]\n")
-    
-    # Check for missing sections msg from check.py
-    # "Missing sections: Problem Statement, User Story"
-    match = re.search(r"Missing sections: (.*)", output)
-    if not match:
-        return f"Validation failed but could not identify missing sections to fix.\nOutput: {output}"
-        
-    missing_sections = [s.strip() for s in match.group(1).split(",")]
-    
-    # 3. Find file
+    # 1. Find file
     story_file = None
     for file_path in agent_config.stories_dir.rglob(f"{story_id}*.md"):
         if file_path.name.startswith(story_id):
@@ -75,46 +65,80 @@ def validate_and_fix_story(story_id: str, config: RunnableConfig = None) -> str:
     if not story_file:
         return f"Could not find story file for {story_id}."
         
-    content = story_file.read_text()
+    # 2. Check Validation State
+    # We run the actual check logic or just assume failures based on request.
+    # InteractiveFixer.analyze_failure does re-read the file.
     
-    # 4. Generate Content
-    EventBus.publish(session_id, "console", f"[dim]Generating: {', '.join(missing_sections)}[/dim]\n")
+    # We must first "Analyze" to get options.
+    # NOTE: Since tools are stateless, we must regenerate options or cache them.
+    # For now, to keep it simple, we regenerate.
+    # Ideally, we should pass the same 'instructions' if we want the same set, 
+    # but the User flow is Analyze -> Speak -> User Picks -> Apply.
+    # If the user picks '1', we need to regenerate option 1 to apply it.
+    # This assumes determinism or that we accept slight variations.
+    # A true stateful solution would cache the latest options in the session.
+    # Given the constraints, regenerating with high temperature=0 logic is best, specific to the fixer prompts.
     
-    prompt = f"""
-    You are an expert technical product manager.
-    The following user story is missing required governance sections: {', '.join(missing_sections)}.
-    
-    Current Content:
-    {content}
-    
-    Task:
-    Generate the content for the missing sections relative to the existing context.
-    Return ONLY the markdown for the missing sections, starting with their headers (e.g. ## Problem Statement).
-    Do not repeat existing sections.
-    """
-    
-    try:
-        # Initialize AI if needed (assumes env vars set or previously set)
-        # We rely on default provider configuration
-        generated = ai_service.complete("You are a helpful assistant.", prompt)
-        
-        if not generated:
-            return "AI returned empty content. Fix failed."
-            
-        # 5. Append/Merge
-        # Simple append for now. A smarter merge would find logical order, 
-        # but check.py only checks for existence.
-        new_content = content + "\n\n" + generated
-        story_file.write_text(new_content)
-        
-        EventBus.publish(session_id, "console", f"[green]Updated file. Re-validating...[/green]\n")
-        
-        # 6. Re-Verify
-        result_retry = run_val()
-        if result_retry.returncode == 0:
-             return f"Fixed story {story_id}. Validation now passes."
-        else:
-             return f"Attempted fix, but validation still failed.\nOutput: {result_retry.stdout}"
+    # Ideally checking validation first:
+    def check_val():
+        return subprocess.run(
+            f"source .venv/bin/activate && agent validate-story {story_id}",
+            shell=True, executable='/bin/zsh', capture_output=True, text=True
+        )
 
-    except Exception as e:
-        return f"Error during auto-fix: {e}"
+    res = check_val()
+    if res.returncode == 0 and not instructions:
+        # If valid and no instructions to force changes, we are done.
+        return f"Story {story_id} is already valid."
+    
+    output = res.stdout + res.stderr
+    missing_match = re.search(r"Missing sections: (.*)", output)
+    missing = [s.strip() for s in missing_match.group(1).split(",")] if missing_match else []
+    
+    context = {
+        "story_id": story_id,
+        "missing_sections": missing,
+        "file_path": str(story_file)
+    }
+    
+    # GENERATE OPTIONS
+    EventBus.publish(session_id, "console", f"[dim]Analyzing failure/options...[/dim]\n")
+    options = fixer.analyze_failure("story_schema", context, feedback=instructions)
+    
+    if not options:
+        return "No fix options could be generated."
+
+    # MODE: APPLY
+    if apply_idx is not None:
+        idx = apply_idx - 1 # 1-based to 0-based
+        if 0 <= idx < len(options):
+            selected = options[idx]
+            EventBus.publish(session_id, "console", f"Applying fix: {selected.get('title')}...\n")
+            
+            # Apply with confirm=False (Programmatic)
+            if fixer.apply_fix(selected, story_file, confirm=False):
+                
+                # Check Verification
+                # We need a callback for verification
+                def validation_callback():
+                    r = check_val()
+                    return r.returncode == 0
+                
+                if fixer.verify_fix(validation_callback, confirm=False):
+                    return f"Successfully applied fix '{selected.get('title')}' and verified validation passes."
+                else:
+                    return f"Applied fix '{selected.get('title')}', but verification FAILED. Changes were reverted."
+            else:
+                return "Failed to write fix to file."
+        else:
+            return f"Invalid option index {apply_idx}. Available: 1-{len(options)}."
+
+    # MODE: ANALYZE (Return list)
+    response_text = f"Found {len(options)} options for fixing {story_id}:\n"
+    for i, opt in enumerate(options):
+        response_text += f"{i+1}. {opt.get('title')}: {opt.get('description')}\n"
+        
+    response_text += "\nTo apply, call this tool with 'apply_idx=<number>'."
+    response_text += "\nTo refining suggestions, call with 'instructions=\"...\"'."
+    
+    return response_text

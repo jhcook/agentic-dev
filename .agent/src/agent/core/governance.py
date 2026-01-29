@@ -505,7 +505,7 @@ def check_license_headers(repo_path: Path, all_files: List[Path], ignore_pattern
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read(4096) # Read first 4kb
+                content = f.read() # Read full content as per Security requirement
                 
                 # Check for any matching license header patterns
                 has_license_header = any(pattern.search(content) for pattern in license_header_patterns)

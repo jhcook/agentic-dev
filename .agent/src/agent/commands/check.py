@@ -18,7 +18,12 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+import typer
+import ast
+import json
 from rich.console import Console
+from rich.prompt import Prompt, Confirm # Needed now for UI logic
+from rich.panel import Panel
 
 from agent.core.ai import ai_service
 from agent.core.ai.prompts import generate_impact_prompt
@@ -26,12 +31,14 @@ from agent.core.config import config
 from agent.core.context import context_loader
 from agent.core.governance import convene_council_full
 from agent.core.utils import infer_story_id, scrub_sensitive_data
+from agent.core.fixer import InteractiveFixer
 
 console = Console()
 
 def validate_story(
     story_id: str = typer.Argument(..., help="The ID of the story to validate."),
-    return_bool: bool = False
+    return_bool: bool = False,
+    interactive: bool = False
 ):
     """
     Validate the schema and required sections of a story file.
@@ -69,8 +76,73 @@ def validate_story(
             missing.append(section)
             
     if missing:
-        console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
-        console.print(f"   Missing sections: {', '.join(missing)}")
+        if interactive:
+            console.print(f"[bold yellow]⚠️  Story schema validation failed for {story_id}. Launching Interactive Repair...[/bold yellow]")
+            fixer = InteractiveFixer()
+            
+            # Context for fixer
+            context = {
+                "story_id": story_id,
+                "missing_sections": missing,
+                "file_path": str(found_file)
+            }
+            
+            options = fixer.analyze_failure("story_schema", context)
+            
+            # --- UI LAYER FOR INTERACTIVE FIXER ---
+            chosen_opt = None
+            if not options:
+                console.print("[yellow]No fix options available.[/yellow]")
+            else:
+                console.print("\n[bold cyan]🔧 Fix Options:[/bold cyan]")
+                for i, opt in enumerate(options):
+                    title = scrub_sensitive_data(opt.get('title', 'Unknown'))
+                    desc = scrub_sensitive_data(opt.get('description', ''))
+                    console.print(f"[bold]{i+1}. {title}[/bold]")
+                    console.print(f"   {desc}")
+                    
+                choice = Prompt.ask("Select an option (or 'q' to quit)", default="1")
+                
+                if choice.lower() != 'q':
+                    try:
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(options):
+                            chosen_opt = options[idx]
+                    except ValueError:
+                        pass
+            
+            if chosen_opt:
+                 # Preview diff
+                 new_to_write = chosen_opt.get("patched_content", "")
+                 safe_preview = scrub_sensitive_data(new_to_write[:500])
+                 console.print(Panel(safe_preview + "...", title="Preview (First 500 chars)"))
+                 
+                 if Confirm.ask("Apply this change?"):
+                    if fixer.apply_fix(chosen_opt, found_file):
+                        console.print(f"[green]✅ Applied fix to {found_file.name}[/green]")
+                        
+                        # Verify
+                        def check():
+                            console.print("[dim]🔄 Verifying fix...[/dim]")
+                            # lightweight re-check
+                            c = found_file.read_text(errors="ignore")
+                            is_valid = all(f"## {s}" in c for s in required_sections)
+                            if is_valid:
+                                console.print("[bold green]✅ Verification Passed![/bold green]")
+                            else:
+                                console.print("[bold red]❌ Verification Failed.[/bold red]")
+                            return is_valid
+                            
+                        # Run verify loop (auto-revert on failure logic is in Core)
+                        # We just need to report success to caller
+                        if fixer.verify_fix(check):
+                            return True
+                        else:
+                             # Core fixer should have auto-reverted if verify failed
+                             console.print("[yellow]⏪ Fix was reverted due to verification failure.[/yellow]")
+                    else:
+                        console.print(f"[red]❌ Failed to apply fix.[/red]")
+                        
         if return_bool:
             return False
         raise typer.Exit(code=1)
@@ -87,7 +159,8 @@ def preflight(
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)"),
     report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
-    ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only).")
+    ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
+    interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode.")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -102,6 +175,19 @@ def preflight(
         ignore_tests: Run tests but ignore failure.
     """
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
+
+    # Check for unstaged changes (Security Maintenance)
+    try:
+        unstaged_res = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+        if unstaged_res.stdout.strip():
+            console.print("[bold red]⛔ Security Block: Unstaged changes detected.[/bold red]")
+            console.print("[red]    You must stage or commit all changes before running preflight.[/red]")
+            console.print("[red]    This ensures the AI reviews the exact state of the code.[/red]")
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception:
+        pass
 
     # Data collection for JSON report
     json_report = {
@@ -131,7 +217,7 @@ def preflight(
     json_report["story_id"] = story_id
 
     # 1. Validate Story First
-    if not validate_story(story_id, return_bool=True):
+    if not validate_story(story_id, return_bool=True, interactive=interactive):
         msg = "Story validation failed."
         console.print(f"[bold red]❌ Preflight failed: {msg}[/bold red]")
         if report_file:

@@ -60,3 +60,51 @@ RESPONSE FORMAT:
 Markdown.
 """
     return prompt.strip()
+
+
+def generate_fix_options_prompt(failure_type: str, context: Dict[str, Any], feedback: str = None) -> str:
+    """
+    Generate a prompt for the AI to propose fixes.
+    Args:
+        feedback: Optional user feedback to guide option generation (e.g. "Make it more detailed").
+    """
+    if failure_type == "story_schema":
+        story_content = context.get("content", "")
+        missing = context.get("missing_sections", [])
+        
+        base_prompt = f"""
+You are an expert Agile Coach and Technical Writer.
+A User Story is missing required sections: {missing}.
+
+STORY CONTENT:
+{story_content}
+
+TASK:
+Generate 2-3 distinct options to fix this schema violation.
+"""
+
+        if feedback:
+            base_prompt += f"\nUSER FEEDBACK ON PREVIOUS OPTIONS:\n'{feedback}'\n\nADJUST GENERATION ACCORDINGLY.\n"
+
+        base_prompt += """
+OPTIONS TO GENERATE:
+1. Minimal Placeholder: Just add the missing headers with empty placeholders.
+2. AI Generated: Try to infer the content based on the Problem Statement/User Story provided.
+
+OUTPUT FORMAT:
+Return a JSON list of objects. Do NOT wrap in markdown code blocks.
+[
+  {
+    "title": "Minimal Fix",
+    "description": "Adds missing headers with empty placeholders.",
+    "patched_content": "...full file content..."
+  },
+  {
+    "title": "AI Generated Content",
+    "description": "Attempts to write the missing sections.",
+    "patched_content": "...full file content..."
+  }
+]
+"""
+        return base_prompt
+    return "Invalid failure type."
