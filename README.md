@@ -1,72 +1,51 @@
-# Agentic Voice Backend
+# Agent
 
-This repository contains the backend services for the Agentic Voice application.
+## Troubleshooting: Missing Credentials
 
-## Features
+The agent requires credentials for certain commands that interact with AI providers (e.g., OpenAI, Anthropic, Gemini). If you encounter an error message like:
 
-- **Voice Agent**: A fully capable voice assistant with bi-directional audio, VAD, and secure tools. [Documentation](docs/features/voice-agent.md)
-- **Governance**: Automated preflight checks.
+`[❌ Missing Credentials] The following required credentials are not found: - OPENAI_API_KEY`
 
-## Getting Started
+It means the agent cannot authenticate with the configured AI provider.
 
-1. **Clone the repository:**
-2. **Setup Environment:** Create a virtual environment named `.venv` (`python3 -m venv .venv && source .venv/bin/activate`).
-3. **Install:** Run `pip install -e ".agent/[voice]"` to install with voice features.
-4. **Onboard:** Run `agent onboard` to set up dependencies and credentials.
+### Resolution
 
-## Voice Configuration
+#### 1. Checking Your Configuration
 
-The Agent supports multiple voice providers for Speech-to-Text (STT) and Text-to-Speech (TTS).
+First, check which AI provider you are trying to use. The default is `openai`. You can check or set the provider using the `LLM_PROVIDER` environment variable.
 
-### Supported Providers
+Supported providers:
 
-- **Deepgram** (Default): Cloud-based streaming STT/TTS.
-- **Azure Speech Services**: High-quality cloud voice. Requires `AZURE_PASSWORD` (stored in secrets).
-- **Google Cloud Speech**: Requires Service Account JSON (encrypted in secrets).
-- **Local/Whisper**: Offline support (beta).
+- `openai` (Requires `OPENAI_API_KEY`)
+- `anthropic` (Requires `ANTHROPIC_API_KEY`)
+- `gemini` (Requires `GOOGLE_API_KEY`)
+- `gh` (Requires `GH_API_KEY` or `GITHUB_TOKEN`)
 
-### Configuration
+#### 2. Providing Credentials
 
-For detailed configuration (including how to switch providers in `voice.yaml`), see [Backend Voice Documentation](.agent/docs/backend_voice.md#configuration).
+You have two options to provide credentials:
 
-### Setup
+**Option A: Environment Variables (Recommended for local dev)**
+Export the key in your shell configuration or current session:
 
-Run the onboarding wizard to configure providers securely:
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+**Option B: Secret Store (Recommended for security)**
+Use the agent's built-in secure storage:
 
 ```bash
 agent onboard
+# follow prompts to enter API keys
 ```
 
-This command will prompt for necessary API keys and securely store them in the project's encrypted Secret Manager. **Never commit raw keys or JSON files.**
-
-## Privacy & Compliance (GDPR/SOC2)
-
-- **Data Retention**: Voice data sent to cloud providers (Google/Azure) is transient and processed only for the requested transcription/synthesis. This application *does not* store user audio or transcripts persistently unless explicitly configured for debugging (which is disabled by default in production).
-- **PII Handling**: Avoid speaking PII. While the providers are enterprise-grade and SOC2 compliant, this application treats voice data as sensitive. Logs are sanitized to exclude full transcripts in production.
-- **Telemetry**: The CLI uses OpenTelemetry for local performance tracing (e.g., installation times). Traces are written to stdio/local logs and **are not exported** to any external server unless explicitly configured by the user. No PII is captured in traces.
-- **User Rights (Deletion)**:
-  - **Local Data**: Use `rm -rf .agent/logs/*` to delete all local session logs.
-  - **Cloud Data**: Data sent to Google/Azure via API is typically not retained for training by default (refer to Google Cloud data logging and Azure Cognitive Services privacy policies). Consumers can opt-out of logging in their respective cloud consoles.
-- **Credentials**: All provider credentials are encrypted at rest using the internal Secret Manager. Managed Identities should be used for production deployments on Azure/GCP.
-- **Third-Party Licenses**:
-  - `google-cloud-speech` (Apache 2.0)
-  - `google-cloud-texttospeech` (Apache 2.0)
-  - `azure-cognitiveservices-speech` (MIT)
-  - All SDKs are compatible with this project's license.
-
-## Agent Management Console
-
-Start the visual dashboard (Frontend + Backend) with a single command:
+Or manually:
 
 ```bash
-agent admin start
+agent secret set openai api_key
 ```
 
-This launches:
+### Mocking for Tests
 
-- **Backend API**: `http://127.0.0.1:8000`
-- **Frontend UI**: `http://127.0.0.1:8080`
-
-The frontend is configured to proxy API requests to the backend automatically.
-
-> **Note**: The frontend source code is located in `.agent/web/`.
+If you are running tests, ensure you mock the credential headers or set dummy environment variables in your test runner configuration (e.g., `conftest.py` or `pytest.ini`). Do not commit real keys to the repository.

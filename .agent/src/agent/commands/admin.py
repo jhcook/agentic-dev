@@ -24,6 +24,9 @@ from typing import Optional
 import typer
 from rich.console import Console
 
+from agent.core.auth.credentials import validate_credentials
+from agent.core.auth.errors import MissingCredentialsError
+
 console = Console()
 app = typer.Typer(help="Manage the Agent Management Console.")
 
@@ -66,6 +69,14 @@ class ProcessManager:
 
     def start(self, follow: bool = False):
         """Starts the backend and frontend processes."""
+        # --- Credential Check ---
+        try:
+            validate_credentials()
+        except MissingCredentialsError as e:
+            console.print(e)
+            sys.exit(1)
+        # ------------------------
+
         current_pids = self._get_pids()
         if current_pids:
             # Check if processes are actually running

@@ -593,13 +593,23 @@ class AIService:
                     "timeout", 
                     "connection reset",
                     "rate limit",
-                    "dns resolution"
+                    "dns resolution",
+                    "429",
+                    "resource exhausted"
                 ]
                 
                 if (
                     any(ind in error_str for ind in transient_indicators)
                     and attempt < max_retries - 1
                 ):
+                    # Smart Failover for Rate Limits:
+                    # If it's a Rate Limit (429), don't hammer the same provider.
+                    # Fail immediately so the outer loop can switch providers.
+                    if "429" in error_str or "rate limit" in error_str or "resource exhausted" in error_str:
+                         console.print(f"[yellow]⚠️  Rate Limit detected ({provider}). switching providers...[/yellow]")
+                         time.sleep(1) # Brief pause before switch
+                         raise e
+                    
                     wait_time = (attempt + 1) * 2
                     console.print(
                         f"[yellow]⚠️ AI Provider error: {e}. "

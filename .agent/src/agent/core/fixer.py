@@ -124,7 +124,31 @@ class InteractiveFixer:
                 else:
                     json_str = response.strip()
                     
-                options = json.loads(json_str) 
+                if not response or not response.strip():
+                     logger.warning("AI returned empty response for fix generation.")
+                     raise ValueError("AI returned empty response (possibly blocked or rate limited).")
+
+                # Robust Regex for JSON Extraction
+                import re
+                try:
+                    # Match content between triple backticks if present
+                    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1)
+                    else:
+                        # Fallback: Just look for list brackets
+                        list_match = re.search(r"(\[.*\])", response, re.DOTALL)
+                        if list_match:
+                            json_str = list_match.group(1)
+                        else:
+                            json_str = response.strip()
+
+                    options = json.loads(json_str)
+                except (json.JSONDecodeError, AttributeError):
+                    # Log the first 200 chars to help debug "nonsense" checks
+                    preview = response[:200].replace("\n", " ")
+                    logger.warning(f"AI returned invalid JSON: '{preview}...'")
+                    raise ValueError("AI response was not valid JSON.") 
                 
                 valid_options = []
                 for opt in options:
@@ -144,29 +168,126 @@ class InteractiveFixer:
                 return valid_options
                 
             except Exception as e:
-                logger.error(f"Fix generation failed: {e}")
+                logger.warning(f"AI fix generation failed (falling back to manual): {e}")
+                # Fallback to manual
+                return [{
+                    "title": "Manual Fix (Open in Editor)",
+                    "description": "AI generation failed. Open the file to fix manually.",
+                    "patched_content": content,
+                    "action": "open_editor"
+                }]
+
+        elif failure_type == "governance_rejection":
+            # Context: { "story_id": ..., "findings": [str], "file_path": ... }
+            story_id = context.get("story_id")
+            findings = context.get("findings", [])
+            file_path = context.get("file_path")
+            
+            if not file_path:
+                logger.warning("No file path provided for governance repair.")
                 return []
+                
+            try:
+                path = Path(file_path).resolve()
+                if not path.exists():
+                     return []
+                content = path.read_text(errors="ignore")
+            except Exception:
+                return []
+
+            prompt = generate_fix_options_prompt(
+                failure_type="governance_rejection",
+                context={
+                    "story_id": story_id,
+                    "findings": findings,
+                    "content": content
+                },
+                feedback=feedback
+            )
+            
+            try:
+                logger.info("Generating governance fix options...")
+                response = self.ai.get_completion(prompt)
+                
+                # Legacy split logic removed
+
+                    
+                if not response or not response.strip():
+                     logger.warning("AI returned empty response for governance fix.")
+                     raise ValueError("AI returned empty response (possibly blocked or rate limited).")
+                
+                # Robust Regex for JSON Extraction
+                # Finds the first '[' and the last ']' to handle markdown wrapping and chatter
+                import re
+                try:
+                    # Match content between triple backticks if present
+                    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1)
+                    else:
+                        # Fallback: Just look for list brackets
+                        list_match = re.search(r"(\[.*\])", response, re.DOTALL)
+                        if list_match:
+                            json_str = list_match.group(1)
+                        else:
+                            json_str = response.strip()
+
+                    # Relaxed parsing to allow control characters (newlines) in strings
+                    options = json.loads(json_str, strict=False)
+                except (json.JSONDecodeError, AttributeError) as je:
+                     preview = response[:200].replace("\n", " ")
+                     logger.warning(f"AI returned invalid JSON: '{preview}...'")
+                     raise ValueError("AI response was not valid JSON.")
+                
+                valid_options = []
+                for opt in options:
+                    if not isinstance(opt, dict) or "title" not in opt or "patched_content" not in opt:
+                        continue
+                        
+                    # Validate content safety
+                    if self._validate_fix_content(opt.get("patched_content", "")):
+                        valid_options.append(opt)
+                
+                return valid_options
+                
+            except Exception as e:
+                logger.warning(f"Governance fix generation failed (falling back to manual): {e}")
+                return [{
+                    "title": "Manual Fix (Open in Editor)",
+                    "description": "AI generation failed. Open the file to fix manually.",
+                    "patched_content": content,
+                    "action": "open_editor"
+                }]
+
+        return proposals
 
         return proposals
 
     def apply_fix(self, option: Dict[str, Any], file_path: Path, confirm: bool = True) -> bool:
         """
         Apply the selected fix to the specified file path.
-        
-        This method includes safety mechanisms:
-        1. It previews the change (diff) if running interactively.
-        2. It creates a temporary backup of the file.
-        3. It attempts to write the new content.
-        4. If writing fails, it restores from backup immediately.
-
-        Args:
-            option: The fix option dict with 'patched_content'.
-            file_path: The Path object to the file to be modified.
-            confirm: If True, prompt the user for confirmation before writing.
-
-        Returns:
-            True if applied successfully, False otherwise.
         """
+        # Handle special manual action
+        if option.get("action") == "open_editor":
+            import collections
+            import subprocess
+            import platform
+            
+            editor = os.getenv("EDITOR", "vim")
+            # Try to be smart about editor
+            if not os.getenv("EDITOR"):
+                 if platform.system() == "Windows": editor = "notepad"
+                 elif shutil.which("nano"): editor = "nano"
+                 elif shutil.which("vi"): editor = "vi"
+            
+            try:
+                subprocess.run([editor, str(file_path)], check=True)
+                logger.info(f"Opened {file_path} in {editor}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to open editor: {e}")
+                return False
+
         new_content = option.get("patched_content")
         if not new_content:
             logger.error("Invalid fix option: no content.")

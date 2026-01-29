@@ -48,7 +48,6 @@ class Config:
         self.storage_dir = self.agent_dir / "storage"
         self.models_dir = self.storage_dir  # Models live in storage now via VAD logical change, or we can keep separate
 
-
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
         self.runbooks_dir = self.cache_dir / "runbooks"
@@ -59,6 +58,9 @@ class Config:
         self.repo_owner = "unknown"
         self.repo_name = "unknown"
         self._load_repo_info()
+
+        # Enabled Providers logic (INFRA-044)
+        self.enabled_providers: List[str] = self._get_enabled_providers()
 
     def _load_repo_info(self):
         """Try to load repo info from git config."""
@@ -90,6 +92,20 @@ class Config:
                     
         except Exception as e:
             logger.warning(f"Failed to load repo info: {e}")
+
+    def _get_enabled_providers(self) -> List[str]:
+        """
+        Determines the enabled AI providers based on environment variables or other configuration.
+        Defaults to checking for the presence of API keys for common providers.
+        """
+        providers = []
+        if os.getenv("OPENAI_API_KEY"):
+            providers.append("openai")
+        if os.getenv("ANTHROPIC_API_KEY"):
+            providers.append("anthropic")
+        if os.getenv("GOOGLE_API_KEY"):
+            providers.append("gemini")
+        return providers
 
     def load_yaml(self, path: Path) -> Dict[str, Any]:
         """Load a YAML file safely."""
@@ -286,6 +302,9 @@ LLM_API_KEY = os.getenv("LLM_API_KEY")
 
 def is_ai_configured() -> bool:
     """Checks if the necessary API keys for AI services are configured."""
+    # Assuming Gemini uses GOOGLE_API_KEY
+    if LLM_PROVIDER == "gemini":
+         return bool(os.getenv("GOOGLE_API_KEY")) or bool(LLM_API_KEY)
     return bool(LLM_API_KEY)
 
 

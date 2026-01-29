@@ -111,14 +111,11 @@ def find_file_in_repo(filename: str) -> List[str]:
 def find_directories_in_repo(dirname: str) -> List[str]:
     """
     Search for directories with a specific name in the repo.
-    Excludes hidden directories (starting with .).
+    Excludes .git but ALLOWS other dot-directories (like .agent).
     """
     try:
-        # standard 'find' command to look for directories with exact name
-        # -type d : directories
-        # -name : match name
-        # -not -path '*/.*' : ignore hidden paths like .git/foo
-        cmd = ["find", ".", "-type", "d", "-name", dirname, "-not", "-path", "*/.*"]
+        # find . -path './.git' -prune -o -type d -name "dirname" -print
+        cmd = ["find", ".", "-path", "./.git", "-prune", "-o", "-type", "d", "-name", dirname, "-print"]
         result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
         if not result:
             return []
@@ -137,13 +134,24 @@ def resolve_path(filepath: str) -> Optional[Path]:
     """
     file_path = Path(filepath)
     
+    # Files that are too common to guess "moves" for.
+    # If the exact path doesn't exist, we assume the AI meant to create a new file
+    # rather than modifying an existing __init__.py somewhere random in the repo.
+    COMMON_FILES = {"__init__.py", "main.py", "config.py", "utils.py", "conftest.py"}
+
     # 1. Exact Match (Best Case)
     if file_path.exists():
         return file_path
         
     # 2. Existing File Search (renames/moves)
     # If the file exists somewhere else with the exact same name, assume that's it.
-    candidates = find_file_in_repo(file_path.name)
+    
+    # Skip fuzzy search for common files to prevent massive ambiguity/false positives
+    if file_path.name in COMMON_FILES:
+        candidates = []
+    else:
+        candidates = find_file_in_repo(file_path.name)
+        
     exact_matches = [c for c in candidates if Path(c).name == file_path.name]
     
     if len(exact_matches) == 1:

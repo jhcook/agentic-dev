@@ -45,31 +45,44 @@ def cli(
     configure_logging(verbose)
 
 
-@app.command()
-def hello(name: str):
-    """
-    Say hello.
-    """
-    print(f"Hello {name}")
+
 
 
 # Governance & Quality
 app.command()(lint.lint)
-app.command()(check.preflight)
-app.command()(check.impact)
-app.command()(check.panel)
+from functools import wraps
+from agent.core.auth.credentials import validate_credentials
+from agent.core.auth.errors import MissingCredentialsError
+
+# Wrapper for commands needing credentials
+def with_creds(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            validate_credentials()
+        except MissingCredentialsError as e:
+            print(e)
+            raise typer.Exit(code=1)
+        return func(*args, **kwargs)
+    return wrapper
+
+# Governance & Quality
+app.command()(lint.lint)
+app.command()(with_creds(check.preflight))
+app.command()(with_creds(check.impact))
+app.command()(with_creds(check.panel))
 app.command(name="run-ui-tests")(check.run_ui_tests)
 app.command("audit")(audit.audit)
 
 
 
 # Workflows
-app.command()(workflow.commit)
-app.command()(workflow.pr)
-app.command()(implement.implement)
-app.command(name="new-story")(story.new_story)
+app.command()(with_creds(workflow.commit))
+app.command()(with_creds(workflow.pr))
+app.command()(with_creds(implement.implement))
+app.command(name="new-story")(with_creds(story.new_story))
 
-app.command(name="new-runbook")(runbook.new_runbook)
+app.command(name="new-runbook")(with_creds(runbook.new_runbook))
 
 app.command(name="new-adr")(adr.new_adr)
 
@@ -103,9 +116,9 @@ app.command("list-runbooks")(list_cmd.list_runbooks)
 app.command("list-models")(list_cmd.list_models)
 
 # Helper Commands
-app.command("match-story")(match.match_story)
+app.command("match-story")(with_creds(match.match_story))
 app.command("validate-story")(check.validate_story)
-app.command("new-plan")(plan.new_plan)
+app.command("new-plan")(with_creds(plan.new_plan))
 
 
 if __name__ == "__main__":

@@ -107,4 +107,46 @@ Return a JSON list of objects. Do NOT wrap in markdown code blocks.
 ]
 """
         return base_prompt
+    elif failure_type == "governance_rejection":
+        findings = context.get("findings", [])
+        content = context.get("content", "")
+        
+        base_prompt = f"""
+You are an expert Senior Software Engineer and Security Lead.
+The Governance Council has BLOCKED a preflight check. You need to propose fixes.
+
+FINDINGS / BLOCKING ISSUES:
+{chr(10).join(findings)}
+
+FILE CONTENT:
+{content}
+
+TASK:
+Generate 2 distinct options to resolve these findings by modifying the code.
+
+OPTIONS TO GENERATE:
+1. Conservative Fix: Minimal changes to address the findings (e.g. adding logs, adding checks).
+2. Refactor Fix: A cleaner, more robust implementation if applicable.
+
+CRITICAL:
+- You is acting as a JSON generator.
+- Output ONLY valid JSON. 
+- Do NOT output markdown formatting, backticks, or conversational text.
+
+OUTPUT FORMAT:
+[
+  {{
+    "title": "Conservative Fix",
+    "description": "Minimal changes to address findings.",
+    "patched_content": "...FULL file content with fix applied..."
+  }},
+  {{
+    "title": "Refactor Fix",
+    "description": "Robust implementation addressing findings.",
+    "patched_content": "...FULL file content with fix applied..."
+  }}
+]
+"""
+        return base_prompt
+
     return "Invalid failure type."

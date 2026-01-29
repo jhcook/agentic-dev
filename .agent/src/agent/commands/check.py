@@ -516,13 +516,67 @@ def preflight(
         if result["verdict"] in ["BLOCK", "FAIL"]:
              console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
              roles = result.get("json_report", {}).get("roles", [])
+             
+             # Collect Blocking Findings
+             blocking_findings = []
              for role in roles:
                  if role["verdict"] == "BLOCK":
                      console.print(f"\n[bold underline]{role['name']}[/bold underline]")
                      for finding in role["findings"]:
                          console.print(Panel(finding, border_style="red", title="Blocking Finding"))
-             
+                         blocking_findings.append(f"{role['name']}: {finding}")
+
              console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
+             
+             if interactive and blocking_findings:
+                 console.print("\n[bold yellow]🔧 Interactive Repair Available for Blocking Findings...[/bold yellow]")
+                 
+                 # Identify target file for repair (Story or Code?)
+                 # For now, default to fixing the Story file as governance usually feedbacks on it.
+                 # If code is needed, simple heuristics or user prompt is needed.
+                 # Let's target the story file location.
+                 target_file_path = None
+                 for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+                     if file_path.name.startswith(story_id):
+                         target_file_path = file_path
+                         break
+                 
+                 if target_file_path:
+                     fixer = InteractiveFixer()
+                     context = {
+                         "story_id": story_id,
+                         "findings": blocking_findings,
+                         "file_path": str(target_file_path)
+                     }
+                     
+                     options = fixer.analyze_failure("governance_rejection", context)
+                     
+                     chosen_opt = None
+                     if not options:
+                        console.print("[yellow]No automated fix options generated.[/yellow]")
+                     else:
+                        console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
+                        for i, opt in enumerate(options):
+                            console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
+                            console.print(f"   {opt.get('description', '')}")
+                        
+                        choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
+                        if choice.lower() != 'q':
+                            try:
+                                idx = int(choice) - 1
+                                if 0 <= idx < len(options):
+                                    chosen_opt = options[idx]
+                            except Exception:
+                                pass
+                                
+                     if chosen_opt:
+                         if fixer.apply_fix(chosen_opt, target_file_path):
+                             console.print("[bold green]✅ Fix applied successfully. Please re-run preflight to verify.[/bold green]")
+                             # Optionally we could re-run the check loop here, but exit is safer for state
+                             raise typer.Exit(code=0)
+                         else:
+                             console.print("[red]❌ Failed to apply fix.[/red]")
+
              raise typer.Exit(code=1)
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
