@@ -20,6 +20,18 @@ We will implement an `InteractiveFixer` module within the `agent` core that:
 
 We adopt **Ruff** as the primary linter to ensure high-performance analysis, minimizing latency during the interactive repair loop.
 
+## Security & Risk Mitigation
+
+The automated generation and execution of code pose inherent risks. We implement a multi-layered defense:
+
+1. **Strict Path Validation**: `os.path.commonpath` enforced path traversal prevention.
+2. **Output Sanitization**: PII and secrets are scrubbed from all AI contexts and logs.
+3. **Strict Content Validation**:
+    - **Phase 1 (Current)**: AST-based parsing (for Python) and comprehensive String Blacklisting (`os`, `subprocess`, `exec`, etc.) to prevent obvious code injection.
+    - **Phase 2 (Roadmap)**: Implementation of a fully isolated Sandbox (e.g., Docker or Wasm-based) for executing validation logic. This is deferred as `preflight` runs locally on the developer's machine with their permissions, acting as a "Co-pilot" rather than an untrusted agent.
+4. **Human-in-the-Loop**: All changes are presented as Diffs for user confirmation.
+5. **Rollback Safety**: Automate `git stash` operations ensure state integrity.
+
 ## Consequences
 
 ### Positive

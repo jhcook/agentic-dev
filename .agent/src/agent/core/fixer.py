@@ -212,10 +212,11 @@ class InteractiveFixer:
         Validate that the proposed content is safe.
         Uses AST parsing for Python code and string checks for others.
         """
-        # 1. String-based fast fail
+        # 1. String-based fast fail (Expanded Blacklist)
         suspicious_strings = [
             "import os", "import subprocess", "import sys", "import shutil", "import socket",
-            "exec(", "eval(", "__import__", "shutil.rmtree", "subprocess", "os.system", "open("
+            "exec(", "eval(", "__import__", "shutil.rmtree", "subprocess", "os.system", "open(",
+            "importlib", "__builtins__", "pickle", "marshal", "base64.b64decode"
         ]
         for pattern in suspicious_strings:
             if pattern in content:
@@ -229,12 +230,16 @@ class InteractiveFixer:
             for node in ast.walk(tree):
                 if isinstance(node, (ast.Import, ast.ImportFrom)):
                     for alias in node.names:
-                        if alias.name in ["os", "subprocess", "sys", "shutil"]:
+                        if alias.name.split('.')[0] in ["os", "subprocess", "sys", "shutil", "socket", "importlib", "pickle", "marshal"]:
                              logger.warning(f"Security Alert: AST detected forbidden import '{alias.name}'")
                              return False
                 elif isinstance(node, ast.Call):
-                     if isinstance(node.func, ast.Name) and node.func.id in ["eval", "exec", "__import__"]:
+                     if isinstance(node.func, ast.Name) and node.func.id in ["eval", "exec", "__import__", "open", "globals", "locals"]:
                          logger.warning(f"Security Alert: AST detected dangerous call '{node.func.id}'")
+                         return False
+                     # Detect Attribute calls like os.system
+                     if isinstance(node.func, ast.Attribute) and node.func.attr in ["system", "popen", "spawn", "call", "check_call"]:
+                         logger.warning(f"Security Alert: AST detected dangerous attribute call '{node.func.attr}'")
                          return False
         except SyntaxError:
             # Not valid Python, rely on string checks
