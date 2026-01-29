@@ -22,6 +22,7 @@ from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
 
+from agent.core.config import config as agent_config
 tracer = trace.get_tracer(__name__)
 
 @tool
@@ -51,6 +52,7 @@ def run_backend_tests(path: str = ".agent/tests/") -> str:
                 executable='/bin/zsh', 
                 capture_output=True, 
                 text=True,
+                cwd=str(agent_config.repo_root),
                 check=False 
             )
             output = result.stdout + result.stderr
@@ -81,7 +83,7 @@ def run_frontend_lint() -> str:
             
         result = subprocess.run(
             ["npm", "run", "lint"], 
-            cwd=web_dir,
+            cwd=str(agent_config.src_dir / "web"),
             capture_output=True, 
             text=True,
             check=False
@@ -111,9 +113,11 @@ def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -
         try:
             # Security: Prevent escaping project root if possible
             if cwd == ".":
-                cwd = os.getcwd()
+                cwd = str(agent_config.repo_root)
+            else:
+                cwd = str(agent_config.repo_root / cwd)
             
-            if ".." in cwd or (cwd.startswith("/") and not cwd.startswith(os.getcwd())):
+            if not str(cwd).startswith(str(agent_config.repo_root)):
                 return "Error: Working directory must be within project root."
             
             final_command = command
@@ -210,7 +214,7 @@ def run_preflight(story_id: str = None, config: RunnableConfig = None) -> str:
                 command,
                 shell=True,
                 executable='/bin/zsh',
-                cwd=None, # Inherit process CWD
+                cwd=str(agent_config.repo_root),
                 stdin=subprocess.PIPE,  # ENABLE INPUT
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, 

@@ -7,12 +7,14 @@ Everything you need to know about AI providers, model selection, and token manag
 ### 1. Google Gemini (Recommended)
 
 **Advantages:**
+
 - Largest context window (1M tokens)
 - Excellent code understanding
 - Competitive pricing
 - Fast response times
 
 **Setup:**
+
 ```bash
 export GEMINI_API_KEY="AIza..."
 # Or
@@ -20,47 +22,56 @@ export GOOGLE_GEMINI_API_KEY="AIza..."
 ```
 
 **Get API Key:**
+
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Create new API key
 3. Copy and export
 
 **Models used:**
+
 - `gemini-1.5-pro` - Complex tasks (runbooks, governance)
 - `gemini-1.5-flash` - Simple tasks (commit messages)
 
 ### 2. OpenAI
 
 **Advantages:**
+
 - High quality responses
 - Well-documented
 - Wide adoption
 
 **Setup:**
+
 ```bash
 export OPENAI_API_KEY="sk-..."
 ```
 
 **Get API Key:**
+
 1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
 2. Create new API key
 3. Add payment method (usage-based billing)
 
 **Models used:**
+
 - `gpt-4o` - Primary model
 - `gpt-4o-mini` - Cheaper alternative
 
 ### 3. GitHub CLI (Fallback)
 
 **Advantages:**
+
 - Free (no API key needed)
 - Easy setup
 
 **Limitations:**
+
 - Small context window (8k tokens)
 - Slower responses
 - Limited availability
 
 **Setup:**
+
 ```bash
 # Install GitHub CLI
 brew install gh
@@ -70,38 +81,45 @@ gh auth login
 ```
 
 **Model:**
+
 - `gh models run gpt-4o`
 
 ### 4. Anthropic Claude 4.5 (NEW)
 
 **Advantages:**
+
 - Large context window (200K tokens)
 - Excellent reasoning and coding
 - **Streaming support** prevents timeouts
 - Three model tiers for flexibility
 
 **Limitations:**
+
 - Requires paid API key (no free tier)
 - Moderate pricing
 
 **Setup:**
+
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-api03-..."
 ```
 
 **Get API Key:**
+
 1. Visit [Anthropic Console](https://console.anthropic.com/settings/keys)
 2. Create new API key
 3. Add payment method (usage-based billing)
 4. Copy and export
 
 **Models available:**
+
 - `claude-sonnet-4-5-20250929` - Advanced tier (balanced performance/cost)
 - `claude-haiku-4-5-20250929` - Standard tier (fast, economical)
 - `claude-opus-4-5-20250929` - Premium tier (highest quality)
 
 **Streaming:**
 Claude uses streaming API to handle large contexts without timeouts:
+
 ```python
 # Automatic streaming in agent
 with client.messages.stream(
@@ -115,6 +133,7 @@ with client.messages.stream(
 ```
 
 **Provider selection:**
+
 ```bash
 # Use Anthropic explicitly
 agent --provider anthropic new-runbook WEB-001
@@ -138,7 +157,7 @@ The Agent uses a Smart Router that selects models based on:
 
 | Task | Context Size | Model Selected |
 |------|--------------|----------------|
-| Generate runbook | Large (100k tokens) | gemini-1.5-pro |
+| Generate runbook | Large (100k tokens) | gemini-2.5-pro |
 | Match story | Small (2k tokens) | gemini-1.5-flash |
 | Governance review | Large (50k tokens) | gpt-4o |
 | Commit message | Tiny (500 tokens) | gpt-4o-mini |
@@ -164,46 +183,34 @@ agent --provider gh new-runbook WEB-001
 Edit `.agent/etc/router.yaml`:
 
 ```yaml
-tiers:
-  # High-end models for complex tasks
-  tier1:
-    models:
-      - "gemini-1.5-pro"
-      - "gpt-4o"
-    context_window: 1000000
-    cost_per_1m_tokens: 1.25
-    use_cases:
-      - "runbook generation"
-      - "governance panel review"
-      - "code implementation"
-      - "architectural analysis"
-  
-  # Mid-tier for moderate tasks
-  tier2:
-    models:
-      - "gemini-1.5-flash"
-      - "gpt-4o-mini"
+models:
+  gemini-2.5-pro:
+    provider: gemini
+    tier: advanced
+    context_window: 1048576
+    cost_per_1k_input: 0.000125
+
+  gemini-1.5-flash:
+     provider: gemini
+     tier: standard
+     context_window: 1048576
+     cost_per_1k_input: 0.00001875
+
+  gpt-4o:
+    provider: openai
+    tier: advanced
     context_window: 128000
-    cost_per_1m_tokens: 0.075
-    use_cases:
-      - "story matching"
-      - "commit message generation"
-      - "simple validation"
+    cost_per_1k_input: 0.005
+
+settings:
+  # Default provider priority
+  provider_priority:
+    - gemini
+    - openai
+    - gh
   
-  # Fallback for when no API keys
-  tier3:
-    models:
-      - "github:gpt-4o"
-    context_window: 8000
-    cost_per_1m_tokens: 0.0
-    use_cases:
-      - "fallback"
-
-# Which tier to use by default
-default_tier: tier1
-
-# Fallback if default fails
-fallback_tier: tier3
+  # Which tier to use by default if not specified
+  default_tier: standard
 ```
 
 ## Token Management
@@ -211,6 +218,7 @@ fallback_tier: tier3
 ### Understanding Tokens
 
 Tokens are chunks of text that AI models process:
+
 - ~4 characters = 1 token
 - ~750 words = 1000 tokens
 
@@ -221,10 +229,11 @@ Tokens are chunks of text that AI models process:
 The Agent uses `tiktoken` to count tokens before sending to AI:
 
 ```python
-from agent.core.token_manager import count_tokens
+from agent.core.tokens import token_manager
+
 
 text = "Your code diff here..."
-tokens = count_tokens(text)
+tokens = token_manager.count_tokens(text)
 print(f"This will use {tokens} tokens")
 ```
 
@@ -246,6 +255,7 @@ Chunk 3: 30k tokens (files G, H)
 ```
 
 **Configure chunk size:**
+
 ```bash
 export AGENT_CHUNK_SIZE=6000  # characters per chunk
 ```
@@ -270,16 +280,19 @@ export AGENT_CHUNK_SIZE=6000  # characters per chunk
 **Cost-saving tips:**
 
 1. **Use tier2 for simple tasks:**
+
    ```yaml
    default_tier: tier2  # In router.yaml
    ```
 
 2. **Reduce chunk size:**
+
    ```bash
    export AGENT_CHUNK_SIZE=4000  # Smaller chunks
    ```
 
 3. **Limit governance roles (smaller teams):**
+
    ```yaml
    # Only essential roles
    team:
@@ -288,6 +301,7 @@ export AGENT_CHUNK_SIZE=6000  # characters per chunk
    ```
 
 4. **Use GitHub CLI when possible:**
+
    ```bash
    agent --provider gh commit --ai
    ```
@@ -301,12 +315,14 @@ agent new-runbook WEB-001
 ```
 
 **Process:**
+
 1. Load story: ~2k tokens
 2. Load governance rules: ~10k tokens  
 3. Generate runbook: ~20k tokens output
 4. Total: ~32k tokens (~$0.04 with Gemini)
 
 **Prompt structure:**
+
 ```
 System: You are an Implementation Planning Agent...
 
@@ -330,6 +346,7 @@ agent preflight --story WEB-001 --ai
 ```
 
 **Process:**
+
 1. Load story: ~2k tokens
 2. Get diff: ~50k tokens (varies)
 3. Load rules: ~10k tokens
@@ -347,6 +364,7 @@ agent match-story --files "src/auth/login.py src/auth/middleware.py"
 ```
 
 **Process:**
+
 1. Load file list: ~0.5k tokens
 2. Load all stories: ~20k tokens
 3. Match algorithm: ~5k tokens output
@@ -359,6 +377,7 @@ agent commit --story WEB-001 --ai
 ```
 
 **Process:**
+
 1. Get staged diff: ~10k tokens
 2. Load story: ~2k tokens
 3. Generate message: ~0.2k tokens output
@@ -371,10 +390,12 @@ agent commit --story WEB-001 --ai
 ### Provider Limits
 
 **Google Gemini:**
+
 - Free tier: 15 RPM, 1 million TPM
 - Paid tier: 360 RPM, 4 million TPM
 
 **OpenAI:**
+
 - Tier 1: 500 RPM, 30k TPM
 - Tier 5: 10k RPM, 200k TPM
 
@@ -395,6 +416,7 @@ for attempt in range(max_retries):
 ```
 
 **Manual rate limit handling:**
+
 ```bash
 # Slow down between calls
 agent new-runbook WEB-001
@@ -457,6 +479,7 @@ Your goal is to create a detailed, step-by-step runbook.
 ```
 
 Restart required:
+
 ```bash
 # Restart any running agent processes
 # Changes take effect immediately
@@ -467,12 +490,14 @@ Restart required:
 ### "AI returned empty response"
 
 **Causes:**
+
 - API key invalid
 - Rate limit exceeded
 - Context too large
 - Network issue
 
 **Solutions:**
+
 ```bash
 # Check API key
 echo $GEMINI_API_KEY
@@ -489,6 +514,7 @@ export AGENT_CHUNK_SIZE=3000
 **Error:** `context_length_exceeded`
 
 **Solution:**
+
 ```bash
 # Enable chunking (should be automatic)
 # Or use larger context model
@@ -500,6 +526,7 @@ agent --provider gemini new-runbook WEB-001
 **Error:** `rate_limit_exceeded`
 
 **Solution:**
+
 ```bash
 # Wait and retry
 sleep 60
@@ -512,12 +539,15 @@ agent --provider openai new-runbook WEB-001
 ### Poor quality responses
 
 **Symptoms:**
+
 - Runbook missing steps
 - Garbage output
 - Incomplete analysis
 
 **Solutions:**
+
 1. **Use higher-tier model:**
+
    ```bash
    agent --provider gemini new-runbook WEB-001
    ```
@@ -532,6 +562,7 @@ agent --provider openai new-runbook WEB-001
    - More specific instructions
 
 4. **Regenerate:**
+
    ```bash
    # Delete and try again
    rm .agent/cache/runbooks/WEB/WEB-001-runbook.md

@@ -106,38 +106,32 @@ Controls which AI model is used for different tasks.
 ### Structure
 
 ```yaml
-tiers:
-  tier1:
-    models:
-      - "gemini-1.5-pro"
-      - "gpt-4o"
-    context_window: 1000000
-    cost_per_1m_tokens: 1.25
-    use_cases:
-      - "runbook generation"
-      - "governance panel review"
-      - "code implementation"
+models:
+  gemini-2.5-pro:
+    provider: gemini
+    tier: advanced
+    context_window: 1048576
+    cost_per_1k_input: 0.000125
   
-  tier2:
-    models:
-      - "gemini-1.5-flash"
-      - "gpt-4o-mini"
+  gpt-4o:
+    provider: openai
+    tier: advanced
     context_window: 128000
-    cost_per_1m_tokens: 0.25
-    use_cases:
-      - "story matching"
-      - "commit message generation"
-  
-  tier3:
-    models:
-      - "github:gpt-4o"
-    context_window: 8000
-    cost_per_1m_tokens: 0.0
-    use_cases:
-      - "fallback when no API key"
+    cost_per_1k_input: 0.005
 
-default_tier: tier1
-fallback_tier: tier3
+  gpt-4o-mini:
+    provider: openai
+    tier: light
+    context_window: 128000
+    cost_per_1k_input: 0.00015
+
+settings:
+  default_tier: standard
+  provider_priority:
+    - gemini
+    - openai
+    - gh
+    - anthropic
 ```
 
 ### Customizing Model Selection
@@ -181,19 +175,15 @@ tiers:
 Then set up the provider:
 
 ```python
-# .agent/src/agent/core/ai.py
+# .agent/src/agent/core/ai/service.py
 from anthropic import Anthropic
 
 class AIService:
-    def _complete_anthropic(self, system: str, user: str) -> str:
-        client = Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY'))
-        response = client.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": user}]
-        )
-        return response.content[0].text
+    def _try_complete(self, provider, system, user, model=None):
+        if provider == "anthropic":
+            client = self.clients['anthropic']
+            # ...
+
 ```
 
 ### Routing Logic

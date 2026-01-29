@@ -14,6 +14,7 @@
 
 from langchain_core.tools import tool
 import os
+from agent.core.config import config as agent_config
 import subprocess
 
 @tool
@@ -21,20 +22,33 @@ def get_recent_logs(lines: int = 50) -> str:
     """
     Get the most recent lines from the agent log file (agent.log).
     """
-    log_file = "agent.log" # Assuming root
-    if not os.path.exists(log_file):
-        # Try checking in .agent directory or common locations if root fails
-        # But standard is root of repo for many agents
-        if os.path.exists(".agent/agent.log"):
-            log_file = ".agent/agent.log"
-        else:
-             return "Log file not found."
+    # Use absolute path based on repo_root
+    # Check standard locations
+    possible_paths = [
+        agent_config.repo_root / "agent.log",
+        agent_config.agent_dir / "agent.log",
+        agent_config.agent_dir / "logs" / "agent.log"
+    ]
+    
+    log_file = None
+    for p in possible_paths:
+        if p.exists():
+            log_file = str(p)
+            break
+            
+    if not log_file:
+         return "Log file not found."
         
     try:
         # Use tail command for efficiency on Mac/Linux
         # Security: lines is int so safe to cast
         params = ["tail", "-n", str(lines), log_file]
-        res = subprocess.run(params, capture_output=True, text=True)
+        res = subprocess.run(
+            params, 
+            capture_output=True, 
+            text=True,
+            cwd=str(agent_config.repo_root)
+        )
         return res.stdout
     except Exception as e:
         return f"Error reading logs: {e}"

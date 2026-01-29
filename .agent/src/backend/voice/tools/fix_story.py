@@ -66,24 +66,14 @@ def interactive_fix_story(
         return f"Could not find story file for {story_id}."
         
     # 2. Check Validation State
-    # We run the actual check logic or just assume failures based on request.
-    # InteractiveFixer.analyze_failure does re-read the file.
-    
-    # We must first "Analyze" to get options.
-    # NOTE: Since tools are stateless, we must regenerate options or cache them.
-    # For now, to keep it simple, we regenerate.
-    # Ideally, we should pass the same 'instructions' if we want the same set, 
-    # but the User flow is Analyze -> Speak -> User Picks -> Apply.
-    # If the user picks '1', we need to regenerate option 1 to apply it.
-    # This assumes determinism or that we accept slight variations.
-    # A true stateful solution would cache the latest options in the session.
-    # Given the constraints, regenerating with high temperature=0 logic is best, specific to the fixer prompts.
-    
-    # Ideally checking validation first:
     def check_val():
         return subprocess.run(
             f"source .venv/bin/activate && agent validate-story {story_id}",
-            shell=True, executable='/bin/zsh', capture_output=True, text=True
+            shell=True,
+            executable='/bin/zsh',
+            capture_output=True,
+            text=True,
+            cwd=str(agent_config.repo_root) # Ensure CWD is correctly set
         )
 
     res = check_val()

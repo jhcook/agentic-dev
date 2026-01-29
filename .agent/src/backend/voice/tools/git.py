@@ -17,6 +17,7 @@ import subprocess
 import logging
 from backend.voice.events import EventBus
 from langchain_core.runnables import RunnableConfig
+from agent.core.config import config as agent_config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,8 @@ def get_git_status(config: RunnableConfig = None) -> str:
             ["git", "status", "--short"], 
             capture_output=True, 
             text=True, 
-            check=True
+            check=True,
+            cwd=str(agent_config.repo_root)
         )
         if not result.stdout:
             return "Working tree clean."
@@ -105,7 +107,8 @@ def get_git_diff(config: RunnableConfig = None) -> str:
             ["git", "diff", "--cached"], 
             capture_output=True, 
             text=True, 
-            check=True
+            check=True,
+            cwd=str(agent_config.repo_root)
         )
         if not result.stdout:
             return "No staged changes."
@@ -135,7 +138,8 @@ def get_git_log(limit: int = 5) -> str:
             ["git", "log", f"-n {limit}", "--oneline"], 
             capture_output=True, 
             text=True, 
-            check=True
+            check=True,
+            cwd=str(agent_config.repo_root)
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
@@ -151,7 +155,8 @@ def get_git_branch() -> str:
             ["git", "branch", "--show-current"], 
             capture_output=True, 
             text=True, 
-            check=True
+            check=True,
+            cwd=str(agent_config.repo_root)
         )
         branch_name = result.stdout.strip() or "HEAD (detached)"
         logger.info(f"Tool get_git_branch returned: {branch_name}")
@@ -175,7 +180,8 @@ def git_stage_changes(files: list[str] = None) -> str:
             cmd,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            cwd=str(agent_config.repo_root)
         )
         
         # Summarize for voice
@@ -216,7 +222,8 @@ def run_commit(message: str = None, config: RunnableConfig = None) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            cwd=str(agent_config.repo_root)
         )
         
         output_buffer = []
@@ -235,7 +242,8 @@ def run_commit(message: str = None, config: RunnableConfig = None) -> str:
                 ["git", "log", "-1", "--stat"],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
+                cwd=str(agent_config.repo_root)
             )
             return f"Commit successful.\n\n{log_result.stdout}"
         else:
@@ -286,12 +294,13 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
             command,
             shell=True,
             executable='/bin/zsh',
-            cwd=None,
+
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            cwd=str(agent_config.repo_root)
         )
         
         # Register for interaction (e.g. preflight prompts)
@@ -355,7 +364,8 @@ def git_push_branch(config: RunnableConfig = None) -> str:
             ["git", "push"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            cwd=str(agent_config.repo_root)
         )
         stdout, stderr = process.communicate()
         
@@ -371,7 +381,8 @@ def git_push_branch(config: RunnableConfig = None) -> str:
             # Get current branch
             branch_proc = subprocess.run(
                 ["git", "branch", "--show-current"], 
-                capture_output=True, text=True, check=True
+                capture_output=True, text=True, check=True,
+                cwd=str(agent_config.repo_root)
             )
             current_branch = branch_proc.stdout.strip()
             
@@ -381,7 +392,8 @@ def git_push_branch(config: RunnableConfig = None) -> str:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                cwd=str(agent_config.repo_root)
             )
             out, err = retry_proc.communicate()
             

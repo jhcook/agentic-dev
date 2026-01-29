@@ -18,8 +18,11 @@ import subprocess
 import os
 import threading
 import time
+import threading
+import time
 from backend.voice.process_manager import ProcessLifecycleManager
 from backend.voice.events import EventBus
+from agent.core.config import config as agent_config
 from langchain_core.runnables import RunnableConfig
 from opentelemetry import trace
 
@@ -49,7 +52,7 @@ def start_interactive_shell(command: str, session_id: str = None, config: Runnab
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1, # Line buffered
-            cwd=os.getcwd()
+            cwd=str(agent_config.repo_root)
         )
         
         # Register with ID

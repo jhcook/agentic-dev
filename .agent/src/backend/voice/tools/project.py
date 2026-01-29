@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 import os
 import glob
 import yaml
+from agent.core.config import config
 
 @tool
 def list_stories(status: str = "OPEN") -> str:
@@ -24,7 +25,7 @@ def list_stories(status: str = "OPEN") -> str:
     Args:
         status: Filter (e.g. 'OPEN', 'COMPLETED', 'ALL')
     """
-    stories_dir = ".agent/cache/stories"
+    stories_dir = config.repo_root / ".agent/cache/stories"
     pattern = f"{stories_dir}/**/*.md"
     matches = []
     
@@ -68,7 +69,7 @@ def get_project_info() -> str:
 @tool
 def list_runbooks() -> str:
     """List all implementation runbooks."""
-    files = glob.glob(".agent/cache/runbooks/**/*.md", recursive=True)
+    files = glob.glob(str(config.repo_root / ".agent/cache/runbooks/**/*.md"), recursive=True)
     return "\n".join([os.path.basename(f) for f in files])
 
 from opentelemetry import trace
@@ -82,7 +83,7 @@ def _is_safe_path(path: str) -> bool:
     try:
         # Resolve absolute paths
         abs_path = os.path.abspath(path)
-        root_path = os.path.abspath(os.getcwd())
+        root_path = str(config.repo_root)
         
         # Use commonpath to check containment
         return os.path.commonpath([root_path, abs_path]) == root_path

@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
+from agent.core.config import config as agent_config
 import subprocess
 import threading
 import time
@@ -45,7 +46,8 @@ def _run_interactive_command(command: str, alias_prefix: str, config: RunnableCo
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            cwd=str(agent_config.repo_root)
         )
         
         ProcessLifecycleManager.instance().register(process, process_id)
