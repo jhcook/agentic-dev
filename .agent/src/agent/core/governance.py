@@ -198,7 +198,8 @@ def convene_council_full(
                 if mode == "consultative":
                     role_findings.append(review)
                 else:
-                    if "BLOCK" in review.upper():
+                    # Use precise regex to avoid false positives (e.g. "blocking I/O")
+                    if re.search(r"VERDICT:\s*BLOCK", review, re.IGNORECASE):
                         role_verdict = "BLOCK"
                         role_findings.append(review)
             except Exception as e:
