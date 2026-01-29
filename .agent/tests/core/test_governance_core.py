@@ -30,13 +30,10 @@ def test_governance_gatekeeper_block(mock_ai_service):
     """
     Test that in 'gatekeeper' mode, a 'BLOCK' verdict from AI results in a BLOCK return.
     """
-    # Mock AI response to contain "Verdict: BLOCK"
-    mock_ai_service.complete.return_value = "Verdict: BLOCK\nReason: Security violation."
+    # Mock AI response to contain "Verdict: BLOCK" anchored to line start
+    mock_ai_service.complete.return_value = "VERDICT: BLOCK\nReason: Security violation."
     
-    console = Console(quiet=True)
-    
-    verdict = convene_council_full(
-        console=console,
+    result = convene_council_full(
         story_id="TEST-1",
         story_content="Story",
         rules_content="Rules",
@@ -45,18 +42,15 @@ def test_governance_gatekeeper_block(mock_ai_service):
         mode="gatekeeper"
     )
     
-    assert verdict == "BLOCK"
+    assert result["verdict"] == "BLOCK"
 
 def test_governance_gatekeeper_pass(mock_ai_service):
     """
     Test that in 'gatekeeper' mode, 'PASS' verdict returns PASS.
     """
-    mock_ai_service.complete.return_value = "Verdict: PASS"
+    mock_ai_service.complete.return_value = "VERDICT: PASS"
     
-    console = Console(quiet=True)
-    
-    verdict = convene_council_full(
-        console=console,
+    result = convene_council_full(
         story_id="TEST-1",
         story_content="Story",
         rules_content="Rules",
@@ -65,20 +59,19 @@ def test_governance_gatekeeper_pass(mock_ai_service):
         mode="gatekeeper"
     )
     
-    assert verdict == "PASS"
+    assert result["verdict"] == "PASS"
 
-def test_governance_consultative_ignores_block(mock_ai_service):
+def test_governance_consultative_mode(mock_ai_service):
     """
-    Test that in 'consultative' mode, even if AI says 'BLOCK' (or negative sentiment),
-    Logic does NOT return BLOCK (so CLI won't fail).
+    Test that in 'consultative' mode:
+    1. Even if AI output contains "BLOCK", the overall verdict remains PASS.
+    2. The raw findings are preserved.
     """
-    # Even if AI acts strict, the mode logic should prevent verdict=BLOCK
-    mock_ai_service.complete.return_value = "Sentiment: NEGATIVE\nThis looks bad."
+    # AI output that would normally block in gatekeeper mode
+    ai_output = "I have some concerns about this design.\nVERDICT: BLOCK"
+    mock_ai_service.complete.return_value = ai_output
     
-    console = Console(quiet=True)
-    
-    verdict = convene_council_full(
-        console=console,
+    result = convene_council_full(
         story_id="TEST-1",
         story_content="Story",
         rules_content="Rules",
@@ -87,6 +80,10 @@ def test_governance_consultative_ignores_block(mock_ai_service):
         mode="consultative"
     )
     
-    # In consultative mode, we usually default to PASS or just ignore block logic
-    # The current implementation returns overall_verdict which defaults to "PASS"
-    assert verdict == "PASS"
+    # In consultative mode, we default to PASS
+    assert result["verdict"] == "PASS"
+    
+    # Check that findings logic captured the output
+    # The current implementation appends ALL reviews in consultative mode
+    role_findings = result["json_report"]["roles"][0]["findings"]
+    assert ai_output in role_findings

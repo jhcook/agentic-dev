@@ -129,8 +129,22 @@ def convene_council_full(
     progress_callback: Optional[callable] = None
 ) -> Dict:
     """
-    Run the AI Governance Council review. Handles provider switching and re-chunking.
-    Supports ReAct Agent Loop if tools are enabled for the council.
+    Run the AI Governance Council review with support for provider switching and context management.
+
+    Args:
+        mode: The operation mode for the council.
+            - "gatekeeper" (Default):
+                Strict enforcement. The AI analyzes the diff against governance rules.
+                If any role returns "VERDICT: BLOCK", the overall result is BLOCK.
+                Used for `agent preflight`.
+            - "consultative":
+                Advisory mode. Used for design reviews or Q&A (`agent panel`).
+                AI findings are collected verbatim.
+                "VERDICT: BLOCK" in AI output is IGNORED and does not trigger an overall BLOCK.
+                This allows for open-ended discussion without blocking CI/CD pipelines.
+
+    Returns:
+        Dict: Contains 'verdict' (PASS/BLOCK), 'log_file' (path), and 'json_report' (detailed data).
     """
     if progress_callback:
         progress_callback("🤖 Convening the AI Governance Council...")
