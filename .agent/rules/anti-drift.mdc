@@ -1,0 +1,38 @@
+---
+description: Anti-Drift and Scope Enforcement Rule
+globs: ["**/*"]
+---
+
+# Anti-Drift & Scope Enforcement
+
+This rule prevents "Agent Drift" (making unsolicited changes like refactoring, formatting, or logging "fixes" that were not requested).
+
+## 1. The Core Directive: "Ask, Don't Touch"
+
+**You are strictly bound by the scope of your current user request or Runbook.**
+
+-   **FORBIDDEN**: Modifying code that is not directly related to the active task.
+-   **FORBIDDEN**: "Cleaning up" code (e.g., changing `print` to `logging`, reformatting) without explicit instruction.
+-   **FORBIDDEN**: removing comments or "dead code" unless explicitly asked.
+
+## 2. The Suggestion Pattern
+
+If you encounter code that *should* be improved (tech debt, messy logging, poor styling) but is not part of your task:
+
+1.  **DO NOT fix it in the main implementation.**
+2.  **DO Capture it** as a suggestion.
+
+### How to Suggest
+-   **In Runbook Creation**: Add it to the `## Proposed Improvements (Opt-In)` section.
+-   **In Implementation**: If you see a major issue, add a comment in your output/response: `> [!TIP] Suggestion: ...` but **leave the code as is**.
+
+## 3. Runbook Execution Logic
+
+When implementing a Runbook:
+-   **Must Do**: Items in `## Implementation Steps`.
+-   **Must Do**: Items in `## Proposed Improvements` that are CHECKED `[x]`.
+-   **MUST IGNORE**: Items in `## Proposed Improvements` that are UNCHECKED `[ ]`.
+
+## 4. Technical specifics
+-   **CLI Output**: `print()` is VALID for CLI tools. Do not "fix" it to `logging.info()` unless the user specifically asks for "Logging Standardization".
+-   **Linter Noise**: If a linter complains about something pre-existing (like `T201 print found`), and you are not tasked to fix lint errors, **IGNORE THE LINTER**.

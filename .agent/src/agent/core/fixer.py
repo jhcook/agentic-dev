@@ -18,22 +18,22 @@ Core module for Interactive Preflight Repair.
 Decouples the fix logic from the CLI.
 """
 import os
-import subprocess
+import shutil
+import tempfile
+import ast
+import json
+import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
-import json
-import typer
-import ast
-import typer
-import ast
+
+# typer/subprocess imports removed if unused, but kept if needed by other parts not shown
+import typer 
 
 from agent.core.ai import ai_service
 from agent.core.ai.prompts import generate_fix_options_prompt
-
-import logging
 from agent.core.utils import scrub_sensitive_data
 
-console = None # Removed
+console = None 
 logger = logging.getLogger(__name__)
 
 class InteractiveFixer:
@@ -46,6 +46,8 @@ class InteractiveFixer:
 
     def __init__(self):
         self.ai = ai_service
+        # Track active backups: { str(original_path): str(backup_temp_path) }
+        self._active_backups: Dict[str, str] = {}
 
     def analyze_failure(self, failure_type: str, context: Dict[str, Any], feedback: str = None) -> List[Dict[str, Any]]:
         """
@@ -59,9 +61,6 @@ class InteractiveFixer:
         Returns:
             List of fix options (dicts).
         """
-        # For now, we mainly support schema fixes (INFRA-042 scope)
-        # But designing this to be extensible.
-        
         proposals = []
         
         if failure_type == "story_schema":
@@ -117,10 +116,6 @@ class InteractiveFixer:
                 response = self.ai.get_completion(prompt)
                 
                 # Parse AI response. Expecting JSON list of options?
-                # For robustness, we might ask for simple text and parse, or JSON mode.
-                # Let's assume the prompt instructions enforce JSON structure or we parse it.
-                # For this MVP, let's try to parse JSON from the response.
-                
                 # Simple parsing strategy: look for json block
                 if "```json" in response:
                     json_str = response.split("```json")[1].split("```")[0].strip()
@@ -130,7 +125,6 @@ class InteractiveFixer:
                     json_str = response.strip()
                     
                 options = json.loads(json_str) 
-                # Expected: [{"title": "...", "description": "...", "patched_content": "..."}]
                 
                 valid_options = []
                 for opt in options:
@@ -155,17 +149,15 @@ class InteractiveFixer:
 
         return proposals
 
-    # present_options moved to CLI layer (see agent.commands.check)
-
     def apply_fix(self, option: Dict[str, Any], file_path: Path, confirm: bool = True) -> bool:
         """
         Apply the selected fix to the specified file path.
         
         This method includes safety mechanisms:
         1. It previews the change (diff) if running interactively.
-        2. It saves the current state to git stash before applying.
+        2. It creates a temporary backup of the file.
         3. It attempts to write the new content.
-        4. If writing fails, it pops the stash to revert.
+        4. If writing fails, it restores from backup immediately.
 
         Args:
             option: The fix option dict with 'patched_content'.
@@ -180,13 +172,20 @@ class InteractiveFixer:
             logger.error("Invalid fix option: no content.")
             return False
             
-        # Diff View
-        current_content = file_path.read_text(errors="ignore")
-        
-        # Diff View handled by CLI or callback
+        file_str = str(file_path.resolve())
+
+        # Safety: File Backup (Replaces dangerous git stash)
+        try:
+            # Create a temp file for backup
+            fd, backup_path = tempfile.mkstemp(prefix="agent_fix_backup_")
+            os.close(fd) # Close file descriptor, we just need path
             
-        # Safety: Git Stash
-        self._git_stash_save()
+            shutil.copy2(file_path, backup_path)
+            self._active_backups[file_str] = backup_path
+            logger.debug(f"Backed up {file_path} to {backup_path}")
+        except Exception as e:
+             logger.error(f"Failed to create backup: {e}")
+             return False
         
         try:
             file_path.write_text(new_content)
@@ -195,31 +194,61 @@ class InteractiveFixer:
             return True
         except Exception as e:
             logger.error(f"File write failed: {e}")
-            self._git_stash_pop() # Revert
+            # Immediate Revert on Write Fail
+            self._restore_backup(file_str, file_path)
             return False
 
     def verify_fix(self, check_callback) -> bool:
         """
-        Run the verification callback. If it fails, offer to revert.
+        Run the verification callback. If it fails, restore from backup.
         """
         success = check_callback()
 
+        # We assume verify_fix is called immediately after apply_fix on the same file context.
+        # Ideally verify_fix should accept file_path, but check_callback encapsulates it.
+        # We process ALL active backups. In a single-fix flow, there is only one.
+        
+        paths_to_clear = []
+
         if success:
-            # Drop stash? Or keep it? 
-            # Ideally we drop the stash since we "committed" to the change in working dir.
-            # But 'git stash drop' might be safer.
-            self._git_stash_drop()
             logger.info("METRIC: Fix Verification Passed")
-            return True
+            # Success: Delete backups
+            for original_path, backup_path in self._active_backups.items():
+                try:
+                    if os.path.exists(backup_path):
+                        os.remove(backup_path)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup backup {backup_path}: {e}")
+                paths_to_clear.append(original_path)
         else:
-             # In programmatic mode, we probably should revert automatically on failure 
-             # OR leave it to the caller. 
-             # Let's revert automatically to be safe, or make it configurable. 
-             # For now, let's revert automatically if it failed verification to return to clean state.
-             self._git_stash_pop()
              logger.info("Fix auto-reverted due to verification failure.")
-                 
-             return False
+             # Failure: Restore all backups
+             for original_path, backup_path in self._active_backups.items():
+                 try:
+                     shutil.copy2(backup_path, original_path)
+                     logger.info(f"Restored {original_path} from backup.")
+                     os.remove(backup_path)
+                 except Exception as e:
+                     logger.error(f"Failed to restore backup for {original_path}: {e}")
+                 paths_to_clear.append(original_path)
+
+        # Clear backup registry
+        for p in paths_to_clear:
+            self._active_backups.pop(p, None)
+
+        return success
+
+    def _restore_backup(self, original_path_str: str, target_path: Path):
+        """Helper to restore a specific backup."""
+        backup = self._active_backups.get(original_path_str)
+        if backup and os.path.exists(backup):
+            try:
+                shutil.copy2(backup, target_path)
+                os.remove(backup)
+                del self._active_backups[original_path_str]
+                logger.info(f"Restored {target_path} from safety backup.")
+            except Exception as e:
+                logger.error(f"CRITICAL: Failed to restore backup for {target_path}: {e}")
 
     def _validate_fix_content(self, content: str) -> bool:
         """
@@ -264,21 +293,3 @@ class InteractiveFixer:
             return False
 
         return True
-
-    def _git_stash_save(self):
-        try:
-            subprocess.run(["git", "stash", "push", "-m", "Agent Interactive Fix Safety Stash", "--quiet"], check=False)
-        except Exception as e:
-            logger.error(f"Git stash save failed: {e}")
-
-    def _git_stash_pop(self):
-        try:
-            subprocess.run(["git", "stash", "pop", "--quiet"], check=False)
-        except Exception as e:
-            logger.error(f"Git stash pop failed: {e}")
-
-    def _git_stash_drop(self):
-        try:
-            subprocess.run(["git", "stash", "drop", "--quiet"], check=False)
-        except Exception as e:
-            logger.error(f"Git stash drop failed: {e}")

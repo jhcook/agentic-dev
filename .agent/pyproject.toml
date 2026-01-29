@@ -73,3 +73,7 @@ agent = "agent.main:app"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# ADR-016: Allow prints in CLI tools
+per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
