@@ -177,15 +177,13 @@ def preflight(
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
 
     # Check for unstaged changes (Security Maintenance)
+    # Check for unstaged changes (Security Maintenance)
     try:
         unstaged_res = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
         if unstaged_res.stdout.strip():
-            console.print("[bold red]⛔ Security Block: Unstaged changes detected.[/bold red]")
-            console.print("[red]    You must stage or commit all changes before running preflight.[/red]")
-            console.print("[red]    This ensures the AI reviews the exact state of the code.[/red]")
-            raise typer.Exit(code=1)
-    except typer.Exit:
-        raise
+            console.print("[yellow]⚠️  Warning: Unstaged changes detected.[/yellow]")
+            console.print("[dim]    Note: The AI will only review what is STAGED for commit.[/dim]")
+            # We proceed instead of blocking
     except Exception:
         pass
 

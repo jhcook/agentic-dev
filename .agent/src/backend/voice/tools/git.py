@@ -183,10 +183,13 @@ def git_stage_changes(files: list[str] = None) -> str:
         return f"Error staging changes: {e}"
 
 @tool
-def run_commit(message: str = None, config: RunnableConfig = None) -> str:
+def run_commit(message: str = None, story_id: str = None, config: RunnableConfig = None) -> str:
     """
     Commit staged changes to the repository.
     If no message is provided, AI generation will be used.
+    Args:
+        message: Optional commit message.
+        story_id: Optional story ID (e.g., INFRA-042) to link the commit to.
     """
     try:
         session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
@@ -194,12 +197,20 @@ def run_commit(message: str = None, config: RunnableConfig = None) -> str:
         # Use robust shell activation pattern
         base_cmd = "source .venv/bin/activate && agent commit --yes"
         
+        # Build command parts
+        cmd_parts = [base_cmd]
+        
+        if story_id:
+            cmd_parts.append(f"--story {story_id}")
+            
         if message:
             # Escape quotes in message
             safe_message = message.replace('"', '\\"')
-            cmd = f'{base_cmd} -m "{safe_message}"'
+            cmd_parts.append(f'-m "{safe_message}"')
         else:
-            cmd = f"{base_cmd} --ai"
+            cmd_parts.append("--ai")
+             
+        cmd = " ".join(cmd_parts)
              
         # Execute with shell to support source
         process = subprocess.Popen(
