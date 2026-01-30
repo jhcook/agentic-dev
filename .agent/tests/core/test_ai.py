@@ -25,22 +25,47 @@ import pytest
 from agent.core.ai import AIService
 
 
+from agent.core.secrets import get_secret_manager
+
+@pytest.fixture(autouse=True)
+def mock_secret_manager():
+    """Ensure tests don't access real secrets."""
+    with patch("agent.core.ai.service.get_secret") as mock_get:
+        # We want get_secret to fall back to env vars, so we can't just return None.
+        # But get_secret implementation calls get_secret_manager.
+        # It's better to patch get_secret_manager to return a locked manager.
+        pass
+
+    with patch("agent.core.secrets.get_secret_manager") as mock_mgr:
+        manager = MagicMock()
+        manager.is_initialized.return_value = False # Force fallback to env
+        manager.is_unlocked.return_value = False
+        mock_mgr.return_value = manager
+        yield mock_mgr
+
 @pytest.fixture
 def mock_env_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
     monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 @pytest.fixture
 def mock_env_gemini(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 @pytest.fixture
 def mock_env_none(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
 
 def test_init_openai(mock_env_openai):
     # Mock openai module
@@ -55,13 +80,15 @@ def test_complete_openai(mock_env_openai):
     mock_openai.OpenAI.return_value.chat.completions.create.return_value = mock_response
     
     with patch.dict(sys.modules, {"openai": mock_openai}):
-        # Force GH check fail to default to OpenAI
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            ai = AIService()
-            # Double check
-            assert ai.provider == "openai"
-            response = ai.complete("System", "User")
-            assert response == "Test response"
+        # Mock config to prevent loading real agent.yaml
+        with patch("agent.core.config.config.load_yaml", return_value={}):
+            # Force GH check fail to default to OpenAI
+            with patch("subprocess.run", side_effect=FileNotFoundError):
+                ai = AIService()
+                # Double check
+                assert ai.provider == "openai"
+                response = ai.complete("System", "User")
+                assert response == "Test response"
 
 @pytest.mark.skip(reason="Mocking issues with google.genai Pydantic validation")
 def test_complete_gemini(mock_env_gemini):

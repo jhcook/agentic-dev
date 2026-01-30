@@ -20,7 +20,7 @@ The Agent CLI governance system is highly customizable through two main mechanis
 ├── documentation.mdc                     # Documentation requirements
 ├── global-compliance-requirements.mdc    # SOC2, GDPR
 ├── lean-code.mdc                        # Code quality standards
-├── state-enforcement.md                  # Workflow state transitions
+├── state-enforcement.mdc                  # Workflow state transitions
 ├── test.mdc                             # Testing requirements
 └── the-team.mdc                         # Team roles and responsibilities
 ```
@@ -30,10 +30,10 @@ The Agent CLI governance system is highly customizable through two main mechanis
 ```
 .agent/instructions/
 ├── compliance/
-│   ├── GDPR.md                          # GDPR-specific checklist
-│   └── SOC2.md                          # SOC2-specific checklist
+│   ├── GDPR.mdc                          # GDPR-specific checklist
+│   └── SOC2.mdc                          # SOC2-specific checklist
 └── qa/
-    └── CRITICAL_FLOWS.md                # Critical E2E test requirements
+    └── CRITICAL_FLOWS.mdc                # Critical E2E test requirements
 ```
 
 ## Creating Custom Rules
@@ -320,6 +320,7 @@ EOF
 Connect rules to instructions for comprehensive guidance:
 
 **In rule file** (`.agent/rules/security.mdc`):
+
 ```markdown
 ## BLOCKER: No Secrets in Code
 
@@ -327,6 +328,7 @@ See: .agent/instructions/security/secrets-management.md
 ```
 
 **In instruction file** (`.agent/instructions/security/secrets-management.md`):
+
 ```markdown
 # Secrets Management
 
@@ -456,6 +458,7 @@ File: `.agent/instructions/compliance/SOC2.md`
 ### 1. Start Small
 
 Don't create 50 rules on day one. Start with:
+
 - Critical security rules (no secrets, no PII)
 - Architectural boundaries
 - Test coverage requirements
@@ -465,12 +468,14 @@ Add more rules as your team matures.
 ### 2. Be Specific
 
 **❌ Vague:**
+
 ```markdown
 ## Code should be good quality
 Write clean, maintainable code.
 ```
 
 **✅ Specific:**
+
 ```markdown
 ## BLOCKER: Functions Must Have Type Hints
 
@@ -492,6 +497,7 @@ def calculate_total(items):
 ### 3. Provide Examples
 
 Every rule should have:
+
 - ✅ Good example (correct implementation)
 - ❌ Bad example (common violation)
 - 🔧 How to fix (if not obvious)
@@ -511,11 +517,13 @@ SQLite is not approved for production use.
 ### 5. Update After Incidents
 
 When bugs occur:
+
 1. Root cause analysis
 2. Create/update rule to prevent recurrence
 3. Add instruction for how to avoid
 
 Example:
+
 ```markdown
 ## BLOCKER: Validate All User Input
 
@@ -527,6 +535,7 @@ All user-provided data must be validated before processing.
 ### 6. Version Control Everything
 
 Rules and instructions are code:
+
 - Commit changes with meaningful messages
 - Review changes in PRs
 - Document breaking changes in CHANGELOG

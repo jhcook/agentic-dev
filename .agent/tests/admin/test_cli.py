@@ -43,7 +43,7 @@ def test_start_success(process_manager):
         assert mock_popen.call_count == 2
         # Verify backend call
         args_be, kwargs_be = mock_popen.call_args_list[0]
-        assert ".venv/bin/python" in args_be[0]
+        assert any(arg.endswith(".venv/bin/python") for arg in args_be[0])
         assert "uvicorn" in args_be[0]
         assert kwargs_be["cwd"] == ".agent/src"
         

@@ -115,11 +115,14 @@ def format_data(format_type: str, data: list[dict[str, any]]) -> str:
     Raises:
         ValueError: If format is unknown or data serialization fails.
     """
-    if not data:
+    if not data and format_type.lower() not in ["json", "yaml"]:
         return ""
 
     if format_type.lower() == "json":
         import json
+        # Handle empty data explicitly or let json.dumps handle it
+        if not data:
+             return "[]"
         return json.dumps(data, indent=2, default=str)
 
     elif format_type.lower() == "yaml":
@@ -134,11 +137,22 @@ def format_data(format_type: str, data: list[dict[str, any]]) -> str:
         if not data:
             return ""
             
-        keys = data[0].keys()
+        # Sanitize for CSV injection (Spreadsheet Formula Injection)
+        sanitized_data = []
+        for row in data:
+            new_row = {}
+            for k, v in row.items():
+                val = str(v)
+                if val.startswith(("=", "+", "-", "@")):
+                    val = "'" + val
+                new_row[k] = val
+            sanitized_data.append(new_row)
+            
+        keys = sanitized_data[0].keys()
         delimiter = "\t" if format_type.lower() == "tsv" else ","
         writer = csv.DictWriter(output, fieldnames=keys, delimiter=delimiter)
         writer.writeheader()
-        writer.writerows(data)
+        writer.writerows(sanitized_data)
         return output.getvalue()
 
     elif format_type.lower() == "markdown":

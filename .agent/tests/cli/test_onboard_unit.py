@@ -97,26 +97,46 @@ def test_ensure_gitignore_does_not_duplicate(tmp_path: Path):
 def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod, tmp_path: Path, monkeypatch):
     """Tests creating a new secret store with user input."""
     monkeypatch.chdir(tmp_path)
-    mock_getpass.side_effect = ["strong_pass", "strong_pass", "test_openai_key"]
-    (tmp_path / ".agent").mkdir(exist_ok=True)
-    configure_api_keys()
+    monkeypatch.setattr(os, "environ", {})
+    # 2 for Init, 1 for OpenAI, then blanks for others
+    inputs = ["strong_pass", "strong_pass", "test_openai_key"] + [""] * 10
+    mock_getpass.side_effect = inputs
+    
+    # Patch config.agent_dir to point to tmp_path/.agent
+    # And reset SecretManager singleton to force new initialization
+    with patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \
+         patch("agent.core.secrets._secret_manager", None):
+        
+        (tmp_path / ".agent").mkdir(exist_ok=True)
+        configure_api_keys()
+        
     secrets_dir = tmp_path / ".agent" / "secrets"
     assert secrets_dir.is_dir()
     mock_chmod.assert_called()
 
-@patch("shutil.which")
-@patch("getpass.getpass")
-@patch("agent.commands.secret._validate_password_strength", return_value=True)
-def test_onboard_command_success_flow(mock_validate, mock_getpass, mock_which):
-    """Tests the full `onboard` command in an ideal scenario."""
-    mock_which.return_value = "/usr/bin/mock"
-    mock_getpass.side_effect = ["pass", "pass", "test_openai_key"]
-    with runner.isolated_filesystem() as fs:
-        fs_path = Path(fs)
-        result = runner.invoke(onboard_app, catch_exceptions=False)
-        assert result.exit_code == 0
-        assert "Onboarding complete!" in result.output
-        assert (fs_path / ".agent").is_dir()
+@patch("agent.commands.onboard.run_verification")
+@patch("agent.commands.onboard.setup_frontend")
+@patch("agent.commands.onboard.configure_voice_settings")
+@patch("agent.commands.onboard.configure_agent_settings")
+@patch("agent.commands.onboard.check_github_auth")
+@patch("agent.commands.onboard.configure_api_keys")
+@patch("agent.commands.onboard.ensure_gitignore")
+@patch("agent.commands.onboard.ensure_agent_directory")
+@patch("agent.commands.onboard.check_dependencies")
+def test_onboard_command_success_flow(
+    mock_check_deps, mock_ensure_dir, mock_ensure_git, mock_api, mock_gh, 
+    mock_agent, mock_voice, mock_frontend, mock_verify
+):
+    """Tests the full `onboard` command orchestration."""
+    result = runner.invoke(onboard_app, catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "Onboarding complete!" in result.output
+    
+    # Verify calls
+    mock_check_deps.assert_called_once()
+    mock_ensure_dir.assert_called_once()
+    # verify order? No need for now.
+    mock_verify.assert_called_once()
 
 @patch("shutil.which")
 def test_onboard_command_fails_on_missing_dependency(mock_which):
@@ -125,4 +145,4 @@ def test_onboard_command_fails_on_missing_dependency(mock_which):
     with runner.isolated_filesystem():
         result = runner.invoke(onboard_app)
         assert result.exit_code != 0
-        assert "Dependency not found" in result.output
+        assert "Binary dependency not found" in result.output

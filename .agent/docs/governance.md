@@ -71,12 +71,14 @@ graph TD
 ### 2. Review Process
 
 Each agent receives:
+
 1. **Story content** - Requirements and acceptance criteria
 2. **Code diff** - Actual changes being made
 3. **Governance rules** - From `.agent/rules/*.mdc`
 4. **Role instructions** - From `.agent/instructions/<role>/`
 
 They evaluate and return:
+
 - **Status**: PASS, WARNING, FAIL, BLOCKER
 - **Feedback**: Specific issues found
 - **Suggestions**: How to fix issues
@@ -84,6 +86,7 @@ They evaluate and return:
 ### 3. Consensus Building
 
 After all agents review:
+
 1. Aggregate all feedback
 2. Identify blockers (must fix)
 3. Highlight warnings (should fix)
@@ -99,6 +102,7 @@ Rules are stored in `.agent/rules/` as Markdown Context (`.mdc`) files.
 #### 1. Global Rules (`main.mdc`)
 
 Apply to all code changes:
+
 ```markdown
 # Global Governance Rules
 
@@ -116,12 +120,14 @@ Apply to all code changes:
 #### 2. Compliance Rules
 
 **SOC2** (`global-compliance-requirements.mdc`):
+
 - Data encryption at rest and in transit
 - Audit logging for sensitive operations
 - Access control enforcement
 - Security incident response procedures
 
 **GDPR** (`.agent/compliance/GDPR.md`):
+
 - Lawful basis for data processing
 - User consent mechanisms
 - Right to erasure implementation
@@ -145,16 +151,19 @@ Use the template in .agent/templates/adr-template.md
 #### 4. Domain-Specific Rules
 
 **Testing** (`test.mdc`):
+
 - Unit test coverage > 80%
 - Integration tests for all API endpoints
 - E2E tests for critical user flows
 
 **Documentation** (`documentation.mdc`):
+
 - All API changes require OpenAPI updates
 - Public modules require README
 - Breaking changes need migration guide
 
 **API Contracts** (`api-contract-validation.mdc`):
+
 - OpenAPI spec must be valid
 - No breaking changes without version bump
 - Response schemas must match implementation
@@ -232,16 +241,19 @@ Runbook: PROPOSED → ACCEPTED
 Defined in `.agent/rules/state-enforcement.md`:
 
 #### Rule 1: Plan Approval Required
+
 - **Requirement**: Plan must be `APPROVED` before stories can be created
 - **Enforced by**: `agent new-story` checks parent plan status
 - **Rationale**: Ensures architectural alignment before work begins
 
 #### Rule 2: Story Commitment Required
+
 - **Requirement**: Story must be `COMMITTED` before runbook generation
 - **Enforced by**: `agent new-runbook` checks story status
 - **Rationale**: Requirements must be locked before implementation planning
 
 #### Rule 3: Runbook Acceptance Required
+
 - **Requirement**: Runbook must be `ACCEPTED` before implementation
 - **Enforced by**: `agent implement` checks runbook status
 - **Rationale**: Implementation plan must be reviewed before execution
@@ -255,6 +267,7 @@ agent preflight --story WEB-001 --ai
 ```
 
 If story is not `COMMITTED`, preflight will fail:
+
 ```
 ❌ BLOCKER: Story WEB-001 must be in COMMITTED state
 Current state: DRAFT
@@ -266,11 +279,13 @@ Update story state before proceeding.
 ### @Architect Reviews
 
 **Pass Criteria:**
+
 - ✅ ADR exists for major architectural changes
 - ✅ No cross-boundary violations (e.g., Mobile importing Backend)
 - ✅ Follows established patterns
 
 **Common Failures:**
+
 - ❌ New database without ADR
 - ❌ Direct database access from frontend
 - ❌ Circular dependencies
@@ -278,12 +293,14 @@ Update story state before proceeding.
 ### @Security Reviews
 
 **Pass Criteria:**
+
 - ✅ No secrets in code (use env vars)
 - ✅ No PII in logs
 - ✅ All inputs validated
 - ✅ Dependencies have no known vulnerabilities
 
 **Common Failures:**
+
 - ❌ Hardcoded API keys
 - ❌ `user.email` in log statements
 - ❌ SQL injection vulnerabilities
@@ -292,12 +309,14 @@ Update story state before proceeding.
 ### @QA Reviews
 
 **Pass Criteria:**
+
 - ✅ Test strategy section complete
 - ✅ Unit tests for new functions
 - ✅ Integration tests for API changes
 - ✅ E2E tests for critical flows
 
 **Common Failures:**
+
 - ❌ No tests for new feature
 - ❌ Test strategy missing
 - ❌ Existing tests broken
@@ -305,11 +324,13 @@ Update story state before proceeding.
 ### @Product Reviews
 
 **Pass Criteria:**
+
 - ✅ Acceptance criteria clear and testable
 - ✅ Impact analysis complete (Run `agent impact <ID>` to generate)
 - ✅ User story follows template
 
 **Common Failures:**
+
 - ❌ Vague acceptance criteria
 - ❌ No impact analysis
 - ❌ Missing problem statement
@@ -317,11 +338,13 @@ Update story state before proceeding.
 ### @Docs Reviews
 
 **Pass Criteria:**
+
 - ✅ CHANGELOG updated
 - ✅ API docs updated (if API changed)
 - ✅ README updated (if public API changed)
 
 **Common Failures:**
+
 - ❌ New API endpoint without OpenAPI update
 - ❌ Breaking change without CHANGELOG entry
 - ❌ Public function without docstring
@@ -329,11 +352,13 @@ Update story state before proceeding.
 ### @Compliance Reviews
 
 **Pass Criteria:**
+
 - ✅ GDPR checklist complete (if user data involved)
 - ✅ SOC2 requirements met
 - ✅ Audit logging for sensitive operations
 
 **Common Failures:**
+
 - ❌ User data collected without consent mechanism
 - ❌ No audit trail for admin operations
 - ❌ PII sent to third-party without DPA
@@ -360,7 +385,7 @@ cat > .agent/rules/performance.mdc << 'EOF'
 EOF
 ```
 
-2. Reference in role instructions:
+1. Reference in role instructions:
 
 ```bash
 cat > .agent/instructions/backend/performance.md << 'EOF'
@@ -375,7 +400,7 @@ For each API endpoint:
 EOF
 ```
 
-3. Test the rule:
+1. Test the rule:
 
 ```bash
 agent preflight --story BACKEND-001 --ai
@@ -400,7 +425,7 @@ team:
     instruction: "Consult .agent/instructions/devops/"
 ```
 
-2. Create instructions directory:
+1. Create instructions directory:
 
 ```bash
 mkdir -p .agent/instructions/devops
@@ -414,7 +439,7 @@ cat > .agent/instructions/devops/deployment.md << 'EOF'
 EOF
 ```
 
-3. The role will automatically participate in preflight reviews.
+1. The role will automatically participate in preflight reviews.
 
 ### Modifying Severity
 
@@ -464,6 +489,7 @@ Fix blockers before warnings.
 ### 3. Keep Rules Updated
 
 Review and update governance rules regularly:
+
 - After incidents (add rules to prevent recurrence)
 - When adopting new technologies
 - When compliance requirements change

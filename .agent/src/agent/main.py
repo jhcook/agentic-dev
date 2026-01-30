@@ -31,18 +31,46 @@ from agent.commands import (
     secret,
     story,
     workflow,
+    query,
 )
 
 app = typer.Typer()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def cli(
-    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Increase verbosity level.")
+    ctx: typer.Context,
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Increase verbosity level."),
+    version: bool = typer.Option(None, "--version", help="Show version and exit"),
+    provider: str = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
 ) -> None:
     """A CLI for managing and interacting with the AI agent."""
     from agent.core.logger import configure_logging
     configure_logging(verbose)
+
+    if version:
+        try:
+            from pathlib import Path
+            version_file = Path(__file__).parent.parent / "VERSION"
+            ver = version_file.read_text().strip() if version_file.exists() else "unknown"
+        except Exception:
+            ver = "unknown"
+        typer.echo(f"Agent CLI {ver}")
+        raise typer.Exit()
+
+    if provider:
+        try:
+            from agent.core.ai import ai_service
+            ai_service.set_provider(provider)
+        except Exception as e:
+            typer.echo(f"Error setting provider: {e}")
+            raise typer.Exit(1)
+
+    if ctx.invoked_subcommand is None:
+         # Restoring default behavior: missing command is an error (unless version/provider handled above)
+         typer.echo(ctx.get_help())
+         # Exit with 1 or 2 to satisfy "!= 0" tests asserting missing command
+         raise typer.Exit(1)
 
 
 @app.command()
@@ -96,6 +124,7 @@ app.command(name="new-adr")(adr.new_adr)
 
 # Infrastructure
 app.command(name="onboard")(onboard.onboard)
+app.command(name="query")(query.query)
 
 @app.command(name="sync")
 def sync_cmd(cursor: str = None):

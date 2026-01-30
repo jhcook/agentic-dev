@@ -66,8 +66,9 @@ def test_format_markdown():
 
 def test_format_plain():
     result = format_data("plain", SAMPLE_DATA)
-    assert "ID\tTitle\tState" in result
-    assert "1\tTest Item\tACTIVE" in result
+    # The implementation produces key=value pairs separate by space, one line per item
+    assert "ID=1 Title=Test Item State=ACTIVE" in result
+    assert "ID=2 Title=Another Item State=DRAFT" in result
 
 def test_format_pretty():
     # Pretty format returns JSON string fallback for non-console use in the function

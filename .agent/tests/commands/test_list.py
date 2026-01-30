@@ -82,7 +82,7 @@ def test_list_stories_output_file(mock_config, tmp_path):
 def test_list_stories_invalid_format(mock_config):
     result = runner.invoke(app, ["list-stories", "--format", "invalid"])
     assert result.exit_code == 1
-    assert "Unsupported format: invalid" in result.stdout
+    assert "Unknown format: invalid" in result.stdout
 
 def test_list_stories_pretty_default(mock_config):
     result = runner.invoke(app, ["list-stories"])

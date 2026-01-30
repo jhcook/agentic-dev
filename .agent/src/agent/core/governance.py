@@ -229,7 +229,7 @@ def convene_council_full(
         
         # Format findings for Markdown table
         findings_text = "<br><br>".join(role_findings)
-        findings_text = findings_text.replace("\n", "<br>").replace("|", "\|")
+        findings_text = findings_text.replace("\n", "<br>").replace("|", "\\|")
         
         if role_verdict == "BLOCK":
             overall_verdict = "BLOCK"

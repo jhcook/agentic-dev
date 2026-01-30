@@ -17,9 +17,17 @@
 from unittest.mock import patch
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from agent.commands.query import grep_fallback
+
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
 
 @pytest.fixture

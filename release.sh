@@ -29,9 +29,39 @@ if [ ! -d "$TARGET_DIR/.agent" ]; then
     mkdir -p "$TARGET_DIR/.agent"
 fi
 
-# Extract
-echo "   Extracting payload..."
-tar -xzf dist/agent-release.tar.gz -C "$TARGET_DIR"
+# Extract to temp dir
+echo "   Extracting payload to temporary directory..."
+TEMP_DIR=$(mktemp -d)
+tar -xzf dist/agent-release.tar.gz -C "$TEMP_DIR"
+
+# Sync to target
+echo "   Syncing to $TARGET_DIR..."
+# We use rsync to update files, honoring .gitignore
+# -a: archive mode
+# -v: verbose
+# --filter=':- .gitignore': Use .gitignore rules from target if present
+# We also want to ensure we don't delete files in target unless we want to match exact state?
+# The user requirement was "overwrite everything in the paths they copy to" but "honor .gitignore".
+# rsync will overwrite existing files with same name.
+# It will NOT delete extra files in target unless --delete is used (we won't use it for safety).
+if [ -f "$TARGET_DIR/.gitignore" ]; then
+    rsync -av --filter=':- .gitignore' "$TEMP_DIR/" "$TARGET_DIR/"
+else
+    # If no .gitignore in target, just sync
+    rsync -av "$TEMP_DIR/" "$TARGET_DIR/"
+fi
+
+# Cleanup
+rm -rf "$TEMP_DIR"
+
+# Create skeleton cache directories (since they were excluded from package)
+echo "   Creating skeleton cache directories..."
+CONFIGURED_SCOPES="{plans,stories,runbooks}/{INFRA,WEB,MOBILE,BACKEND}"
+# We use eval to expand the braces since variables in quotes don't expand braces in bash by default?
+# Actually simple explicit expansion is safer or enable brace expansion.
+# Let's just run mkdir -p with the brace expansion directly.
+mkdir -p "$TARGET_DIR/.agent/cache/"{plans,stories,runbooks}/{INFRA,WEB,MOBILE,BACKEND}
+mkdir -p "$TARGET_DIR/.agent/adrs"
 
 echo "✅ Agent files deployed."
 

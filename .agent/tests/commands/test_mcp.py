@@ -17,11 +17,21 @@ from unittest.mock import MagicMock, patch
 from agent.commands.mcp import _get_github_token
 from agent.core.secrets import get_secret_manager
 from typer import Exit
+import os
+
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    """Ensure no real GitHub tokens are present in env."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
 
 @patch("agent.commands.mcp.get_secret")
 @patch("agent.commands.mcp.get_secret_manager")
 @patch("agent.commands.secret._prompt_password")
-def test_get_github_token_unlock_flow(mock_prompt, mock_get_manager, mock_get_secret):
+@patch("shutil.which")
+def test_get_github_token_unlock_flow(mock_which, mock_prompt, mock_get_manager, mock_get_secret):
+    mock_which.return_value = None # Disable gh CLI fallback
     # Setup: 
     # 1. First get_secret fails (env empty)
     # 2. Manager is locked
@@ -53,7 +63,9 @@ def test_get_github_token_unlock_flow(mock_prompt, mock_get_manager, mock_get_se
 @patch("agent.commands.mcp.get_secret")
 @patch("agent.commands.mcp.get_secret_manager")
 @patch("agent.commands.secret._prompt_password")
-def test_get_github_token_retry_flow(mock_prompt, mock_get_manager, mock_get_secret):
+@patch("shutil.which")
+def test_get_github_token_retry_flow(mock_which, mock_prompt, mock_get_manager, mock_get_secret):
+    mock_which.return_value = None
     # Setup: 
     # 1. Manager locked
     # 2. First unlock fails (raises exception)
@@ -80,7 +92,9 @@ def test_get_github_token_retry_flow(mock_prompt, mock_get_manager, mock_get_sec
 @patch("agent.commands.mcp.get_secret")
 @patch("agent.commands.mcp.get_secret_manager")
 @patch("agent.commands.secret._prompt_password")
-def test_get_github_token_retry_exhausted(mock_prompt, mock_get_manager, mock_get_secret):
+@patch("shutil.which")
+def test_get_github_token_retry_exhausted(mock_which, mock_prompt, mock_get_manager, mock_get_secret):
+    mock_which.return_value = None
     # Setup: 
     # 1. Manager locked
     # 2. All 3 unlock attempts fail

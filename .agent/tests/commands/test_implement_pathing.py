@@ -33,21 +33,21 @@ def test_find_file_in_repo(mock_subprocess):
 @patch("pathlib.Path.write_text")
 @patch("pathlib.Path.mkdir")
 def test_apply_auto_correct(mock_mkdir, mock_write, mock_exists, mock_find, mock_console, mock_confirm):
-    # Scenario: AI tries to write to "main.py" (root), but it doesn't exist there.
-    # It DOES exist at ".agent/src/agent/main.py"
+    # Scenario: AI tries to write to "custom_script.py" (root), but it doesn't exist there.
+    # It DOES exist at ".agent/src/agent/custom_script.py"
     
     # 1. Root path does NOT exist
     mock_exists.return_value = False 
     
     # 2. Git search finds exactly one match
-    mock_find.return_value = [".agent/src/agent/main.py"]
+    mock_find.return_value = [".agent/src/agent/custom_script.py"]
     
     # 3. Apply changes
-    success = apply_change_to_file("main.py", "print('hello')", yes=True)
+    success = apply_change_to_file("custom_script.py", "print('hello')", yes=True)
     
     # Assertions
     assert success is True
     # Verify we wrote to the DEEP path, not the root path
     # args[0] of write_text should be the content. The Path object it's called on matters.
     # We can check if console printed the auto-correct message
-    mock_console.print.assert_any_call("[yellow]⚠️  Path Auto-Correct (File Match): 'main.py' -> '.agent/src/agent/main.py'[/yellow]")
+    mock_console.print.assert_any_call("[yellow]⚠️  Path Auto-Correct (File Match): 'custom_script.py' -> '.agent/src/agent/custom_script.py'[/yellow]")

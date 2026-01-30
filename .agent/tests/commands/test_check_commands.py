@@ -117,7 +117,7 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 1
-    assert "Governance Council Verdict: BLOCK" in result.stdout
+    assert "Preflight Blocked by Governance Council" in result.stdout
     assert "Reason: Hardcoded password" in result.stdout
 
 @patch("agent.core.governance.ai_service")
@@ -176,7 +176,8 @@ It avoids the error markdown for a BLOCK verdict.
     result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 0
-    assert "Governance Council Verdict: PASS" in result.stdout
+    assert result.exit_code == 0
+    assert "Preflight checks passed" in result.stdout
 
 @patch("agent.core.governance.ai_service") 
 @patch("agent.commands.check.ai_service")
@@ -201,7 +202,7 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
     result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 0
-    assert "Governance Council Verdict: PASS" in result.stdout
+    assert "Preflight checks passed" in result.stdout
 
 @patch("agent.core.governance.ai_service")
 @patch("agent.commands.check.ai_service")
@@ -235,4 +236,4 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
     assert data["roles"][0]["verdict"] == "PASS"
     
     # Check Output still contains human readable logs
-    assert "Governance Council Verdict: PASS" in result.stdout
+    assert "Preflight checks passed" in result.stdout

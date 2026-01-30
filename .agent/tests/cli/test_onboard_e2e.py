@@ -14,6 +14,7 @@
 
 import os
 import sys
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -139,7 +140,14 @@ def test_app():
     test_app.command(name="foo")(wrapper)
     return test_app
 
+@pytest.fixture
+def mock_onboard_steps():
+    with patch("agent.commands.onboard.configure_voice_settings") as m1, \
+         patch("agent.commands.onboard.setup_frontend") as m2:
+        yield m1, m2
+
 def test_onboard_dependencies_missing(test_app, mock_shutil_which):
+
     """Test that onboarding fails if critical dependencies are missing"""
     mock_shutil_which.side_effect = lambda x: None if x == "git" else "/usr/bin/python3"
     
@@ -149,7 +157,7 @@ def test_onboard_dependencies_missing(test_app, mock_shutil_which):
         print(f"OUTPUT: {result.output}")
         print(f"EXCEPTION: {result.exception}")
     assert result.exit_code == 1
-    assert "Dependency not found: 'git'" in result.stdout
+    assert "Binary dependency not found" in result.stdout
 
 @pytest.fixture
 def mock_secret_manager():
@@ -198,6 +206,7 @@ def test_onboard_happy_path(
     mock_secret_manager,
     mock_prompt_password,
     mock_validate_password,
+    mock_onboard_steps,
 ):
     """Test the happy path where all checks pass and user provides keys."""
     # Simulate user input:
@@ -259,7 +268,9 @@ def test_onboard_skip_keys(
     mock_user_input,
     mock_runner,
     mock_config,
-    mock_ai_service
+    mock_ai_service,
+    mock_github_auth,
+    mock_onboard_steps,
 ):
     """Test skipping optional keys"""
     mock_shutil_which.return_value = "/bin/tool"
@@ -288,7 +299,9 @@ def test_verification_failure_warns(
     mock_ai_service,
     mock_secret_manager,
     mock_prompt_password,
-    mock_validate_password
+    mock_validate_password,
+    mock_github_auth,
+    mock_onboard_steps,
 ):
     """Test that verification failure just warns and doesn't crash"""
     mock_shutil_which.return_value = "/bin/tool"
@@ -320,7 +333,8 @@ def test_check_github_auth_authenticated(
     mock_ai_service,
     mock_secret_manager,
     mock_prompt_password,
-    mock_validate_password
+    mock_validate_password,
+    mock_onboard_steps,
 ):
     """Test standard flow when gh is authenticated"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -328,14 +342,19 @@ def test_check_github_auth_authenticated(
     # Mock gh auth status success
     mock_subprocess_run.return_value.returncode = 0
     
+    # Mock secret existing
+    mock_secret_manager.has_secret.return_value = True
+
     # Standard inputs
     # 3 Keys (skip), Provider 1, Model 1
     mock_user_input.side_effect = ["", "", "", "1", "1"]
-    result = mock_runner.invoke(test_app, [])
+    
+    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+        result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
-    assert "[INFO] Checking GitHub authentication status..." in result.stdout
-    assert "[OK] GitHub CLI is authenticated." in result.stdout
+    assert "Configuring GitHub Access..." in result.stdout
+    assert "GitHub access already configured" in result.stdout
 
 def test_check_github_auth_not_authenticated_yes(
     test_app,
@@ -348,7 +367,8 @@ def test_check_github_auth_not_authenticated_yes(
     mock_ai_service,
     mock_secret_manager,
     mock_prompt_password,
-    mock_validate_password
+    mock_validate_password,
+    mock_onboard_steps,
 ):
     """Test flow when gh is NOT authenticated and user says YES to login"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -363,16 +383,31 @@ def test_check_github_auth_not_authenticated_yes(
     # Typer confirm usually uses stdin? Or uses typer.confirm?
     # We patch typer.confirm below.
     # So we just need the standard flow inputs.
-    mock_user_input.side_effect = ["", "", "", "1", "1"]
+    mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1"]
     
-    with patch("agent.commands.onboard.typer.confirm", return_value=True):
-        result = mock_runner.invoke(test_app, [])
+    # We also need to mock subprocess.Popen for the login attempt
+    with patch("agent.commands.onboard.subprocess.Popen") as mock_popen:
+        mock_process = MagicMock()
+        mock_process.communicate.return_value = ("Logged in", "")
+        mock_process.returncode = 0
+        mock_popen.return_value = mock_process
         
+        with patch("agent.commands.onboard.typer.confirm", return_value=True):
+            result = mock_runner.invoke(test_app, [])
+    
     assert result.exit_code == 0
-    assert "[WARN] GitHub CLI is not authenticated." in result.stdout
-    assert "[WARN] GitHub CLI is not authenticated." in result.stdout
+    # Steps:
+    # 1. Configuring -> 2. We will now configure -> 3. GitHub CLI authenticated
+    assert "We will now configure GitHub access" in result.stdout
+    assert "GitHub CLI authenticated" in result.stdout
     # Check we called login
-    mock_subprocess_run.assert_called_with(["gh", "auth", "login"])
+    mock_popen.assert_called_with(
+        ["gh", "auth", "login", "--with-token"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
 
 def test_verification_uses_configured_provider(
     test_app,
@@ -383,7 +418,9 @@ def test_verification_uses_configured_provider(
     mock_config,
     mock_secret_manager,
     mock_prompt_password,
-    mock_validate_password
+    mock_validate_password,
+    mock_github_auth,
+    mock_onboard_steps,
 ):
     """Test that verification forces the configured provider"""
     mock_shutil_which.return_value = "/bin/tool"
@@ -430,7 +467,9 @@ def test_onboard_migration(
     mock_secret_manager,
     mock_prompt_password,
     mock_validate_password,
-    mock_ai_service
+    mock_ai_service,
+    mock_github_auth,
+    mock_onboard_steps,
 ):
     """Test migration of keys from env to secret manager."""
     mock_shutil_which.return_value = "/bin/tool"

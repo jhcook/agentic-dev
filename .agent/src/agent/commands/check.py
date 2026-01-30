@@ -155,6 +155,11 @@ def validate_story(
                     else:
                         console.print("[red]❌ Failed to apply fix.[/red]")
                         
+            
+        if not interactive:
+            console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
+            console.print(f"Missing sections: {', '.join(missing)}")
+            
         if return_bool:
             return False
         raise typer.Exit(code=1)

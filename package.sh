@@ -47,19 +47,19 @@ else
     echo "unknown" > .agent/src/VERSION
 fi
 
+# list tracked files
+git ls-files "$SOURCE_DIR" > "$DIST_DIR/files_to_package.txt"
+
+# Add version file (which is a build artifact, not tracked)
+echo ".agent/src/VERSION" >> "$DIST_DIR/files_to_package.txt"
+
 echo "📦 Packaging agent..."
-# Exclude user-specific data directories but keep the tool structure
-tar --exclude="$SOURCE_DIR/logs/*" \
-    --exclude="$SOURCE_DIR/adrs/*" \
-    --exclude="$SOURCE_DIR/cache/*" \
-    --exclude="$SOURCE_DIR/secrets/*" \
-    --exclude="$SOURCE_DIR/models/*" \
-    --exclude="$SOURCE_DIR/storage/*" \
-    --exclude="$SOURCE_DIR/backups/*" \
-    --exclude="$SOURCE_DIR/tests" \
-    --exclude="$SOURCE_DIR/.venv" \
-    -czf "$DIST_DIR/$ARCHIVE_NAME" \
-    "$SOURCE_DIR"
+# We use -T - to read files from stdin
+# Filter:
+# 1. /tests/ : Exclude any directory named 'tests'
+# 2. .agent/cache/ : Exclude the entire cache directory
+# 3. .agent/adrs/ : Exclude the entire adrs directory
+grep -v "/tests/" "$DIST_DIR/files_to_package.txt" | grep -v ".agent/cache/" | grep -v ".agent/adrs/" | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
 
 echo "✅ Build complete!"
 echo "   Archive: $DIST_DIR/$ARCHIVE_NAME"
