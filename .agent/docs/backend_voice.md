@@ -180,12 +180,16 @@ Imports for heavy voice libraries (`deepgram-sdk`, `faster-whisper`, `kokoro-onn
 ### 4. Process Lifecycle Management
 
 To prevent "orphaned" processes (e.g. `agent preflight` running in the background after the server stops), the system uses a singleton `ProcessLifecycleManager`.
+
+- Real-time streaming of subprocess output (e.g. `npm audit`, `preflight`) via EventBus.
+- **PTY Support**: Uses Pseudo-Terminals for subprocesses to force line-buffering and preserve colored output/stderr visibility.
 - **Registry**: Tools register their `subprocess.Popen` instances.
 - **Cleanup**: An `atexit` handler ensures all registered child processes are forcibly terminated when the main agent process exits.
 
 ### 5. Thread-Safe Event Dispatching
 
 Tools often run in background threads (managed by LangGraph) to avoid blocking the main asyncio loop. The `VoiceOrchestrator` implements thread-safe event ingestion:
+
 - **EventBus**: Tools publish events (logs, status) synchronously.
 - **Orchestrator**: Uses `loop.call_soon_threadsafe` to bridge these events back into the main `asyncio` loop for WebSocket streaming. This prevents `RuntimeError: no running event loop` crashes.
 

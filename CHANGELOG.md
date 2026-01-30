@@ -12,6 +12,9 @@
 - **Voice Agent Integration for Preflight** (INFRA-039):
   - Added `AGENT_VOICE_MODE` detection to optimize CLI output for speech-to-text interfaces.
   - Enabled hands-free interactive repair via voice commands.
+- **Improved CLI Robustness**:
+  - Restored `agent help` command regression.
+  - Implemented PTY support for `agent preflight` in Voice Mode to fix output buffering and visible errors.
 
 - Implemented core orchestration logic for real-time voice interaction via WebSocket endpoint `/ws/voice`.
 - Created `VoiceOrchestrator` class for managing audio processing, STT, agent interaction, and TTS.
