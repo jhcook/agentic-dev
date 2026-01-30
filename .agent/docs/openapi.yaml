@@ -1,0 +1,462 @@
+openapi: 3.1.0
+info:
+  title: Agentic Voice Backend
+  version: 0.1.0
+paths:
+  /api/admin/health:
+    get:
+      tags:
+      - admin
+      summary: Health Check
+      description: Simple health check for the Admin API.
+      operationId: health_check_api_admin_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/admin/config/voice:
+    get:
+      tags:
+      - admin
+      summary: Get Voice Config
+      description: Returns the current voice configuration.
+      operationId: get_voice_config_api_admin_config_voice_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+    post:
+      tags:
+      - admin
+      summary: Update Voice Config
+      description: Updates the voice configuration atomically.
+      operationId: update_voice_config_api_admin_config_voice_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoiceConfig'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/admin/config/schema:
+    get:
+      tags:
+      - admin
+      summary: Get Config Schema
+      description: Returns the JSON schema for VoiceConfig.
+      operationId: get_config_schema_api_admin_config_schema_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/admin/prompts:
+    get:
+      tags:
+      - admin
+      summary: List Prompts
+      description: Lists available system prompts.
+      operationId: list_prompts_api_admin_prompts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/admin/prompts/{filename}:
+    get:
+      tags:
+      - admin
+      summary: Get Prompt
+      description: Reads a specific system prompt.
+      operationId: get_prompt_api_admin_prompts__filename__get
+      parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Filename
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - admin
+      summary: Update Prompt
+      description: Updates a system prompt atomically.
+      operationId: update_prompt_api_admin_prompts__filename__post
+      parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Filename
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Data
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/admin/governance/artifacts:
+    get:
+      tags:
+      - governance
+      summary: List Artifacts
+      operationId: list_artifacts_api_admin_governance_artifacts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Artifact'
+                type: array
+                title: Response List Artifacts Api Admin Governance Artifacts Get
+  /api/admin/governance/graph:
+    get:
+      tags:
+      - governance
+      summary: Get Estate Graph
+      operationId: get_estate_graph_api_admin_governance_graph_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstateGraph'
+  /api/admin/governance/artifact/{art_id}:
+    get:
+      tags:
+      - governance
+      summary: Get Artifact Content
+      operationId: get_artifact_content_api_admin_governance_artifact__art_id__get
+      parameters:
+      - name: art_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Art Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - governance
+      summary: Update Artifact
+      operationId: update_artifact_api_admin_governance_artifact__art_id__post
+      parameters:
+      - name: art_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Art Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/admin/governance/artifact/{art_id}/status:
+    patch:
+      tags:
+      - governance
+      summary: Update Artifact Status
+      operationId: update_artifact_status_api_admin_governance_artifact__art_id__status_patch
+      parameters:
+      - name: art_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Art Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/admin/governance/preflight:
+    post:
+      tags:
+      - governance
+      summary: Run Preflight
+      operationId: run_preflight_api_admin_governance_preflight_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health:
+    get:
+      summary: Health Check
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    Artifact:
+      properties:
+        id:
+          type: string
+          title: Id
+        uid:
+          type: string
+          title: Uid
+        type:
+          type: string
+          title: Type
+        title:
+          type: string
+          title: Title
+        status:
+          type: string
+          title: Status
+        path:
+          type: string
+          title: Path
+        content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content
+        links:
+          items:
+            type: string
+          type: array
+          title: Links
+          default: []
+      type: object
+      required:
+      - id
+      - uid
+      - type
+      - title
+      - status
+      - path
+      title: Artifact
+    ArtifactUpdate:
+      properties:
+        content:
+          type: string
+          title: Content
+      type: object
+      required:
+      - content
+      title: ArtifactUpdate
+    EstateGraph:
+      properties:
+        nodes:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Nodes
+        edges:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Edges
+      type: object
+      required:
+      - nodes
+      - edges
+      title: EstateGraph
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LLMConfig:
+      properties:
+        provider:
+          type: string
+          title: Provider
+          description: LLM provider name (e.g., gemini, openai)
+        model:
+          type: string
+          title: Model
+          description: Model ID to use
+      type: object
+      required:
+      - provider
+      - model
+      title: LLMConfig
+    STTConfig:
+      properties:
+        provider:
+          type: string
+          title: Provider
+          description: STT provider (deepgram, whisper)
+        model:
+          type: string
+          title: Model
+          description: Model name
+      type: object
+      required:
+      - provider
+      - model
+      title: STTConfig
+    StatusUpdate:
+      properties:
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - status
+      title: StatusUpdate
+    TTSConfig:
+      properties:
+        provider:
+          type: string
+          title: Provider
+          description: TTS provider (deepgram, kokoro)
+        model:
+          type: string
+          title: Model
+          description: Voice model name
+      type: object
+      required:
+      - provider
+      - model
+      title: TTSConfig
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VoiceConfig:
+      properties:
+        llm:
+          $ref: '#/components/schemas/LLMConfig'
+        stt:
+          $ref: '#/components/schemas/STTConfig'
+        tts:
+          $ref: '#/components/schemas/TTSConfig'
+        whisper:
+          $ref: '#/components/schemas/WhisperConfig'
+      type: object
+      required:
+      - llm
+      - stt
+      - tts
+      - whisper
+      title: VoiceConfig
+    WhisperConfig:
+      properties:
+        model_size:
+          type: string
+          title: Model Size
+          description: Whisper model size
+          default: tiny
+        device:
+          type: string
+          title: Device
+          description: Execution device (cpu, cuda, auto)
+          default: auto
+      type: object
+      title: WhisperConfig

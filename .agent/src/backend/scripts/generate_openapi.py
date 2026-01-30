@@ -20,6 +20,10 @@ from pathlib import Path
 # Add src to path to import backend
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from unittest.mock import MagicMock
+sys.modules["psycopg2"] = MagicMock()
+sys.modules["psycopg2.binary"] = MagicMock()
+
 from backend.main import app
 
 def generate():
@@ -29,7 +33,7 @@ def generate():
     # Actually commonly docs/ usually refers to project root docs if it exists, or .agent/docs
     # Let's target .agent/docs based on list_dir output intent
     
-    output_dir = Path(__file__).parent.parent.parent.parent / "docs"
+    output_dir = Path(__file__).parents[4] / "docs"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     json_path = output_dir / "openapi.json"
