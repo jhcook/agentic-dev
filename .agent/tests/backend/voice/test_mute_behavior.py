@@ -32,31 +32,33 @@ async def test_mute_force_flush_logic():
         queue = asyncio.Queue()
         orchestrator.run_background(queue)
         
-        # 2. Push some "Quiet" audio (below threshold but non-zero)
-        # 0.5 seconds of audio
-        audio_chunk = b'\x00' * 3200 # 3200 bytes = 0.1s at 16k 16bit? 16000 * 2 = 32000 bytes/s. 3200 is 0.1s.
-        for _ in range(5):
-            orchestrator.push_audio(audio_chunk)
+        try:
+            # 2. Push some "Quiet" audio (below threshold but non-zero)
+            # 0.5 seconds of audio
+            audio_chunk = b'\x00' * 3200 # 3200 bytes = 0.1s at 16k 16bit? 16000 * 2 = 32000 bytes/s. 3200 is 0.1s.
+            for _ in range(5):
+                orchestrator.push_audio(audio_chunk)
+                
+            # 3. Send Mute Sentinel (User clicked Mute)
+            # Simulate router handling mute_changed
+            orchestrator.handle_client_event("mute_changed", {"muted": True})
             
-        # 3. Send Mute Sentinel (User clicked Mute)
-        # Simulate router handling mute_changed
-        orchestrator.handle_client_event("mute_changed", {"muted": True})
-        
-        # Allow loop to process
-        await asyncio.sleep(0.1)
-        
-        # 4. Verify Pipeline was called?
-        # CURRENTLY: This should FAIL because speech_active is False.
-        # We WANT it to Pass (Push-to-Talk behavior).
-        
-        # Check if pipeline was called
-        # orchestrator._run_pipeline.assert_called() 
-        
-        print(f"Pipeline called: {orchestrator._run_pipeline.called}")
-        orchestrator.stop()
-        
-        # We assert what we EXPECT the current behavior to be (reproduction)
-        # If this fails assertion, then my understanding is wrong.
-        # Expectation: called=True (Push-to-Talk works)
-        assert orchestrator._run_pipeline.called, "Pipeline WAS NOT called, Push-to-Talk failed."
+            # Allow loop to process
+            await asyncio.sleep(0.1)
+            
+            # 4. Verify Pipeline was called?
+            # CURRENTLY: This should FAIL because speech_active is False.
+            # We WANT it to Pass (Push-to-Talk behavior).
+            
+            # Check if pipeline was called
+            # orchestrator._run_pipeline.assert_called() 
+            
+            print(f"Pipeline called: {orchestrator._run_pipeline.called}")
+            
+            # We assert what we EXPECT the current behavior to be (reproduction)
+            # If this fails assertion, then my understanding is wrong.
+            # Expectation: called=True (Push-to-Talk works)
+            assert orchestrator._run_pipeline.called, "Pipeline WAS NOT called, Push-to-Talk failed."
+        finally:
+            orchestrator.stop()
 

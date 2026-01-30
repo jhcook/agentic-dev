@@ -38,14 +38,16 @@ def test_git_status_streaming(mock_subprocess_run, mock_event_bus):
     result = get_git_status.func(config=config)
     
     # Check output format
-    assert "UNTRACKED Files" in result
+    import json
+    data = json.loads(result)
+    assert "untracked.txt" in data["untracked"]
     
     # Check streaming
     mock_event_bus.publish.assert_called_once()
     args = mock_event_bus.publish.call_args[0]
     assert args[0] == "session-1" # Session ID
     assert args[1] == "console"
-    assert "=== Git Status ===" in args[2]
+    assert "=== Git Status (JSON) ===" in args[2]
 
 def test_git_diff_streaming_truncation(mock_subprocess_run, mock_event_bus):
     """Test that large git diffs are truncated and streamed."""
@@ -112,7 +114,11 @@ def test_run_pr_opens_url(mock_event_bus):
     """Test that run_pr emits open_url event when URL is found."""
     from backend.voice.tools.git import run_pr
     
-    with patch('subprocess.Popen') as mock_popen:
+    with patch('subprocess.Popen') as mock_popen, \
+         patch('backend.voice.process_manager.ProcessLifecycleManager') as mock_plm:
+         
+        # Ensure instance().register/unregister works
+        mock_plm.instance.return_value = MagicMock()
         
         # Setup Pass 1: Date (subprocess.check_output uses context manager)
         proc_date = MagicMock()

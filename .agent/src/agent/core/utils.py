@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import re
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -298,3 +299,53 @@ def sanitize_id(input_str: str) -> str:
     # Remove all whitespace
     s = re.sub(r"\s+", "", s)
     return s
+
+
+def extract_json_from_response(response: str) -> str:
+    """
+    Robustly extract JSON from AI response, handling markdown code blocks
+    and various formatting issues.
+    """
+    if not response:
+        return ""
+    response = response.strip()
+    
+    # 1. Try Regex for code blocks (most reliable)
+    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
+    if json_match:
+        try:
+            # Verify if it parses, otherwise fall through to robust extraction
+            # use strict=False to match fixer.py leniency expectations
+            json.loads(json_match.group(1), strict=False)
+            return json_match.group(1)
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Robust Bracket Matching Logic
+    # Find the FIRST '['
+    start_idx = response.find("[")
+    if start_idx == -1:
+        return "" # No array found
+        
+    # Optimistic approach: try from first '[' to last ']'
+    # If that fails (due to trailing noise with brackets), step back to previous ']'
+    
+    # Collect all indices of ']' that appear after start_idx
+    end_indices = [i for i, char in enumerate(response) if char == "]" and i > start_idx]
+    
+    # Reverse iterate (try largest block first)
+    for end_idx in reversed(end_indices):
+        candidate = response[start_idx : end_idx + 1]
+        try:
+            json.loads(candidate, strict=False)
+            return candidate
+        except json.JSONDecodeError:
+            continue
+            
+    # 3. Fallback: Return original greedy search if robust fail (might work for lenient parsers)
+    # This preserves original behavior if for some reason the above failed but regex would have matched partial
+    list_match = re.search(r"(\[.*\])", response, re.DOTALL)
+    if list_match:
+        return list_match.group(1)
+        
+    return response

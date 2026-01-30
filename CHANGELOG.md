@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Interactive Preflight Repair** (INFRA-042):
+  - Added `--interactive` flag to `agent preflight`.
+  - Implemented `InteractiveFixer` service for identifying and repairing Story schema and governance violations.
+  - Added AI-powered fix suggestions and automated verification loop.
+  - Added File-based backup mechanism (replacing `git stash`) for safe rollbacks.
+- **Voice Agent Integration for Preflight** (INFRA-039):
+  - Added `AGENT_VOICE_MODE` detection to optimize CLI output for speech-to-text interfaces.
+  - Enabled hands-free interactive repair via voice commands.
+
 - Implemented core orchestration logic for real-time voice interaction via WebSocket endpoint `/ws/voice`.
 - Created `VoiceOrchestrator` class for managing audio processing, STT, agent interaction, and TTS.
 - **Integrated LangGraph for intelligent conversational agent in voice orchestrator** (INFRA-029)

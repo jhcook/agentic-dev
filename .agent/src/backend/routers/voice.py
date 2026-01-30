@@ -62,7 +62,15 @@ async def websocket_endpoint(websocket: WebSocket):
     - Receiver Loop: reads input -> VAD check -> offloads processing
     """
     await websocket.accept()
-    session_id = str(uuid4())
+    
+    client_host = websocket.client.host if websocket.client else "unknown"
+    logger.info(f"WS_CONNECT: New connection attempt from {client_host}")
+    
+    # Respect client-provided session ID to maintain history continuity
+    session_id = websocket.query_params.get("session_id")
+    if not session_id:
+        session_id = str(uuid4())
+        
     logger.info(f"Voice session started: {session_id}", extra={"correlation_id": session_id})
     
     orchestrator = VoiceOrchestrator(session_id)

@@ -49,9 +49,20 @@ As a Developer, I want an interactive "fix" mode for the `agent preflight` comma
   - Mock the AI service to return preset options.
   - Verify that option selection applies the correct file edit.
   - Verify that successful re-check clears the error.
-- **Manual**:
-  - Corrupt a story file (remove section). Run `agent fix`. Verify prompt and repair.
-  - Break a test. Run `agent fix`. Verify prompt and repair (assuming AI can fix simple logic).
+
+- **Integration (Automated)**:
+  - `test_check_integration.py`: Verify `validate_story` correctly identifies schema violations and triggers the interactive fixer (mocked).
+  - Verify `validate_story` returns `True` for valid stories.
+
+- **E2E (Automated)**:
+  - `test_e2e_interactive.py`: Simulate the full CLI loop (`agent preflight --interactive`).
+  - Corrupt a dummy story file.
+  - Mock User Input to select a fix.
+  - Assert that the file is repaired and the command exits successfully.
+
+- **Manual (Exploratory)**:
+  - Voice Agent Integration verification (testing strict voice flow).
+  - "Break a test" scenario to verify non-schema failure handling.
 
 ## Rollback Plan
 

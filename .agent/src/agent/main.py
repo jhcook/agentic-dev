@@ -45,6 +45,13 @@ def cli(
     configure_logging(verbose)
 
 
+@app.command()
+def help(ctx: typer.Context):
+    """Show help for the CLI."""
+    typer.echo(ctx.parent.get_help())
+    raise typer.Exit()
+
+
 
 
 

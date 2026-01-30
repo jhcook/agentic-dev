@@ -20,8 +20,10 @@ from rich.console import Console
 app = typer.Typer()
 console = Console()
 
+import subprocess
+
 def match_story(
-    files: str = typer.Option(..., help="List of changed files (space or newline separated)"),
+    files: Optional[str] = typer.Argument(None, help="List of changed files (space or newline separated). Defaults to staged git files."),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, openai)."
     ),
@@ -30,8 +32,18 @@ def match_story(
     AI-assisted story selection based on context.
     """
     if not files:
-        console.print("[red]❌ Error: --files argument is required.[/red]")
-        raise typer.Exit(code=1)
+        # Default to staged files
+        try:
+            staged = subprocess.check_output(["git", "diff", "--name-only", "--cached"]).decode().strip()
+            if staged:
+                files = staged.replace("\n", " ")
+                console.print(f"[dim]Using staged files: {files}[/dim]")
+            else:
+                console.print("[red]❌ Error: No files provided and no staged changes found.[/red]")
+                raise typer.Exit(code=1)
+        except Exception as e:
+            console.print(f"[red]❌ Error detecting staged files: {e}[/red]")
+            raise typer.Exit(code=1)
 
     if provider:
         from agent.core.ai import ai_service

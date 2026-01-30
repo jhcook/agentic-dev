@@ -53,6 +53,9 @@ tar --exclude="$SOURCE_DIR/logs/*" \
     --exclude="$SOURCE_DIR/adrs/*" \
     --exclude="$SOURCE_DIR/cache/*" \
     --exclude="$SOURCE_DIR/secrets/*" \
+    --exclude="$SOURCE_DIR/models/*" \
+    --exclude="$SOURCE_DIR/storage/*" \
+    --exclude="$SOURCE_DIR/backups/*" \
     --exclude="$SOURCE_DIR/tests" \
     --exclude="$SOURCE_DIR/.venv" \
     -czf "$DIST_DIR/$ARCHIVE_NAME" \

@@ -29,9 +29,11 @@ class MockTTS:
 
 @pytest.fixture
 def mock_providers():
-    with patch("backend.voice.orchestrator.get_voice_providers") as mock:
-        mock.return_value = (MockSTT(), MockTTS())
-        yield mock
+    with patch("backend.voice.orchestrator.get_voice_providers") as mock_providers, \
+         patch("backend.voice.orchestrator._create_llm") as mock_llm_factory:
+        mock_providers.return_value = (MockSTT(), MockTTS())
+        mock_llm_factory.return_value = MagicMock() # Mock LLM
+        yield mock_providers
 
 @pytest.mark.asyncio
 async def test_process_audio_streaming(mock_providers):
@@ -76,6 +78,7 @@ async def test_process_audio_streaming(mock_providers):
         raise
     finally:
         loop_task.cancel()
+        orchestrator.stop()
 
     # Verification
     # Expected chunks based on SentenceBuffer logic:
@@ -107,8 +110,13 @@ async def test_process_audio_no_input(mock_providers):
         with pytest.raises(asyncio.TimeoutError):
             item = await asyncio.wait_for(orchestrator.output_queue.get(), timeout=0.5)
             # Filter status thinking/listening if they happen
+            count = 0
             while item["type"] == "status":
                  item = await asyncio.wait_for(orchestrator.output_queue.get(), timeout=0.5)
+                 count += 1
+                 if count > 100:
+                     raise RuntimeError("Infinite status loop detected in test")
             assert item is None # Should not happen
     finally:
         loop_task.cancel()
+        orchestrator.stop()

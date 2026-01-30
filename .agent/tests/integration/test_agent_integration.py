@@ -19,7 +19,7 @@ import subprocess
 import pytest
 
 # Path to the real repository root
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 def get_venv_env():
     """Get environment with venv bin in PATH."""

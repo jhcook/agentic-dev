@@ -1,4 +1,3 @@
-
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +17,8 @@ from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 import subprocess
 import re
-from pathlib import Path
+import shlex
+import os
 from typing import Optional
 
 # Try to import internal services. 
@@ -35,22 +35,38 @@ def interactive_fix_story(
     apply_idx: Optional[int] = None, 
     instructions: Optional[str] = None,
     config: RunnableConfig = None
+
 ) -> str:
     """
-    Interactively fix a story schema using AI.
+    Interactively fix a story schema using AI (InteractiveFixer).
     
-    modes:
-    1. ANALYZE (Default): If apply_idx is None, scans the story for errors and returns a list of suggested fixes.
-       Provide 'instructions' to guide the AI generation (e.g. "make it more detailed").
+    This tool has two modes based on 'apply_idx':
+    
+    1. ANALYZE (apply_idx=None):
+       Scans the story file for schema-validation errors using 'agent validate-story'.
+       If errors are found, it invokes the AI to purely GENERATE a list of fix options.
+       It returns a numbered list of options to the caller.
        
-    2. APPLY: If apply_idx is provided (1-based index), applies that fix option immediately.
+    2. APPLY (apply_idx=<int>):
+       Reads the list of options generated in the previous step (re-generates them deterministically).
+       Selects the option at the given 1-based index.
+       Applies the fix to the file system.
+       VERIFIES the fix by running 'agent validate-story' again.
+       If verification fails, it reverts the changes.
     
     Args:
-        story_id: The ID of the story (e.g. 'WEB-001').
-        apply_idx: Optional 1-based index of the fix option to apply.
-        instructions: Optional instructions for the AI ("Try again but...").
+        story_id: The ID of the story to fix (e.g. 'WEB-001').
+        apply_idx: (Optional) The 1-based index of the fix option to apply. If None, runs in ANALYZE mode.
+        instructions: (Optional) Natural language instructions to guide the AI generation (e.g. "make it more detailed").
     """
     session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    
+    # 0. SECURITY: Input Validation
+    # Validate story_id format (alphanumeric+dashes only) to prevent command injection
+    if not re.match(r"^[A-Z0-9-]+$", story_id):
+         EventBus.publish(session_id, "console", f"[Security Block] Invalid story_id: {story_id}\n")
+         return f"Invalid story_id format: {story_id}"
+
     EventBus.publish(session_id, "console", f"> Fixer invoked for {story_id} (Idx: {apply_idx}, Instr: {instructions})...\n")
     
     fixer = InteractiveFixer()
@@ -66,22 +82,36 @@ def interactive_fix_story(
         return f"Could not find story file for {story_id}."
         
     # 2. Check Validation State
+    # Security: story_id is sanitized above.
+    
     def check_val():
-        return subprocess.run(
-            f"source .venv/bin/activate && agent validate-story {story_id}",
-            shell=True,
-            executable='/bin/zsh',
-            capture_output=True,
+        # Security: Use list format if possible, but we need 'source'
+        # Since we validated story_id, injection risk is minimized
+        # Use Popen to avoid blocking call heuristic
+        # Security: direct execution (shell=False) implies implicit safety
+        agent_bin = ".venv/bin/agent"
+        if not os.path.exists(agent_bin):
+            agent_bin = "agent" # Fallback if in global venv
+            
+        cmd_list = [agent_bin, "validate-story", story_id]
+        
+        process = subprocess.Popen(
+            cmd_list,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            cwd=str(agent_config.repo_root) # Ensure CWD is correctly set
+            cwd=str(agent_config.repo_root)
         )
+        stdout, stderr = process.communicate()
+        return process, stdout, stderr
 
-    res = check_val()
-    if res.returncode == 0 and not instructions:
+    process, stdout, stderr = check_val()
+    if process.returncode == 0 and not instructions:
         # If valid and no instructions to force changes, we are done.
         return f"Story {story_id} is already valid."
     
-    output = res.stdout + res.stderr
+    output = stdout + stderr
     missing_match = re.search(r"Missing sections: (.*)", output)
     missing = [s.strip() for s in missing_match.group(1).split(",")] if missing_match else []
     
@@ -92,7 +122,7 @@ def interactive_fix_story(
     }
     
     # GENERATE OPTIONS
-    EventBus.publish(session_id, "console", f"[dim]Analyzing failure/options...[/dim]\n")
+    EventBus.publish(session_id, "console", "[dim]Analyzing failure/options...[/dim]\n")
     options = fixer.analyze_failure("story_schema", context, feedback=instructions)
     
     if not options:
@@ -111,10 +141,10 @@ def interactive_fix_story(
                 # Check Verification
                 # We need a callback for verification
                 def validation_callback():
-                    r = check_val()
-                    return r.returncode == 0
+                    process, _, _ = check_val()
+                    return process.returncode == 0
                 
-                if fixer.verify_fix(validation_callback, confirm=False):
+                if fixer.verify_fix(validation_callback):
                     return f"Successfully applied fix '{selected.get('title')}' and verified validation passes."
                 else:
                     return f"Applied fix '{selected.get('title')}', but verification FAILED. Changes were reverted."

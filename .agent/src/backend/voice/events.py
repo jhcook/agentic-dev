@@ -33,26 +33,74 @@ class EventBus:
             cls._instance = super(EventBus, cls).__new__(cls)
         return cls._instance
 
-    @classmethod
-    def subscribe(cls, session_id: str, callback: Callable[[str, Any], None]):
-        """Subscribe a callback to events for a specific session."""
-        with cls._lock:
-            cls._subscribers[session_id].append(callback)
 
     @classmethod
-    def unsubscribe(cls, session_id: str):
-        """Remove all subscribers for a session."""
+    def subscribe(cls, session_id: str, callback: Callable[[str, Any], None]):
+        """
+        Subscribe a callback to events for a specific session.
+        ENFORCES SINGLE SUBSCRIBER: Overwrites any existing subscriber for this session
+        to prevent duplicate outputs in case of race conditions or zombie connections.
+        Uses weak references to prevent memory leaks.
+        """
+        import weakref
+        
+        with cls._lock:
+            # We need to wrap the callback method if it's a bound method
+            # WeakMethod is robust for bound methods.
+            if hasattr(callback, '__self__') and callback.__self__ is not None:
+                ref = weakref.WeakMethod(callback)
+            else:
+                ref = weakref.ref(callback)
+                
+            cls._subscribers[session_id] = [ref]
+
+    @classmethod
+    def unsubscribe(cls, session_id: str, callback: Callable = None):
+        """
+        Remove subscriber.
+        Args:
+            session_id: Session to unsubscribe
+            callback: Specific callback to remove. If None, removes all (legacy behavior).
+        """
         with cls._lock:
             if session_id in cls._subscribers:
-                del cls._subscribers[session_id]
+                if callback:
+                    # Filter out the specific callback
+                    # We have to dereference weakrefs to compare
+                    new_list = []
+                    for ref in cls._subscribers[session_id]:
+                        obj = ref()
+                        if obj is not None and obj != callback:
+                            new_list.append(ref)
+                    cls._subscribers[session_id] = new_list
+                else:
+                    # Force remove all
+                    del cls._subscribers[session_id]
+                
+                # Cleanup if empty
+                if session_id in cls._subscribers and not cls._subscribers[session_id]:
+                    del cls._subscribers[session_id]
 
     @classmethod
     def publish(cls, session_id: str, event_type: str, data: Any):
-        """Publish an event to all subscribers of a session."""
+        """Publish an event to the subscriber of a session."""
         with cls._lock:
             if session_id in cls._subscribers:
-                for callback in cls._subscribers[session_id]:
-                    try:
-                        callback(event_type, data)
-                    except Exception as e:
-                        logger.error(f"EventBus callback failed: {e}")
+                # Iterate over copy
+                # Dereference weakrefs
+                active_refs = []
+                for ref in list(cls._subscribers[session_id]):
+                    callback = ref()
+                    if callback is not None:
+                        try:
+                            callback(event_type, data)
+                            active_refs.append(ref)
+                        except Exception as e:
+                            logger.error(f"EventBus callback failed: {e}")
+                    # If callback is None, it's dead, don't keep it
+                
+                # Update list with only active refs
+                if active_refs:
+                    cls._subscribers[session_id] = active_refs
+                else:
+                    del cls._subscribers[session_id]

@@ -15,8 +15,9 @@
 from langchain_core.tools import tool
 import os
 import glob
-import yaml
+import subprocess
 from agent.core.config import config
+from agent.core.utils import find_best_matching_story
 
 @tool
 def list_stories(status: str = "OPEN") -> str:
@@ -71,6 +72,27 @@ def list_runbooks() -> str:
     """List all implementation runbooks."""
     files = glob.glob(str(config.repo_root / ".agent/cache/runbooks/**/*.md"), recursive=True)
     return "\n".join([os.path.basename(f) for f in files])
+
+@tool
+def match_current_changes_to_story() -> str:
+    """
+    Analyze currently staged git changes and identify the most relevant User Story.
+    """
+    try:
+        staged = subprocess.check_output(["git", "diff", "--name-only", "--cached"]).decode().strip()
+        if not staged:
+            return "No staged changes found. Please stage changes using git add first."
+            
+        staged_files = staged.replace("\n", " ")
+        story_id = find_best_matching_story(staged_files)
+        
+        if story_id:
+            return f"Based on the staged changes ({staged_files}), the matching story is: {story_id}"
+        else:
+            return "Could not match the staged changes to any existing story."
+            
+    except Exception as e:
+        return f"Error matching story: {e}"
 
 from opentelemetry import trace
 

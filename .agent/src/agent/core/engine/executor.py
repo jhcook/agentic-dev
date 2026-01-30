@@ -20,7 +20,7 @@ from agent.core.ai.service import AIService
 from agent.core.engine.parser import BaseParser, ReActJsonParser
 from agent.core.engine.typedefs import AgentAction, AgentFinish, AgentStep
 from agent.core.mcp.client import MCPClient, Tool
-from agent.core.security import SecureManager
+from agent.core.security import scrub_sensitive_data
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ class AgentExecutor:
         self.parser = parser or ReActJsonParser()
         self.max_steps = max_steps
         self.system_prompt = system_prompt
-        self.secure_manager = SecureManager() # For scrubbing
+        self.system_prompt = system_prompt
+        # self.secure_manager = SecureManager() # Removed in favor of functional approach
         self.allowed_tools = allowed_tools
 
     async def run(self, user_prompt: str) -> str:
@@ -141,7 +142,7 @@ class AgentExecutor:
                 
                 # 4. OBSERVE (and Scrub!)
                 # Security Check: Scrub observation
-                scrubbed_observation = self.secure_manager.scrub(observation_str)
+                scrubbed_observation = scrub_sensitive_data(observation_str)
                 
                 step = AgentStep(
                     action=action,

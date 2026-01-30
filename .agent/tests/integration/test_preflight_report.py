@@ -1,0 +1,111 @@
+
+import unittest
+from unittest.mock import MagicMock, patch
+import json
+from pathlib import Path
+import tempfile
+import shutil
+import typer
+from agent.commands import check
+
+class TestPreflightReport(unittest.TestCase):
+    """
+    Regression tests for Preflight Reporting (INFRA-042).
+    Ensures that --report-file triggers JSON output on both success and failure.
+    """
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.report_path = Path(self.test_dir) / "report.json"
+        
+        # Mock dependencies in check.py
+        self.mock_console_patch = patch('agent.commands.check.console')
+        self.mock_console = self.mock_console_patch.start()
+        
+        self.mock_run_patch = patch('subprocess.run')
+        self.mock_run = self.mock_run_patch.start()
+        self.mock_run.return_value.returncode = 0
+        self.mock_run.return_value.stdout = "some_file.py"
+        
+        self.mock_validate_patch = patch('agent.commands.check.validate_story')
+        self.mock_validate = self.mock_validate_patch.start()
+        self.mock_validate.return_value = True
+
+        self.mock_analyzer_patch = patch('agent.commands.check.DependencyAnalyzer') # Incorrect path? Check imports
+        # check.py imports DependencyAnalyzer inside the function or file?
+        # It imports inside the function: `from agent.core.dependency_analyzer import DependencyAnalyzer`
+        # So we need to patch verify where it is imported. 
+        # Actually it imports it inside `preflight`.
+        # so we patch 'agent.core.dependency_analyzer.DependencyAnalyzer'
+        self.mock_analyzer_patch = patch('agent.core.dependency_analyzer.DependencyAnalyzer')
+        self.mock_analyzer = self.mock_analyzer_patch.start()
+        self.mock_analyzer.return_value.get_file_dependencies.return_value = set()
+
+        self.mock_convene_patch = patch('agent.commands.check.convene_council_full')
+        self.mock_convene = self.mock_convene_patch.start()
+
+    def tearDown(self):
+        self.mock_console_patch.stop()
+        self.mock_run_patch.stop()
+        self.mock_validate_patch.stop()
+        self.mock_analyzer_patch.stop()
+        self.mock_convene_patch.stop()
+        shutil.rmtree(self.test_dir)
+
+    def test_report_generated_on_success(self):
+        """
+        Verify report.json is created when preflight checks pass.
+        """
+        try:
+            check.preflight(
+                story_id="TEST-001",
+                ai=False,
+                report_file=self.report_path,
+                skip_tests=True,
+                base=None,
+                provider=None,
+                ignore_tests=False,
+                interactive=False
+            )
+        except typer.Exit:
+            pass # Typer always exits
+
+        self.assertTrue(self.report_path.exists(), "Report file should exist on success")
+        data = json.loads(self.report_path.read_text())
+        self.assertEqual(data["overall_verdict"], "PASS")
+
+    def test_report_generated_on_governance_block(self):
+        """
+        Verify report.json is created when governance blocks the preflight.
+        """
+        # Mock governance block
+        self.mock_convene.return_value = {
+            "verdict": "BLOCK",
+            "json_report": {
+                "roles": [{"name": "Security", "verdict": "BLOCK", "findings": ["Bad implementation"]}],
+                "overall_verdict": "BLOCK"
+            },
+            "log_file": "log.md"
+        }
+
+        try:
+            check.preflight(
+                story_id="TEST-002",
+                ai=True,
+                report_file=self.report_path,
+                skip_tests=True,
+                base=None,
+                provider=None,
+                ignore_tests=False,
+                interactive=False
+            )
+        except typer.Exit as e:
+            self.assertEqual(e.exit_code, 1)
+
+        self.assertTrue(self.report_path.exists(), "Report file should exist on governance block")
+        data = json.loads(self.report_path.read_text())
+        self.assertEqual(data["overall_verdict"], "BLOCK")
+        self.assertEqual(data["roles"][0]["verdict"], "BLOCK")
+
+if __name__ == '__main__':
+    unittest.main()

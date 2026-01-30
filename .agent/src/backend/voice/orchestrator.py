@@ -17,7 +17,7 @@ import logging
 import time
 import re
 from typing import Optional, AsyncGenerator, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 from collections import deque
 
@@ -155,7 +155,7 @@ async def get_chat_history(session_id: str) -> list[dict]:
     if not GLOBAL_MEMORY:
         return []
         
-    config = {"configurable": {"thread_id": session_id}}
+    thread_config = {"configurable": {"thread_id": session_id}}
     # MemorySaver .get() returns a StateSnapshot
     # We need to access .values['messages']
     
@@ -165,55 +165,65 @@ async def get_chat_history(session_id: str) -> list[dict]:
     # But let's assume async access pattern for future-proofing or if it supports aget.
     
     # MemorySaver has .get(config) -> StateSnapshot
-    snapshot = GLOBAL_MEMORY.get(config)
+    snapshot = GLOBAL_MEMORY.get(thread_config)
     logger.info(f"DEBUG[get_chat_history]: session={session_id} snapshot_found={bool(snapshot)}")
-    if not snapshot:
-        logger.warning(f"DEBUG[get_chat_history]: No snapshot found for {session_id}")
-        return []
-        
-    # Correctly access messages from CheckpointTuple
-    # snapshot is a CheckpointTuple with .checkpoint (dict)
-    try:
-        messages = snapshot.checkpoint["channel_values"].get("messages", [])
-        logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in checkpoint['channel_values']")
-    except (AttributeError, KeyError):
-        # Fallback for alternative structures
-        try:
-            messages = snapshot.values.get("messages", [])
-            logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in snapshot.values")
-        except (AttributeError, TypeError):
-            logger.error(f"DEBUG[get_chat_history]: Failed to extract messages. Keys: {dir(snapshot)}")
-            messages = []
-            
+    
     history = []
     
-    for msg in messages:
-        # Convert LangChain/LangGraph messages to our format
-        role = "user" if msg.type == "human" else "assistant"
-        if msg.type == "ai": role = "assistant"
-        
-        # Skip system messages or tool calls if we only want chat
-        if msg.type not in ["human", "ai"]:
-            continue
+    if snapshot:
+        # Correctly access messages from CheckpointTuple
+        # snapshot is a CheckpointTuple with .checkpoint (dict)
+        try:
+            messages = snapshot.checkpoint["channel_values"].get("messages", [])
+            logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in checkpoint['channel_values']")
+        except (AttributeError, KeyError):
+            # Fallback for alternative structures
+            try:
+                messages = snapshot.values.get("messages", [])
+                logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in snapshot.values")
+            except (AttributeError, TypeError):
+                logger.error(f"DEBUG[get_chat_history]: Failed to extract messages. Keys: {dir(snapshot)}")
+                messages = []
+                
+        for msg in messages:
+            # Convert LangChain/LangGraph messages to our format
+            role = "user" if msg.type == "human" else "assistant"
+            if msg.type == "ai": role = "assistant"
             
-        # Robust content handling (handle lists/multimodal)
-        content = msg.content
-        if isinstance(content, list):
-            # Extract text parts
-            text_parts = []
-            for part in content:
-                if isinstance(part, str):
-                    text_parts.append(part)
-                elif isinstance(part, dict) and "text" in part:
-                    text_parts.append(part["text"])
-            text = " ".join(text_parts)
-        else:
-            text = str(content) if content is not None else ""
+            # Skip system messages or tool calls if we only want chat
+            if msg.type not in ["human", "ai"]:
+                continue
+                
+            # Robust content handling (handle lists/multimodal)
+            content = msg.content
+            if isinstance(content, list):
+                # Extract text parts
+                text_parts = []
+                for part in content:
+                    if isinstance(part, str):
+                        text_parts.append(part)
+                    elif isinstance(part, dict) and "text" in part:
+                        text_parts.append(part["text"])
+                text = " ".join(text_parts)
+            else:
+                text = str(content) if content is not None else ""
+                
+            history.append({
+                "role": role,
+                "text": text
+            })
             
-        history.append({
-            "role": role,
-            "text": text
-        })
+    # Fallback to Disk Persistence if in-memory is empty
+    if not history:
+        try:
+             storage_dir = config.agent_dir / "storage" / "voice_sessions"
+             file_path = storage_dir / f"{session_id}.json"
+             if file_path.exists():
+                 data = json.loads(file_path.read_text())
+                 history = data.get("history", [])
+                 logger.info(f"Loaded persistent history for {session_id} from disk: {len(history)} items")
+        except Exception as e:
+             logger.warning(f"Failed to load persistent history from disk: {e}")
         
     return history
 
@@ -400,12 +410,24 @@ class VoiceOrchestrator:
         self.is_running = False
         
         from backend.voice.events import EventBus
-        EventBus.unsubscribe(self.session_id)
+        # Unsubscribe from EventBus
+        EventBus.unsubscribe(self.session_id, self._handle_bus_event)
         
+        # Signal worker to stop
         if self.worker_task:
             self.worker_task.cancel()
+            try:
+                # We don't await here because stop is often called synchronously 
+                # or from cleanup where we might not want to block. 
+                # But typically we should await if async. 
+                # However, this method is synchronous in signature (def stop).
+                pass
+            except Exception:
+                pass
+        
         if self.pipeline_task:
             self.pipeline_task.cancel()
+            
         logger.info(f"Orchestrator worker stopped for session {self.session_id}")
 
     def _handle_bus_event(self, event_type: str, data: Any):
@@ -690,8 +712,7 @@ class VoiceOrchestrator:
         # Heal state before invocation to prevent INVALID_CHAT_HISTORY
         self._heal_chat_history(self.session_id)
 
-        if self.on_event:
-            self.on_event("status", {"state": "thinking"})
+
 
         with tracer.start_as_current_span("voice.agent.process") as span:
             span.set_attribute("session_id", self.session_id)
@@ -705,8 +726,6 @@ class VoiceOrchestrator:
             
             if not text_input or len(text_input.strip()) < 2:
                 logger.debug("Ignoring empty/short transcript.")
-                if self.on_event:
-                    self.on_event("status", {"state": "listening"})
                 return
                 
             # Echo Suppression
@@ -724,6 +743,9 @@ class VoiceOrchestrator:
                 "User input received",
                 extra={"session_id": self.session_id, "length": len(text_input), "text": text_input}
             )
+            
+            if self.on_event:
+                self.on_event("status", {"state": "thinking"})
             
             # 2. Pipeline: Agent -> Buffer -> TTS
             from backend.voice.buffer import SentenceBuffer

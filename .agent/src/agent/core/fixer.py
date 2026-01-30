@@ -23,15 +23,14 @@ import tempfile
 import ast
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from pathlib import Path
 
 # typer/subprocess imports removed if unused, but kept if needed by other parts not shown
-import typer 
 
 from agent.core.ai import ai_service
 from agent.core.ai.prompts import generate_fix_options_prompt
-from agent.core.utils import scrub_sensitive_data
+from agent.core.utils import extract_json_from_response
 
 console = None 
 logger = logging.getLogger(__name__)
@@ -115,34 +114,14 @@ class InteractiveFixer:
                      logger.info("Generating fix options...")
                 response = self.ai.get_completion(prompt)
                 
-                # Parse AI response. Expecting JSON list of options?
-                # Simple parsing strategy: look for json block
-                if "```json" in response:
-                    json_str = response.split("```json")[1].split("```")[0].strip()
-                elif "```" in response:
-                     json_str = response.split("```")[1].split("```")[0].strip()
-                else:
-                    json_str = response.strip()
-                    
                 if not response or not response.strip():
                      logger.warning("AI returned empty response for fix generation.")
                      raise ValueError("AI returned empty response (possibly blocked or rate limited).")
 
-                # Robust Regex for JSON Extraction
-                import re
-                try:
-                    # Match content between triple backticks if present
-                    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(1)
-                    else:
-                        # Fallback: Just look for list brackets
-                        list_match = re.search(r"(\[.*\])", response, re.DOTALL)
-                        if list_match:
-                            json_str = list_match.group(1)
-                        else:
-                            json_str = response.strip()
+                # Use shared extraction logic
+                json_str = extract_json_from_response(response)
 
+                try:
                     options = json.loads(json_str)
                 except (json.JSONDecodeError, AttributeError):
                     # Log the first 200 chars to help debug "nonsense" checks
@@ -164,6 +143,13 @@ class InteractiveFixer:
                         logger.info("METRIC: Fix Validation Failed (Security)")
                 
                 logger.info(f"Generated {len(valid_options)} valid fix options for {failure_type}")
+                
+                # Limit options to prevent UI overload
+                MAX_FIX_OPTIONS = 3
+                if len(valid_options) > MAX_FIX_OPTIONS:
+                    logger.info(f"Truncating fix options from {len(valid_options)} to {MAX_FIX_OPTIONS}")
+                    valid_options = valid_options[:MAX_FIX_OPTIONS]
+
                 logger.info(f"METRIC: Feature Generation Completed. Options: {len(valid_options)}")
                 return valid_options
                 
@@ -216,25 +202,13 @@ class InteractiveFixer:
                      logger.warning("AI returned empty response for governance fix.")
                      raise ValueError("AI returned empty response (possibly blocked or rate limited).")
                 
-                # Robust Regex for JSON Extraction
-                # Finds the first '[' and the last ']' to handle markdown wrapping and chatter
-                import re
-                try:
-                    # Match content between triple backticks if present
-                    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(1)
-                    else:
-                        # Fallback: Just look for list brackets
-                        list_match = re.search(r"(\[.*\])", response, re.DOTALL)
-                        if list_match:
-                            json_str = list_match.group(1)
-                        else:
-                            json_str = response.strip()
+                # Use shared extraction logic from utils (DRY Fix)
+                json_str = extract_json_from_response(response)
 
+                try:
                     # Relaxed parsing to allow control characters (newlines) in strings
                     options = json.loads(json_str, strict=False)
-                except (json.JSONDecodeError, AttributeError) as je:
+                except (json.JSONDecodeError, AttributeError):
                      preview = response[:200].replace("\n", " ")
                      logger.warning(f"AI returned invalid JSON: '{preview}...'")
                      raise ValueError("AI response was not valid JSON.")
@@ -248,6 +222,12 @@ class InteractiveFixer:
                     if self._validate_fix_content(opt.get("patched_content", "")):
                         valid_options.append(opt)
                 
+                # Limit options to prevent UI overload
+                MAX_FIX_OPTIONS = 3
+                if len(valid_options) > MAX_FIX_OPTIONS:
+                    logger.info(f"Truncating fix options from {len(valid_options)} to {MAX_FIX_OPTIONS}")
+                    valid_options = valid_options[:MAX_FIX_OPTIONS]
+
                 return valid_options
                 
             except Exception as e:
@@ -269,7 +249,6 @@ class InteractiveFixer:
         """
         # Handle special manual action
         if option.get("action") == "open_editor":
-            import collections
             import subprocess
             import platform
             

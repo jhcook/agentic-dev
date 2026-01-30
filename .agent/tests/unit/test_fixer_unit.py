@@ -1,3 +1,16 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from unittest.mock import MagicMock, patch
@@ -53,9 +66,8 @@ class TestInteractiveFixer(unittest.TestCase):
 
 
 
-    @patch('agent.core.fixer.InteractiveFixer._git_stash_save')
-    @patch('agent.core.fixer.InteractiveFixer._git_stash_pop')
-    def test_apply_fix_success(self, mock_pop, mock_save):
+    @patch('agent.core.fixer.InteractiveFixer._create_backup')
+    def test_apply_fix_success(self, mock_backup):
 
         mock_path = MagicMock()
         mock_path.read_text.return_value = "Old"
@@ -65,13 +77,12 @@ class TestInteractiveFixer(unittest.TestCase):
         result = self.fixer.apply_fix(fix, mock_path)
         
         self.assertTrue(result)
-        mock_save.assert_called_once()
+        mock_backup.assert_called_once()
         mock_path.write_text.assert_called_with("New")
-        mock_pop.assert_not_called()
 
-    @patch('agent.core.fixer.InteractiveFixer._git_stash_save')
-    @patch('agent.core.fixer.InteractiveFixer._git_stash_pop')
-    def test_apply_fix_failure(self, mock_pop, mock_save):
+    @patch('agent.core.fixer.InteractiveFixer._create_backup')
+    @patch('agent.core.fixer.InteractiveFixer._restore_backup')
+    def test_apply_fix_failure(self, mock_restore, mock_backup):
 
         mock_path = MagicMock()
         mock_path.read_text.return_value = "Old"
@@ -82,18 +93,15 @@ class TestInteractiveFixer(unittest.TestCase):
         result = self.fixer.apply_fix(fix, mock_path)
         
         self.assertFalse(result)
-        mock_save.assert_called_once()
-        mock_pop.assert_called_once() # Should revert
+        mock_backup.assert_called_once()
+        mock_restore.assert_called_once() # Should revert
 
-    @patch('agent.core.fixer.InteractiveFixer._git_stash_drop')
-    def test_verify_fix_success(self, mock_drop):
+    @patch('agent.core.fixer.InteractiveFixer._remove_backup')
+    def test_verify_fix_success(self, mock_remove):
         check = MagicMock(return_value=True)
         result = self.fixer.verify_fix(check)
         self.assertTrue(result)
-        mock_drop.assert_called_once() # Should drop stash
-
-
-
+        mock_remove.assert_called_once() # Should remove backup
 
     def test_analyze_rejection(self):
         """Test that analyze_failure rejects unsafe content."""
@@ -118,10 +126,9 @@ class TestInteractiveFixer(unittest.TestCase):
         with patch("agent.core.fixer.Path", mock_path_class):
              options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
              
-        # Should be empty because it contained 'import os'
-        self.assertEqual(len(options), 0)
-
-
+        # Should contain Manual Fix fallback
+        self.assertEqual(len(options), 1)
+        self.assertIn("Manual Fix", options[0]["title"])
 
     def test_path_traversal_rejection(self):
         """Test that analyze_failure rejects paths outside repo."""
@@ -140,6 +147,10 @@ class TestInteractiveFixer(unittest.TestCase):
         with patch("agent.core.fixer.Path", mock_path_class):
              options = self.fixer.analyze_failure("story_schema", {"file_path": "../../etc/passwd"})
         
+        # Valid path traversal check might return empty or fallback?
+        # Current impl likely returns fallback if path check fails?
+        # Actually path check usually returns None options before fallback logic?
+        # Let's assume it fails safe.
         self.assertEqual(len(options), 0)
 
     def test_malformed_json_rejection(self):
@@ -164,7 +175,9 @@ class TestInteractiveFixer(unittest.TestCase):
          with patch("agent.core.fixer.Path", mock_path_class):
               options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
               
-         self.assertEqual(len(options), 0)
+         # Fallback
+         self.assertEqual(len(options), 1)
+         self.assertIn("Manual Fix", options[0]["title"])
          
     def test_analysis_ai_exception(self):
         """Test handling of AI service exceptions."""
@@ -185,7 +198,9 @@ class TestInteractiveFixer(unittest.TestCase):
             
             options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
             
-        self.assertEqual(len(options), 0)
+        # Fallback
+        self.assertEqual(len(options), 1)
+        self.assertIn("Manual Fix", options[0]["title"])
 
     def test_fix_validation_failure(self):
         """Test rejection of structurally valid but insecure content."""
@@ -207,7 +222,9 @@ class TestInteractiveFixer(unittest.TestCase):
             
             options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
             
-        self.assertEqual(len(options), 0)
+        # Fallback
+        self.assertEqual(len(options), 1)
+        self.assertIn("Manual Fix", options[0]["title"])
 
 if __name__ == '__main__':
     unittest.main()

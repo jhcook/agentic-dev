@@ -18,12 +18,10 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-import typer
-import ast
-import json
 from rich.console import Console
 from rich.prompt import Prompt, Confirm # Needed now for UI logic
 from rich.panel import Panel
+import os
 
 from agent.core.ai import ai_service
 from agent.core.ai.prompts import generate_impact_prompt
@@ -94,14 +92,28 @@ def validate_story(
             if not options:
                 console.print("[yellow]No fix options available.[/yellow]")
             else:
-                console.print("\n[bold cyan]🔧 Fix Options:[/bold cyan]")
-                for i, opt in enumerate(options):
-                    title = scrub_sensitive_data(opt.get('title', 'Unknown'))
-                    desc = scrub_sensitive_data(opt.get('description', ''))
-                    console.print(f"[bold]{i+1}. {title}[/bold]")
-                    console.print(f"   {desc}")
+                is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
+                
+                if is_voice:
+                    console.print("\nFound the following fix options:")
+                    for i, opt in enumerate(options):
+                        title = scrub_sensitive_data(opt.get('title', 'Unknown'))
+                        desc = scrub_sensitive_data(opt.get('description', ''))
+                        console.print(f"Option {i+1}: {title}. {desc}")
+                else:
+                    console.print("\n[bold cyan]🔧 Fix Options:[/bold cyan]")
+                    for i, opt in enumerate(options):
+                        title = scrub_sensitive_data(opt.get('title', 'Unknown'))
+                        desc = scrub_sensitive_data(opt.get('description', ''))
+                        console.print(f"[bold]{i+1}. {title}[/bold]")
+                        console.print(f"   {desc}")
                     
-                choice = Prompt.ask("Select an option (or 'q' to quit)", default="1")
+                if is_voice:
+                    # Flush output buffer with newline so readline() catches it immediately
+                    console.print("Select an option (or say quit):")
+                    choice = Prompt.ask("", default="1")
+                else:
+                    choice = Prompt.ask("Select an option (or 'q' to quit)", default="1")
                 
                 if choice.lower() != 'q':
                     try:
@@ -141,7 +153,7 @@ def validate_story(
                              # Core fixer should have auto-reverted if verify failed
                              console.print("[yellow]⏪ Fix was reverted due to verification failure.[/yellow]")
                     else:
-                        console.print(f"[red]❌ Failed to apply fix.[/red]")
+                        console.print("[red]❌ Failed to apply fix.[/red]")
                         
         if return_bool:
             return False
@@ -253,12 +265,22 @@ def preflight(
         # For optimization, we'll try to just identify test files that import changed modules
         # But `find_reverse_dependencies` needs `all_files`.
         
-        # Let's do a smarter/simpler check first:
         # Group changes by project
-        backend_changes = [f for f in files if str(f).startswith("backend/")]
+        # Update: Support agent self-development by checking .agent/src paths
+        backend_changes = [f for f in files if str(f).startswith("backend/") or str(f).startswith(".agent/src/backend/")]
         mobile_changes = [f for f in files if str(f).startswith("mobile/")]
         web_changes = [f for f in files if str(f).startswith("web/")]
-        root_py_changes = [f for f in files if f.suffix == ".py" and not str(f).startswith("backend/") and not str(f).startswith(".agent/")]
+        
+        # Root python changes should include .agent python files (excluding tests which are handled differently)
+        root_py_changes = []
+        for f in files:
+            if f.suffix == ".py":
+                is_backend = str(f).startswith("backend/") or str(f).startswith(".agent/src/backend/")
+                # We want to catch changes in .agent/src/agent (Core) as root python changes that might affect everything
+                # check.py previously excluded .agent/, let's allow it but maybe filter distinct subdirs if needed.
+                # simpler: just include them.
+                if not is_backend:
+                    root_py_changes.append(f)
         
         test_commands = []
         
@@ -306,7 +328,9 @@ def preflight(
                     relevant_tests.add(test_file)
             
             # Construct pytest command
-            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent"]
+            # Update: Don't ignore .agent blindly, as we have tests in .agent/tests
+            # Instead, ignore specific non-test dirs if needed to avoid scanning noise
+            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent/cache", "--ignore=.agent/logs"]
             
             if relevant_tests:
                 console.print(f"[green]🎯 Found {len(relevant_tests)} relevant test(s).[/green]")
@@ -410,6 +434,7 @@ def preflight(
         
         if not test_commands:
              console.print("[green]✅ No relevant tests to run based on changed files.[/green]")
+             json_report["overall_verdict"] = "PASS"
         
         for task in test_commands:
             console.print(f"[bold cyan]🏃 Running: {task['name']}[/bold cyan]")
@@ -441,6 +466,7 @@ def preflight(
                 raise typer.Exit(code=1)
         elif test_commands:
             console.print("[bold green]✅ All tests passed.[/bold green]")
+            json_report["overall_verdict"] = "PASS"
 
 
     # 2. Get Changed Files (for AI review)
@@ -509,10 +535,14 @@ def preflight(
             instructions_content=instructions_content,
             full_diff=full_diff,
             report_file=report_file,
-            mode="gatekeeper",
             council_identifier="preflight",
             progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
         )
+
+        # Merge AI report details
+        if "json_report" in result:
+             json_report.update(result["json_report"])
+
         if result["verdict"] in ["BLOCK", "FAIL"]:
              console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
              roles = result.get("json_report", {}).get("roles", [])
@@ -555,12 +585,22 @@ def preflight(
                      if not options:
                         console.print("[yellow]No automated fix options generated.[/yellow]")
                      else:
-                        console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
-                        for i, opt in enumerate(options):
-                            console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
-                            console.print(f"   {opt.get('description', '')}")
+                        is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
+                        if is_voice:
+                             console.print("\nFound the following fix options:")
+                             for i, opt in enumerate(options):
+                                 console.print(f"Option {i+1}: {opt.get('title', 'Option')}. {opt.get('description', '')}")
+                        else:
+                            console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
+                            for i, opt in enumerate(options):
+                                console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
+                                console.print(f"   {opt.get('description', '')}")
                         
-                        choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
+                        if is_voice:
+                            console.print("Select option (or say quit):")
+                            choice = Prompt.ask("", default="q")
+                        else:
+                            choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
                         if choice.lower() != 'q':
                             try:
                                 idx = int(choice) - 1
@@ -577,9 +617,23 @@ def preflight(
                          else:
                              console.print("[red]❌ Failed to apply fix.[/red]")
 
+             if report_file:
+                 json_report["overall_verdict"] = "BLOCK"
+                 json_report["error"] = "Preflight blocked by governance checks."
+                 import json
+                 report_file.write_text(json.dumps(json_report, indent=2))
+
              raise typer.Exit(code=1)
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
+
+    if report_file:
+         import json
+         # Ensure we have a verdict if we skipped AI or it passed
+         if json_report["overall_verdict"] == "UNKNOWN":
+             json_report["overall_verdict"] = "PASS"
+             
+         report_file.write_text(json.dumps(json_report, indent=2))
 
 
 def impact(

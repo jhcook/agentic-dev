@@ -182,6 +182,10 @@ def convene_council_full(
     report = f"# Governance Preflight Report\n\nStory: {story_id}\n\n"
     if user_question:
         report += f"## ❓ User Question\n{scrub_sensitive_data(user_question)}\n\n"
+    
+    # Table Header
+    report += "| Role | Verdict | Findings |\n"
+    report += "|---|---|---|\n"
         
     json_roles = []
     
@@ -223,21 +227,25 @@ def convene_council_full(
         role_data["findings"] = role_findings
         role_data["verdict"] = role_verdict
         
-        findings_text = "\n\n".join(role_findings)
+        # Format findings for Markdown table
+        findings_text = "<br><br>".join(role_findings)
+        findings_text = findings_text.replace("\n", "<br>").replace("|", "\|")
         
         if role_verdict == "BLOCK":
             overall_verdict = "BLOCK"
             if progress_callback:
                 progress_callback(f"❌ @{role_name}: BLOCK")
-            report += f"### ❌ @{role_name}: BLOCK\n\n{findings_text}\n\n"
+            report += f"| **@{role_name}** | ❌ BLOCK | {findings_text} |\n"
         elif mode == "consultative":
                 if progress_callback:
                     progress_callback(f"ℹ️  @{role_name}: CONSULTED")
-                report += f"### ℹ️ @{role_name}: ADVICE\n\n{findings_text}\n\n"
+                report += f"| @{role_name} | ℹ️ ADVICE | {findings_text} |\n"
         else:
             if progress_callback:
                 progress_callback(f"✅ @{role_name}: PASS")
-            report += f"### ✅ @{role_name}: PASS\n\n{findings_text}\n\n"
+            if not findings_text:
+                findings_text = "No issues found."
+            report += f"| @{role_name} | ✅ PASS | {findings_text} |\n"
             
         json_roles.append(role_data)
 

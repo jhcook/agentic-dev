@@ -3,7 +3,6 @@
 This document provides details about the AI-related commands in the CLI (`implement`, `match-story`, `new-runbook`, `pr`).
 
 ---
----
 
 ## Global Options
 
@@ -301,6 +300,7 @@ The `--provider` option allows developers to select an AI provider (`gh`, `gemin
 - `gh` (default)
 - `gemini`
 - `openai`
+- `anthropic`
 
 ### Default Behavior
 
@@ -313,5 +313,58 @@ To use an AI provider, the appropriate environment variables or configuration ke
 - **`gh`**: Requires appropriate GitHub access configuration (if any).
 - **`gemini`**: Requires `GEMINI_API_KEY` environment variable or configuration setting.
 - **`openai`**: Requires `OPENAI_API_KEY` to be set in the environment or configuration.
+- **`anthropic`**: Requires `ANTHROPIC_API_KEY` to be set in the environment or configuration.
 
 For example:
+
+### agent preflight
+
+Run governance checks, automated tests, and linting on your current changes.
+
+```bash
+agent preflight [OPTIONS]
+```
+
+#### Options
+
+- `--story [ID]`: Link the preflight check to a specific Story ID (e.g., `WEB-001`).
+- `--interactive`: **[NEW]** Enable interactive repair mode. The agent will propose fixes for failures.
+- `--ai`: Enable AI-powered governance review (requires API key).
+- `--base [BRANCH]`: Verify changes against a specific base branch (default: staged vs HEAD).
+- `--skip-tests`: Skip automated tests.
+
+### Voice Agent Integration
+
+When running in Voice Mode (triggered by `AGENT_VOICE_MODE=1` or via the Voice Agent), the preflight command optimizes its output for Text-to-Speech (TTS):
+
+- **Formatted Output**: Uses clear, concise summaries instead of raw logs.
+- **Interactive Repair**: The `--interactive` flag allows the agent to propose fixes, which the user can accept/reject via voice commands (mapped to keyboard input).
+
+#### Voice Commands Reference
+
+| Command | Action |
+| :--- | :--- |
+| "Option One" | Select Fix Option 1 |
+| "Yes" | Confirm Action |
+| "No" | Cancel Action |
+| "Quit" | Exit Preflight |
+
+### Compliance & Data Safety
+
+The Agentic Development Tool utilizes AI for code analysis and repair. To ensure compliance with data protection standards (GDPR/SOC2):
+
+- **Lawful Basis**: Processing is based on **Legitimate Interest** (development efficiency) and **User Consent** (explicit invocation of `--ai` flag).
+- **Data Retention**: All AI context (lines of code, story content) is **ephemeral**. It is sent to the provider for inference and discarded immediately after the session. No code is stored by the AI provider for model training (via Enterprise agreements).
+- **Human-in-the-Loop**: All AI-generated fixes must be explicitly reviewed and confirmed by the user before being applied to the filesystem. The agent **never** auto-commits changes without user verified approval.
+- **Monitoring**: Logs are kept locally in `.agent/logs/` for security auditing but are not stripped of PII unless explicitly tagged. Users are responsible for not committing PII.
+
+- **Constraints**:
+  - Users must speak clearly when selecting options (e.g., "Option one", "Yes", "No").
+  - Complex diffs are summarized to avoid reading thousands of lines of code.
+
+Example Voice Flow:
+
+1. User: "Run preflight check on story INFRA-042."
+2. Agent: "Running checks... I found a schema error. Should I fix it?"
+3. User: "Yes, please."
+4. Agent: "Fix applied. Verifying... All checks passed."

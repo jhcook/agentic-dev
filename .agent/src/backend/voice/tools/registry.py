@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .architect import list_adrs, read_adr, search_rules
-from .project import list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers
+from .project import list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers, match_current_changes_to_story
 from .git import get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr, git_push_branch
 from .qa import run_backend_tests, run_frontend_lint, shell_command, run_preflight
 from .interactive_shell import start_interactive_shell, send_shell_input
@@ -42,7 +42,7 @@ def get_all_tools():
         # Architect
         list_adrs, read_adr, search_rules,
         # Project
-        list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers,
+        list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers, match_current_changes_to_story,
         # Git
         get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr, git_push_branch,
         # QA
