@@ -254,7 +254,7 @@ def convene_council_full(
         else:
             report += "No issues found."
 
-        report += "\n\n---\n\n"
+        report += "\n\n"
              
         json_roles.append(role_data)
 

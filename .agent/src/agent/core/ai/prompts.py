@@ -137,16 +137,16 @@ CRITICAL RESPONSE GUIDELINES:
 
 OUTPUT FORMAT:
 [
-  {
+  {{
     "title": "Conservative Fix",
     "description": "Minimal changes to address findings.",
     "patched_content": "...FULL file content with fix applied..."
-  },
-  {
+  }},
+  {{
     "title": "Refactor Fix",
     "description": "Robust implementation addressing findings.",
     "patched_content": "...FULL file content with fix applied..."
-  }
+  }}
 ]
 """
         return base_prompt

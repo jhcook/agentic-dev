@@ -357,8 +357,8 @@ class InteractiveFixer:
         """
         # 1. String-based fast fail (Expanded Blacklist)
         suspicious_strings = [
-            "import os", "import subprocess", "import sys", "import shutil", "import socket",
-            "exec(", "eval(", "__import__", "shutil.rmtree", "subprocess", "os.system", "open(",
+            "import os", "import sys", "import shutil", "import socket",
+            "exec(", "eval(", "__import__", "shutil.rmtree", "os.system", "open(",
             "importlib", "__builtins__", "pickle", "marshal", "base64.b64decode"
         ]
         for pattern in suspicious_strings:

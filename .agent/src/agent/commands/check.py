@@ -541,7 +541,7 @@ def preflight(
             full_diff=full_diff,
             report_file=report_file,
             council_identifier="preflight",
-            progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
+            progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]") if "BLOCK" not in msg and "PASS" not in msg else None
         )
 
         # Merge AI report details

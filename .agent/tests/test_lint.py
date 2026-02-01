@@ -31,7 +31,7 @@ def test_run_markdownlint_npx_success(mock_run, mock_which):
     mock_run.assert_called_once()
     args = mock_run.call_args[0][0]
     assert args[0] == "npx"
-    assert "markdownlint-cli" in args
+    assert "markdownlint-cli@0.44.0" in args
     assert "doc.md" in args
 
 @patch("shutil.which")
