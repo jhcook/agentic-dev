@@ -35,6 +35,10 @@
   - **Interactive Shell**: Support for running interactive commands via voice.
   - **Thread Safety**: Implemented thread storage for EventBus.
   - **Strict Secrets**: Removed environment variable fallback for API keys to enforce secure storage.
+- **Agent Sync Restoration** (INFRA-045):
+  - Fixed `agent sync` CLI wiring regression.
+  - Enforced authentication for remote sync operations (`pull`/`push`) via new `with_creds` decorator.
+  - Added strict governance for CLI commands (ADR-017).
 - **Additional Voice Providers** (INFRA-037):
   - Added support for **Google Cloud Speech** (Async STT/TTS).
   - Added support for **Azure Speech Services** (STT/TTS).

@@ -52,7 +52,8 @@ def test_new_story_creation_auto_id(mock_mkdir, mock_write, mock_get_id):
     # CLI args: agent new-story INFRA-999
     
     # We'll test with explicit ID to avoid prompts
-    with patch("pathlib.Path.exists", return_value=False):
+    with patch("pathlib.Path.exists", return_value=False), \
+         patch("agent.core.auth.decorators.validate_credentials"):
         result = runner.invoke(app, ["new-story", "INFRA-999"], input="My Story Title\n")
     
     # Debugging
@@ -67,7 +68,8 @@ def test_new_story_creation_auto_id(mock_mkdir, mock_write, mock_get_id):
 def test_new_plan_command():
     with patch("pathlib.Path.exists", return_value=False), \
          patch("pathlib.Path.write_text") as mock_write, \
-         patch("pathlib.Path.mkdir"):
+         patch("pathlib.Path.mkdir"), \
+         patch("agent.core.auth.decorators.validate_credentials"):
         
         result = runner.invoke(app, ["new-plan", "WEB-001"], input="Plan Title\n")
         assert result.exit_code == 0
@@ -137,7 +139,8 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run):
     mock_run.return_value = MagicMock(stdout="some_file.py", returncode=0)
     
     # We also need to mock validate_story inside preflight or it will fail
-    with patch("agent.commands.check.validate_story") as mock_validate:
+    with patch("agent.commands.check.validate_story") as mock_validate, \
+         patch("agent.core.auth.decorators.validate_credentials"):
         result = runner.invoke(app, ["pr"])
         
     assert result.exit_code == 0
@@ -150,16 +153,17 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run):
 
 @patch("subprocess.run")
 def test_commit_command(mock_run):
-    # commit requires story ID if branch inference fails (let's assume it fails here)
-    with patch("agent.commands.workflow.infer_story_id", return_value=None):
-        result = runner.invoke(app, ["commit"], input="Commit message\n")
-        assert result.exit_code == 1
-        assert "Story ID is required" in result.stdout
+    with patch("agent.core.auth.decorators.validate_credentials"):
+        # commit requires story ID if branch inference fails (let's assume it fails here)
+        with patch("agent.commands.workflow.infer_story_id", return_value=None):
+            result = runner.invoke(app, ["commit"], input="Commit message\n")
+            assert result.exit_code == 1
+            assert "Story ID is required" in result.stdout
 
-    # commit with explicit args
-    result = runner.invoke(app, ["commit", "--story", "INFRA-100"], input="Fix bug\n")
-    assert result.exit_code == 0
-    assert "[INFRA-100] Fix bug" in str(mock_run.call_args)
+        # commit with explicit args
+        result = runner.invoke(app, ["commit", "--story", "INFRA-100"], input="Fix bug\n")
+        assert result.exit_code == 0
+        assert "[INFRA-100] Fix bug" in str(mock_run.call_args)
 
 @patch("subprocess.run")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
@@ -168,7 +172,8 @@ def test_preflight_inference(mock_branch, mock_run):
     mock_run.return_value = MagicMock(stdout="file.py", returncode=0)
     
     # Needs to mock validate_story to pass
-    with patch("agent.commands.check.validate_story") as mock_validate:
+    with patch("agent.commands.check.validate_story") as mock_validate, \
+         patch("agent.core.auth.decorators.validate_credentials"):
         result = runner.invoke(app, ["preflight"])
         
     assert result.exit_code == 0
@@ -178,7 +183,7 @@ def test_preflight_inference(mock_branch, mock_run):
 def test_main_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "Governed workflow CLI" in result.stdout
+    assert "A CLI for managing and interacting with the AI agent." in result.stdout
 
 def test_preflight_help():
     result = runner.invoke(app, ["preflight", "--help"])
@@ -188,6 +193,6 @@ def test_preflight_help():
 
 def test_no_args_does_not_crash():
     # Verify that invoking the app with no arguments does not crash.
-    # It should exit with 0 because invoke_without_command=True.
+    # It should exit with 1 because invoke_without_command handler exits with 1
     result = runner.invoke(app, [])
-    assert result.exit_code == 0
+    assert result.exit_code == 1

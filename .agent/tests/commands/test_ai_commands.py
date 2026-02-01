@@ -52,7 +52,7 @@ def clean_env(monkeypatch):
 @patch("agent.core.ai.ai_service.complete")
 @patch("agent.core.config.config.agent_dir") 
 def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
-    with patch("agent.main.validate_credentials"): # bypass auth
+    with patch("agent.core.auth.decorators.validate_credentials"): # bypass auth
         mock_agent_dir.return_value = mock_deps["root"] / ".agent" 
         
         with patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
@@ -85,7 +85,7 @@ def test_new_runbook_command(mock_complete, mock_deps):
     mock_yaml = MagicMock()
     mock_yaml.safe_load.return_value = {"team": []}
     
-    with patch("agent.main.validate_credentials"):
+    with patch("agent.core.auth.decorators.validate_credentials"):
         with patch.dict("sys.modules", {"yaml": mock_yaml}):
             with patch("agent.core.config.config.runbooks_dir", mock_deps["root"] / ".agent" / "runbooks"), \
                  patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
@@ -102,7 +102,7 @@ def test_new_runbook_command(mock_complete, mock_deps):
 
 @patch("agent.core.ai.ai_service.complete")
 def test_match_story_command(mock_complete, mock_deps):
-     with patch("agent.main.validate_credentials"), \
+     with patch("agent.core.auth.decorators.validate_credentials"), \
           patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
           patch("agent.core.utils.subprocess.check_output") as mock_git:
           

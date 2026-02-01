@@ -15,6 +15,7 @@
 import typer
 
 from agent.sync import sync as sync_ops
+from agent.core.auth.decorators import with_creds
 
 app = typer.Typer(
     help="Distributed synchronization (push, pull, status, scan).",
@@ -22,11 +23,13 @@ app = typer.Typer(
 )
 
 @app.command()
+@with_creds
 def pull(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Pull artifacts from remote."""
     sync_ops.pull(verbose=verbose)
 
 @app.command()
+@with_creds
 def push(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Push artifacts to remote."""
     sync_ops.push(verbose=verbose)

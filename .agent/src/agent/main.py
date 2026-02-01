@@ -85,21 +85,7 @@ def help(ctx: typer.Context):
 
 # Governance & Quality
 app.command()(lint.lint)
-from functools import wraps
-from agent.core.auth.credentials import validate_credentials
-from agent.core.auth.errors import MissingCredentialsError
-
-# Wrapper for commands needing credentials
-def with_creds(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            validate_credentials()
-        except MissingCredentialsError as e:
-            print(e)
-            raise typer.Exit(code=1)
-        return func(*args, **kwargs)
-    return wrapper
+from agent.core.auth.decorators import with_creds
 
 # Governance & Quality
 app.command()(lint.lint)
@@ -126,18 +112,8 @@ app.command(name="new-adr")(adr.new_adr)
 app.command(name="onboard")(onboard.onboard)
 app.command(name="query")(query.query)
 
-@app.command(name="sync")
-def sync_cmd(cursor: str = None):
-    """
-    Sync artifacts to the local database.
-    """
-    try:
-        from agent.sync import main as sync_module
-        sync_module.sync_data(cursor=cursor)
-    except ImportError as e:
-        typer.echo(f"Error loading sync module: {e}")
-        typer.echo("Missing dependency? Try 'pip install memory_profiler'")
-        raise typer.Exit(1)
+from agent.sync import cli as sync_cli
+app.add_typer(sync_cli.app, name="sync")
 
 # Sub-commands (Typer Apps)
 app.add_typer(admin.app, name="admin")
