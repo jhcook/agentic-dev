@@ -95,7 +95,9 @@ def _unlock_manager(manager: SecretManager) -> None:
 
 
 @app.command(name="init")
-def init():
+def init(
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing secrets")
+):
     """
     Initialize secret management with master password.
     
@@ -103,7 +105,7 @@ def init():
     """
     manager = get_secret_manager()
     
-    if manager.is_initialized():
+    if manager.is_initialized() and not force:
         console.print("[yellow]Secret manager already initialized.[/yellow]")
         raise typer.Exit(code=0)
     
@@ -117,12 +119,52 @@ def init():
         raise typer.Exit(code=1)
     
     try:
-        manager.initialize(password)
+        manager.initialize(password, force=force)
         console.print("\n[green]✅ Secret manager initialized successfully.[/green]")
         console.print(f"[dim]Secrets directory: {manager.secrets_dir}[/dim]")
     except SecretManagerError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+
+
+@app.command(name="rotate-key")
+def rotate_key():
+    """Rotate master password for all secrets."""
+    manager = get_secret_manager()
+    if not manager.is_initialized():
+        console.print("[red]Not initialized.[/red]")
+        raise typer.Exit(1)
+        
+    console.print("[bold]Rotating Master Key[/bold]")
+    console.print("1. Enter CURRENT password to unlock.")
+    old_pass = _prompt_password()
+    
+    try:
+        manager.unlock(old_pass)
+    except InvalidPasswordError:
+        console.print("[red]Incorrect password.[/red]")
+        raise typer.Exit(1)
+        
+    console.print("\n2. Enter NEW password.")
+    new_pass = _prompt_password(confirm=True)
+    if not _validate_password_strength(new_pass):
+        raise typer.Exit(1)
+        
+    try:
+        manager.change_password(old_pass, new_pass)
+        console.print("[green]✅ Master key rotated successfully.[/green]")
+        
+        # Update Keychain if present
+        try:
+            import keyring
+            keyring.set_password("agent-cli", "master_key", new_pass)
+            console.print("[green]✅ System keychain updated.[/green]")
+        except Exception:
+            pass
+            
+    except Exception as e:
+        console.print(f"[bold red]Rotation Failed: {e}[/bold red]")
+        raise typer.Exit(1)
 
 
 @app.command(name="set")

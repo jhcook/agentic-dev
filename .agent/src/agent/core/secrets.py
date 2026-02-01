@@ -109,14 +109,25 @@ class SecretManager:
         """Check if the secret manager is unlocked (key in memory)."""
         return self._master_key is not None
     
-    def initialize(self, master_password: str) -> None:
+    def initialize(self, master_password: str, force: bool = False) -> None:
         """
         Initialize secret storage with master password.
         
         Creates the secrets directory, generates salt, and stores metadata.
         """
-        if self.is_initialized():
-            raise SecretManagerError("Secret manager already initialized")
+        if self.is_initialized() and not force:
+             raise SecretManagerError("Secret manager already initialized")
+
+        # Safety Check: Orphaned Secrets
+        # If config doesn't exist (not initialized) but OTHER json files do, we are about to orphan them.
+        if not self.is_initialized() and self.secrets_dir.exists():
+             existing_files = [f for f in self.secrets_dir.glob("*.json") if f.name != "config.json"]
+             if existing_files and not force:
+                 raise SecretManagerError(
+                     f"Found existing secret files ({len(existing_files)}). "
+                     "Initializing now will make them permanently unreadable. "
+                     "Use --force to overwrite them, or 'agent secret rotate-key' to change password."
+                 )
         
         # Create secrets directory with restricted permissions
         self.secrets_dir.mkdir(parents=True, exist_ok=True)
@@ -153,7 +164,102 @@ class SecretManager:
         
         self._log_operation("init", "system", "config", "success")
         logger.info("Secret manager initialized successfully")
-    
+
+    def change_password(self, old_password: str, new_password: str) -> None:
+        """
+        Rotate master password: decrypt all secrets, re-encrypt with new key.
+        Atomic operation with rollback support.
+        """
+        import shutil
+        
+        # 1. Verify and Unlock
+        self.unlock(old_password)
+        
+        # 2. Derive NEW key
+        new_salt = os.urandom(SALT_LENGTH)
+        new_master_key = self._derive_key(new_password, new_salt)
+        
+        # 3. Create Backup
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        backup_dir = self.secrets_dir.parent / "backups" / f"secrets_{timestamp}"
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+        shutil.copytree(self.secrets_dir, backup_dir)
+        
+        # 4. Prepare Temp Directory
+        temp_dir = self.secrets_dir.with_suffix(".rotation_tmp")
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        temp_dir.mkdir(mode=0o700)
+        
+        try:
+            # 5. Load and Re-encrypt All Secrets
+            # Copy config first, but we will update it later
+            temp_config = temp_dir / "config.json"
+            
+            # Re-encrypt Service Files
+            aesgcm_new = AESGCM(new_master_key)
+            
+            for service_file in self.secrets_dir.glob("*.json"):
+                if service_file.name == "config.json":
+                    continue
+                
+                # Decrypt old
+                secrets = self._load_service_secrets(service_file.stem)
+                new_secrets = {}
+                
+                for key, encrypted_val in secrets.items():
+                    # Decrypt with old key (self._master_key is currently old key)
+                    plaintext = self._decrypt_value(encrypted_val)
+                    
+                    # Encrypt with NEW key
+                    nonce = os.urandom(NONCE_LENGTH)
+                    ciphertext = aesgcm_new.encrypt(nonce, plaintext.encode("utf-8"), None)
+                    
+                    new_secrets[key] = {
+                        "ciphertext": base64.b64encode(ciphertext).decode("utf-8"),
+                        "nonce": base64.b64encode(nonce).decode("utf-8"),
+                        "updated_at": datetime.utcnow().isoformat()
+                    }
+                    
+                # Save to temp
+                self._save_json(temp_dir / service_file.name, new_secrets)
+
+            # 6. Update Config in Temp
+            config_data = {
+                "salt": base64.b64encode(new_salt).decode("utf-8"),
+                "created_at": datetime.utcnow().isoformat(),
+                "version": "1.0",
+                "pbkdf2_iterations": PBKDF2_ITERATIONS,
+            }
+            self._save_json(temp_config, config_data)
+            
+            # 7. Atomic Swap
+            # We can't rename over non-empty dir easily cross-platform, but on POSIX os.replace is atomic
+            # For safety, we'll swap paths.
+            
+            # Implementation detail: Move 'secrets' to 'secrets_old', move 'temp' to 'secrets', delete 'secrets_old'
+            old_secrets_path = self.secrets_dir.with_suffix(".old")
+            if old_secrets_path.exists():
+                shutil.rmtree(old_secrets_path)
+                
+            os.rename(self.secrets_dir, old_secrets_path)
+            os.rename(temp_dir, self.secrets_dir)
+            shutil.rmtree(old_secrets_path)
+            
+            # 8. Update In-Memory State
+            self._salt = new_salt
+            self._master_key = new_master_key
+            
+            self._log_operation("rotate_key", "system", "all", "success")
+            
+        except Exception as e:
+            # Rollback is implicit if we failed before rename: existing secrets_dir is untouched.
+            # If we failed DURING rename (scary), we might need manual intervention, but we have backup.
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+            raise SecretManagerError(f"Rotation failed: {e}. Backup at {backup_dir}")
+
     def unlock(self, master_password: str) -> None:
         """
         Unlock the secret manager with master password.
@@ -244,7 +350,7 @@ class SecretManager:
         if not service_file.exists():
             return {}
         return self._load_json(service_file)
-    
+
     def _save_service_secrets(
         self, service: str, secrets: Dict[str, Dict[str, str]]
     ) -> None:
