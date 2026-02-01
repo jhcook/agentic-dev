@@ -31,6 +31,9 @@ We will adopt a "Graceful Hybrid" strategy for Node.js tooling:
 - **Positive**:
   - Python devs don't need Node for basic work.
   - CI/CD can bring its own Node environment.
+- **Positive**:
+  - Python devs don't need Node for basic work.
+  - CI/CD can bring its own Node environment.
   - Linting is "best effort" locally but strict in CI (where Node is present).
 - **Negative**:
   - Linting results might vary if a user doesn't have the tool installed (false positives/negatives vs CI).
@@ -40,3 +43,14 @@ We will adopt a "Graceful Hybrid" strategy for Node.js tooling:
 
 - **Security**: `npx` usage must be scrutinized. We pin versions in `package.json` where possible.
 - **Privacy**: No additional PII risk.
+
+## Security Risk Assessment (Added 2026-02-01)
+
+### Risk: Supply Chain Attack via `npx`
+
+Executing `npx` (which fetches from npm registry) allows execution of remote code.
+**Mitigation**:
+
+- We heavily prefer `npx --no-install` which only runs **local** `node_modules` (verified by `package-lock.json`).
+- If using `npx --yes` (ephemeral), we **MUST pin the version** (e.g., `markdownlint-cli@0.44.0`) to prevent auto-upgrading to a compromised `latest` version.
+- The command is executed with `check=True` and isolated via `subprocess`.

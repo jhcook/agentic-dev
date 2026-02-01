@@ -128,23 +128,25 @@ OPTIONS TO GENERATE:
 1. Conservative Fix: Minimal changes to address the findings (e.g. adding logs, adding checks).
 2. Refactor Fix: A cleaner, more robust implementation if applicable.
 
-CRITICAL:
-- You is acting as a JSON generator.
-- Output ONLY valid JSON. 
-- Do NOT output markdown formatting, backticks, or conversational text.
+CRITICAL RESPONSE GUIDELINES:
+- You are a JSON generator. You do NOT speak.
+- Output ONLY valid JSON array.
+- Do NOT use markdown code blocks (```json).
+- Do NOT provide an introduction or conclusion.
+- If you cannot generate a fix, return an empty list [].
 
 OUTPUT FORMAT:
 [
-  {{
+  {
     "title": "Conservative Fix",
     "description": "Minimal changes to address findings.",
     "patched_content": "...FULL file content with fix applied..."
-  }},
-  {{
+  },
+  {
     "title": "Refactor Fix",
     "description": "Robust implementation addressing findings.",
     "patched_content": "...FULL file content with fix applied..."
-  }}
+  }
 ]
 """
         return base_prompt

@@ -269,7 +269,7 @@ def run_markdownlint(files: List[str], fix: bool = False) -> bool:
         # Command Construction
         cmd = []
         if has_npx:
-            cmd = ["npx", "--yes", "markdownlint-cli"]
+            cmd = ["npx", "--yes", "markdownlint-cli@0.44.0"]
         else:
             cmd = ["markdownlint"]
             
