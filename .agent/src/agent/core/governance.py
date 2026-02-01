@@ -87,8 +87,8 @@ def load_roles() -> List[Dict[str, str]]:
     if not roles:
         roles = [
             {"name": "Architect", "focus": "System design, ADR compliance, patterns, and dependency hygiene."},
-            {"name": "Security", "focus": "PII leaks, hardcoded secrets, injection vulnerabilities, and permission scope."},
-            {"name": "Compliance", "focus": "GDPR, SOC2, and legal compliance mandates."},
+            {"name": "Security (CISO)", "focus": "Chief Information Security Officer. Enforcer of technical security controls, vulnerabilities, and secure coding practices."},
+            {"name": "Compliance (Lawyer)", "focus": "Legal & Compliance Officer. Enforcer of GDPR, SOC2, Licensing, and regulatory frameworks."},
             {"name": "QA", "focus": "Test coverage, edge cases, and testability of the changes."},
             {"name": "Docs", "focus": "Documentation updates, clarity, and user manual accuracy."},
             {"name": "Observability", "focus": "Logging, metrics, tracing, and error handling."},

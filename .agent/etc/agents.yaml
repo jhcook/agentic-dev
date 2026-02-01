@@ -24,16 +24,16 @@ team:
     instruction: "Consult the .agent/instructions/qa/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
 
   - role: security
-    name: "Security & Compliance Officer"
-    description: "Enforcer of SOC2, GDPR, and general security posture."
+    name: "Security (CISO)"
+    description: "Chief Information Security Officer. Enforcer of technical security controls, vulnerabilities, and secure coding practices."
     responsibilities:
-      - "Scan for secrets and PII"
-      - "Verify GDPR/SOC2 compliance checklists"
+      - "Scan for secrets, PII, and injection risks"
       - "Review dependency vulnerabilities"
+      - "Check for insecure configurations"
     governance_checks:
       - "No PII in logs"
       - "No secrets in code"
-      - "Compliance docs checked if applicable"
+      - "Are dependencies pinned and safe?"
     instruction: "Consult the .agent/instructions/security/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
 
   - role: product
@@ -72,16 +72,16 @@ team:
     instruction: "Consult the .agent/instructions/docs/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
 
   - role: compliance
-    name: "Compliance Officer"
-    description: "Enforcer of SOC2, GDPR, and general security posture."
+    name: "Compliance (Lawyer)"
+    description: "Legal & Compliance Officer. Enforcer of GDPR, SOC2, Licensing, and regulatory frameworks."
     responsibilities:
-      - "Scan for secrets and PII"
       - "Verify GDPR/SOC2 compliance checklists"
-      - "Review dependency vulnerabilities"
+      - "Check license headers and dependencies licenses"
+      - "Ensure Lawful Basis is documented"
     governance_checks:
-      - "No PII in logs"
-      - "No secrets in code"
-      - "Compliance docs checked if applicable"
+      - "Are License headers present?"
+      - "Is GDPR data handling compliant?"
+      - "Is the Lawful Basis for data processing defined?"
     instruction: "Consult the .agent/instructions/compliance/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
 
   - role: mobile
