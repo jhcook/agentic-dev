@@ -15,8 +15,10 @@
 import shutil
 import subprocess
 import sys
+import os
 from pathlib import Path
 from typing import List, Optional, Set
+from opentelemetry import trace
 
 import typer
 from rich.console import Console
@@ -237,6 +239,60 @@ def run_eslint(files: List[str], fix: bool = False) -> bool:
     return success
 
 
+tracer = trace.get_tracer(__name__)
+
+
+
+def run_markdownlint(files: List[str], fix: bool = False) -> bool:
+    if not files:
+        return True
+    
+    with tracer.start_as_current_span("lint.markdownlint") as span:
+        span.set_attribute("file_count", len(files))
+        
+        # Check availability
+        import shutil
+        is_ci = os.getenv("CI", "").lower() in ("true", "1", "yes")
+        
+        has_npx = shutil.which("npx") is not None
+        has_local = shutil.which("markdownlint") is not None
+        
+        if not has_npx and not has_local:
+             if is_ci:
+                 console.print("[bold red]❌ CI Error: markdownlint missing.[/bold red]")
+                 span.set_attribute("status", "failed_ci")
+                 return False
+             console.print("[dim]⚠️  Skipping markdownlint.[/dim]")
+             span.set_attribute("skipped", True)
+             return True
+             
+        # Command Construction
+        cmd = []
+        if has_npx:
+            cmd = ["npx", "--yes", "markdownlint-cli"]
+        else:
+            cmd = ["markdownlint"]
+            
+        if fix:
+            cmd.append("--fix")
+        cmd.extend(files)
+        
+        try:
+            subprocess.run(cmd, check=True)
+            span.set_attribute("status", "success")
+            return True
+        except subprocess.CalledProcessError:
+             span.set_attribute("status", "failed")
+             return False
+        except Exception as e:
+             span.set_attribute("status", "error")
+             span.record_exception(e)
+             console.print(f"[red]Error: {e}[/red]")
+             return False
+
+
+
+
 def lint(
     path: Optional[Path] = typer.Argument(
         None, help="Path to file or directory to lint."
@@ -271,6 +327,7 @@ def lint(
     py_files = [f for f in files if f.endswith(".py")]
     sh_files = [f for f in files if f.endswith(".sh") or f.endswith("bin/agent")]
     js_files = [f for f in files if f.endswith((".js", ".jsx", ".ts", ".tsx"))]
+    md_files = [f for f in files if f.endswith(".md")]
 
     success = True
 
@@ -284,6 +341,10 @@ def lint(
 
     if js_files:
         if not run_eslint(js_files, fix=fix):
+            success = False
+
+    if md_files:
+        if not run_markdownlint(md_files, fix=fix):
             success = False
 
     if not success:

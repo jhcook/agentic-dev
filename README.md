@@ -41,7 +41,15 @@ The agent requires credentials for certain commands that interact with AI provid
 
 It means the agent cannot authenticate with the configured AI provider.
 
-### Resolution
+### Prerequisites
+
+- **Python 3.10+** (Managed via `.venv` or system)
+- **Git**
+- **GitHub CLI (`gh`)**: For AI model access and PR management.
+- **Node.js & npm** (Optional but Recommended): Required for `web` development and advanced linting (`markdownlint`).
+  - The CLI uses `npx` to run linters without polluting your global scope.
+
+### Installation
 
 #### 1. Checking Your Configuration
 

@@ -183,9 +183,7 @@ def convene_council_full(
     if user_question:
         report += f"## ❓ User Question\n{scrub_sensitive_data(user_question)}\n\n"
     
-    # Table Header
-    report += "| Role | Verdict | Findings |\n"
-    report += "|---|---|---|\n"
+    # Report Structure (Section-based)
         
     json_roles = []
     
@@ -206,7 +204,14 @@ def convene_council_full(
                     system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, Diff."
                     if user_question: system_prompt += f" Question: {user_question}"
             else:
-                    system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Review code diff. Output: Verdict (PASS/BLOCK) + Analysis."
+                    system_prompt = (
+                        f"You are {role_name}. Focus: {focus_area}. Task: Review code diff. "
+                        "Output format:\n"
+                        "VERDICT: [PASS|BLOCK]\n"
+                        "SUMMARY:\n<one line summary>\n"
+                        "FINDINGS:\n- <finding 1>\n- <finding 2>\n"
+                        "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
+                    )
 
             user_prompt = f"STORY: {story_content}\nRULES: {rules_content}\nDIFF: {chunk}"
             
@@ -227,26 +232,30 @@ def convene_council_full(
         role_data["findings"] = role_findings
         role_data["verdict"] = role_verdict
         
-        # Format findings for Markdown table
-        findings_text = "<br><br>".join(role_findings)
-        findings_text = findings_text.replace("\n", "<br>").replace("|", "\\|")
+        # Append to Report
+        report += f"### @{role_name}\n"
         
         if role_verdict == "BLOCK":
             overall_verdict = "BLOCK"
             if progress_callback:
                 progress_callback(f"❌ @{role_name}: BLOCK")
-            report += f"| **@{role_name}** | ❌ BLOCK | {findings_text} |\n"
+            report += f"**Verdict**: ❌ BLOCK\n\n"
         elif mode == "consultative":
                 if progress_callback:
                     progress_callback(f"ℹ️  @{role_name}: CONSULTED")
-                report += f"| @{role_name} | ℹ️ ADVICE | {findings_text} |\n"
+                report += f"**Verdict**: ℹ️ ADVICE\n\n"
         else:
             if progress_callback:
                 progress_callback(f"✅ @{role_name}: PASS")
-            if not findings_text:
-                findings_text = "No issues found."
-            report += f"| @{role_name} | ✅ PASS | {findings_text} |\n"
-            
+            report += f"**Verdict**: ✅ PASS\n\n"
+
+        if role_findings:
+            report += "\n\n".join(role_findings)
+        else:
+            report += "No issues found."
+
+        report += "\n\n---\n\n"
+             
         json_roles.append(role_data)
 
     json_report["roles"] = json_roles

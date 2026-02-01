@@ -99,6 +99,21 @@ def check_dependencies() -> None:
             )
         else:
             typer.secho(f"  - Found {dep} (recommended)", fg=typer.colors.GREEN)
+            
+    # Check linting tools
+    if not shutil.which("markdownlint"):
+         typer.secho("[INFO] markdownlint-cli not found. It is recommended for documentation checks.", fg=typer.colors.BLUE)
+         if typer.confirm("Install markdownlint-cli globally via npm?", default=True):
+             if shutil.which("npm"):
+                 try:
+                     subprocess.run(["npm", "install", "-g", "markdownlint-cli"], check=True)
+                     typer.secho("[OK] markdownlint-cli installed.", fg=typer.colors.GREEN)
+                 except Exception as e:
+                     typer.secho(f"[ERROR] Failed to install markdownlint-cli: {e}", fg=typer.colors.RED)
+             else:
+                 typer.secho("[WARN] npm not found. Cannot install markdownlint-cli automatically.", fg=typer.colors.YELLOW)
+    else:
+         typer.secho("  - Found tool: markdownlint", fg=typer.colors.GREEN)
 
     typer.secho("[OK] System dependencies check passed.", fg=typer.colors.GREEN)
 

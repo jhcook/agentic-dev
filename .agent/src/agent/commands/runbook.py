@@ -102,6 +102,17 @@ def new_runbook(
     else:
         panel_description = "- @Architect, @Security, @QA, @Docs, @Compliance, @Observability"
 
+    # Load Template
+    template_path = config.templates_dir / "runbook-template.md"
+    if not template_path.exists():
+        console.print(f"[bold red]❌ Runbook template not found at {template_path}[/bold red]")
+        raise typer.Exit(code=1)
+        
+    template_content = template_path.read_text()
+    
+    # We want the LLM to fill in the template. 
+    # We will provide the structure as a requirement.
+    
     system_prompt = f"""You are the AI Governance Panel for this repository.
 Your role is to design and document a DETAILED Implementation Runbook for a software engineering task.
 
@@ -112,62 +123,19 @@ INSTRUCTIONS:
 1. You MUST adopt the perspective of EVERY role in the panel.
 2. You MUST provide a distinct review section for EVERY role.
 3. You MUST enforce the "Definition of Done".
+4. You MUST follow the structure of the provided TEMPLATE exactly.
 
 INPUTS:
 1. User Story (Requirements)
 2. Governance Rules (Compliance constraints)
 
-OUTPUT FORMAT:
-Raw Markdown content ONLY. Do NOT wrap the output in code fences (```markdown).
-The content MUST start with '## State'.
+TEMPLATE STRUCTURE (Found in {template_path.name}):
+{template_content}
 
-STRUCTURE:
-# STORY-ID: <Title>
-
-## State
-PROPOSED
-
-## Goal Description
-<Clear summary of the objective>
-
-## Panel Review Findings
-(Critique the story/plan from each perspective)
-{panel_checks if agents_path.exists() else '''
-- **@Architect**: ...
-- **@Security**: ...
-- **@QA**: ...
-- **@Docs**: ...
-- **@Compliance**: ...
-- **@Observability**: ...
-'''}
-
-## Implementation Steps
-(Must be detailed enough for a qualified engineer)
-### [Component Name]
-#### [MODIFY | NEW | DELETE] [file path]
-- <Specific instruction on what to change>
-- <Code snippets if necessary for clarity>
-
-## Verification Plan
-### Automated Tests
-- [ ] Test 1
-
-### Manual Verification
-- [ ] Step 1
-
-## Definition of Done
-### Documentation
-- [ ] CHANGELOG.md updated
-- [ ] README.md updated (if applicable)
-- [ ] API Documentation updated (if applicable)
-
-### Observability
-- [ ] Logs are structured and free of PII
-- [ ] Metrics added for new features
-
-### Testing
-- [ ] Unit tests passed
-- [ ] Integration tests passed
+Your output must be the FILLED IN template, starting with the Header. Do NOT wrap in markdown blocks.
+Replace placeholders like <Title>, <Clear summary...>, etc. with actual content.
+Update '## Panel Review Findings' with specific commentary.
+Update '## Targeted Refactors & Cleanups (INFRA-043)' with any relevant cleanups found.
 """
 
     user_prompt = f"""STORY CONTENT:
@@ -175,6 +143,8 @@ PROPOSED
 
 GOVERNANCE RULES:
 {rules_content}
+
+Generate the runbook now.
 """
 
     with console.status("[bold green]🤖 Panel is discussing...[/bold green]"):

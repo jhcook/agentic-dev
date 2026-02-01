@@ -13,7 +13,7 @@ PROPOSED
 (Critique the story/plan from each perspective)
 {panel_checks}
 
-## Proposed Improvements (Opt-In)
+## Targeted Refactors & Cleanups (INFRA-043)
 
 (Agent: List tech debt or "cleanup" items here. User: Check [x] to approve implementation.)
 

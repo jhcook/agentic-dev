@@ -97,7 +97,7 @@ def test_run_audit_integration(mock_orphaned, mock_stagnant, mock_repo):
     assert "ungoverned.py" in result.ungoverned_files
 
 def test_check_license_headers(mock_repo):
-    result = AuditResult(0, [], [], [], [])
+    result = AuditResult(0, [], [], [], [], [])
     
     # File with Apache license
     f1 = mock_repo / "licensed.py"
@@ -107,8 +107,9 @@ def test_check_license_headers(mock_repo):
     f2 = mock_repo / "unlicensed.py"
     f2.write_text("print('oops')")
     
-    check_license_headers(mock_repo, [f1, f2], [], result)
+    # check_license_headers returns a list of missing files (relative path)
+    missing = check_license_headers(mock_repo, [f1, f2], [])
     
-    # Should have error for f2
-    assert len(result.errors) == 1
-    assert "Missing license headers" in result.errors[0]
+    # Should have missing for f2
+    assert len(missing) == 1
+    assert "unlicensed.py" in missing[0]
