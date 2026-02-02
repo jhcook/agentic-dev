@@ -585,10 +585,18 @@ class AIService:
                     return full_text.strip()
                 
             except Exception as e:
+                # Check for SSL errors first - Fail Fast if Proxy/Cert issue
+                from agent.core.net_utils import check_ssl_error
+                ssl_msg = check_ssl_error(e, url=f"Provider: {current_p}")
+                if ssl_msg:
+                    console.print(f"[bold red]{ssl_msg}[/bold red]")
+                    # Do not retry SSL errors, they are configuration issues
+                    raise e
+
                 # Catch transient network errors and retry
                 error_str = str(e).lower()
                 transient_indicators = [
-                    "remote protocol error", 
+                    "remote protocol error",  
                     "server disconnected", 
                     "timeout", 
                     "connection reset",

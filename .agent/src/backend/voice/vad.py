@@ -205,7 +205,16 @@ class VADProcessor:
                 VAD_DOWNLOAD_COUNT.labels(status='failure').inc()
             return False
             
+            return False
+            
         except Exception as e:
+            from agent.core.net_utils import check_ssl_error
+            ssl_msg = check_ssl_error(e, url=SILERO_MODEL_URL)
+            if ssl_msg:
+                logger.error(f"event='model_download_ssl_error' error='{ssl_msg}'")
+                # Break retry loop on SSL error
+                return False
+                
             logger.error(f"event='model_download_error' error='{e}'")
             if METRICS_AVAILABLE:
                 VAD_DOWNLOAD_COUNT.labels(status='failure').inc()

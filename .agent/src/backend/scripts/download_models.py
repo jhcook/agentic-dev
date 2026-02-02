@@ -86,7 +86,16 @@ def main():
                 logger.error(f"Checksum verification failed for {filename}!")
                 os.remove(dest_path)
         except Exception as e:
-            logger.error(f"Failed to download {filename}: {e}")
+            from agent.core.net_utils import check_ssl_error
+            ssl_msg = check_ssl_error(e, url=info["url"])
+            if ssl_msg:
+                 logger.error(ssl_msg)
+                 # Do not remove dest_path (partial) if verification failed? 
+                 # Actually if SSL failed, file likely created empty or partial.
+                 # Let's keep existing behavior or cleanup?
+                 # Existing behavior is to log error and continue loop.
+            else:
+                 logger.error(f"Failed to download {filename}: {e}")
 
 if __name__ == "__main__":
     main()
