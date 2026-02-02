@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import difflib
+import unicodedata
 import json
 import logging
 import re
@@ -170,8 +172,15 @@ class NotionSync:
         # Conflict Resolution (Interactive) for PULL
         if target_file.exists() and not force:
             local_content = target_file.read_text(encoding="utf-8")
-            if self._normalize_markdown(local_content) != self._normalize_markdown(content):
+            norm_local = self._normalize_markdown(local_content)
+            norm_remote = self._normalize_markdown(content)
+            if norm_local != norm_remote:
                 # Conflict!
+                # Show diff of normalized content for debugging
+                diff = difflib.ndiff([norm_local], [norm_remote])
+                diff_text = "".join(list(diff))
+                logger.debug(f"Normalization Diff for {art_id}:\n{diff_text}")
+                
                 should_overwrite = Confirm.ask(
                     f"[bold red]Conflict detected for {art_id}[/bold red]. Remote content differs from Local.\n"
                     f"Local file: {target_file}\n"
@@ -254,6 +263,11 @@ class NotionSync:
             
             if norm_local != norm_remote:
                 # Conflict Resolution (Interactive) for PUSH
+                # Show diff
+                diff = difflib.ndiff([norm_local], [norm_remote])
+                diff_text = "".join(list(diff))
+                logger.debug(f"Normalization Diff for {art['id']}:\n{diff_text}")
+
                 should_update = Confirm.ask(
                     f"[bold red]Conflict detected for {art['id']}[/bold red]. Local content differs from Remote.\n"
                     f"Overwrite [bold]REMOTE[/bold] Notion page with local content?",
@@ -403,6 +417,8 @@ class NotionSync:
             if line.startswith("## Status") or line.startswith("## State"): continue
             if line.upper().strip() in ["DRAFT", "PROPOSED", "ACCEPTED", "DONE", "IN_PROGRESS"]: continue 
             if not line.strip(): continue
+            # Normalize Unicode to NFC to avoid false positives (e.g. café vs cafe\u0301)
+            line = unicodedata.normalize("NFC", line)
             filtered.append(re.sub(r"\W+", "", line).lower())
         return "".join(filtered)
 
