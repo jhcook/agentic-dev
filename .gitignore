@@ -43,6 +43,7 @@ Thumbs.db
 .agent/backups/
 .agent/models/
 .agent/src/backend/voice/tools/custom/
+.agent/src/VERSION
 
 # Secrets
 .agent/secrets/

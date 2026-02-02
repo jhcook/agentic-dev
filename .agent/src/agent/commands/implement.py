@@ -109,6 +109,63 @@ def find_file_in_repo(filename: str) -> List[str]:
     except Exception:
         return []
 
+def get_current_branch() -> str:
+    """Get the current git branch name."""
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], 
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        return ""
+
+def is_git_dirty() -> bool:
+    """Check if there are uncommitted changes."""
+    try:
+        # Check for modified filed
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], 
+            stderr=subprocess.DEVNULL
+        ).strip()
+        return bool(status)
+    except Exception:
+        return True # Fail safe
+
+def sanitize_branch_name(title: str) -> str:
+    """Sanitize a story title for use in a branch name."""
+    # Lowercase, replace special chars with hyphen
+    name = title.lower()
+    name = re.sub(r'[^a-z0-9]+', '-', name)
+    return name.strip('-')
+
+def create_branch(story_id: str, title: str):
+    """Create or checkout a feature branch."""
+    branch_name = f"{story_id}/{sanitize_branch_name(title)}"
+    
+    # Check if exists
+    exists = False
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--verify", branch_name], 
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        exists = True
+    except subprocess.CalledProcessError:
+        exists = False
+        
+    if exists:
+        console.print(f"[bold blue]🔄 Switching to existing branch: {branch_name}[/bold blue]")
+        subprocess.run(["git", "checkout", branch_name], check=True)
+    else:
+        console.print(f"[bold green]🌱 Creating new branch: {branch_name}[/bold green]")
+        subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+    
+    # Log event
+    log_file = Path(".agent/logs/implement.log")
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_file, "a") as f:
+        f.write(f"[{datetime.now().isoformat()}] Branch{'Switched' if exists else 'Created'}: {branch_name}\n")
+
 def find_directories_in_repo(dirname: str) -> List[str]:
     """
     Search for directories with a specific name in the repo.
@@ -446,6 +503,41 @@ def implement(
             "before implementing.[/bold red]"
         )
         raise typer.Exit(code=1)
+
+    # 1.1.5 AUTOMATION: Branch Management (INFRA-055)
+    
+    # Check Dirty State
+    if is_git_dirty():
+        console.print("[bold red]❌ Uncommitted changes detected.[/bold red]")
+        console.print("Please stash or commit your changes before starting implementation.")
+        raise typer.Exit(code=1)
+
+    current_branch = get_current_branch()
+    story_id = extract_story_id(runbook_id, runbook_content_scrubbed)
+    
+    # Get Story Title for branch name
+    from agent.core.utils import find_story_file
+    story_file = find_story_file(story_id)
+    story_title = "feature"
+    if story_file:
+         # content is # ID: Title
+         first_line = story_file.read_text().splitlines()[0]
+         # Remove ID prefix if present
+         if first_line.startswith(f"# {story_id}:"):
+             story_title = first_line.replace(f"# {story_id}:", "").strip()
+         elif first_line.startswith("#"):
+             story_title = first_line.lstrip("# ").strip()
+
+    if current_branch == "main":
+        console.print(f"[dim]On main branch. Setting up workspace for {story_id}...[/dim]")
+        create_branch(story_id, story_title)
+    elif current_branch.startswith(f"{story_id}/"):
+        console.print(f"[bold green]✅ Already on valid story branch: {current_branch}[/bold green]")
+    else:
+        console.print(f"[bold red]❌ Invalid Branch: {current_branch}[/bold red]")
+        console.print(f"You must be on 'main' or a branch starting with '{story_id}/' to implement this story.")
+        raise typer.Exit(code=1)
+
 
     # 1.2 AUTOMATION: Update Story State (Phase 0)
     story_id = extract_story_id(runbook_id, runbook_content_scrubbed)
