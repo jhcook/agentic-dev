@@ -5,6 +5,44 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/history/{session_id}": {
+      "get": {
+        "summary": "Get History",
+        "description": "Get chat history for a session.",
+        "operationId": "get_history_history__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/health": {
       "get": {
         "tags": [
@@ -209,6 +247,53 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/stories": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Stories",
+        "description": "Returns all stories.",
+        "operationId": "get_stories_api_dashboard_stories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Get Stories Api Dashboard Stories Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/stats": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Stats",
+        "description": "Returns project statistics.",
+        "operationId": "get_stats_api_dashboard_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }

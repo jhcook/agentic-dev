@@ -1,4 +1,18 @@
 
+// Copyright 2026 Justin Cook
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import React, { useEffect, useState } from 'react';
 import { Activity, GitPullRequest, FileText } from 'lucide-react';
 
@@ -83,6 +97,7 @@ export function Dashboard() {
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
+                        <caption className="sr-only">List of active stories and their status</caption>
                         <thead>
                             <tr className="bg-gray-700/50 text-gray-400 text-sm uppercase">
                                 <th className="px-6 py-4 font-medium">ID</th>
@@ -104,8 +119,8 @@ export function Dashboard() {
                                         <td className="px-6 py-4 text-gray-200">{story.title}</td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${story.status.toUpperCase() === 'IN_PROGRESS'
-                                                    ? 'bg-blue-900/50 text-blue-200'
-                                                    : 'bg-yellow-900/50 text-yellow-200'
+                                                ? 'bg-blue-900/50 text-blue-200'
+                                                : 'bg-yellow-900/50 text-yellow-200'
                                                 }`}>
                                                 {story.status}
                                             </span>
