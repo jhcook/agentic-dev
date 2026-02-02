@@ -44,7 +44,7 @@ WORKFLOW:
 
 STEP 2 — PULL REQUEST:
 
-- Use `gh pr create --draft --web`.
+- Use `gh pr create --web`.
 - Auto-fill title with "[STORY-ID] <Title from Commit/Prompt>".
 - Auto-fill body with template:
 
@@ -62,7 +62,7 @@ STEP 2 — PULL REQUEST:
 
 STEP 3 — EXECUTION:
 
-- Execute `gh pr create --draft --web` with the generated arguments.
+- Execute `gh pr create --web` with the generated arguments.
 
 NOTES:
 

@@ -125,7 +125,7 @@ def pr(
     gh_args = ["gh", "pr", "create", "--title", title, "--body", body, "--base", target_branch]
     if web:
         gh_args.append("--web")
-    if draft:
+    elif draft:
         gh_args.append("--draft")
     
     try:
