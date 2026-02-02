@@ -46,7 +46,7 @@ User provides a requirement. You must:
 
 1. **Update Story State**
    - Locate the Story file related to this Runbook (referenced in `Runbook: <ID>`).
-   - Change the `## State` status to `IN PROGRESS`.
+   - Change the `## State` status to `IN_PROGRESS`.
    - Run `agent sync` to propagate this change to Notion.
 
 ### PHASE 1: REQUIREMENTS & DESIGN
@@ -358,7 +358,7 @@ User provides a requirement. You must:
 
 1. **Update Story State**
    - Locate the Story file.
-   - Ensure `## State` is `IN PROGRESS`.
+   - Ensure `## State` is `IN_PROGRESS`.
    - Run `agent sync` to finalize the status in Notion.
    - **Note**: The subsequent `agent commit` command will transition this to `COMMITTED`.
 

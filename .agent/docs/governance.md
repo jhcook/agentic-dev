@@ -146,6 +146,10 @@ Apply to all code changes:
 
 ## ADR Format
 Use the template in .agent/templates/adr-template.md
+
+## Status Lifecycle
+- **DEPRECATED**: Binding but no new uses allowed.
+- **RETIRED**: Not binding, usage forbidden.
 ```
 
 #### 4. Domain-Specific Rules
@@ -226,10 +230,10 @@ The agent enforces strict state transitions to ensure quality gates are respecte
 
 ### State Diagram
 
-```
+```text
 Plan: PROPOSED → APPROVED
                     ↓
-Story: DRAFT → OPEN → COMMITTED
+Story: DRAFT → IN_PROGRESS → COMMITTED
                          ↓
 Runbook: PROPOSED → ACCEPTED
                        ↓
@@ -270,7 +274,7 @@ If story is not `COMMITTED`, preflight will fail:
 
 ```
 ❌ BLOCKER: Story WEB-001 must be in COMMITTED state
-Current state: DRAFT
+Current state: TO_DO
 Update story state before proceeding.
 ```
 
@@ -478,7 +482,7 @@ agent preflight --story WEB-001 --ai
 
 Preflight output shows severity:
 
-```
+```text
 🚫 BLOCKER: Hardcoded API key in config.py
 ⚠️  WARNING: Test coverage below 80%
 ℹ️  INFO: Consider adding OpenTelemetry tracing

@@ -462,7 +462,7 @@ def implement(
                  console.print(f"[bold red]⛔ Cannot implement Story {story_id}: Status is '{current_state}'[/bold red]")
                  raise typer.Exit(code=1)
 
-    update_story_state(story_id, "In Progress", context_prefix="Phase 0")
+    update_story_state(story_id, "IN_PROGRESS", context_prefix="Phase 0")
 
     # 2. Load Guide
     guide_path = config.agent_dir / "workflows/implement.md"

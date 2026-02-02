@@ -2,7 +2,9 @@
 
 ## State
 
-In Progress## Problem Statement
+COMMITTED
+
+## Problem Statement
 
 As the number of artifacts grows, ensuring Stories, Plans, and ADRs are correctly linked is difficult. Broken links and orphan stories reduce visibility.
 

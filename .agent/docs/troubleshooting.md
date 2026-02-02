@@ -11,17 +11,20 @@ Common issues and their solutions.
 **Solutions:**
 
 1. **Use full path:**
+
    ```bash
    /path/to/repo/.agent/bin/agent --version
    ```
 
 2. **Add to PATH:**
+
    ```bash
    export PATH="$PATH:$(pwd)/.agent/bin"
    agent --version
    ```
 
 3. **Make permanent:**
+
    ```bash
    echo 'export PATH="$PATH:/Users/jcook/repo/agentic-dev/.agent/bin"' >> ~/.zshrc
    source ~/.zshrc
@@ -32,6 +35,7 @@ Common issues and their solutions.
 **Problem:** Python can't find the agent module.
 
 **Solution:**
+
 ```bash
 # Install the agent package
 pip install -e .agent/
@@ -46,6 +50,7 @@ agent --version
 **Problem:** Execute permission not set.
 
 **Solution:**
+
 ```bash
 chmod +x .agent/bin/agent
 ```
@@ -59,11 +64,13 @@ chmod +x .agent/bin/agent
 **Solutions:**
 
 1. **List all stories:**
+
    ```bash
    agent list-stories
    ```
 
 2. **Check ID format:**
+
    ```
    ✅ WEB-001
    ❌ web-001
@@ -72,6 +79,7 @@ chmod +x .agent/bin/agent
    ```
 
 3. **Verify file exists:**
+
    ```bash
    ls .agent/cache/stories/WEB/
    ```
@@ -81,6 +89,7 @@ chmod +x .agent/bin/agent
 **Problem:** Trying to generate runbook for non-committed story.
 
 **Solution:**
+
 ```bash
 # Edit story
 vim .agent/cache/stories/WEB/WEB-001-feature.md
@@ -98,6 +107,7 @@ agent new-runbook WEB-001
 **Problem:** Trying to implement non-accepted runbook.
 
 **Solution:**
+
 ```bash
 # Edit runbook
 vim .agent/cache/runbooks/WEB/WEB-001-runbook.md
@@ -116,12 +126,14 @@ agent implement WEB-001
 **Solutions:**
 
 1. **Commit your changes first:**
+
    ```bash
    git add .
    agent commit --story WEB-001
    ```
 
 2. **Check branch:**
+
    ```bash
    git log origin/main..HEAD
    # Should show commits
@@ -136,12 +148,14 @@ agent implement WEB-001
 **Debugging:**
 
 1. **Check API key:**
+
    ```bash
    echo $GEMINI_API_KEY
    echo $OPENAI_API_KEY
    ```
 
 2. **Test API directly:**
+
    ```bash
    # Gemini
    curl -H "Content-Type: application/json" \
@@ -150,12 +164,14 @@ agent implement WEB-001
    ```
 
 3. **Try different provider:**
+
    ```bash
    agent --provider openai new-runbook WEB-001
    agent --provider gh new-runbook WEB-001
    ```
 
 4. **Check logs:**
+
    ```bash
    # Enable debug logging
    export AGENT_LOG_LEVEL=DEBUG
@@ -169,11 +185,13 @@ agent implement WEB-001
 **Solutions:**
 
 1. **Use larger context model (Gemini):**
+
    ```bash
    agent --provider gemini new-runbook WEB-001
    ```
 
 2. **Reduce chunk size:**
+
    ```bash
    export AGENT_CHUNK_SIZE=3000
    agent preflight --story WEB-001 --ai
@@ -191,12 +209,14 @@ agent implement WEB-001
 **Solutions:**
 
 1. **Wait and retry:**
+
    ```bash
    sleep 60
    agent new-runbook WEB-001
    ```
 
 2. **Use different provider:**
+
    ```bash
    agent --provider openai new-runbook WEB-001
    ```
@@ -216,11 +236,13 @@ agent implement WEB-001
    - OpenAI: [Platform](https://platform.openai.com/api-keys)
 
 2. **Update environment:**
+
    ```bash
    export GEMINI_API_KEY="new-key-here"
    ```
 
 3. **Check for typos:**
+
    ```bash
    # Keys should look like:
    # Gemini: AIza...
@@ -236,6 +258,7 @@ agent implement WEB-001
 **Solutions:**
 
 1. **Run linter directly:**
+
    ```bash
    # Python
    flake8 src/
@@ -245,6 +268,7 @@ agent implement WEB-001
    ```
 
 2. **Auto-fix:**
+
    ```bash
    # Python
    black src/
@@ -263,6 +287,7 @@ agent implement WEB-001
 **Solutions:**
 
 1. **Run tests directly:**
+
    ```bash
    pytest tests/
    # or
@@ -280,6 +305,7 @@ agent implement WEB-001
 **Common issues:**
 
 **1. Hardcoded secrets:**
+
 ```python
 # ❌ Bad
 API_KEY = "sk-1234567890..."
@@ -289,6 +315,7 @@ API_KEY = os.environ.get('API_KEY')
 ```
 
 **2. PII in logs:**
+
 ```python
 # ❌ Bad
 logger.info(f"User {user.email} logged in")
@@ -298,6 +325,7 @@ logger.info(f"User {user.id} logged in")
 ```
 
 **3. SQL injection:**
+
 ```python
 # ❌ Bad
 db.execute(f"SELECT * FROM users WHERE id = {user_id}")
@@ -311,6 +339,7 @@ db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
 **Common issues:**
 
 **1. Missing CHANGELOG:**
+
 ```bash
 # Add entry to CHANGELOG.md
 vim CHANGELOG.md
@@ -324,12 +353,14 @@ vim CHANGELOG.md
 ```
 
 **2. Missing API documentation:**
+
 ```bash
 # Update OpenAPI spec
 vim docs/openapi.yaml
 ```
 
 **3. Missing docstrings:**
+
 ```python
 # ❌ Bad
 def calculate_total(items):
@@ -353,12 +384,14 @@ def calculate_total(items: List[Item]) -> Decimal:
 **Common issues:**
 
 **1. No tests for new feature:**
+
 ```bash
 # Add tests
 vim tests/test_feature.py
 ```
 
 **2. Test coverage too low:**
+
 ```bash
 # Check coverage
 pytest --cov=src tests/
@@ -367,6 +400,7 @@ pytest --cov=src tests/
 ```
 
 **3. No test strategy in story:**
+
 ```markdown
 ## Test Strategy
 - Unit tests: test_feature.py
@@ -381,6 +415,7 @@ pytest --cov=src tests/
 **Problem:** Parent plan is not in APPROVED state.
 
 **Solution:**
+
 ```bash
 # Find plan
 agent list-plans
@@ -394,9 +429,10 @@ Status: APPROVED
 
 ### "Can't generate runbook: Story not committed"
 
-**Problem:** Story state is DRAFT or OPEN.
+**Problem:** Story state is DRAFT, TO_DO or IN_PROGRESS.
 
 **Solution:**
+
 ```bash
 # Update story
 vim .agent/cache/stories/WEB/WEB-001-feature.md
@@ -411,6 +447,7 @@ COMMITTED
 **Problem:** Runbook status is PROPOSED.
 
 **Solution:**
+
 ```bash
 # Review runbook
 vim .agent/cache/runbooks/WEB/WEB-001-runbook.md
@@ -426,6 +463,7 @@ Status: ACCEPTED
 **Problem:** Trying to create PR from main branch.
 
 **Solution:**
+
 ```bash
 # Create feature branch
 git checkout -b feature/WEB-001-user-profile
@@ -443,6 +481,7 @@ agent pr --story WEB-001
 **Problem:** No files added to staging area.
 
 **Solution:**
+
 ```bash
 # Stage files
 git add .
@@ -459,6 +498,7 @@ agent commit --story WEB-001
 **Problem:** Multiple people edited same story.
 
 **Solution:**
+
 ```bash
 # Pull latest
 git pull origin main
@@ -480,12 +520,14 @@ git commit -m "Merge story changes"
 **Solutions:**
 
 1. **Skip AI for quick checks:**
+
    ```bash
    # Basic checks only (fast)
    agent preflight --story WEB-001
    ```
 
 2. **Reduce number of roles:**
+
    ```yaml
    # Edit .agent/etc/agents.yaml
    team:
@@ -495,6 +537,7 @@ git commit -m "Merge story changes"
    ```
 
 3. **Use faster model:**
+
    ```bash
    agent --provider gemini preflight --story WEB-001 --ai
    ```
@@ -510,6 +553,7 @@ git commit -m "Merge story changes"
    - Focus on essentials
 
 2. **Reduce rules:**
+
    ```bash
    # Temporarily move non-critical rules
    mkdir .agent/rules/temp
@@ -600,6 +644,7 @@ Before asking for help, verify:
 ---
 
 **Related Documentation:**
+
 - [Getting Started](getting_started.md)
 - [Commands Reference](commands.md)
 - [Configuration](configuration.md)

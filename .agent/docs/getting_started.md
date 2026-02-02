@@ -38,6 +38,7 @@ pip install -e ".agent/[voice,ai]"
 ```
 
 The agent requires (automatically installed):
+
 - `typer>=0.21.1` - CLI framework
 - `rich>=14.2.0` - Terminal formatting
 - `pydantic>=2.12.5` - Data validation
@@ -95,6 +96,7 @@ agent --version
 ```
 
 You should see output like:
+
 ```
 Agent CLI v0.2.0
 ```
@@ -118,6 +120,7 @@ agent new-story
 ```
 
 You'll be prompted:
+
 ```
 Select Story Category:
 1. INFRA (Governance, CI/CD)
@@ -141,6 +144,7 @@ vim .agent/cache/stories/WEB/WEB-001-add-user-profile-page.md
 ```
 
 Key sections to complete:
+
 - **Problem Statement**: What problem are we solving?
 - **User Story**: As a [user], I want [capability] so that [value]
 - **Acceptance Criteria**: Specific, testable conditions
@@ -162,6 +166,7 @@ agent new-runbook WEB-001
 ```
 
 The AI will:
+
 1. Read your story
 2. Load governance rules
 3. Generate a detailed implementation plan
@@ -176,6 +181,7 @@ cat .agent/cache/runbooks/WEB/WEB-001-runbook.md
 ```
 
 The runbook contains:
+
 - **Goal description**
 - **Compliance checklist** (what the governance panel will review)
 - **Proposed changes** (files to create/modify)
@@ -196,6 +202,7 @@ agent implement WEB-001
 ```
 
 The AI will:
+
 1. Read the runbook
 2. Generate code changes
 3. Create/modify files according to the plan
@@ -213,6 +220,7 @@ agent preflight --story WEB-001 --ai
 ```
 
 The AI governance panel will review:
+
 - ✅ Architecture compliance
 - ✅ Security (no secrets/PII)
 - ✅ Test coverage
@@ -229,6 +237,7 @@ agent commit --story WEB-001
 ```
 
 You'll be prompted to enter a conventional commit message:
+
 ```
 feat(web): add user profile page component [WEB-001]
 ```
@@ -240,6 +249,7 @@ agent commit --story WEB-001 --ai
 ```
 
 The AI will:
+
 1. Analyze your staged changes
 2. Generate a conventional commit message
 3. Link to the story automatically
@@ -269,28 +279,33 @@ Now that you've completed your first workflow, explore:
 ## Quick Tips
 
 ### 1. Use Tab Completion
+
 ```bash
 # Add this to your ~/.zshrc or ~/.bashrc
 eval "$(_AGENT_COMPLETE=zsh_source agent)"
 ```
 
 ### 2. Set Default Provider
+
 ```bash
 # Always use Gemini
 agent --provider gemini new-runbook WEB-001
 ```
 
 ### 3. Check Story Status
+
 ```bash
 agent list-stories
 ```
 
 ### 4. Validate Before Committing
+
 ```bash
 agent validate-story WEB-001
 ```
 
 ### 5. View Governance Logs
+
 ```bash
 # Preflight logs are saved here
 cat .agent/logs/preflight-*.log
@@ -299,13 +314,17 @@ cat .agent/logs/preflight-*.log
 ## Troubleshooting
 
 ### "Story file not found"
+
 Ensure your story exists and has the correct ID:
+
 ```bash
 agent list-stories
 ```
 
 ### "AI returned empty response"
+
 Check your API key is set:
+
 ```bash
 echo $GEMINI_API_KEY
 # Or
@@ -313,14 +332,18 @@ echo $OPENAI_API_KEY
 ```
 
 ### "Preflight failed"
+
 Read the failure details carefully. Common issues:
+
 - Missing test coverage
 - No CHANGELOG entry
 - Undocumented API changes
 - Security violations
 
 ### "Command not found: agent"
+
 Add to PATH or use full path:
+
 ```bash
 export PATH="$PATH:$(pwd)/.agent/bin"
 ```
@@ -337,6 +360,7 @@ agent preflight --help
 ```
 
 For more detailed help, see:
+
 - [Commands Reference](commands.md)
 - [Troubleshooting Guide](troubleshooting.md)
 - GitHub Issues

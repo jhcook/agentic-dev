@@ -13,7 +13,18 @@ All ADRs in this repository must follow these rules:
     - Format: `- **YYYY-MM-DD**: <Description of change>`
 
 3. **Compliance & Validation**:
+## Status Definitions
+
+*   **DRAFT**: Decision is being written.
+*   **PROPOSED**: Decision is under discussion.
+*   **ACCEPTED**: Decision is agreed upon and binding.
+*   **SUPERSEDED**: Decision has been replaced by a newer ADR.
+*   **DEPRECATED**: Decision is still technically authoritative but discouraged.
+    *   **Rule**: MAY NOT be referenced by NEW Plans/Stories.
+    *   **Rule**: EXISTING usage is permitted but should optionally be migrated.
+*   **RETIRED**: Decision is no longer in use.
+    *   **Rule**: MUST NOT be referenced by ANY Plan/Story.
+    *   **Rule**: EXISTING usage MUST be removed.
     - **Linkage**: Any Pull Request or Commit that implements or modifies architecture MUST explicitly link to the relevant ADR (e.g., "Implements ADR-014").
     - **Evidence**: Provide evidence in the PR description that the changes align with the ADR's decision logic.
     - **Updates**: If the implementation requires deviating from the ADR, the ADR MUST be updated *before* the code is merged.
-

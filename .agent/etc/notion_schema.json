@@ -14,35 +14,39 @@
                     "type": "select",
                     "options": [
                         {
-                            "name": "To Do",
+                            "name": "DRAFT",
+                            "color": "default"
+                        },
+                        {
+                            "name": "TO_DO",
                             "color": "gray"
                         },
                         {
-                            "name": "In Progress",
+                            "name": "IN_PROGRESS",
                             "color": "blue"
                         },
                         {
-                            "name": "Done",
+                            "name": "DONE",
                             "color": "green"
                         },
                         {
-                            "name": "Blocked",
+                            "name": "BLOCKED",
                             "color": "red"
                         },
                         {
-                            "name": "Committed",
+                            "name": "COMMITTED",
                             "color": "blue"
                         },
                         {
-                            "name": "Superseded",
+                            "name": "SUPERSEDED",
                             "color": "gray"
                         },
                         {
-                            "name": "Deprecated",
+                            "name": "DEPRECATED",
                             "color": "gray"
                         },
                         {
-                            "name": "Retired",
+                            "name": "RETIRED",
                             "color": "gray"
                         }
                     ]
@@ -113,19 +117,23 @@
                     "type": "select",
                     "options": [
                         {
-                            "name": "Proposed",
+                            "name": "DRAFT",
+                            "color": "default"
+                        },
+                        {
+                            "name": "PROPOSED",
                             "color": "gray"
                         },
                         {
-                            "name": "Approved",
+                            "name": "APPROVED",
                             "color": "blue"
                         },
                         {
-                            "name": "Completed",
+                            "name": "COMPLETED",
                             "color": "green"
                         },
                         {
-                            "name": "Deprecated",
+                            "name": "DEPRECATED",
                             "color": "red"
                         }
                     ]
@@ -149,24 +157,32 @@
                     "type": "select",
                     "options": [
                         {
-                            "name": "Proposed",
+                            "name": "DRAFT",
+                            "color": "default"
+                        },
+                        {
+                            "name": "PROPOSED",
                             "color": "yellow"
                         },
                         {
-                            "name": "Accepted",
+                            "name": "ACCEPTED",
                             "color": "green"
                         },
                         {
-                            "name": "Rejected",
+                            "name": "REJECTED",
                             "color": "red"
                         },
                         {
-                            "name": "Deprecated",
+                            "name": "DEPRECATED",
                             "color": "gray"
                         },
                         {
-                            "name": "Superseded",
+                            "name": "SUPERSEDED",
                             "color": "orange"
+                        },
+                        {
+                            "name": "RETIRED",
+                            "color": "gray"
                         }
                     ]
                 },

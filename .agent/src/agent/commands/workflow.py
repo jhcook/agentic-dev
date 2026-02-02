@@ -220,4 +220,4 @@ def commit(
     
     # Update Story State to COMMITTED
     from agent.core.utils import update_story_state
-    update_story_state(story_id, "Committed", context_prefix="Post-Commit")
+    update_story_state(story_id, "COMMITTED", context_prefix="Post-Commit")
