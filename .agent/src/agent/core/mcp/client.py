@@ -23,8 +23,10 @@ from dataclasses import dataclass
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-except ImportError:
+except ImportError as e:
     # Allow import for type checking / CLI loading without dependency
+    import sys
+    print(f"[WARN] Failed to import mcp: {e}", file=sys.stderr)
     ClientSession = Any
     StdioServerParameters = Any
     stdio_client = Any

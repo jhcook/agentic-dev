@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import getpass
+import os
 import shutil
 import subprocess
 import sys
@@ -385,30 +386,50 @@ def configure_agent_settings() -> None:
         data = {}
         
     # 1. Select Provider
-    drivers = list(PROVIDERS.keys())
-    
-    # Filter based on what keys are set in .env (loaded in process) or just offer all?
-    # Better to offer all but warn if key missing? 
-    # For now, just offer all supported.
-    
-    typer.echo("Select your default AI provider:")
-    for i, p in enumerate(drivers, 1):
-        typer.echo(f"{i}. {p}")
-        
-    provider = None
-    while not provider:
-        choice = typer.prompt("Enter number", default="1")
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(drivers):
-                provider = drivers[idx]
-            else:
-                typer.echo("Invalid selection.")
-        except ValueError:
-            typer.echo("Invalid input.")
+    current_provider = config.get_value(data, "agent.provider")
+    should_configure_provider = True
 
-    # Save provider
-    config.set_value(data, "agent.provider", provider)
+    if current_provider:
+        typer.secho(f"[OK] Default AI provider is already set to '{current_provider}'.", fg=typer.colors.GREEN)
+        if not typer.confirm("Would you like to re-configure?", default=False):
+            should_configure_provider = False
+            provider = current_provider
+            
+            # Check model config if skipping provider
+            current_model = config.get_value(data, f"agent.models.{current_provider}")
+            if current_model:
+                 typer.secho(f"[OK] Default model for {current_provider} is set to '{current_model}'.", fg=typer.colors.GREEN)
+                 if not typer.confirm(f"Would you like to re-configure model for {current_provider}?", default=False):
+                     return # Skip model selection as well
+
+    if should_configure_provider: 
+        # Logic to select provider if not skipped
+        drivers = list(PROVIDERS.keys())
+        
+        # Filter based on what keys are set in .env (loaded in process) or just offer all?
+        # Better to offer all but warn if key missing? 
+        # For now, just offer all supported.
+        
+        typer.echo("Select your default AI provider:")
+        for i, p in enumerate(drivers, 1):
+            typer.echo(f"{i}. {p}")
+            
+        provider = None
+        while not provider:
+            choice = typer.prompt("Enter number", default="1")
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(drivers):
+                    provider = drivers[idx]
+                else:
+                    typer.echo("Invalid selection.")
+            except ValueError:
+                typer.echo("Invalid input.")
+
+
+
+        # Save provider
+        config.set_value(data, "agent.provider", provider)
     
     # 2. Select Model
     # We need to reload .env to ensure the keys we just set are available to AIService
@@ -722,9 +743,21 @@ def configure_notion_settings() -> None:
     page_id = get_secret("notion_page_id") or os.getenv("NOTION_PARENT_PAGE_ID")
     if not page_id:
         typer.echo("We need a Parent Page ID where the Agent will create databases.")
-        page_id = typer.prompt("Notion Parent Page ID: ", default="")
+        typer.echo("Tips: You can copy the full URL of the page.")
+        page_id = typer.prompt("Notion Parent Page URL or ID: ", default="")
         if page_id:
             try:
+                # Sanitize: Extract UUID if URL or slug-UUID format
+                import re
+                # Match 32 hex chars, potentially with dashes
+                match = re.search(r"([a-fA-F0-9]{32}|[a-fA-F0-9-]{36})", page_id)
+                if match:
+                    # Remove dashes for consistency if it's the 32-char format Notion often uses in API
+                    sanitized_id = match.group(0).replace("-", "")
+                    if len(sanitized_id) == 32:
+                         page_id = sanitized_id
+                         typer.secho(f"[INFO] Extracted Page ID: {page_id}", dim=True)
+                
                 manager.set_secret("agent", "notion_page_id", page_id)
                 os.environ["NOTION_PARENT_PAGE_ID"] = page_id
                 typer.secho("[OK] Page ID saved.", fg=typer.colors.GREEN)
