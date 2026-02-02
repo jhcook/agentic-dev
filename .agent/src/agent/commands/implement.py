@@ -30,6 +30,7 @@ from agent.core.utils import (
     find_runbook_file,
     load_governance_context,
     scrub_sensitive_data,
+    update_story_state,
 )
 
 app = typer.Typer()
@@ -326,6 +327,72 @@ def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
         
     return global_context, chunks
 
+
+def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
+    """
+    Update the state of a Story file and sync to Notion.
+    """
+    # Import here to avoid circular dependencies if any
+    from agent.core.utils import find_story_file
+    from agent.sync.sync import push_safe
+
+    story_file = find_story_file(story_id)
+    if not story_file:
+         console.print(f"[yellow]⚠️  Could not find Story {story_id} to update state.[/yellow]")
+         return
+
+    content = story_file.read_text()
+    # Regex to find state section (handle various spacing)
+    # ## State
+    # <CURRENT_STATE>
+    state_regex = r"(^## State\s*\n+)([A-Za-z\s]+)"
+    
+    match = re.search(state_regex, content, re.MULTILINE)
+    if match:
+        current_state = match.group(2).strip()
+        if current_state.upper() == new_state.upper():
+            return # Already set
+
+        new_content = re.sub(state_regex, f"\\1{new_state}", content, count=1, flags=re.MULTILINE)
+        story_file.write_text(new_content)
+        console.print(f"[bold blue]🔄 {context_prefix}: Updated Story {story_id} State: {current_state} -> {new_state}[/bold blue]")
+        
+        # Trigger Sync
+        push_safe(timeout=3, verbose=True)
+    else:
+         console.print(f"[yellow]⚠️  Could not find '## State' section in {story_file.name}[/yellow]")
+
+def extract_story_id(runbook_id: str, runbook_content: str) -> str:
+    """
+    Attempt to find the linked Story ID.
+    1. Check if Runbook ID looks like a Story ID (e.g. INFRA-123) and exists.
+    2. Parse 'Story: <ID>' or 'Related Story: <ID>' from content.
+    """
+    from agent.core.utils import find_story_file
+
+    # 1. Try Runbook ID directly (common case)
+    if find_story_file(runbook_id):
+        return runbook_id
+
+    # 2. Parse from content
+    # Look for "Related Story" header and subsequent list items or "Story: XYZ"
+    # Simple regex for finding ID patterns in the first 500 chars (metadata section)
+    # We look for something that looks like PROJ-123
+    
+    # Restrict to top of file to avoid false positives in body
+    header_section = runbook_content[:1000] 
+    
+    # Regex for IDs like PROJ-123
+    id_matches = re.findall(r"\b[A-Z]+-\d+\b", header_section)
+    
+    # Filter out the runbook ID itself if it matches
+    for candidate in id_matches:
+        if candidate != runbook_id and find_story_file(candidate):
+            return candidate
+            
+    return runbook_id # Fallback to using runbook ID as best guess
+
+
 def implement(
     runbook_id: str = typer.Argument(..., help="The ID of the runbook to implement."),
     apply: bool = typer.Option(
@@ -380,6 +447,23 @@ def implement(
         )
         raise typer.Exit(code=1)
 
+    # 1.2 AUTOMATION: Update Story State (Phase 0)
+    story_id = extract_story_id(runbook_id, runbook_content_scrubbed)
+    
+    # Check if Story is Retired/Deprecated (Enforcement)
+    from agent.core.utils import find_story_file
+    story_file = find_story_file(story_id)
+    if story_file:
+         s_content = story_file.read_text()
+         s_match = re.search(r"(^## State\s*\n+)([A-Za-z\s]+)", s_content, re.MULTILINE)
+         if s_match:
+             current_state = s_match.group(2).strip().upper()
+             if current_state in ["RETIRED", "DEPRECATED", "SUPERSEDED"]:
+                 console.print(f"[bold red]⛔ Cannot implement Story {story_id}: Status is '{current_state}'[/bold red]")
+                 raise typer.Exit(code=1)
+
+    update_story_state(story_id, "In Progress", context_prefix="Phase 0")
+
     # 2. Load Guide
     guide_path = config.agent_dir / "workflows/implement.md"
     guide_content = ""
@@ -400,7 +484,8 @@ def implement(
     full_content = ""
     fallback_needed = False
     
-
+    # Track overall success
+    implementation_success = False
 
     try:
         system_prompt = """You are an Implementation Agent.
@@ -448,6 +533,8 @@ GOVERNANCE RULES:
              full_content = ai_service.complete(system_prompt, user_prompt, model=model)
              if not full_content:
                  raise Exception("Empty response from AI")
+        
+        implementation_success = True
 
     except Exception as e:
         console.print(f"[yellow]⚠️ Full context failed: {e}[/yellow]")
@@ -535,7 +622,13 @@ RULES (Filtered):
                     if code_blocks:
                         console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
                         for block in code_blocks:
-                            apply_change_to_file(block['file'], block['content'], yes)
+                            success = apply_change_to_file(block['file'], block['content'], yes)
+                            # If applying fails, we might want to warn but not hard stop? 
+                            # But implementation_success implies generally things worked.
+            
+        # If we made it through the loop (or failed and exited), set success status if we have content
+        if full_content:
+            implementation_success = True
 
     # Final Handling
     if not full_content:
@@ -551,4 +644,13 @@ RULES (Filtered):
          # ... apply loop ...
          for block in code_blocks:
             apply_change_to_file(block['file'], block['content'], yes)
+            
+    # 1.3 AUTOMATION: Phase 6
+    # We do NOT set to DONE here. We leave it as In Progress.
+    # The 'commit' workflow will transition it to Committed.
+    if apply and implementation_success:
+        console.print("[bold green]✅ Implementation Complete (Local).[/bold green]")
+        console.print(f"[dim]Story {story_id} remains 'In Progress'. Run 'agent commit' to mark as 'Committed'.[/dim]")
+
+
 

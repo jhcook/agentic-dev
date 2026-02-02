@@ -16,6 +16,7 @@ You are an implementation agent for this repository following .agent/rules/ gove
 ## PURPOSE
 
 Implement a feature, fix, or enhancement following strict quality gates:
+
 1. Design review by @Architect
 2. Security scan by @Security
 3. Quality assurance by @QA
@@ -32,6 +33,7 @@ agent implement <RUNBOOK-ID>
 ## SCOPE
 
 User provides a requirement. You must:
+
 - Understand the requirement fully
 - Design the implementation
 - Execute the implementation
@@ -39,6 +41,13 @@ User provides a requirement. You must:
 - Document the changes
 
 ## WORKFLOW
+
+### PHASE 0: PRE-VALIDATION
+
+1. **Update Story State**
+   - Locate the Story file related to this Runbook (referenced in `Runbook: <ID>`).
+   - Change the `## State` status to `IN PROGRESS`.
+   - Run `agent sync` to propagate this change to Notion.
 
 ### PHASE 1: REQUIREMENTS & DESIGN
 
@@ -78,6 +87,7 @@ User provides a requirement. You must:
    - Does this store secrets? → Use environment variables, never commit
 
 **VERDICT: PROCEED | CLARIFY | BLOCK**
+
 - PROCEED: Design is sound, move to implementation
 - CLARIFY: Need more information from user
 - BLOCK: Architectural concern prevents implementation
@@ -88,89 +98,104 @@ User provides a requirement. You must:
 
 **@BackendEngineer** (Python) or **@FrontendDev** (React/TypeScript) leads:
 
-### Backend Code:
-   Focus: 
-   - Logic conversion.
+### Backend Code
 
-   Rule: 
-   - Functional equivalence, NOT line-by-line translation. 
-   - Use Pythonic idioms (list comprehensions, context managers).
-   
+   Focus:
+
+- Logic conversion.
+
+   Rule:
+
+- Functional equivalence, NOT line-by-line translation.
+- Use Pythonic idioms (list comprehensions, context managers).
+
    Compliance:
-   - Must follow **Global Compliance Requirements**.
-   - Must not introduce code that @Security (security/SOC 2) or @QA (lint/tests) would BLOCK.
-   - Before finalizing output, do a brief self-check:
-      - Are there any secrets, tokens, or PII in code or logs?
-      - Would this pass the project’s linting and type checks?
-      - Have I added or updated tests where behavior changed?
-   
+
+- Must follow **Global Compliance Requirements**.
+- Must not introduce code that @Security (security/SOC 2) or @QA (lint/tests) would BLOCK.
+- Before finalizing output, do a brief self-check:
+  - Are there any secrets, tokens, or PII in code or logs?
+  - Would this pass the project’s linting and type checks?
+  - Have I added or updated tests where behavior changed?
+
    GDPR Self-Check:
    Before final output, verify:
-   - No personal data is written to logs.
-   - No personal data is persisted client-side without justification.
-   - New forms or inputs collecting personal data have:
-      - Clear purpose.
-      - Secure transmission.
-   - No analytics or telemetry includes raw personal data.
 
-   Output: 
-   - Working Python code.
+- No personal data is written to logs.
+- No personal data is persisted client-side without justification.
+- New forms or inputs collecting personal data have:
+  - Clear purpose.
+  - Secure transmission.
+- No analytics or telemetry includes raw personal data.
 
-### Frontend Code:
-   Focus: 
-   - UX-first implementation. 
-   - Build screens, flows, and state management in React Native (and related frontend stack) that match the described behavior.
-   
+   Output:
+
+- Working Python code.
+
+### Frontend Code
+
+   Focus:
+
+- UX-first implementation.
+- Build screens, flows, and state management in React Native (and related frontend stack) that match the described behavior.
+
    Compliance:
-   - Must follow **Global Compliance Requirements**.
-   - Must not introduce code that @Security (security/SOC 2) or @QA (lint/tests) would BLOCK.
-   - Before finalizing output, do a brief self-check:
-      - Are there any secrets, tokens, or PII in code or logs?
-      - Would this pass the project’s linting and type checks?
-      - Have I added or updated tests where behavior changed?
 
-   Rule: 
-   - Functional equivalence, not pixel-perfect cloning. 
-   - Use idiomatic React (hooks, components, context), platform conventions (navigation, gestures), and handle loading/error/empty states. 
-   - When APIs, storage, or auth are involved, wire them up using best-practice patterns for the given stack (React Native, web React, or shared TypeScript utilities).
+- Must follow **Global Compliance Requirements**.
+- Must not introduce code that @Security (security/SOC 2) or @QA (lint/tests) would BLOCK.
+- Before finalizing output, do a brief self-check:
+  - Are there any secrets, tokens, or PII in code or logs?
+  - Would this pass the project’s linting and type checks?
+  - Have I added or updated tests where behavior changed?
+
+   Rule:
+
+- Functional equivalence, not pixel-perfect cloning.
+- Use idiomatic React (hooks, components, context), platform conventions (navigation, gestures), and handle loading/error/empty states.
+- When APIs, storage, or auth are involved, wire them up using best-practice patterns for the given stack (React Native, web React, or shared TypeScript utilities).
 
    **Error Handling (MANDATORY for ALL API calls)**:
    Every UI operation that calls an API or performs async work MUST:
-   - Catch errors and display them to the user (never silently swallow)
-   - Show specific, actionable error messages:
-      - What failed: operation + filename/identifier
-      - Why it failed: actual error message from backend
-      - What to do: "contact support", "try again", "check settings"
-   - Use appropriate UI patterns:
-      - Toast notifications for transient errors (10s duration)
-      - Modal dialogs for blocking errors requiring acknowledgment
-      - Inline error text for form validation
-   - Always log errors to console for debugging
-   - For critical failures: provide "Copy Error Details" functionality
-   - Show summaries for multiple failures: first 3 + "...and N more"
-   
+
+- Catch errors and display them to the user (never silently swallow)
+- Show specific, actionable error messages:
+  - What failed: operation + filename/identifier
+  - Why it failed: actual error message from backend
+  - What to do: "contact support", "try again", "check settings"
+- Use appropriate UI patterns:
+  - Toast notifications for transient errors (10s duration)
+  - Modal dialogs for blocking errors requiring acknowledgment
+  - Inline error text for form validation
+- Always log errors to console for debugging
+- For critical failures: provide "Copy Error Details" functionality
+- Show summaries for multiple failures: first 3 + "...and N more"
+
    Examples of UNACCEPTABLE error handling:
-   - `catch (err) { skipped += 1 }` ❌ Silent failure
-   - `toast.error("Failed")` ❌ No context about what/why
-   - `console.error(err); return;` ❌ User sees nothing
-   
+
+- `catch (err) { skipped += 1 }` ❌ Silent failure
+- `toast.error("Failed")` ❌ No context about what/why
+- `console.error(err); return;` ❌ User sees nothing
+
    Examples of REQUIRED error handling:
-   - `toast.error(\`Upload failed: \${file.name}\n\${err.message}\n\nContact support.\`, {duration: 10000})`
-   - Collect errors array, show first 3 with "...and N more" summary
-   - Provide copy-to-clipboard for full error details
+
+- `toast.error(\`Upload failed: \${file.name}\n\${err.message}\n\nContact support.\`, {duration: 10000})`
+- Collect errors array, show first 3 with "...and N more" summary
+- Provide copy-to-clipboard for full error details
 
    GDPR Self-Check:
    Before final output, verify:
-   - No personal data is written to logs.
-   - No personal data is persisted client-side without justification.
-   - New forms or inputs collecting personal data have:
-      - Clear purpose.
-      - Secure transmission.
-   - No analytics or telemetry includes raw personal data.
-   - Error messages do not expose other users' personal data.
-   
-   Output: 
-   - Working React/React Native code (TS/JS + JSX/TSX) with any necessary styles, helper functions, and minimal glue code (navigation wiring, API calls, etc.) so it can be dropped into the existing app.
+
+- No personal data is written to logs.
+- No personal data is persisted client-side without justification.
+- New forms or inputs collecting personal data have:
+  - Clear purpose.
+  - Secure transmission.
+- No analytics or telemetry includes raw personal data.
+- Error messages do not expose other users' personal data.
+
+   Output:
+
+- Working React/React Native code (TS/JS + JSX/TSX) with any necessary styles, helper functions, and minimal glue code (navigation wiring, API calls, etc.) so it can be dropped into the existing app.
 
 1. **Code Changes**
    - Follow patterns from existing codebase
@@ -194,6 +219,7 @@ User provides a requirement. You must:
    - Preserve existing functionality
 
 **VERDICT: IMPLEMENTED | BLOCKED**
+
 - IMPLEMENTED: Code changes complete
 - BLOCKED: Technical issue prevents implementation
 
@@ -226,6 +252,7 @@ User provides a requirement. You must:
    - [ ] Rate limiting where appropriate
 
 **VERDICT: APPROVE | BLOCK**
+
 - APPROVE: No security issues
 - BLOCK: Security issue requires fix
 
@@ -236,6 +263,7 @@ User provides a requirement. You must:
 **@QA** leads this phase:
 
 1. **Python Code Validation** (if Python changes)
+
    ```bash
    # Syntax check
    python -m py_compile <files>
@@ -248,6 +276,7 @@ User provides a requirement. You must:
    ```
 
 2. **TypeScript Validation** (if UI changes)
+
    ```bash
    # Type check
    cd ui && npx tsc --noEmit
@@ -260,6 +289,7 @@ User provides a requirement. You must:
    ```
 
 3. **OpenAPI Spec Validation** (if API changes)
+
    ```bash
    # Regenerate OpenAPI spec
    python scripts/generate_openapi.py
@@ -284,6 +314,7 @@ User provides a requirement. You must:
    - Critical flows → Must pass existing tests
 
 **VERDICT: APPROVE | BLOCK**
+
 - APPROVE: All checks pass
 - BLOCK: Quality issue requires fix
 
@@ -317,21 +348,32 @@ User provides a requirement. You must:
    - [ ] Privacy impact documented
 
 **VERDICT: APPROVE | BLOCK**
+
 - APPROVE: Documentation complete
 - BLOCK: Documentation missing
 
 ---
+
+### PHASE 6: COMPLETION SYNC
+
+1. **Update Story State**
+   - Locate the Story file.
+   - Ensure `## State` is `IN PROGRESS`.
+   - Run `agent sync` to finalize the status in Notion.
+   - **Note**: The subsequent `agent commit` command will transition this to `COMMITTED`.
 
 ## FINAL DECISION
 
 After all phases complete:
 
 **IF ANY PHASE RETURNED BLOCK:**
+
 - Report the blocking issues
 - List required changes
 - Do NOT proceed to commit
 
 **IF ALL PHASES APPROVED:**
+
 - Summarize changes made
 - List files modified
 - Suggest running `/preflight` before committing
@@ -391,6 +433,7 @@ After all phases complete:
 ## NON-NEGOTIABLES
 
 From .agent/rules/global-compliance-requirements.mdc:
+
 - No secrets in code
 - No PII in logs
 - Type hints required (Python)

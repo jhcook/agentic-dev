@@ -28,6 +28,22 @@
                         {
                             "name": "Blocked",
                             "color": "red"
+                        },
+                        {
+                            "name": "Committed",
+                            "color": "blue"
+                        },
+                        {
+                            "name": "Superseded",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Deprecated",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Retired",
+                            "color": "gray"
                         }
                     ]
                 },

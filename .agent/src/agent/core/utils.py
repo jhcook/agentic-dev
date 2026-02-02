@@ -348,4 +348,36 @@ def extract_json_from_response(response: str) -> str:
     if list_match:
         return list_match.group(1)
         
-    return response
+
+def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
+    """
+    Update the state of a Story file and sync to Notion.
+    """
+    # Import here to avoid circular dependencies if any
+    from agent.sync.sync import push_safe
+
+    story_file = find_story_file(story_id)
+    if not story_file:
+         console.print(f"[yellow]⚠️  Could not find Story {story_id} to update state.[/yellow]")
+         return
+
+    content = story_file.read_text()
+    # Regex to find state section (handle various spacing)
+    # ## State
+    # <CURRENT_STATE>
+    state_regex = r"(^## State\s*\n+)([A-Za-z\s]+)"
+    
+    match = re.search(state_regex, content, re.MULTILINE)
+    if match:
+        current_state = match.group(2).strip()
+        if current_state.upper() == new_state.upper():
+            return # Already set
+
+        new_content = re.sub(state_regex, f"\\1{new_state}", content, count=1, flags=re.MULTILINE)
+        story_file.write_text(new_content)
+        console.print(f"[bold blue]🔄 {context_prefix}: Updated Story {story_id} State: {current_state} -> {new_state}[/bold blue]")
+        
+        # Trigger Sync
+        push_safe(timeout=3, verbose=True)
+    else:
+         console.print(f"[yellow]⚠️  Could not find '## State' section in {story_file.name}[/yellow]")

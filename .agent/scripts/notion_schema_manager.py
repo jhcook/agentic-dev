@@ -81,7 +81,7 @@ class NotionSchemaManager:
             
             if existing_id:
                 logger.info(f"Checking existing database: {db_title} ({existing_id})")
-                # TODO: Verify existence? For now assume valid if in state
+                await self._update_database_schema(db_key, db_def, state)
             else:
                 logger.info(f"Creating database: {db_title}...")
                 success = await self._create_database(db_key, db_def, state)
@@ -95,7 +95,12 @@ class NotionSchemaManager:
                 if "properties" in db_def:
                     await self._update_relations(db_key, db_def, state)
 
+        # Pass 3: Template Population
+        if not failure_occurred:
+            await self._ensure_templates(state)
+
         self._save_state(state)
+
         
         if failure_occurred:
             logger.error("Schema Sync Failed. Some databases could not be created.")
@@ -222,6 +227,63 @@ class NotionSchemaManager:
             
         return False
 
+
+    async def _update_database_schema(self, db_key: str, db_def: Dict[str, Any], state: Dict[str, Any]):
+        """Pass 1.5: Update existing database schema (e.g. adding new select options)."""
+        db_id = state.get(db_key)
+        if not db_id:
+            return
+
+        # We only update properties that can be safely updated (Title, Select, Multi-Select)
+        # We avoid Relation updates here as they are handled in Pass 2
+        
+        raw_props = db_def.get("properties", {})
+        update_props = {}
+        
+        for p_name, p_def in raw_props.items():
+            p_type = p_def["type"]
+            # Only target select/multi_select for option updates, or title renaming
+            if p_type in ["select", "multi_select"]:
+                t_prop = self._transform_property(p_name, p_def, state, is_creation=True)
+                if t_prop:
+                    update_props[p_name] = t_prop
+
+        if not update_props:
+            return
+
+        logger.info(f"Updating schema for {db_def['title']}...")
+        
+        import urllib.request
+        from agent.core.net_utils import check_ssl_error
+
+        url = f"https://api.notion.com/v1/databases/{db_id}"
+        payload = {
+            "properties": update_props
+        }
+        data = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json"
+        }
+        
+        req = urllib.request.Request(url, data=data, headers=headers, method="PATCH")
+        
+        try:
+             with urllib.request.urlopen(req) as res:
+                if res.getcode() == 200:
+                    logger.info(f"Successfully updated schema for '{db_def['title']}'")
+                else:
+                    logger.error(f"Failed to update schema for '{db_def['title']}': {res.read().decode('utf-8')}")
+        except Exception as e:
+            ssl_msg = check_ssl_error(e, url="api.notion.com")
+            if ssl_msg:
+                logger.error(ssl_msg)
+            elif isinstance(e, urllib.error.HTTPError):
+                 logger.error(f"HTTP Error {e.code} updating schema: {e.read().decode('utf-8')}")
+            else:
+                 logger.error(f"Error updating schema: {e}")
+
     async def _update_relations(self, db_key: str, db_def: Dict[str, Any], state: Dict[str, Any]):
         """Pass 2: Update database with relation properties."""
         db_id = state.get(db_key)
@@ -273,6 +335,123 @@ class NotionSchemaManager:
             else:
                  logger.error(f"Error updating relations: {e}")
 
+    async def _ensure_templates(self, state: Dict[str, Any]):
+        """Pass 3: Create Master Template Rows."""
+        
+        TEMPLATES = {
+            "Stories": {
+                "title": "! TEMPLATE: Story",
+                "blocks": [
+                    {"heading_2": {"rich_text": [{"text": {"content": "Problem Statement"}}]}},
+                    {"paragraph": {"rich_text": [{"text": {"content": "Describe the problem..."}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "User Story"}}]}},
+                    {"paragraph": {"rich_text": [{"text": {"content": "**As a** [Role]\n**I want** [Feature]\n**So that** [Benefit]"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Acceptance Criteria"}}]}},
+                    {"to_do": {"rich_text": [{"text": {"content": "Scenario 1"}}]}},
+                    {"callout": {"rich_text": [{"text": {"content": "💡 Tip: Right-click this row in the database view and select 'Duplicate' to start a new Story."}}], "icon": {"emoji": "💡"}}}
+                ]
+            },
+            "Plans": {
+                "title": "! TEMPLATE: Plan",
+                "blocks": [
+                    {"heading_1": {"rich_text": [{"text": {"content": "Implementation Plan"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Goal"}}]}},
+                    {"paragraph": {"rich_text": [{"text": {"content": "..."}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Proposed Changes"}}]}},
+                    {"heading_3": {"rich_text": [{"text": {"content": "Component A"}}]}},
+                    {"callout": {"rich_text": [{"text": {"content": "💡 Tip: Right-click this row in the database view and select 'Duplicate' to start a new Plan."}}], "icon": {"emoji": "💡"}}}
+                ]
+            },
+            "ADRs": {
+                "title": "! TEMPLATE: ADR",
+                "blocks": [
+                    {"heading_1": {"rich_text": [{"text": {"content": "Title"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Status"}}]}},
+                    {"paragraph": {"rich_text": [{"text": {"content": "Proposed"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Context"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Decision"}}]}},
+                    {"heading_2": {"rich_text": [{"text": {"content": "Consequences"}}]}},
+                    {"callout": {"rich_text": [{"text": {"content": "💡 Tip: Right-click this row in the database view and select 'Duplicate' to start a new ADR."}}], "icon": {"emoji": "💡"}}}
+                ]
+            }
+        }
+
+        import urllib.request
+        from agent.core.net_utils import check_ssl_error
+
+        logger.info("--- Pass 3: Template Population ---")
+
+        for db_name, tmpl in TEMPLATES.items():
+            db_id = state.get(db_name)
+            if not db_id:
+                continue
+
+            # 1. Check if template exists
+            # We query the database for a page with this exact title
+            query_url = f"https://api.notion.com/v1/databases/{db_id}/query"
+            query_payload = {
+                "filter": {
+                    "property": "Title", # Assumes 'Title' is the name of the title prop
+                    "title": {
+                        "equals": tmpl["title"]
+                    }
+                }
+            }
+            
+            # Need to find the actual name of the Title property from schema
+            # Our notion_schema.json uses "Title" as the key, but we should double check schema?
+            # For simplicity, we assume "Title" based on our schema definition.
+            
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json"
+            }
+            
+            exists = False
+            try:
+                data = json.dumps(query_payload).encode("utf-8")
+                req = urllib.request.Request(query_url, data=data, headers=headers, method="POST")
+                with urllib.request.urlopen(req) as res:
+                    if res.getcode() == 200:
+                        body = json.loads(res.read().decode("utf-8"))
+                        if body.get("results"):
+                            exists = True
+                            logger.info(f"Template '{tmpl['title']}' already exists in {db_name}.")
+            except Exception as e:
+                logger.warning(f"Failed to query templates for {db_name}: {e}")
+                continue
+            
+            if exists:
+                continue
+
+            # 2. Create Template Page
+            logger.info(f"Creating template '{tmpl['title']}' in {db_name}...")
+            create_url = "https://api.notion.com/v1/pages"
+            create_payload = {
+                "parent": {"database_id": db_id},
+                "properties": {
+                    "Title": { # Again assuming 'Title' property name Matches schema
+                        "title": [{"text": {"content": tmpl["title"]}}]
+                    }
+                },
+                "children": tmpl["blocks"]
+            }
+            
+            try:
+                data = json.dumps(create_payload).encode("utf-8")
+                req = urllib.request.Request(create_url, data=data, headers=headers, method="POST")
+                with urllib.request.urlopen(req) as res:
+                    if res.getcode() == 200:
+                        logger.info(f"Successfully created template in {db_name}")
+                    else:
+                        logger.error(f"Failed to create template: {res.read().decode('utf-8')}")
+            except Exception as e:
+                ssl_msg = check_ssl_error(e, url="api.notion.com")
+                if ssl_msg:
+                    logger.error(ssl_msg)
+                else:
+                    logger.error(f"Error creating template: {e}")
 
 if __name__ == "__main__":
     manager = NotionSchemaManager()
