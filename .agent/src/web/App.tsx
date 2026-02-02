@@ -18,6 +18,8 @@ import { ConfigEditor } from './components/ConfigEditor'
 import { PromptStudio } from './components/PromptStudio'
 import { ActivityLog } from './components/ActivityLog'
 import { GovernanceDesk } from './components/GovernanceDesk'
+import { Dashboard } from './components/Dashboard'
+import { Kanban } from './components/Kanban'
 import { useViewStore } from './store/viewStore'
 
 function App() {
@@ -25,6 +27,10 @@ function App() {
 
   const renderView = () => {
     switch (activeView) {
+      case 'dashboard':
+        return <Dashboard />
+      case 'kanban':
+        return <Kanban />
       case 'voice':
         return <VoiceClient />
       case 'config':
@@ -36,7 +42,7 @@ function App() {
       case 'governance':
         return <GovernanceDesk />
       default:
-        return <VoiceClient />
+        return <Dashboard />
     }
   }
 

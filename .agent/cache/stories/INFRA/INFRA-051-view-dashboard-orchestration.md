@@ -1,44 +1,61 @@
-# INFRA-051: View & Dashboard Orchestration
+# INFRA-051: Local Admin Dashboard
 
 ## State
 
-DRAFT
+IN_PROGRESS
 
 ## Problem Statement
 
-Different stakeholders need different views (Kanban for status, List for backlog, Gallery for stakeholders). Manual setup is tedious and inconsistent.
+Stakeholders and Developers need a consolidated view of the project's status (Stories, Plans, ADRs) "at a glance".
+The original plan to use Notion Views was blocked by API limitations.
+The user needs a local "Admin Console" dashboard to visualize work while working with Git.
 
 ## User Story
 
-As a Stakeholder, I want curated Dashboards automatically created by the agent so that I have high-level visibility without configuring Notion.
+As a Developer, I want to view a "Project Dashboard" in my local `agent admin` console (web UI), so that I can see active stories, backlog, and system health without context switching to a browser-based Notion instance that requires manual sync.
 
 ## Acceptance Criteria
 
-- [ ] **Filtered Views**: The agent uses `update_database` to create/maintain specific views (e.g., "Developer Backlog" filtered by State=Draft/Ready).
-- [ ] **Project Overview**: A top-level Page designated as "Dashboard" is updated with Rollup data (e.g., number of open stories).
+- [ ] **Console Navigation**: Update existing `App.tsx` (or Layout) to add "Dashboard" and "Kanban" to the navigation.
+- [ ] **Dashboard Tab**:
+  - Stats Widgets (Active Stories, Pending PRs, Total ADRs).
+  - Active Work List (Table of IN_PROGRESS items).
+- [ ] **Kanban Tab**:
+  - Columns: DRAFT, IN_PROGRESS, REVIEW, COMMITTED.
+  - Read-only cards sorted by ID.
+- [ ] **Backend API**: Add endpoints to `backend/main.py` (or new router) to serve:
+  - `GET /api/stories`
+  - `GET /api/stats`
+- [ ] **Data Source**: Backend reads local `.agent/cache/all_stories.json` (or parses Markdown).
 
 ## Non-Functional Requirements
 
-- **Aesthetics**: Views should be clean and use consistent sorting/filtering.
+- **Consistency**: Match existing UI styles (Tailwind).
+- **Security**: Strict Localhost binding (No `0.0.0.0`).
+- **Speed**: Dashboard must load instantly.
 
 ## Linked ADRs
 
-- ADR-010: Model Context Protocol
+- ADR-019 (Global ID Strategy)
+- WEB-002 (Platform Core)
 
 ## Impact Analysis Summary
 
 - **Components Touched**:
-  - `notion_schema.json`: Define "Views" in the desired state.
-  - `notion_setup.md`: Apply logic for Views.
+  - `.agent/src/web/App.tsx`: Navigation updates.
+  - `.agent/src/web/components/`: New Dashboard/Kanban components.
+  - `.agent/src/backend/`: API updates.
 - **Risks**:
-  - Notion API support for creating Views is limited/complex. May need fallback to just creating the Database and asking user to add views if API doesn't support it fully (verify capabilities).
+  - None (Standard feature addition).
 
 ## Test Strategy
 
-- **Manual Verification**:
-  - Run setup.
-  - Check Notion for "Developer Backlog" tab in the Database.
+- **Manual**:
+  - Run `agent admin start`.
+  - Go to `localhost:8080` (or configured port).
+  - Verify Dashboard loads and shows correct counts matching local files.
 
 ## Rollback Plan
 
-- Delete views manually.
+- Revert changes to `App.tsx` and `backend/main.py` if issues arise.
+- `git restore .agent/src/web/App.tsx .agent/src/backend/main.py`

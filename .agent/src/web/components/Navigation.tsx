@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { Mic, Settings, Activity, FileText } from 'lucide-react';
+import { Mic, Settings, Activity, FileText, LayoutDashboard, SquareKanban } from 'lucide-react';
 import { useViewStore, type View } from '../store/viewStore';
 
 const navItems: { id: View; label: string; icon: React.ElementType }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'kanban', label: 'Kanban Board', icon: SquareKanban },
     { id: 'voice', label: 'Voice Client', icon: Mic },
     { id: 'config', label: 'Configuration', icon: Settings },
     { id: 'prompts', label: 'Persona Studio', icon: FileText },

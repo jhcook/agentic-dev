@@ -14,7 +14,7 @@
 
 import { create } from 'zustand';
 
-export type View = 'voice' | 'config' | 'prompts' | 'governance' | 'logs';
+export type View = 'dashboard' | 'kanban' | 'voice' | 'config' | 'prompts' | 'governance' | 'logs';
 
 interface ViewState {
     activeView: View;
@@ -22,6 +22,6 @@ interface ViewState {
 }
 
 export const useViewStore = create<ViewState>((set) => ({
-    activeView: 'voice',
+    activeView: 'dashboard',
     setActiveView: (view) => set({ activeView: view }),
 }));

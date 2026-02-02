@@ -80,6 +80,13 @@ try:
 except ImportError:
     logger.warning("Admin dependencies missing. Admin capabilities disabled.")
 
+try:
+    from backend.routers import dashboard
+    app.include_router(dashboard.router)
+    logger.info("Dashboard module loaded")
+except ImportError:
+    logger.warning("Dashboard module failed to load.")
+
 app.include_router(governance.router)
 
 @app.websocket("/ws/admin/logs")
