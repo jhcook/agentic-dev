@@ -104,4 +104,9 @@ How we will confirm the plan was successful.
     else:
         console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
 
+    # Auto-Sync to Providers (Priority Sync)
+    from agent.sync.sync import push_safe
+    console.print(f"[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
+    push_safe(timeout=2, verbose=True)
+
 

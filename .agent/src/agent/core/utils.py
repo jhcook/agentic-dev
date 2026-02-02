@@ -28,21 +28,60 @@ console = Console()
 
 def get_next_id(directory: Path, prefix: str) -> str:
     """
-    Finds the next available ID in a directory based on a prefix.
-    Assumes files are named starting with PREFIX-XXX.
+    Finds the next available Global ID based on a prefix.
+    Scans Stories, Plans, Runbooks, and local DB to ensure uniqueness per ADR-019.
     """
-    if not directory.exists():
-        return f"{prefix}-001"
+    # 1. Allow for 'ADR' special case (lives in its own flat dir)
+    # 2. For others (INFRA, WEB, etc.), check subfolders in stories/plans/runbooks
 
+    from agent.db.client import get_connection
+    
     max_num = 0
     pattern = re.compile(f"{prefix}-(\\d+)")
 
-    for file_path in directory.glob(f"{prefix}-*.md"):
-        match = pattern.search(file_path.name)
-        if match:
-            num = int(match.group(1))
-            if num > max_num:
-                max_num = num
+    # Define paths to scan based on prefix
+    paths_to_scan = []
+    
+    if prefix == "ADR":
+        paths_to_scan.append(config.adrs_dir)
+    else:
+        # Scan all known artifact types that share this ID namespace
+        if (config.stories_dir / prefix).exists():
+            paths_to_scan.append(config.stories_dir / prefix)
+        if (config.plans_dir / prefix).exists():
+            paths_to_scan.append(config.plans_dir / prefix)
+        if (config.runbooks_dir / prefix).exists():
+            paths_to_scan.append(config.runbooks_dir / prefix)
+
+    # A. Scan Filesystem
+    for path in paths_to_scan:
+        if path.exists():
+            for file_path in path.glob(f"{prefix}-*.md"):
+                match = pattern.search(file_path.name)
+                if match:
+                    num = int(match.group(1))
+                    if num > max_num:
+                        max_num = num
+
+    # B. Scan Database (to catch things known mostly remotely or in other folders)
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Look for any artifact ID starting with prefix
+        # Use simple LIKE query
+        query_prefix = f"{prefix}-%"
+        cursor.execute("SELECT id FROM artifacts WHERE id LIKE ?", (query_prefix,))
+        rows = cursor.fetchall()
+        for row in rows:
+            art_id = row[0]
+            match = pattern.search(art_id)
+            if match:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+        conn.close()
+    except Exception as e:
+        console.print(f"[yellow]⚠️  DB check failed for ID generation: {e}[/yellow]")
 
     next_num = max_num + 1
     return f"{prefix}-{next_num:03d}"

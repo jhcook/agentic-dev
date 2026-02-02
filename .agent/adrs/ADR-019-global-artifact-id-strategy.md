@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Context
 
-As the Agentic Development system evolves, we have multiple artifact types (Plans, Stories, Runbooks, ADRs, Dashboards). Originally, IDs were assigned loosely or per-type, leading to ambiguity (e.g., "Does 048 refer to the Plan or the Story?"). We need a consistent strategy to ensure unique addressability and clear relationships.
+As the Agentic Development system evolves, we have multiple artifact types (Plans, Stories, Runbooks, and ADRs). Originally, IDs were assigned loosely or per-type, leading to ambiguity (e.g., "Does 048 refer to the Plan or the Story?"). We need a consistent strategy to ensure unique addressability and clear relationships.
 
 ## Decision
 
