@@ -46,3 +46,7 @@
   - Integrated `janitor` command with multi-backend support.
   - Added `agent sync init` command for bootstrapping synchronization environments.
   - Implemented **Self-Healing Sync** to detect and repair missing environments (e.g. Notion 404s).
+- **Automated Branching for Implement Command** (INFRA-055):
+  - Enhanced `agent implement` to enforce git hygiene.
+  - Automatically creates and checks out feature branches (`STORY-ID/title`).
+  - Blocks execution if on an incorrect branch or if git state is dirty.

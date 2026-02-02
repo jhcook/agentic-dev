@@ -33,7 +33,11 @@ def clean_env(tmp_path):
     # Mock config paths
     with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
          patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \
-         patch("agent.core.utils.load_governance_context", return_value="Rules"):
+         patch("agent.core.utils.load_governance_context", return_value="Rules"), \
+         patch("agent.commands.implement.get_current_branch", return_value="main"), \
+         patch("agent.commands.implement.is_git_dirty", return_value=False), \
+         patch("agent.commands.implement.extract_story_id", return_value="INFRA-000"), \
+         patch("agent.commands.implement.create_branch"):
         
         (tmp_path / "runbooks").mkdir()
         (tmp_path / ".agent").mkdir()
