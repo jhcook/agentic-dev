@@ -39,8 +39,10 @@
   - Fixed `agent sync` CLI wiring regression.
   - Enforced authentication for remote sync operations (`pull`/`push`) via new `with_creds` decorator.
   - Added strict governance for CLI commands (ADR-017).
-- **Additional Voice Providers** (INFRA-037):
-  - Added support for **Google Cloud Speech** (Async STT/TTS).
-  - Added support for **Azure Speech Services** (STT/TTS).
-  - Updated `agent onboard` to securely prompt and encrypt keys for new providers.
-  - Refactored voice factory to use a dynamic registry pattern.
+- **Multi-Backend Sync** (INFRA-054):
+  - Updated `agent sync` to support multiple backends (Notion, Supabase) via `--backend` flag.
+  - Added `--force` flag for overwriting remote or local state.
+  - Implemented **Interactive Conflict Resolution** for handling content divergance.
+  - Integrated `janitor` command with multi-backend support.
+  - Added `agent sync init` command for bootstrapping synchronization environments.
+  - Implemented **Self-Healing Sync** to detect and repair missing environments (e.g. Notion 404s).

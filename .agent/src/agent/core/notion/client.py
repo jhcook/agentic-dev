@@ -102,3 +102,19 @@ class NotionClient:
       """Retrieves comments from a Notion page."""
       data = self._request("GET", f"comments?block_id={page_id}")
       return data.get("results", [])
+
+    def retrieve_block_children(self, block_id: str) -> List[Dict[str, Any]]:
+        """Retrieves children blocks of a block (or page)."""
+        # Pagination is required for large pages, but for now fetch first page (100 blocks max default)
+        # TODO: Implement pagination
+        data = self._request("GET", f"blocks/{block_id}/children")
+        return data.get("results", [])
+
+    def append_block_children(self, block_id: str, children: List[Dict[str, Any]]) -> None:
+        """Appends block children to a block (or page)."""
+        payload = {"children": children}
+        self._request("PATCH", f"blocks/{block_id}/children", payload)
+
+    def delete_block(self, block_id: str) -> None:
+        """Deletes (archives) a block."""
+        self._request("DELETE", f"blocks/{block_id}")

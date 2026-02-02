@@ -60,29 +60,41 @@ Synchronize artifacts (stories, plans, runbooks) between your local cache and th
 | Command | Description |
 |---------|-------------|
 | `agent sync pull` | Pull artifacts from remote to local cache |
-| `agent sync push` | Push local artifacts to remote (Coming Soon) |
+| `agent sync push` | Push local artifacts to remote |
 | `agent sync status` | View local cache inventory |
 | `agent sync delete` | Delete artifacts from local cache |
 | `agent sync scan` | Scan local filesystem and populate cache |
+| `agent sync janitor` | Maintain relational integrity (e.g. Notion linking) |
+| `agent sync init` | Bootstrap sync environments (e.g. create Notion databases) |
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--backend <name>` | Specific backend to use (e.g. `notion`). Default: All. |
+| `--force` | Force overwrite without interactive prompts. |
 
 ### Usage Examples
 
 ```bash
-# Pull latest changes
+# Pull latest changes (from all backends)
 agent sync pull
 
-# Scan local files (initializes DB if missing)
-agent sync scan
+# Pull only from Notion
+agent sync pull --backend notion
+
+# Push to Notion (overwriting remote if conflict)
+agent sync push --backend notion --force
+
+# Run Janitor for Notion
+agent sync janitor --backend notion
+
+# Initialize/Bootstrap Notion environment
+agent sync init --backend notion
 
 # View status
 agent sync status
 agent sync status --detailed
-
-# Delete an artifact (and its related types)
-agent sync delete INFRA-001
-
-# Delete only a specific type
-agent sync delete INFRA-001 --type story
 ```
 
 ---

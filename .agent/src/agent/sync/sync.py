@@ -71,8 +71,27 @@ from agent.commands.secret import _prompt_password
 from agent.core.secrets import get_secret_manager
 
 
-def pull(verbose: bool = False):
+def pull(verbose: bool = False, backend: str = None, force: bool = False):
     """Execute the sync process (pull from remote)."""
+    
+    # Backend Orchestration
+    run_all = backend is None
+    
+    # 1. Supabase (Core)
+    if run_all or backend in ["supabase", "core"]:
+        _pull_supabase(verbose)
+        
+    # 2. Notion
+    if run_all or backend == "notion":
+        from agent.sync.notion import NotionSync
+        try:
+            print("Syncing with Notion...")
+            NotionSync().pull(force=force)
+        except Exception as e:
+            print(f"Notion sync failed: {e}")
+
+def _pull_supabase(verbose: bool = False):
+    """Internal Supabase Pull Logic"""
     client = get_supabase_client(verbose=verbose)
     
     # interactive unlock if client is None
@@ -129,8 +148,27 @@ def pull(verbose: bool = False):
             print(f"\nError during sync: {e}")
             break
 
-def push(verbose: bool = False):
-    """Push local artifacts to remote Supabase."""
+def push(verbose: bool = False, backend: str = None, force: bool = False):
+    """Push local artifacts to remote."""
+    
+    # Backend Orchestration
+    run_all = backend is None
+    
+    # 1. Supabase (Core)
+    if run_all or backend in ["supabase", "core"]:
+        _push_supabase(verbose)
+        
+    # 2. Notion
+    if run_all or backend == "notion":
+        from agent.sync.notion import NotionSync
+        try:
+            print("Syncing with Notion...")
+            NotionSync().push(force=force)
+        except Exception as e:
+            print(f"Notion sync failed: {e}")
+
+def _push_supabase(verbose: bool = False):
+    """Internal Supabase Push Logic"""
     client = get_supabase_client(verbose=verbose)
     
     # interactive unlock if client is None
@@ -199,7 +237,7 @@ def push_safe(timeout: int = 2, verbose: bool = False):
 
     def _target():
         try:
-            push(verbose=verbose)
+            push(verbose=verbose, backend=None, force=False)
         except Exception:
             pass # Swallow internal errors
     
@@ -320,3 +358,52 @@ def scan(verbose: bool = False):
     print(f"Scan complete. Processed {total_added} artifacts with {total_errors} errors.")
 
 
+
+def janitor(
+    notion_api_key: str = None, 
+    database_id: str = None, 
+    dry_run: bool = False,
+    backend: str = None
+):
+    """Run the Janitor to maintain relational integrity."""
+    
+    # Default to Notion if not specified, or if specific backend requested
+    if backend is None or backend == "notion":
+        from agent.core.notion.client import NotionClient
+        from agent.sync.janitor import NotionJanitor
+        from agent.core.secrets import get_secret
+        
+        # Resolve Credentials
+        if not notion_api_key:
+            notion_api_key = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+            
+        if not notion_api_key:
+            print("Error: Notion API Key not found. Set NOTION_TOKEN or use --notion-api-key.")
+            return
+
+        # Resolve Database ID
+        if not database_id:
+             database_id = os.getenv("NOTION_DB_ID")
+             
+        if not database_id:
+            print("Error: Notion Database ID not found. Set NOTION_DB_ID or use --database-id.")
+            return
+
+        print("Running Notion Janitor...")
+        client = NotionClient(notion_api_key)
+        janitor = NotionJanitor(client)
+        janitor.run_janitor(database_id)
+    else:
+        print(f"Janitor backend '{backend}' not supported.")
+
+def init(backend: str = None):
+    """Bootstraps the sync environment (e.g. Notion databases)."""
+    if backend is None or backend == "notion":
+        from agent.sync.bootstrap import NotionBootstrap
+        try:
+            print("Bootstrapping Notion backend...")
+            NotionBootstrap().run()
+        except Exception as e:
+            print(f"Notion bootstrap failed: {e}")
+    else:
+        print(f"Backend '{backend}' does not support initialization.")

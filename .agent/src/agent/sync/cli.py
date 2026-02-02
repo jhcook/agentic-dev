@@ -29,15 +29,23 @@ app = typer.Typer(
 
 @app.command()
 @with_creds
-def pull(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
+def pull(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    backend: str = typer.Option(None, "--backend", help="Specific backend to use (e.g. notion)"),
+    force: bool = typer.Option(False, "--force", help="Force overwrite without prompting")
+):
     """Pull artifacts from remote."""
-    sync_ops.pull(verbose=verbose)
+    sync_ops.pull(verbose=verbose, backend=backend, force=force)
 
 @app.command()
 @with_creds
-def push(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
+def push(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    backend: str = typer.Option(None, "--backend", help="Specific backend to use (e.g. notion)"),
+    force: bool = typer.Option(False, "--force", help="Force overwrite without prompting")
+):
     """Push artifacts to remote."""
-    sync_ops.push(verbose=verbose)
+    sync_ops.push(verbose=verbose, backend=backend, force=force)
 
 @app.command()
 def status(detailed: bool = typer.Option(False, "--detailed", help="Show detailed list of artifacts")):
@@ -59,16 +67,20 @@ def scan(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose ou
 
 @app.command()
 def janitor(
-    notion_api_key: str = typer.Option(..., envvar="NOTION_TOKEN", help="Notion API Key"),
-    database_id: str = typer.Option(..., envvar="NOTION_DB_ID", help="Notion Database ID (Stories)"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Run without making changes")
+    notion_api_key: str = typer.Option(None, envvar="NOTION_TOKEN", help="Notion API Key"),
+    database_id: str = typer.Option(None, envvar="NOTION_DB_ID", help="Notion Database ID (Stories)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run without making changes"),
+    backend: str = typer.Option(None, "--backend", help="Specific backend to use (e.g. notion)")
 ):
-    """Run the Notion Janitor to maintain relational integrity."""
-    # TODO: Pass dry_run to Janitor if supported
-    client = NotionClient(notion_api_key)
-    janitor = NotionJanitor(client)
-    
-    # We need to handle database_id carefully. If it's a URL, extract ID?
-    # For now assume ID.
-    
-    janitor.run_janitor(database_id)
+    """Run the Janitor to maintain relational integrity."""
+    sync_ops.janitor(
+        notion_api_key=notion_api_key, 
+        database_id=database_id, 
+        dry_run=dry_run, 
+        backend=backend
+    )
+
+@app.command()
+def init(backend: str = typer.Option(None, "--backend", help="Specific backend to initialize (e.g. notion)")):
+    """Initialize/Bootstrap sync backends (create databases, etc)."""
+    sync_ops.init(backend=backend)

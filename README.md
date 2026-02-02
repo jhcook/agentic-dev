@@ -90,3 +90,19 @@ agent secret set openai api_key
 ### Mocking for Tests
 
 If you are running tests, ensure you mock the credential headers or set dummy environment variables in your test runner configuration (e.g., `conftest.py` or `pytest.ini`). Do not commit real keys to the repository.
+
+## 🔄 Environment Sync
+
+The `agent sync` command manages bidirectional synchronization between your local environment and configured backends (e.g. Supabase, Notion).
+
+```bash
+agent sync pull [--backend=notion] [--force]
+agent sync push [--backend=notion] [--force]
+```
+
+It supports:
+
+- **Multiple Backends**: Target specific backends or sync all.
+- **Interactive Conflict Resolution**: Prompts when content differs between local and remote.
+- **Self-Healing**: Detects missing environments (e.g., Notion 404s) and offers to bootstrap them via `agent sync init`.
+- **Janitor**: `agent sync janitor` ensures relational integrity (linking Stories to Plans/ADRs).

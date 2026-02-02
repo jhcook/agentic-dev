@@ -71,6 +71,12 @@ class NotionSchemaManager:
         logger.info(f"Target Page ID: {self.page_id}")
         
         state = self._load_state()
+        
+        # Pre-flight Check: Validate Parent ID
+        if not await self._validate_parent_is_page():
+            logger.error("Validation Failed: invalid Notion Parent ID.")
+            sys.exit(1)
+
         failure_occurred = False
         
         # Pass 1: Create/Verify Databases (Simple Properties Only)
@@ -108,6 +114,56 @@ class NotionSchemaManager:
             
         logger.info("Schema Sync Complete.")
 
+    async def _validate_parent_is_page(self) -> bool:
+        """Verifies that self.page_id refers to a Page, not a Database."""
+        import urllib.request
+        from agent.core.net_utils import check_ssl_error
+
+        # 1. Check if it is a DATABASE (which is invalid for parenting databases)
+        url_db = f"https://api.notion.com/v1/databases/{self.page_id}"
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Notion-Version": "2022-06-28",
+        }
+        
+        req_db = urllib.request.Request(url_db, headers=headers, method="GET")
+        try:
+             with urllib.request.urlopen(req_db) as res:
+                if res.getcode() == 200:
+                    data = json.loads(res.read().decode("utf-8"))
+                    title_text = "Unknown"
+                    if "title" in data and data["title"]:
+                        title_text = "".join([t.get("text", {}).get("content", "") for t in data["title"]])
+                        
+                    logger.error(f"CRITICAL ERROR: The provided NOTION_PARENT_PAGE_ID ({self.page_id}) is a DATABASE ('{title_text}').")
+                    logger.error("Notion databases cannot contain other databases. You must use a PAGE as the parent.")
+                    logger.error("Please update your configuration with the ID of a valid Notion Page.")
+                    return False
+        except Exception:
+            # If 404 or other error, it's likely not a database (or token issue), so we proceed to check if it's a page.
+            pass
+
+        # 2. Check if it is a PAGE (which is valid)
+        url_page = f"https://api.notion.com/v1/pages/{self.page_id}"
+        req_page = urllib.request.Request(url_page, headers=headers, method="GET")
+        try:
+             with urllib.request.urlopen(req_page) as res:
+                if res.getcode() == 200:
+                    data = json.loads(res.read().decode("utf-8"))
+                    # Additional check: Is it archived?
+                    if data.get("archived"):
+                        logger.warning(f"Warning: The target parent page ({self.page_id}) is archived.")
+                    
+                    logger.info(f"Verified Parent Page: {self.page_id}")
+                    return True
+        except Exception as e:
+             # If it fails here, the ID might be completely invalid or we have no access.
+             logger.error(f"Could not verify Parent ID {self.page_id} as a valid Page. API Error: {e}")
+             # We assume invalid if we can't verify it as a page either
+             return False
+        
+        return False
+        
     def _transform_property(self, name: str, prop_def: Dict[str, Any], state: Dict[str, Any], is_creation: bool) -> Optional[Dict[str, Any]]:
         """
         Transforms simplified schema to Notion API format.
