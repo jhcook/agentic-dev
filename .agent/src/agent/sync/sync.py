@@ -188,6 +188,33 @@ def push(verbose: bool = False):
 
     print(f"Push complete. {success_count} success, {error_count} errors.")
 
+def push_safe(timeout: int = 2, verbose: bool = False):
+    """
+    Executes a 'Best Effort' push.
+    Designed for secondary targets (like Notion) that should not block the CLI.
+    Swallows errors and enforces a strict timeout.
+    """
+    import signal
+    import threading
+
+    def _target():
+        try:
+            push(verbose=verbose)
+        except Exception:
+            pass # Swallow internal errors
+    
+    # Run in thread to enforce timeout
+    t = threading.Thread(target=_target)
+    t.start()
+    t.join(timeout=timeout)
+    
+    if t.is_alive():
+        if verbose:
+            print(f"[WARN] Sync timed out after {timeout}s (Background)")
+        # We can't easily kill python threads, but we abandon it.
+        # This prevents the CLI from hanging.
+
+
 def status(detailed: bool = False):
     """Checks and prints the sync status."""
     print("Sync Status:")
