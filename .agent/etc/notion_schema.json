@@ -1,0 +1,166 @@
+{
+    "databases": {
+        "Stories": {
+            "title": "Stories",
+            "description": "User Stories and Tasks",
+            "properties": {
+                "ID": {
+                    "type": "rich_text"
+                },
+                "Title": {
+                    "type": "title"
+                },
+                "Status": {
+                    "type": "select",
+                    "options": [
+                        {
+                            "name": "To Do",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "In Progress",
+                            "color": "blue"
+                        },
+                        {
+                            "name": "Done",
+                            "color": "green"
+                        },
+                        {
+                            "name": "Blocked",
+                            "color": "red"
+                        }
+                    ]
+                },
+                "Priority": {
+                    "type": "select",
+                    "options": [
+                        {
+                            "name": "Low",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Medium",
+                            "color": "yellow"
+                        },
+                        {
+                            "name": "High",
+                            "color": "orange"
+                        },
+                        {
+                            "name": "Critical",
+                            "color": "red"
+                        }
+                    ]
+                },
+                "Type": {
+                    "type": "select",
+                    "options": [
+                        {
+                            "name": "Feature",
+                            "color": "blue"
+                        },
+                        {
+                            "name": "Bug",
+                            "color": "red"
+                        },
+                        {
+                            "name": "Chore",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Spike",
+                            "color": "purple"
+                        }
+                    ]
+                },
+                "Linked Plans": {
+                    "type": "relation",
+                    "relation_target": "Plans"
+                },
+                "Linked ADRs": {
+                    "type": "relation",
+                    "relation_target": "ADRs"
+                }
+            }
+        },
+        "Plans": {
+            "title": "Plans",
+            "description": "High-level implementation plans",
+            "properties": {
+                "ID": {
+                    "type": "rich_text"
+                },
+                "Title": {
+                    "type": "title"
+                },
+                "Status": {
+                    "type": "select",
+                    "options": [
+                        {
+                            "name": "Proposed",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Approved",
+                            "color": "blue"
+                        },
+                        {
+                            "name": "Completed",
+                            "color": "green"
+                        },
+                        {
+                            "name": "Deprecated",
+                            "color": "red"
+                        }
+                    ]
+                },
+                "Objectives": {
+                    "type": "rich_text"
+                }
+            }
+        },
+        "ADRs": {
+            "title": "ADRs",
+            "description": "Architecture Decision Records",
+            "properties": {
+                "ID": {
+                    "type": "rich_text"
+                },
+                "Title": {
+                    "type": "title"
+                },
+                "Status": {
+                    "type": "select",
+                    "options": [
+                        {
+                            "name": "Proposed",
+                            "color": "yellow"
+                        },
+                        {
+                            "name": "Accepted",
+                            "color": "green"
+                        },
+                        {
+                            "name": "Rejected",
+                            "color": "red"
+                        },
+                        {
+                            "name": "Deprecated",
+                            "color": "gray"
+                        },
+                        {
+                            "name": "Superseded",
+                            "color": "orange"
+                        }
+                    ]
+                },
+                "Decision": {
+                    "type": "rich_text"
+                },
+                "Date": {
+                    "type": "date"
+                }
+            }
+        }
+    }
+}

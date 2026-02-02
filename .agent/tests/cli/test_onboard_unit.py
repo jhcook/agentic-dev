@@ -30,10 +30,12 @@ from agent.commands.onboard import (
 
 runner = CliRunner()
 
+@patch("importlib.util.find_spec")
 @patch("shutil.which")
-def test_check_dependencies_success(mock_which):
+def test_check_dependencies_success(mock_which, mock_find_spec):
     """Tests that check_dependencies passes when all binaries are found."""
     mock_which.return_value = "/usr/bin/some_path"
+    mock_find_spec.return_value = True # All python modules found
     try:
         check_dependencies()
     except typer.Exit:
@@ -117,6 +119,7 @@ def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod,
 @patch("agent.commands.onboard.run_verification")
 @patch("agent.commands.onboard.setup_frontend")
 @patch("agent.commands.onboard.configure_voice_settings")
+@patch("agent.commands.onboard.configure_notion_settings")
 @patch("agent.commands.onboard.configure_agent_settings")
 @patch("agent.commands.onboard.check_github_auth")
 @patch("agent.commands.onboard.configure_api_keys")
@@ -125,7 +128,7 @@ def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod,
 @patch("agent.commands.onboard.check_dependencies")
 def test_onboard_command_success_flow(
     mock_check_deps, mock_ensure_dir, mock_ensure_git, mock_api, mock_gh, 
-    mock_agent, mock_voice, mock_frontend, mock_verify
+    mock_agent, mock_notion, mock_voice, mock_frontend, mock_verify
 ):
     """Tests the full `onboard` command orchestration."""
     result = runner.invoke(onboard_app, catch_exceptions=False)

@@ -412,8 +412,12 @@ def configure_agent_settings() -> None:
     
     # 2. Select Model
     # We need to reload .env to ensure the keys we just set are available to AIService
-    from dotenv import load_dotenv
-    load_dotenv(override=True)
+    # We need to reload .env to ensure the keys we just set are available to AIService
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+    except ImportError:
+        pass
     
     # Force the service to recognize the new key/provider?
     # aiservice singleton is already initialized.
@@ -476,8 +480,12 @@ def select_default_model(provider: str, config_data: dict, config_path: Path) ->
         # We'll explicitly try to refresh the service client if needed.
         
         # Reload env vars to process
-        from dotenv import load_dotenv
-        load_dotenv(override=True)
+        # Reload env vars to process
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+        except ImportError:
+            pass
         
         # Hack to refresh client if missing
         if provider not in ai_service.clients:
@@ -682,6 +690,72 @@ def configure_voice_settings() -> None:
         except Exception as e:
             typer.secho(f"[ERROR] Unexpected error: {e}", fg=typer.colors.RED)
 
+def configure_notion_settings() -> None:
+    """Configures Notion integration settings effectively bootstrapping the environment.
+    
+    Prompts the user for Notion Integration Token and Parent Page ID.
+    Stores these secrets in the Secret Manager.
+    Triggers the schema manager script to bootstrap database structures.
+    """
+    typer.echo("\n[INFO] Configuring Notion Workspace Manager...")
+    
+    manager = get_secret_manager()
+    
+    # 1. Notion Token
+    token = get_secret("notion_token") or os.getenv("NOTION_TOKEN")
+    if not token:
+        if typer.confirm("Configure Notion Integration?", default=False):
+            token = getpass.getpass("Notion Integration Token: ")
+            if token:
+                try:
+                    manager.set_secret("agent", "notion_token", token)
+                    # Also set in env for immediate use
+                    os.environ["NOTION_TOKEN"] = token
+                    typer.secho("[OK] Notion Token saved.", fg=typer.colors.GREEN)
+                except Exception as e:
+                    typer.secho(f"[ERROR] Failed to save token: {e}", fg=typer.colors.RED)
+        else:
+            typer.echo("Skipping Notion setup.")
+            return
+
+    # 2. Parent Page ID
+    page_id = get_secret("notion_page_id") or os.getenv("NOTION_PARENT_PAGE_ID")
+    if not page_id:
+        typer.echo("We need a Parent Page ID where the Agent will create databases.")
+        page_id = typer.prompt("Notion Parent Page ID: ", default="")
+        if page_id:
+            try:
+                manager.set_secret("agent", "notion_page_id", page_id)
+                os.environ["NOTION_PARENT_PAGE_ID"] = page_id
+                typer.secho("[OK] Page ID saved.", fg=typer.colors.GREEN)
+            except Exception as e:
+                typer.secho(f"[ERROR] Failed to save Page ID: {e}", fg=typer.colors.RED)
+    
+    # 3. Trigger Bootstrap
+    if token and page_id:
+        if typer.confirm("Run Notion Schema Bootstrap now?", default=True):
+            typer.echo("Running Schema Manager... (This launches an MCP server)")
+            try:
+                # Run the script via subprocess
+                script_path = AGENT_DIR / "scripts" / "notion_schema_manager.py"
+                
+                # Ensure env vars are passed
+                env = os.environ.copy()
+                env["NOTION_TOKEN"] = token
+                env["NOTION_PARENT_PAGE_ID"] = page_id
+                
+                subprocess.run(
+                    [sys.executable, str(script_path)],
+                    env=env,
+                    check=True
+                )
+                typer.secho("[SUCCESS] Notion Environment Bootstrapped!", fg=typer.colors.GREEN)
+            except subprocess.CalledProcessError:
+                typer.secho("[ERROR] Schema Manager failed.", fg=typer.colors.RED)
+            except Exception as e:
+                 typer.secho(f"[ERROR] Unexpected error running script: {e}", fg=typer.colors.RED)
+
+
 
 
 
@@ -766,8 +840,12 @@ def run_verification() -> None:
     typer.echo("\n[INFO] Verifying AI connectivity...")
     
     # Reload env vars
-    from dotenv import load_dotenv
-    load_dotenv(override=True)
+    # Reload env vars
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+    except ImportError:
+        pass # dotenv is optional
     
     # Instantiate a FRESH service to pick up new keys
     service = AIService()
@@ -855,6 +933,7 @@ def onboard() -> None:
         check_github_auth() # Now safe to use secrets if needed? Actually I just save preference.
         configure_agent_settings()
         configure_voice_settings()
+        configure_notion_settings()
         setup_frontend()
         run_verification()
         

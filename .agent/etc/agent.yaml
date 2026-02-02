@@ -4,3 +4,10 @@ agent:
     gemini: models/gemini-2.5-pro
   github:
     tool: mcp
+  mcp:
+    servers:
+      notion:
+        command: "npx"
+        args: ["-y", "@notionhq/notion-mcp-server"]
+        env:
+          NOTION_KEY: "${NOTION_TOKEN}"

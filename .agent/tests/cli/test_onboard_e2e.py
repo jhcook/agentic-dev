@@ -143,8 +143,9 @@ def test_app():
 @pytest.fixture
 def mock_onboard_steps():
     with patch("agent.commands.onboard.configure_voice_settings") as m1, \
-         patch("agent.commands.onboard.setup_frontend") as m2:
-        yield m1, m2
+         patch("agent.commands.onboard.setup_frontend") as m2, \
+         patch("agent.commands.onboard.configure_notion_settings") as m3:
+        yield m1, m2, m3
 
 def test_onboard_dependencies_missing(test_app, mock_shutil_which):
 
@@ -302,6 +303,7 @@ def test_verification_failure_warns(
     mock_validate_password,
     mock_github_auth,
     mock_onboard_steps,
+    mock_check_dependencies,
 ):
     """Test that verification failure just warns and doesn't crash"""
     mock_shutil_which.return_value = "/bin/tool"
@@ -335,6 +337,7 @@ def test_check_github_auth_authenticated(
     mock_prompt_password,
     mock_validate_password,
     mock_onboard_steps,
+    mock_check_dependencies,
 ):
     """Test standard flow when gh is authenticated"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -369,6 +372,7 @@ def test_check_github_auth_not_authenticated_yes(
     mock_prompt_password,
     mock_validate_password,
     mock_onboard_steps,
+    mock_check_dependencies,
 ):
     """Test flow when gh is NOT authenticated and user says YES to login"""
     mock_shutil_which.return_value = "/usr/bin/tool"
@@ -421,6 +425,7 @@ def test_verification_uses_configured_provider(
     mock_validate_password,
     mock_github_auth,
     mock_onboard_steps,
+    mock_check_dependencies,
 ):
     """Test that verification forces the configured provider"""
     mock_shutil_which.return_value = "/bin/tool"
@@ -470,6 +475,7 @@ def test_onboard_migration(
     mock_ai_service,
     mock_github_auth,
     mock_onboard_steps,
+    mock_check_dependencies,
 ):
     """Test migration of keys from env to secret manager."""
     mock_shutil_which.return_value = "/bin/tool"
