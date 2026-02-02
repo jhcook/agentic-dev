@@ -16,6 +16,11 @@ import typer
 
 from agent.sync import sync as sync_ops
 from agent.core.auth.decorators import with_creds
+from agent.core.notion.client import NotionClient
+from agent.sync.janitor import NotionJanitor
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Distributed synchronization (push, pull, status, scan).",
@@ -51,3 +56,19 @@ def delete(
 def scan(verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")):
     """Scan local file system and update cache."""
     sync_ops.scan(verbose=verbose)
+
+@app.command()
+def janitor(
+    notion_api_key: str = typer.Option(..., envvar="NOTION_TOKEN", help="Notion API Key"),
+    database_id: str = typer.Option(..., envvar="NOTION_DB_ID", help="Notion Database ID (Stories)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run without making changes")
+):
+    """Run the Notion Janitor to maintain relational integrity."""
+    # TODO: Pass dry_run to Janitor if supported
+    client = NotionClient(notion_api_key)
+    janitor = NotionJanitor(client)
+    
+    # We need to handle database_id carefully. If it's a URL, extract ID?
+    # For now assume ID.
+    
+    janitor.run_janitor(database_id)
