@@ -213,7 +213,7 @@ def convene_council_full(
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )
 
-            user_prompt = f"STORY: {story_content}\nRULES: {rules_content}\nDIFF: {chunk}"
+            user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n<diff>{chunk}</diff>"
             
             try:
                 review = ai_service.complete(system_prompt, user_prompt)

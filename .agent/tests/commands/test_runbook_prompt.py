@@ -51,9 +51,9 @@ team:
 
 
 @patch("agent.core.ai.ai_service.complete")
-@patch("agent.core.config.config.agent_dir")
-def test_runbook_prompt_construction(mock_agent_dir, mock_complete, mock_deps):
-    mock_agent_dir.return_value = mock_deps["root"] / ".agent"
+@patch("agent.core.auth.decorators.validate_credentials")
+def test_runbook_prompt_construction(mock_validate, mock_complete, mock_deps):
+    target_agent_dir = mock_deps["root"] / ".agent"
     
     # Mock yaml module
     mock_yaml = MagicMock()
@@ -77,27 +77,30 @@ def test_runbook_prompt_construction(mock_agent_dir, mock_complete, mock_deps):
     
 
     import sys
-    with patch.dict(sys.modules, {"yaml": mock_yaml}):
-        with patch("agent.core.config.config.runbooks_dir", mock_deps["root"] / ".agent" / "runbooks"), \
-             patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
-             patch("agent.core.config.config.rules_dir", mock_deps["root"] / ".agent" / "rules"):
+    # Patch agent_dir on the config instance with the ACTUAL path, not a mock
+    with patch("agent.core.config.config.agent_dir", target_agent_dir):
+        with patch.dict(sys.modules, {"yaml": mock_yaml}):
+            with patch("agent.core.config.config.runbooks_dir", target_agent_dir / "runbooks"), \
+                 patch("agent.core.config.config.stories_dir", target_agent_dir / "stories"), \
+                 patch("agent.core.config.config.rules_dir", target_agent_dir / "rules"):
+                 
+                mock_complete.return_value = "Runbook Content"
+                 
+                result = runner.invoke(app, ["new-runbook", "STORY-PROMPT"])
              
-            mock_complete.return_value = "Runbook Content"
+                assert result.exit_code == 0
              
-            result = runner.invoke(app, ["new-runbook", "STORY-PROMPT"])
-         
-            assert result.exit_code == 0
-         
-            # Capture the arguments passed to complete
-            args, _ = mock_complete.call_args
-            system_prompt = args[0]
-         
-            # Verification 1: Check dynamic agents are present
-            assert "Architect Bot" in system_prompt
-            assert "Sec Bot" in system_prompt
-            assert "Check ADRs" in system_prompt
-         
-            # Verification 2: Check Definition of Done
-            assert "## Definition of Done" in system_prompt
-            assert "CHANGELOG.md updated" in system_prompt
-            assert "Logs are structured and free of PII" in system_prompt
+                # Capture the arguments passed to complete
+                args, _ = mock_complete.call_args
+                system_prompt = args[0]
+             
+                # Verification 1: Check dynamic agents are present
+                assert "Architect Bot" in system_prompt
+                assert "Sec Bot" in system_prompt
+                assert "Check ADRs" in system_prompt
+             
+                # Verification 2: Check Definition of Done
+                assert "## Definition of Done" in system_prompt
+                assert "CHANGELOG.md updated" in system_prompt
+                assert "Logs are structured and free of PII" in system_prompt
+

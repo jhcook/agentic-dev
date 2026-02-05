@@ -2,7 +2,8 @@
 set -e
 
 # Configuration
-TARGET_DIR="../inspected/inspected-app"
+#TARGET_DIR="../inspected/inspected-app"
+TARGET_DIR="../cv"
 WORKFLOW_FILE="$TARGET_DIR/.github/workflows/global-governance-preflight.yml"
 
 # Ensure we are in the root

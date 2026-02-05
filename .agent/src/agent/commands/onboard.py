@@ -723,13 +723,14 @@ def configure_notion_settings() -> None:
     manager = get_secret_manager()
     
     # 1. Notion Token
-    token = get_secret("notion_token") or os.getenv("NOTION_TOKEN")
+    token = get_secret("notion_token", service="notion") or os.getenv("NOTION_TOKEN")
     if not token:
         if typer.confirm("Configure Notion Integration?", default=False):
             token = getpass.getpass("Notion Integration Token: ")
             if token:
                 try:
-                    manager.set_secret("agent", "notion_token", token)
+                    # Save to 'notion' service
+                    manager.set_secret("notion", "notion_token", token)
                     # Also set in env for immediate use
                     os.environ["NOTION_TOKEN"] = token
                     typer.secho("[OK] Notion Token saved.", fg=typer.colors.GREEN)
@@ -740,7 +741,8 @@ def configure_notion_settings() -> None:
             return
 
     # 2. Parent Page ID
-    page_id = get_secret("notion_page_id") or os.getenv("NOTION_PARENT_PAGE_ID")
+    agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
+    page_id = config.get_value(agent_config, "notion.page_id") or os.getenv("NOTION_PARENT_PAGE_ID")
     if not page_id:
         typer.echo("We need a Parent Page ID where the Agent will create databases.")
         typer.echo("Tips: You can copy the full URL of the page.")
@@ -758,7 +760,9 @@ def configure_notion_settings() -> None:
                          page_id = sanitized_id
                          typer.secho(f"[INFO] Extracted Page ID: {page_id}", dim=True)
                 
-                manager.set_secret("agent", "notion_page_id", page_id)
+                config.set_value(agent_config, "notion.page_id", page_id)
+                config.save_yaml(config.etc_dir / "agent.yaml", agent_config)
+                # Ensure env var is set for current process usage (e.g. bootstrap script)
                 os.environ["NOTION_PARENT_PAGE_ID"] = page_id
                 typer.secho("[OK] Page ID saved.", fg=typer.colors.GREEN)
             except Exception as e:

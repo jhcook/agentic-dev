@@ -119,6 +119,9 @@ Your role is to design and document a DETAILED Implementation Runbook for a soft
 THE PANEL (You represent ALL these roles):
 {panel_description}
 
+GOVERNANCE CHECKS PER ROLE:
+{panel_checks}
+
 INSTRUCTIONS:
 1. You MUST adopt the perspective of EVERY role in the panel.
 2. You MUST provide a distinct review section for EVERY role.

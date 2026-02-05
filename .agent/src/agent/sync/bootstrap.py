@@ -41,7 +41,11 @@ class NotionBootstrap:
             raise typer.Exit(code=1)
 
         self.client = NotionClient(self.token)
-        self.parent_page_id = parent_page_id or get_secret("notion_parent_page_id", service="agent")
+        
+        # Load Page ID from Config
+        agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
+        self.parent_page_id = parent_page_id or config.get_value(agent_config, "notion.page_id")
+        
         if not self.parent_page_id:
              from os import getenv
              self.parent_page_id = getenv("NOTION_PARENT_PAGE_ID")
@@ -50,9 +54,11 @@ class NotionBootstrap:
         """Main execution flow for bootstrapping."""
         if not self.parent_page_id:
             logger.warning("NOTION_PARENT_PAGE_ID is missing.")
-            self.parent_page_id = Prompt.ask("Enter the Notion Page ID to create databases in")
+            user_input = Prompt.ask("Enter the Notion Page ID to create databases in")
+            self.parent_page_id = self._extract_page_id(user_input)
+            
             if not self.parent_page_id:
-                logger.error("Parent Page ID required.")
+                logger.error(f"Could not extract valid Page ID from input: {user_input}")
                 return
 
         logger.info(f"Bootstrapping Notion Environment in Page: {self.parent_page_id}")
@@ -86,6 +92,32 @@ class NotionBootstrap:
         # TODO: Port template logic if needed, skipping for now to focus on core structure
         
         logger.info("Bootstrap complete.")
+
+    def _extract_page_id(self, input_str: str) -> Optional[str]:
+        """Extracts a 32-char UUID from a Notion URL or raw ID."""
+        if not input_str: return None
+        
+        import re
+        
+        # 1. Look for standard UUID format (8-4-4-4-12)
+        match_uuid = re.search(r"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})", input_str.strip())
+        if match_uuid:
+             return match_uuid.group(1)
+
+        # 2. Look for 32 hex chars (raw ID)
+        # It's usually at the end of the path part of a URL, or just the string itself.
+        # Regex: 
+        # - ([a-f0-9]{32})  : Capture 32 hex chars
+        # - (?:\?|/|$)      : Followed by ?, /, or End of String (to ensure we don't match random parts of a longer string if specific enough, but Notion IDs are usually distinct)
+        # Actually, simpler: Notion URLs are typically `.../Title-<ID>` or `.../<ID>?v=...`
+        # Let's just find the last occurrence of 32 hex chars.
+        
+        matches = re.findall(r"([a-f0-9]{32})", input_str)
+        if matches:
+            # Return the last one found (usually the page ID in a URL structure)
+            return matches[-1]
+             
+        return None
 
     def _load_state(self) -> Dict[str, str]:
         if not STATE_FILE.exists():

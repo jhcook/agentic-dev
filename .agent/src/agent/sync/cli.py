@@ -30,22 +30,26 @@ app = typer.Typer(
 @app.command()
 @with_creds
 def pull(
+    artifact_id: str = typer.Argument(None, help="Specific artifact ID to pull (e.g. INFRA-001)"),
+    type: str = typer.Option(None, "--type", help="Specific artifact type (story, plan, runbook, adr)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     backend: str = typer.Option(None, "--backend", help="Specific backend to use (e.g. notion)"),
     force: bool = typer.Option(False, "--force", help="Force overwrite without prompting")
 ):
     """Pull artifacts from remote."""
-    sync_ops.pull(verbose=verbose, backend=backend, force=force)
+    sync_ops.pull(verbose=verbose, backend=backend, force=force, artifact_id=artifact_id, artifact_type=type)
 
 @app.command()
 @with_creds
 def push(
+    artifact_id: str = typer.Argument(None, help="Specific artifact ID to push (e.g. INFRA-001)"),
+    type: str = typer.Option(None, "--type", help="Specific artifact type (story, plan, runbook, adr)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     backend: str = typer.Option(None, "--backend", help="Specific backend to use (e.g. notion)"),
     force: bool = typer.Option(False, "--force", help="Force overwrite without prompting")
 ):
     """Push artifacts to remote."""
-    sync_ops.push(verbose=verbose, backend=backend, force=force)
+    sync_ops.push(verbose=verbose, backend=backend, force=force, artifact_id=artifact_id, artifact_type=type)
 
 @app.command()
 def status(detailed: bool = typer.Option(False, "--detailed", help="Show detailed list of artifacts")):

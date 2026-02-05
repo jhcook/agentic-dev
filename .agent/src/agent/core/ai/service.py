@@ -585,11 +585,14 @@ class AIService:
                     return full_text.strip()
                 
             except Exception as e:
+                # Catch-all is necessary because different provider SDKs (Google, OpenAI, Anthropic) 
+                # raise different base exceptions. We inspect specific errors below.
+                
                 # Check for SSL errors first - Fail Fast if Proxy/Cert issue
                 from agent.core.net_utils import check_ssl_error
-                ssl_msg = check_ssl_error(e, url=f"Provider: {current_p}")
+                ssl_msg = check_ssl_error(e, url=f"Provider: {provider}")
                 if ssl_msg:
-                    console.print(f"[bold red]{ssl_msg}[/bold red]")
+                    logging.error(f"SSL Error: {ssl_msg}")
                     # Do not retry SSL errors, they are configuration issues
                     raise e
 

@@ -71,26 +71,34 @@ from agent.commands.secret import _prompt_password
 from agent.core.secrets import get_secret_manager
 
 
-def pull(verbose: bool = False, backend: str = None, force: bool = False):
-    """Execute the sync process (pull from remote)."""
+
+def pull(verbose: bool = False, backend: str = None, force: bool = False, artifact_id: str = None, artifact_type: str = None):
+    """
+    Execute the sync process (pull from remote).
+    
+    Status Mapping:
+      - Notion 'Status' property (Select/Status) maps to the 'State' metadata in Markdown artifacts.
+      - e.g., Notion "In Progress" -> Markdown "State: IN_PROGRESS" (normalized to uppercase/underscore).
+      - This allows bi-directional sync of workflow states.
+    """
     
     # Backend Orchestration
     run_all = backend is None
     
     # 1. Supabase (Core)
     if run_all or backend in ["supabase", "core"]:
-        _pull_supabase(verbose)
+        _pull_supabase(verbose, strict=(backend in ["supabase", "core"])) # TODO: Pass artifact_id filter to supabase logic
         
     # 2. Notion
     if run_all or backend == "notion":
         from agent.sync.notion import NotionSync
         try:
             print("Syncing with Notion...")
-            NotionSync().pull(force=force)
+            NotionSync().pull(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
         except Exception as e:
             print(f"Notion sync failed: {e}")
 
-def _pull_supabase(verbose: bool = False):
+def _pull_supabase(verbose: bool = False, strict: bool = False):
     """Internal Supabase Pull Logic"""
     client = get_supabase_client(verbose=verbose)
     
@@ -109,9 +117,10 @@ def _pull_supabase(verbose: bool = False):
                     print(f"Failed to unlock: {e}")
 
     if not client:
-        print("Cannot sync: Supabase client not initialized. Check credentials.")
-        if verbose:
-            print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
+        if strict or verbose:
+            print("Cannot sync: Supabase client not initialized. Check credentials.")
+            if verbose:
+                print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
         return
 
     total = get_total_artifacts(client)  # Fetch total count from Supabase
@@ -148,7 +157,7 @@ def _pull_supabase(verbose: bool = False):
             print(f"\nError during sync: {e}")
             break
 
-def push(verbose: bool = False, backend: str = None, force: bool = False):
+def push(verbose: bool = False, backend: str = None, force: bool = False, artifact_id: str = None, artifact_type: str = None):
     """Push local artifacts to remote."""
     
     # Backend Orchestration
@@ -156,18 +165,18 @@ def push(verbose: bool = False, backend: str = None, force: bool = False):
     
     # 1. Supabase (Core)
     if run_all or backend in ["supabase", "core"]:
-        _push_supabase(verbose)
+        _push_supabase(verbose, artifact_id, strict=(backend in ["supabase", "core"])) # Type filtering not strictly needed for Supabase yet (ID is unique per table usually, but good to add later)
         
     # 2. Notion
     if run_all or backend == "notion":
         from agent.sync.notion import NotionSync
         try:
             print("Syncing with Notion...")
-            NotionSync().push(force=force)
+            NotionSync().push(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
         except Exception as e:
             print(f"Notion sync failed: {e}")
 
-def _push_supabase(verbose: bool = False):
+def _push_supabase(verbose: bool = False, artifact_id: str = None, strict: bool = False):
     """Internal Supabase Push Logic"""
     client = get_supabase_client(verbose=verbose)
     
@@ -186,12 +195,13 @@ def _push_supabase(verbose: bool = False):
                     print(f"Failed to unlock: {e}")
 
     if not client:
-        print("Cannot push: Supabase client not initialized. Check credentials.")
-        if verbose:
-            print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
+        if strict or verbose:
+            print("Cannot push: Supabase client not initialized. Check credentials.")
+            if verbose:
+                print("Tip: Run 'agent secret set supabase service_role_key' or set SUPABASE_SERVICE_ROLE_KEY env var.")
         return
 
-    artifacts = get_all_artifacts_content()
+    artifacts = get_all_artifacts_content(artifact_id)
     if not artifacts:
         print("No local artifacts to push.")
         return
@@ -226,7 +236,7 @@ def _push_supabase(verbose: bool = False):
 
     print(f"Push complete. {success_count} success, {error_count} errors.")
 
-def push_safe(timeout: int = 2, verbose: bool = False):
+def push_safe(timeout: int = 2, verbose: bool = False, artifact_id: str = None):
     """
     Executes a 'Best Effort' push.
     Designed for secondary targets (like Notion) that should not block the CLI.
@@ -237,7 +247,7 @@ def push_safe(timeout: int = 2, verbose: bool = False):
 
     def _target():
         try:
-            push(verbose=verbose, backend=None, force=False)
+            push(verbose=verbose, backend=None, force=False, artifact_id=artifact_id)
         except Exception:
             pass # Swallow internal errors
     

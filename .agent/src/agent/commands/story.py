@@ -127,5 +127,5 @@ How do we revert safely?
     # Auto-Sync to Providers (Priority Sync)
     from agent.sync.sync import push_safe
     console.print(f"[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
-    push_safe(timeout=2, verbose=True)
+    push_safe(timeout=2, verbose=True, artifact_id=story_id)
 

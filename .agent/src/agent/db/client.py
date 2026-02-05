@@ -193,7 +193,7 @@ def get_artifact_counts() -> dict:
         if conn:
             conn.close()
 
-def get_all_artifacts_content() -> list:
+def get_all_artifacts_content(artifact_id: Optional[str] = None) -> list:
     """Returns all artifacts including content from the local cache."""
     conn: Optional[sqlite3.Connection] = None
     try:
@@ -206,7 +206,11 @@ def get_all_artifacts_content() -> list:
         if not cursor.fetchone():
             return []
             
-        cursor.execute("SELECT * FROM artifacts")
+        if artifact_id:
+            cursor.execute("SELECT * FROM artifacts WHERE id = ?", (artifact_id,))
+        else:
+            cursor.execute("SELECT * FROM artifacts")
+            
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     except sqlite3.OperationalError:

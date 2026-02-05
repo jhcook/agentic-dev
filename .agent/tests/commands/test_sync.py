@@ -21,18 +21,19 @@ runner = CliRunner()
 
 @pytest.fixture
 def mock_sync_ops():
-    with patch("agent.sync.cli.sync_ops") as mock:
-        yield mock
+    with patch("agent.sync.cli.sync_ops") as mock_ops, \
+         patch("agent.core.auth.decorators.validate_credentials"):
+        yield mock_ops
 
 def test_sync_pull(mock_sync_ops):
     result = runner.invoke(app, ["pull"])
     assert result.exit_code == 0
-    mock_sync_ops.pull.assert_called_once_with(verbose=False)
+    mock_sync_ops.pull.assert_called_once_with(verbose=False, backend=None, force=False, artifact_id=None, artifact_type=None)
 
 def test_sync_push(mock_sync_ops):
     result = runner.invoke(app, ["push"])
     assert result.exit_code == 0
-    mock_sync_ops.push.assert_called_once_with(verbose=False)
+    mock_sync_ops.push.assert_called_once_with(verbose=False, backend=None, force=False, artifact_id=None, artifact_type=None)
 
 def test_sync_status_default(mock_sync_ops):
     result = runner.invoke(app, ["status"])
@@ -60,3 +61,11 @@ def test_sync_delete_with_type(mock_sync_ops):
     assert result.exit_code == 0
     mock_sync_ops.delete.assert_called_once_with("INFRA-001", "story")
 
+
+
+
+def test_sync_pull_notion_backend(mock_sync_ops):
+    """Verify that specifying --backend notion triggers the pull with the correct backend."""
+    result = runner.invoke(app, ["pull", "--backend", "notion"])
+    assert result.exit_code == 0
+    mock_sync_ops.pull.assert_called_once_with(verbose=False, backend="notion", force=False, artifact_id=None, artifact_type=None)

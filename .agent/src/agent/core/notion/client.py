@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import os
 import urllib.request
 import urllib.error
 import json
@@ -40,8 +41,9 @@ class NotionClient:
         
         req = urllib.request.Request(url, data=data, headers=self.headers, method=method)
         
+        timeout = int(os.getenv("NOTION_TIMEOUT", "30"))
         try:
-            with urllib.request.urlopen(req) as res:
+            with urllib.request.urlopen(req, timeout=timeout) as res:
                 if res.getcode() == 200:
                     resp_body = res.read().decode("utf-8")
                     return json.loads(resp_body)
@@ -86,7 +88,7 @@ class NotionClient:
         payload = {"properties": properties}
         self._request("PATCH", f"pages/{page_id}", payload)
 
-    def get_page(self, page_id: str) -> Dict[str, Any]:
+    def retrieve_page(self, page_id: str) -> Dict[str, Any]:
          """Retrieves a Notion page."""
          return self._request("GET", f"pages/{page_id}")
 
@@ -104,11 +106,24 @@ class NotionClient:
       return data.get("results", [])
 
     def retrieve_block_children(self, block_id: str) -> List[Dict[str, Any]]:
-        """Retrieves children blocks of a block (or page)."""
-        # Pagination is required for large pages, but for now fetch first page (100 blocks max default)
-        # TODO: Implement pagination
-        data = self._request("GET", f"blocks/{block_id}/children")
-        return data.get("results", [])
+        """Retrieves children blocks of a block (or page) with pagination."""
+        results = []
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            # Construct URL with cursor if present
+            endpoint = f"blocks/{block_id}/children"
+            if start_cursor:
+                endpoint += f"?start_cursor={start_cursor}"
+            
+            data = self._request("GET", endpoint)
+            
+            results.extend(data.get("results", []))
+            has_more = data.get("has_more", False)
+            start_cursor = data.get("next_cursor")
+            
+        return results
 
     def append_block_children(self, block_id: str, children: List[Dict[str, Any]]) -> None:
         """Appends block children to a block (or page)."""

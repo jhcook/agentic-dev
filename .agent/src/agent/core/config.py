@@ -33,7 +33,10 @@ class Config:
     def __init__(self):
         # file is in .agent/src/agent/core/config.py
         # .parents[4] resolves to the repo root (containing .agent)
-        self.repo_root = Path(__file__).parents[4]
+        if os.getenv("AGENT_ROOT"):
+            self.repo_root = Path(os.getenv("AGENT_ROOT"))
+        else:
+            self.repo_root = Path(__file__).parents[4]
         
         self.agent_dir = self.repo_root / ".agent"
         self.src_dir = self.agent_dir / "src"

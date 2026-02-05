@@ -53,12 +53,47 @@ def agent_sandbox(tmp_path):
     # Make sure it's executable
     os.chmod(agent_bin, 0o755)
     
-    return str(agent_bin), tmp_path
+    # Executable path
+    agent_bin = dest_agent / "bin" / "agent"
+    
+    # Make sure it's executable
+    os.chmod(agent_bin, 0o755)
+
+    # Create a wrapper script/function to run agent with new env
+    # OR just return the bin path and let tests assume consistent environment?
+    # Actually, we need to enforce AGENT_ROOT in the ENTIRE test session if possible,
+    # or just set it in the environment that runs the agent.
+    # The tests use `subprocess.run([bin, ...])`. We should wrap this or export variable.
+    # Since we can't easily wrap the binary return, let's set it in os.environ for the duration?
+    # No, that affects the test process.
+    # Better: The tests should pass `env={...}`.
+    # But looking at usage: `subprocess.run([agent_bin, ...], cwd=tmp_path)`
+    # It inherits env. So setting os.environ["AGENT_ROOT"] = str(tmp_path) works!
+    
+    os.environ["AGENT_ROOT"] = str(tmp_path)
+    
+    # REMOVE Secrets to avoid interaction prompts needing passwords
+    # This ensures the agent runs in a "fresh" state for these tests
+    secrets_db = dest_agent / "secrets.db"
+    secrets_dir = dest_agent / "secrets"
+    if secrets_db.exists():
+        secrets_db.unlink()
+    if secrets_dir.exists():
+        shutil.rmtree(secrets_dir)
+    
+    yield str(agent_bin), tmp_path
+    
+    # Teardown
+    del os.environ["AGENT_ROOT"]
 
 def test_agent_help(agent_sandbox):
     """Test standard help output."""
     agent_bin, _ = agent_sandbox
     result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env())
+    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env())
+    # Depending on checking behavior, if no secrets, it might just print help. 
+    # If it fails due to missing deps (not installed in sandbox venv context?), we check return code.
+    # But usually help should always work.
     assert result.returncode == 0
     assert "Governed workflow CLI" in result.stdout
     assert "preflight" in result.stdout

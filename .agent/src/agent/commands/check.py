@@ -552,23 +552,45 @@ def preflight(
              console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
              console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
              
-             # Render the full report as a single panel
-             # This restores the behavior of showing one consolidated view
-             from rich.markdown import Markdown
-             if result.get('log_file'):
-                 log_path = result.get('log_file')
-                 if log_path.exists():
-                     md_content = log_path.read_text()
-                     console.print(Panel(Markdown(md_content), title="Governance Report", border_style="red"))
+             # Render the full report as a single panel?
+             # User feedback: "Revert the single-panel-report in check.py to show each component separately."
+             
+             console.print("\n[bold]Governance Council Findings:[/bold]")
+             
+             roles = result.get("json_report", {}).get("roles", [])
+             for role in roles:
+                 name = role.get("name", "Unknown")
+                 verdict = role.get("verdict", "UNKNOWN")
+                 findings = role.get("findings", [])
+                 
+                 style = "green" if verdict == "PASS" else "red"
+                 if verdict == "PASS":
+                     title = f"✅ {name}"
+                 else:
+                     title = f"❌ {name}"
+                     
+                 # Format findings
+                 content = ""
+                 if findings:
+                     if isinstance(findings, list):
+                         content = "\n".join(findings)
+                     else:
+                         content = str(findings)
+                 else:
+                     content = "[dim]No issues found.[/dim]"
+                 
+                 console.print(Panel(content, title=title, border_style=style))
 
              # Collect Blocking Findings for interactive repair
-             roles = result.get("json_report", {}).get("roles", [])
              blocking_findings = []
              for role in roles:
-                  if role["verdict"] == "BLOCK":
-                      # In the new format, findings might be strings in a list
-                      for finding in role["findings"]:
-                          blocking_findings.append(f"{role['name']}: {finding}")
+                  if role.get("verdict") == "BLOCK":
+                      findings = role.get("findings", [])
+                      if isinstance(findings, list):
+                          for finding in findings:
+                              blocking_findings.append(f"{role['name']}: {finding}")
+                      else:
+                           blocking_findings.append(f"{role['name']}: {findings}")
 
              if interactive and blocking_findings:
                  console.print("\n[bold yellow]🔧 Interactive Repair Available for Blocking Findings...[/bold yellow]")
