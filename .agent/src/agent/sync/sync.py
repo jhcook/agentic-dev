@@ -97,6 +97,10 @@ def pull(verbose: bool = False, backend: str = None, force: bool = False, artifa
             NotionSync().pull(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
         except Exception as e:
             print(f"Notion sync failed: {e}")
+            
+    # Always update local artifact DB after pull
+    if run_all or backend == "notion":
+        scan(verbose=verbose)
 
 def _pull_supabase(verbose: bool = False, strict: bool = False):
     """Internal Supabase Pull Logic"""

@@ -22,14 +22,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def validate_credentials() -> None:
+def validate_credentials(check_llm: bool = True) -> None:
     """
     Validates that necessary credentials are present in either environment variables
     or the secret store.
     
+    Args:
+        check_llm: If True, validates LLM provider specific keys.
+    
     Raises:
         MissingCredentialsError: If any required credential is missing from both sources.
     """
+    if not check_llm:
+        return
+
     # 1. Determine active providers/keys to check
     # Check keys based on the configured LLM_PROVIDER
     provider = LLM_PROVIDER.lower()

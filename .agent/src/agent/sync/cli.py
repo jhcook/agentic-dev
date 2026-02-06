@@ -28,7 +28,7 @@ app = typer.Typer(
 )
 
 @app.command()
-@with_creds
+@with_creds(check_llm=False)
 def pull(
     artifact_id: str = typer.Argument(None, help="Specific artifact ID to pull (e.g. INFRA-001)"),
     type: str = typer.Option(None, "--type", help="Specific artifact type (story, plan, runbook, adr)"),
@@ -40,7 +40,7 @@ def pull(
     sync_ops.pull(verbose=verbose, backend=backend, force=force, artifact_id=artifact_id, artifact_type=type)
 
 @app.command()
-@with_creds
+@with_creds(check_llm=False)
 def push(
     artifact_id: str = typer.Argument(None, help="Specific artifact ID to push (e.g. INFRA-001)"),
     type: str = typer.Option(None, "--type", help="Specific artifact type (story, plan, runbook, adr)"),

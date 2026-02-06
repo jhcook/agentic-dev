@@ -17,16 +17,22 @@ import typer
 from agent.core.auth.credentials import validate_credentials
 from agent.core.auth.errors import MissingCredentialsError
 
-def with_creds(func):
+def with_creds(func=None, *, check_llm: bool = True):
     """
     Decorator to ensure that credentials are set before running a function.
+    Supports usage as @with_creds or @with_creds(check_llm=False).
     """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            validate_credentials()
-        except MissingCredentialsError as e:
-            print(e)
-            raise typer.Exit(code=1)
-        return func(*args, **kwargs)
-    return wrapper
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                validate_credentials(check_llm=check_llm)
+            except MissingCredentialsError as e:
+                print(e)
+                raise typer.Exit(code=1)
+            return f(*args, **kwargs)
+        return wrapper
+
+    if func:
+        return decorator(func)
+    return decorator

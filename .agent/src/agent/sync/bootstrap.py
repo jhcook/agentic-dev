@@ -31,7 +31,7 @@ STATE_FILE = config.cache_dir / "notion_state.json"
 
 class NotionBootstrap:
     def __init__(self, token: str = None, parent_page_id: str = None):
-        self.token = token or get_secret("notion_token", service="agent")
+        self.token = token or get_secret("notion_token", service="notion")
         if not self.token:
              from os import getenv
              self.token = getenv("NOTION_TOKEN")
@@ -168,7 +168,6 @@ class NotionBootstrap:
 
         if props:
             try:
-                self.client.update_page_properties(db_id, props) # Actually DB update uses same endpoint structure? No, PATCH databases/:id
                 # Only properties allowed in update
                 self.client._request("PATCH", f"databases/{db_id}", {"properties": props})
             except Exception as e:
