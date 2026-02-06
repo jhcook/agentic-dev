@@ -415,7 +415,7 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
         console.print(f"[bold blue]🔄 {context_prefix}: Updated Story {story_id} State: {current_state} -> {new_state}[/bold blue]")
         
         # Trigger Sync
-        push_safe(timeout=3, verbose=True)
+        push_safe(timeout=3, verbose=False)
     else:
          console.print(f"[yellow]⚠️  Could not find '## State' section in {story_file.name}[/yellow]")
 
