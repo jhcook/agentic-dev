@@ -1,0 +1,43 @@
+---
+alwaysApply: true
+globs: "**/*"
+---
+
+# Mobile Platform Support Policy (ADR-020)
+
+This rule defines the supported lifecycle for Android and iOS operating systems to ensure security, stability, and development velocity.
+
+## 1. Governance Policy (Current + 2)
+
+All mobile applications MUST support the **Current Major Version** and the **Two Previous Major Versions** of the respective operating system.
+
+- **iOS**: Current + 2 (e.g., if iOS 18 is current -> 18, 17, 16).
+- **Android**: Current + 2 (based on Android API Levels corresponding to major versions).
+
+## 2. Technical Enforcement
+
+The policy MUST be reflected in the codebase configuration.
+
+### Android (`android/build.gradle`)
+- `minSdkVersion` MUST be set to the API level corresponding to the oldest supported major version.
+- `targetSdkVersion` MUST be set to the Current major version (or latest stable API level).
+
+### iOS (`ios/Podfile`)
+- `platform :ios` MUST be set to the oldest supported major version (e.g., `'16.0'`).
+
+## 3. Dropping Support (Deprecation Process)
+
+When a new major OS version is released, the oldest supported version enters the **Deprecation Phase**.
+
+### Validation Required (@Product / @Analytics)
+- Before dropping support, verify that **< 5%** of active users are on the version to be dropped.
+- If usage is > 5%, a **User Notification Plan** is REQUIRED (@Compliance check).
+    - Users must be notified at least 30 days in advance via in-app message or email.
+
+### Sunset Testing (@QA)
+- A final regression test MUST be performed on the version being dropped to ensure:
+    - The app allows for a graceful "Update Required" or "Not Supported" state.
+    - The app does not crash on launch.
+
+## 4. Deep Links (@Security)
+- When supporting new OS versions, **Deep Link** verification (Android App Links / iOS Universal Links) MUST be performed to ensure no regression in verification logic changes by the OS.

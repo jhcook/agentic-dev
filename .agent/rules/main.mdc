@@ -31,6 +31,7 @@ This file serves as the **root index** for project governance. All agents must f
 -   **Baseline**:
     -   **Web**: Next.js App Router, TailwindCSS, WCAG AA.
     -   **Mobile**: Expo Router, NativeWind, Offline-First.
+    -   **Mobile Lifecycle**: See [mobile-platform-support.mdc](.agent/rules/mobile-platform-support.mdc) (Current + 2).
     -   **UI/UX**: Implement "drag-and-relocate" for dashboard items (Pointer Events).
 
 ## 2. Security & Compliance
