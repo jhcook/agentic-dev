@@ -933,6 +933,26 @@ def panel(
         progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
     )
     
+    # 4.5 Display Results
+    console.print("\n[bold]Governance Panel Findings:[/bold]")
+    roles = result.get("json_report", {}).get("roles", [])
+    
+    for role in roles:
+        name = role.get("name", "Unknown")
+        findings = role.get("findings", [])
+        
+        # In Consultative mode, findings are usually the full advice
+        content = ""
+        if findings:
+            if isinstance(findings, list):
+                content = "\n".join(findings)
+            else:
+                content = str(findings)
+        else:
+            content = "[dim]No specific advice provided.[/dim]"
+            
+        console.print(Panel(content, title=f"🤖 {name}", border_style="blue"))
+
     # 5. Apply Advice
     if apply and target_file and result["log_file"]:
         console.print(f"\n[bold magenta]🏗️  Applying advice to {target_file.name}...[/bold magenta]")

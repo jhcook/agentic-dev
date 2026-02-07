@@ -91,12 +91,18 @@ def pull(verbose: bool = False, backend: str = None, force: bool = False, artifa
         
     # 2. Notion
     if run_all or backend == "notion":
-        from agent.sync.notion import NotionSync
-        try:
-            print("Syncing with Notion...")
-            NotionSync().pull(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
-        except Exception as e:
-            print(f"Notion sync failed: {e}")
+        from agent.core.config import get_secret
+        notion_token = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+        
+        if notion_token:
+            from agent.sync.notion import NotionSync
+            try:
+                print("Syncing with Notion...")
+                NotionSync().pull(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
+            except Exception as e:
+                print(f"Notion sync failed: {e}")
+        elif backend == "notion":
+            print("Skipping Notion sync: NOTION_TOKEN not found.")
             
     # Always update local artifact DB after pull
     if run_all or backend == "notion":
@@ -173,12 +179,18 @@ def push(verbose: bool = False, backend: str = None, force: bool = False, artifa
         
     # 2. Notion
     if run_all or backend == "notion":
-        from agent.sync.notion import NotionSync
-        try:
-            print("Syncing with Notion...")
-            NotionSync().push(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
-        except Exception as e:
-            print(f"Notion sync failed: {e}")
+        from agent.core.config import get_secret
+        notion_token = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+        
+        if notion_token:
+            from agent.sync.notion import NotionSync
+            try:
+                print("Syncing with Notion...")
+                NotionSync().push(force=force, artifact_id=artifact_id, artifact_type=artifact_type)
+            except Exception as e:
+                print(f"Notion sync failed: {e}")
+        elif backend == "notion":
+            print("Skipping Notion sync: NOTION_TOKEN not found.")
 
 def _push_supabase(verbose: bool = False, artifact_id: str = None, strict: bool = False):
     """Internal Supabase Push Logic"""

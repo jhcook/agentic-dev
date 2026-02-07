@@ -37,8 +37,9 @@ def validate_credentials(check_llm: bool = True) -> None:
         return
 
     # 1. Determine active providers/keys to check
-    # Check keys based on the configured LLM_PROVIDER
-    provider = LLM_PROVIDER.lower()
+    # Check keys based on the configured LLM_PROVIDER or runtime override
+    from agent.core.ai import ai_service
+    provider = (ai_service.provider or LLM_PROVIDER).lower()
     
     # Map provider to list of acceptable keys (any one will do)
     provider_key_map = {

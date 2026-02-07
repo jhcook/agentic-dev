@@ -68,7 +68,8 @@ def configure_logging(verbosity: int = 0):
 logger = logging.getLogger("agent")
 
 # Add file handler if needed (e.g. to .agent/logs/agent.log)
-log_dir = Path(".agent/logs")
+from agent.core.config import config
+log_dir = config.logs_dir
 log_dir.mkdir(parents=True, exist_ok=True)
 file_handler = logging.FileHandler(log_dir / "agent.log")
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))

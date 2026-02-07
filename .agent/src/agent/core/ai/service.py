@@ -590,12 +590,22 @@ class AIService:
                 
                 # Check for SSL errors first - Fail Fast if Proxy/Cert issue
                 from agent.core.net_utils import check_ssl_error
-                ssl_msg = check_ssl_error(e, url=f"Provider: {provider}")
+                
+                # Map providers to their API endpoints for better debugging
+                host_map = {
+                    "openai": "api.openai.com",
+                    "gemini": "generativelanguage.googleapis.com",
+                    "anthropic": "api.anthropic.com", 
+                    "gh": "models.github.com"
+                }
+                target_host = host_map.get(provider, f"Provider: {provider}")
+                
+                ssl_msg = check_ssl_error(e, url=target_host)
                 if ssl_msg:
                     logging.error(f"SSL Error: {ssl_msg}")
                     # Do not retry SSL errors, they are configuration issues
                     raise e
-
+                    
                 # Catch transient network errors and retry
                 error_str = str(e).lower()
                 transient_indicators = [
