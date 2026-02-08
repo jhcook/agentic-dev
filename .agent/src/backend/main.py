@@ -89,6 +89,16 @@ except ImportError:
 
 app.include_router(governance.router)
 
+# Optional: Premium Voice Capabilities (Agentic Executive)
+try:
+    from agentic_executive import voice_router
+    app.include_router(voice_router, prefix="/voice", tags=["premium-voice"])
+    logger.info("Agentic Executive (Premium) Voice module loaded")
+except ImportError:
+    pass
+except Exception as e:
+    logger.warning(f"Failed to load Agentic Executive: {e}")
+
 @app.websocket("/ws/admin/logs")
 async def admin_logs_websocket(websocket: WebSocket):
     """Streams activity logs from the internal log_bus to the frontend."""

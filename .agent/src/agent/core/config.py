@@ -31,12 +31,7 @@ logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self):
-        # file is in .agent/src/agent/core/config.py
-        # .parents[4] resolves to the repo root (containing .agent)
-        if os.getenv("AGENT_ROOT"):
-            self.repo_root = Path(os.getenv("AGENT_ROOT"))
-        else:
-            self.repo_root = Path(__file__).parents[4]
+        self.repo_root = self._find_repo_root()
         
         self.agent_dir = self.repo_root / ".agent"
         self.src_dir = self.agent_dir / "src"
@@ -49,7 +44,7 @@ class Config:
         self.logs_dir = self.agent_dir / "logs"
         self.backups_dir = self.agent_dir / "backups"
         self.storage_dir = self.agent_dir / "storage"
-        self.models_dir = self.storage_dir  # Models live in storage now via VAD logical change, or we can keep separate
+        self.models_dir = self.storage_dir
 
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
@@ -64,6 +59,46 @@ class Config:
 
         # Enabled Providers logic (INFRA-044)
         self.enabled_providers: List[str] = self._get_enabled_providers()
+
+    def _find_repo_root(self) -> Path:
+        """
+        Robustly find the repository root.
+        Priority:
+        1. AGENT_ROOT env var
+        2. Upward traversal looking for .agent directory (Framework Marker)
+        3. Git (Fallback)
+        4. Fallback to Relative Path
+        """
+        # 1. Env Var
+        if os.getenv("AGENT_ROOT"):
+            return Path(os.getenv("AGENT_ROOT")).resolve()
+
+        # 2. Upward Traversal (Highest Priority for Framework Integrity)
+        try:
+            cwd = Path.cwd().resolve()
+            for parent in [cwd] + list(cwd.parents):
+                if (parent / ".agent").is_dir():
+                    return parent
+        except Exception:
+            pass
+            
+        # 3. Git (Gold Standard - verify it has .agent if possible, otherwise accept)
+        try:
+            import subprocess
+            root = subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"], 
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if root:
+                return Path(root).resolve()
+        except Exception:
+            pass
+
+        # 4. Fallback to Relative Path
+        try:
+            return Path(__file__).resolve().parents[4]
+        except IndexError:
+            return Path.cwd()
 
     def _load_repo_info(self):
         """Try to load repo info from git config."""
