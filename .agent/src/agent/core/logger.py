@@ -13,11 +13,14 @@
 # limitations under the License.
 
 import logging
-from pathlib import Path
 
 # Configure default logging (Default to WARNING to be quiet)
 # We do NOT call basicConfig here to avoid side effects on import.
 # Instead, we provide a setup function.
+
+# Guard flag to prevent adding duplicate file handlers.
+_file_handler_added = False
+
 
 def configure_logging(verbosity: int = 0):
     """
@@ -59,21 +62,24 @@ def configure_logging(verbosity: int = 0):
     
     # Set Agent level explicitly if different from root
     logging.getLogger("agent").setLevel(agent_level)
-    
-    # For intermediate verbosity (-vv), explicitly silence chatty libraries if we want stricter control,
-    # but setting root to WARNING usually covers it. 
-    # However, if root is WARNING, agent needs to be set to DEBUG explicitly (done above).
 
-# Create a custom logger
+    # Lazy file handler: create logs dir and attach handler only when
+    # configure_logging is called AND the .agent project directory exists.
+    global _file_handler_added
+    if not _file_handler_added:
+        from agent.core.config import config
+        if config.agent_dir.exists():
+            log_dir = config.logs_dir
+            log_dir.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_dir / "agent.log")
+            file_handler.setFormatter(
+                logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            )
+            logging.getLogger("agent").addHandler(file_handler)
+            _file_handler_added = True
+
+# Create a custom logger (no file handler at import time)
 logger = logging.getLogger("agent")
-
-# Add file handler if needed (e.g. to .agent/logs/agent.log)
-from agent.core.config import config
-log_dir = config.logs_dir
-log_dir.mkdir(parents=True, exist_ok=True)
-file_handler = logging.FileHandler(log_dir / "agent.log")
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
 
 def get_logger(name: str):
     """Get a logger instance with the specified name."""

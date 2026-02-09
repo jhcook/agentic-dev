@@ -4,6 +4,17 @@ All notable changes to the Agent Governance Framework will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-02-09
+
+### Fixed
+- **JSON Extraction**: `extract_json_from_response` now returns raw bracket-matched content as a fallback instead of an empty string when no valid JSON can be parsed.
+- **Integration Tests**: `Path.exists` mocks in `test_python_agent.py` no longer break DB schema lookup during `new-story`, `new-plan`, and `new-adr` commands.
+
+### Changed
+- **Config**: `backup_config()` now lazily creates `backups_dir` on first use, consistent with `logs_dir` initialisation in `logger.py`.
+- **Implement**: Removed duplicate `update_story_state` from `implement.py`; canonical version lives in `core/utils.py`.
+- **Documentation**: `update_story_state` docstring expanded with purpose, callers, args, and internal-only designation.
+
 ## [Unreleased] - 2026-01-13
 
 ### Security

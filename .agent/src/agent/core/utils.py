@@ -343,80 +343,110 @@ def sanitize_id(input_str: str) -> str:
 def extract_json_from_response(response: str) -> str:
     """
     Robustly extract JSON from AI response, handling markdown code blocks
-    and various formatting issues.
+    and various formatting issues. Supports JSON arrays, objects, and
+    top-level primitives (strings, numbers, booleans, null).
+
+    NOTE: This function intentionally exceeds the 50-line guideline.  It is a
+    single-purpose, sequential extraction pipeline (stages 0-5) whose steps
+    share local state (``stripped``, ``cleaned``).  Splitting into sub-functions
+    would scatter control-flow without improving readability.
     """
     if not response:
         return ""
     response = response.strip()
-    
-    # 1. Try Regex for code blocks (most reliable)
-    json_match = re.search(r"```(?:json)?\s*(\[.*\])\s*```", response, re.DOTALL)
-    if json_match:
+
+    # 0. Strip markdown code fences as a preprocessing step.
+    #    This handles ```json ... ```, ``` ... ```, and variants.
+    stripped = response
+    fence_pattern = re.compile(
+        r"^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$",
+        re.DOTALL
+    )
+    fence_match = fence_pattern.match(stripped)
+    if fence_match:
+        stripped = fence_match.group(1).strip()
+
+    # Also handle cases where fences are not the only content
+    # (e.g., "Here is the JSON:\n```json\n[...]\n```\nLet me know...")
+    if not fence_match:
+        fence_pattern_inner = re.compile(
+            r"```(?:json|JSON)?\s*\n(.*?)\n\s*```",
+            re.DOTALL
+        )
+        fence_match_inner = fence_pattern_inner.search(stripped)
+        if fence_match_inner:
+            stripped = fence_match_inner.group(1).strip()
+
+    # 0b. Pre-process: strip JS-style single-line comments and trailing commas
+    #     that LLMs sometimes include in JSON output.
+    cleaned = re.sub(r'//[^\n]*', '', stripped)          # remove // comments
+    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)     # remove trailing commas
+
+    # 1. Direct parse: try the cleaned content first
+    try:
+        json.loads(cleaned, strict=False)
+        return cleaned
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 1b. Direct parse: try the stripped (pre-comment-removal) content
+    if cleaned != stripped:
         try:
-            # Verify if it parses, otherwise fall through to robust extraction
-            # use strict=False to match fixer.py leniency expectations
-            json.loads(json_match.group(1), strict=False)
-            return json_match.group(1)
-        except json.JSONDecodeError:
+            json.loads(stripped, strict=False)
+            return stripped
+        except (json.JSONDecodeError, ValueError):
             pass
 
-    # 2. Robust Bracket Matching Logic
-    # Find the FIRST '['
-    start_idx = response.find("[")
-    if start_idx == -1:
-        return "" # No array found
-        
-    # Optimistic approach: try from first '[' to last ']'
-    # If that fails (due to trailing noise with brackets), step back to previous ']'
-    
-    # Collect all indices of ']' that appear after start_idx
-    end_indices = [i for i, char in enumerate(response) if char == "]" and i > start_idx]
-    
-    # Reverse iterate (try largest block first)
-    for end_idx in reversed(end_indices):
-        candidate = response[start_idx : end_idx + 1]
-        try:
-            json.loads(candidate, strict=False)
-            return candidate
-        except json.JSONDecodeError:
+    # 2. Bracket/Brace Matching Logic - find JSON array or object
+    # Try both '[' (array) and '{' (object) as potential roots
+    for open_char, close_char in [('[', ']'), ('{', '}')]:
+        start_idx = stripped.find(open_char)
+        if start_idx == -1:
             continue
-            
-    # 3. Fallback: Return original greedy search if robust fail (might work for lenient parsers)
-    # This preserves original behavior if for some reason the above failed but regex would have matched partial
-    list_match = re.search(r"(\[.*\])", response, re.DOTALL)
-    if list_match:
-        return list_match.group(1)
-        
 
-def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
-    """
-    Update the state of a Story file and sync to Notion.
-    """
-    # Import here to avoid circular dependencies if any
-    from agent.sync.sync import push_safe
+        # Collect all indices of the closing char after start_idx
+        end_indices = [
+            i for i, char in enumerate(stripped)
+            if char == close_char and i > start_idx
+        ]
 
-    story_file = find_story_file(story_id)
-    if not story_file:
-         console.print(f"[yellow]⚠️  Could not find Story {story_id} to update state.[/yellow]")
-         return
+        # Reverse iterate (try largest block first)
+        for end_idx in reversed(end_indices):
+            candidate = stripped[start_idx : end_idx + 1]
+            try:
+                json.loads(candidate, strict=False)
+                return candidate
+            except json.JSONDecodeError:
+                continue
 
-    content = story_file.read_text()
-    # Regex to find state section (handle various spacing)
-    # ## State
-    # <CURRENT_STATE>
-    state_regex = r"(^## State\s*\n+)([A-Za-z\s]+)"
-    
-    match = re.search(state_regex, content, re.MULTILINE)
-    if match:
-        current_state = match.group(2).strip()
-        if current_state.upper() == new_state.upper():
-            return # Already set
+    # 3. Last resort: try the same bracket matching on the ORIGINAL response
+    #    (in case fence stripping removed too much)
+    if stripped != response:
+        for open_char, close_char in [('[', ']'), ('{', '}')]:
+            start_idx = response.find(open_char)
+            if start_idx == -1:
+                continue
+            end_indices = [
+                i for i, char in enumerate(response)
+                if char == close_char and i > start_idx
+            ]
+            for end_idx in reversed(end_indices):
+                candidate = response[start_idx : end_idx + 1]
+                try:
+                    json.loads(candidate, strict=False)
+                    return candidate
+                except json.JSONDecodeError:
+                    continue
 
-        new_content = re.sub(state_regex, f"\\1{new_state}", content, count=1, flags=re.MULTILINE)
-        story_file.write_text(new_content)
-        console.print(f"[bold blue]🔄 {context_prefix}: Updated Story {story_id} State: {current_state} -> {new_state}[/bold blue]")
-        
-        # Trigger Sync
-        push_safe(timeout=3, verbose=False)
-    else:
-         console.print(f"[yellow]⚠️  Could not find '## State' section in {story_file.name}[/yellow]")
+    # 4. Fallback: return the first bracket-delimited substring even if
+    #    it isn't valid JSON (callers may need the raw content).
+    for open_char, close_char in ('[', ']'), ('{', '}'):
+        start_idx = stripped.find(open_char)
+        if start_idx == -1:
+            continue
+        end_idx = stripped.rfind(close_char)
+        if end_idx > start_idx:
+            return stripped[start_idx : end_idx + 1]
+
+    # 5. Return empty string if nothing worked
+    return ""

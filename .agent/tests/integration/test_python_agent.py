@@ -28,6 +28,16 @@ from agent.main import app
 
 runner = CliRunner()
 
+# Keep a reference to the real Path.exists so targeted mocks can delegate.
+_real_path_exists = Path.exists
+
+
+def _story_file_missing(self: Path) -> bool:
+    """Return False only for .md files (story/plan/ADR targets); real check for everything else."""
+    if self.suffix == ".md":
+        return False
+    return _real_path_exists(self)
+
 def test_app_version():
     # If using Typer's version flag, it should exit(0). 
     # If result.exit_code is 2, it might be "Missing command" if invoke_without_command is not set?
@@ -52,7 +62,7 @@ def test_new_story_creation_auto_id(mock_mkdir, mock_write, mock_get_id):
     # CLI args: agent new-story INFRA-999
     
     # We'll test with explicit ID to avoid prompts
-    with patch("pathlib.Path.exists", return_value=False), \
+    with patch("pathlib.Path.exists", new=_story_file_missing), \
          patch("agent.core.auth.decorators.validate_credentials"):
         result = runner.invoke(app, ["new-story", "INFRA-999"], input="My Story Title\n")
     
@@ -66,7 +76,7 @@ def test_new_story_creation_auto_id(mock_mkdir, mock_write, mock_get_id):
     assert "INFRA-999" in str(mock_write.call_args)
 
 def test_new_plan_command():
-    with patch("pathlib.Path.exists", return_value=False), \
+    with patch("pathlib.Path.exists", new=_story_file_missing), \
          patch("pathlib.Path.write_text") as mock_write, \
          patch("pathlib.Path.mkdir"), \
          patch("agent.core.auth.decorators.validate_credentials"):
@@ -76,7 +86,7 @@ def test_new_plan_command():
         assert "Created Plan" in result.stdout
 
 def test_new_adr_command():
-    with patch("pathlib.Path.exists", return_value=False), \
+    with patch("pathlib.Path.exists", new=_story_file_missing), \
          patch("pathlib.Path.write_text") as mock_write, \
          patch("pathlib.Path.mkdir"), \
          patch("agent.commands.adr.get_next_id", return_value="ADR-005"):

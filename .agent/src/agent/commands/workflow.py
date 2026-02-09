@@ -219,5 +219,5 @@ def commit(
     subprocess.run(["git", "commit", "-m", full_message])
     
     # Update Story State to COMMITTED
-    from agent.core.utils import update_story_state
+    from agent.commands.utils import update_story_state
     update_story_state(story_id, "COMMITTED", context_prefix="Post-Commit")

@@ -49,8 +49,6 @@ class Config:
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
         self.runbooks_dir = self.cache_dir / "runbooks"
-        
-        self.backups_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize repo info
         self.repo_owner = "unknown"
@@ -77,7 +75,12 @@ class Config:
         try:
             cwd = Path.cwd().resolve()
             for parent in [cwd] + list(cwd.parents):
-                if (parent / ".agent").is_dir():
+                agent_dir = parent / ".agent"
+                # Check for key files to ensure this is a real root, not just a logs artifact
+                if agent_dir.is_dir() and (agent_dir / "etc" / "agents.yaml").exists():
+                    return parent
+                # Also accept if just .agent exists but contains meaningful structure (fallback)
+                if agent_dir.is_dir() and (agent_dir / "src").exists():
                     return parent
         except Exception:
             pass
@@ -177,7 +180,9 @@ class Config:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{path.stem}_{timestamp}{path.suffix}"
         backup_path = self.backups_dir / backup_name
-        
+
+        # Lazy-init: create backups directory on first use (consistent with logs_dir)
+        self.backups_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, backup_path)
         return backup_path
 
