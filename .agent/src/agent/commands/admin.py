@@ -26,12 +26,13 @@ from rich.console import Console
 
 from agent.core.auth.credentials import validate_credentials
 from agent.core.auth.errors import MissingCredentialsError
+from agent.core.config import config
 
 console = Console()
 app = typer.Typer(help="Manage the Agent Management Console.")
 
-PID_FILE = Path(".agent/run/admin.json")
-LOG_DIR = Path(".agent/logs")
+PID_FILE = config.agent_dir / "run" / "admin.json"
+LOG_DIR = config.agent_dir / "logs"
 
 class ProcessManager:
     def __init__(self):
@@ -102,8 +103,8 @@ class ProcessManager:
 
         # Determine python executable
         # Prefer local .venv if it exists
-        if os.path.exists(".venv/bin/python"):
-             python_exec = os.path.abspath(".venv/bin/python")
+        if (config.repo_root / ".venv" / "bin" / "python").exists():
+             python_exec = str(config.repo_root / ".venv" / "bin" / "python")
         else:
              python_exec = sys.executable
 
@@ -123,13 +124,14 @@ class ProcessManager:
             backend_cmd,
             stdout=backend_log,
             stderr=subprocess.STDOUT,
-            cwd=".agent/src",
+            cwd=str(config.agent_dir / "src"),
             start_new_session=True # Detach
         )
 
         # 2. Start Frontend (Vite)
-        if not os.path.exists(".agent/src/web"):
-             console.print("[bold red]Error: '.agent/src/web' directory not found.[/bold red]")
+        web_dir = config.agent_dir / "src" / "web"
+        if not web_dir.exists():
+             console.print(f"[bold red]Error: '{web_dir}' directory not found.[/bold red]")
              backend_proc.terminate()
              raise typer.Exit(1)
 
@@ -142,7 +144,7 @@ class ProcessManager:
             frontend_cmd,
             stdout=frontend_log,
             stderr=subprocess.STDOUT,
-            cwd=".agent/src/web",
+            cwd=str(web_dir),
             start_new_session=True # Detach
         )
 
@@ -287,7 +289,10 @@ class ProcessManager:
                 self.stop()
 
 
-manager = ProcessManager()
+
+def _get_manager() -> ProcessManager:
+    """Lazy init to avoid mkdir at import time."""
+    return ProcessManager()
 
 @app.command()
 def start(
@@ -296,7 +301,7 @@ def start(
     """
     Start the Agent Management Console (Detached by default).
     """
-    manager.start(follow=follow)
+    _get_manager().start(follow=follow)
     
 
 
@@ -305,11 +310,11 @@ def stop():
     """
     Stop the Agent Management Console.
     """
-    manager.stop()
+    _get_manager().stop()
 
 @app.command()
 def status():
     """
     Check the status of the Agent Management Console.
     """
-    manager.status()
+    _get_manager().status()
