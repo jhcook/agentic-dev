@@ -1,0 +1,45 @@
+---
+description: Defines what constitutes a breaking change across all managed codebases
+alwaysApply: true
+---
+
+# Breaking Change Policy
+
+This rule scopes what reviewers should treat as a "breaking change" during preflight. It applies to **all codebases** managed by the agent framework.
+
+## What IS a Breaking Change
+
+A change is **breaking** if it modifies the **public contract** of the system:
+
+1. **CLI interfaces**: Removing, renaming, or changing the required arguments of a CLI command or script.
+2. **API endpoints**: Removing, renaming, or changing the request/response schema of a public API.
+3. **Configuration**: Removing or renaming config keys, environment variables, or settings files.
+4. **Public exports**: Removing or renaming a function, class, or module that is imported by consumers **outside** its own package.
+5. **Database schema**: Removing or renaming columns/tables without a migration path.
+6. **File formats**: Changing the structure of persisted files (e.g. markdown templates, YAML schemas) that other tools or processes depend on.
+
+## What Is NOT a Breaking Change
+
+These changes MUST NOT be flagged as breaking:
+
+1. **Widening behavior**: A function that previously handled case A now also handles cases B and C. All existing inputs produce the same output.
+2. **Internal refactors**: Moving, renaming, or restructuring code that is only consumed within its own package. All callers are updated in the same changeset.
+3. **Adding parameters with defaults**: Adding a new optional parameter that preserves existing behavior when omitted.
+4. **Improving error handling**: Adding validation, better error messages, or graceful degradation.
+5. **Performance improvements**: Optimising internals without changing observable behavior.
+6. **Adding new exports**: New functions, classes, or endpoints that don't affect existing ones.
+
+## How to Verify
+
+If a reviewer suspects a breaking change, they should ask:
+
+1. **Is there an external consumer?** (CLI user, API client, config file, other package)
+2. **Does existing usage break?** Run the same input — does it produce a different result or error?
+3. **Are all callers updated in this changeset?** If so, it's an internal refactor, not a break.
+
+If the answer to all three is "no", it is **not breaking**.
+
+## Enforcement
+
+- @QA and @Architect MUST apply this definition when evaluating changes.
+- Flagging an internal improvement as a "breaking change" without evidence of a broken contract is a **false positive** and must not result in BLOCK.

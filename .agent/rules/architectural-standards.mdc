@@ -1,35 +1,73 @@
 ---
-description: Architectural Standards and Boundaries
-globs: .agent/src/**/*.py
+description: Architectural Standards, Layer Boundaries, and Dependency Rules
+globs: "**/*.py"
+alwaysApply: true
 ---
 
 # Architectural Standards
 
 ## 1. Architectural Layers & Boundaries
 
-The codebase is structured into distinct layers. Dependencies must flow **downwards** (from high-level to low-level).
+The codebase is structured into distinct layers. Dependencies must flow **downwards** (from high-level to low-level). This applies to all managed codebases.
 
-### Layers
-1.  **CLI / Interface Layer** (`agent/cli.py`, `agent/commands/`, `agent/main.py`)
+```
+UI / CLI / Commands  →  Core / Domain  →  stdlib / config
+        ↓
+   Side-effects (sync, notifications, external I/O)
+```
+
+### General Layer Definitions
+
+1.  **CLI / Interface Layer** (commands, handlers, entry points)
     -   **Responsibility**: User interaction, argument parsing, output formatting.
     -   **Restrictions**: MUST NOT contain core business logic. MUST delegate to Core/Service layer.
 
-2.  **Core / Service Layer** (`agent/core/`, `agent/core/ai/`)
+2.  **Core / Service Layer** (business logic, orchestration)
     -   **Responsibility**: Business logic, orchestration, state management.
-    -   **Restrictions**: MUST NOT rely on CLI libraries (e.g., `click`, `typer`) for logic.
+    -   **Restrictions**: MUST NOT rely on CLI/presentation libraries (e.g., `click`, `typer`, `rich`) for logic. MUST NOT trigger external side-effects (sync, notifications).
 
-3.  **Infrastructure / Utils Layer** (`agent/core/db/`, `agent/core/utils/`)
+3.  **Infrastructure / Utils Layer** (database, helpers, I/O)
     -   **Responsibility**: Low-level I/O, database access, helper functions.
     -   **Restrictions**: ZERO dependencies on upper layers.
 
 ## 2. Dependency Rules
 
+-   **Higher layers MAY import from lower layers.** This is the correct direction.
+-   **Lower layers MUST NOT import from higher layers.** Core/domain code must not depend on CLI handlers, presentation libraries, or side-effect-heavy modules.
 -   **No Circular Imports**: Strictly prohibited.
--   **No Cross-Layer Pollution**:
-    -   CLI code should not directly import low-level system libraries (`subprocess`, `sys`, `os`) if a Service/Core wrapper exists (e.g., use `ai_service` instead of raw `subprocess.run("gh ...")`).
+-   **Cross-layer imports within the same layer** are permitted but discouraged unless necessary.
+-   **Side-effect imports** (sync, notifications, analytics) belong in the highest layer that triggers them, not in core.
+-   **No Cross-Layer Pollution**: CLI code should not directly import low-level system libraries (`subprocess`, `sys`, `os`) if a Service/Core wrapper exists.
 -   **Strict Typing**: All boundaries (public methods of Services and Core modules) MUST have full type hints.
 
-## 3. Enforcement
+### What Is NOT a Violation
 
--   **@Architect** must BLOCK any PR that violates these boundaries.
--   **@Backend** must BLOCK any PR that introduces circular dependencies.
+- A CLI command importing a utility from the core layer — this is the correct direction.
+- A CLI module using presentation libraries (e.g. `rich`, `chalk`) — presentation belongs in the CLI layer.
+- A CLI module triggering sync or notifications — side-effects belong in the command layer.
+
+### What IS a Violation
+
+- Core/domain code importing from CLI/command modules — upward dependency.
+- Core/domain code using presentation libraries — core must remain presentation-agnostic.
+- Core/domain code triggering external side-effects (sync, HTTP calls) — core must be side-effect free.
+
+## 3. Codebase-Specific Boundaries
+
+Each managed codebase SHOULD document its own layer map below. If no explicit layer map exists, reviewers MUST apply the general principles above and MUST NOT invent specific boundaries.
+
+### Agent CLI (`agent/`)
+
+| Layer | Path | May Import From |
+|-------|------|-----------------|
+| **commands** | `agent/commands/`, `agent/main.py` | `core`, `sync`, `db`, `rich`, stdlib |
+| **core** | `agent/core/`, `agent/core/ai/` | stdlib, config, third-party libs (NOT `sync`, `rich`, `commands`) |
+| **sync** | `agent/sync/` | `core`, `db`, stdlib |
+| **db** | `agent/db/` | `core`, stdlib |
+
+## 4. Enforcement
+
+-   **@Architect** MUST use this rule and any codebase-specific boundary map as the definitive reference.
+-   **@Backend** MUST BLOCK any PR that introduces circular dependencies.
+-   Any finding that contradicts documented boundaries is a **false positive** and must not result in BLOCK.
+-   If boundaries need to change, file a new ADR first.

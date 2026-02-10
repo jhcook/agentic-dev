@@ -28,3 +28,15 @@ All ADRs in this repository must follow these rules:
     - **Linkage**: Any Pull Request or Commit that implements or modifies architecture MUST explicitly link to the relevant ADR (e.g., "Implements ADR-014").
     - **Evidence**: Provide evidence in the PR description that the changes align with the ADR's decision logic.
     - **Updates**: If the implementation requires deviating from the ADR, the ADR MUST be updated *before* the code is merged.
+
+## Exception Records (`EXC-*`)
+
+Exception Records are a subtype of ADR used to document **deliberate, justified deviations** from governance rules (see ADR-021).
+
+-   **Prefix**: Use `EXC-` instead of `ADR-` (e.g. `EXC-001-function-length-override.md`).
+-   **Template**: Use `.agent/templates/exception-template.md`.
+-   **Storage**: Stored in `.agent/adrs/` alongside standard ADRs.
+-   **Lifecycle**: Follows the same status definitions as ADRs (Accepted → Superseded → Retired).
+-   **Preflight Integration**: The `/preflight` workflow loads active (`Accepted`) exception records and suppresses matching challenges.
+-   **Immutability**: Once accepted, exception records follow the same change-logging rules as standard ADRs.
+

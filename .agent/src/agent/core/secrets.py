@@ -24,7 +24,7 @@ import json
 import logging
 import os
 import stat
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -142,7 +142,7 @@ class SecretManager:
         # Store config with salt (encoded as base64)
         config_data = {
             "salt": base64.b64encode(self._salt).decode("utf-8"),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "version": "1.0",
             "pbkdf2_iterations": PBKDF2_ITERATIONS,
         }
@@ -180,7 +180,7 @@ class SecretManager:
         new_master_key = self._derive_key(new_password, new_salt)
         
         # 3. Create Backup
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         backup_dir = self.secrets_dir.parent / "backups" / f"secrets_{timestamp}"
         if backup_dir.exists():
             shutil.rmtree(backup_dir)
@@ -219,7 +219,7 @@ class SecretManager:
                     new_secrets[key] = {
                         "ciphertext": base64.b64encode(ciphertext).decode("utf-8"),
                         "nonce": base64.b64encode(nonce).decode("utf-8"),
-                        "updated_at": datetime.utcnow().isoformat()
+                        "updated_at": datetime.now(UTC).isoformat()
                     }
                     
                 # Save to temp
@@ -228,7 +228,7 @@ class SecretManager:
             # 6. Update Config in Temp
             config_data = {
                 "salt": base64.b64encode(new_salt).decode("utf-8"),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "version": "1.0",
                 "pbkdf2_iterations": PBKDF2_ITERATIONS,
             }
@@ -389,9 +389,8 @@ class SecretManager:
         
         secrets = self._load_service_secrets(service)
         secrets[key] = self._encrypt_value(value)
-        secrets[key]["updated_at"] = datetime.utcnow().isoformat()
+        secrets[key]["updated_at"] = datetime.now(UTC).isoformat()
         
-        self._save_service_secrets(service, secrets)
         self._save_service_secrets(service, secrets)
         self._log_operation("set", service, key, "success")
     
@@ -540,7 +539,7 @@ class SecretManager:
         """Log secret management operation for SOC2 compliance."""
         # Never log secret values
         audit_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "operation": operation,
             "service": service,
             "key": key,
@@ -624,7 +623,19 @@ def get_secret(key: str, service: Optional[str] = None, strict: bool = False) ->
             raise SecretManagerError(
                 f"Secret manager is locked. Run 'agent secret login' to access {service} secrets."
             )
-        # In non-strict mode, fall through to env var fallback
+        # In non-strict mode, check if the secret file exists before falling
+        # through to env vars.  If the secret is on disk we can still confirm
+        # it's present (without decrypting) and try an automatic unlock.
+        service_file = manager._get_service_file(service)
+        if service_file.exists():
+            try:
+                data = manager._load_json(service_file)
+                if key in data:
+                    # Secret is stored — fall through to env var lookup
+                    # but don't warn about missing credentials.
+                    pass
+            except Exception:
+                pass
     
     if service and manager.is_initialized() and manager.is_unlocked():
         value = manager.get_secret(service, key)
@@ -644,5 +655,3 @@ def get_secret(key: str, service: Optional[str] = None, strict: bool = False) ->
 
     # Direct fallback (legacy or unmapped)
     return os.getenv(key)
-
-

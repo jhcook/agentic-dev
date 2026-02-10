@@ -1,0 +1,34 @@
+---
+description: Environment safety rules for uv, dependency management, and test execution
+globs: "**/pyproject.toml"
+alwaysApply: true
+---
+
+# Environment Safety
+
+## 1. Dependency Management
+
+### uv Commands
+
+- **NEVER** run bare `uv run` or `uv sync` — always use `make test`, `make sync`, or explicitly pass `--extra ai --extra admin`.
+- `uv sync` and `uv run` strip packages not in the active resolution. If optional extras are omitted, their packages are **uninstalled from the venv**.
+- The `[tool.uv] default-groups` setting in `pyproject.toml` pins the default extras for safety, but explicit flags are still preferred in CI/scripts.
+
+### Modifying Dependencies
+
+- **Before** changing `pyproject.toml` dependency groups: run `make test` to establish a baseline.
+- **After** changing `pyproject.toml` dependency groups: run `make test` again to confirm no regressions.
+- **Never** move packages between optional groups without verifying which tests depend on them.
+- **Never** remove an optional group without checking for test imports from its packages.
+
+## 2. Test Execution
+
+- Use `make test` (not raw pytest) as the standard test command.
+- Voice tests require `--extra voice` and a compatible platform (macOS ARM64 or Linux). Use `make test-all` only when voice deps are installed.
+- Tests that depend on optional packages MUST use `pytest.importorskip()` or the `@pytest.mark.requires_ai` / `@pytest.mark.requires_voice` markers.
+
+## 3. Enforcement
+
+- **@QA** MUST verify `make test` passes before any APPROVE verdict.
+- **@Architect** MUST BLOCK any PR that modifies `pyproject.toml` dependency groups without test evidence (before/after).
+- Any agent workflow that needs to run Python code MUST use `make` targets or `uv run --extra ai --extra admin`.

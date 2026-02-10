@@ -40,10 +40,18 @@ WORKFLOW:
      - Documentation / auditability requirements
      - Architectural boundaries and data flows
 
-2. ROLE REVIEWS
+3. LOAD EXCEPTIONS (ADR-021)
+   - Read all `EXC-*` files from `.agent/adrs/` whose `## Status` is `Accepted`.
+   - Each exception record documents a **deliberate, justified deviation** from a governance rule.
+   - During role reviews (Step 4), if a finding matches an active exception:
+     - Downgrade the finding from BLOCK to APPROVE.
+     - Note the exception reference (e.g. "Covered by EXC-001").
+   - Exceptions with status `Superseded` or `Retired` MUST be ignored.
+
+4. ROLE REVIEWS
    Act as each role, staying strictly within their remit.
 
-3. VERDICTS
+5. VERDICTS
    Each role must return a verdict:
    - APPROVE: No blocking issues within their remit.
    - BLOCK: There is at least one non-trivial issue that must be fixed before committing.
@@ -56,7 +64,7 @@ WORKFLOW:
    - Any obvious lint/type/test or correctness issue MUST result in BLOCK by @QA.
    - When uncertain about compliance, default to BLOCK and explain why.
 
-4. OVERALL OUTCOME
+6. OVERALL OUTCOME
    - If ANY role returns BLOCK, the overall preflight verdict is BLOCK.
    - Only if ALL roles return APPROVE is the overall preflight verdict APPROVE.
 

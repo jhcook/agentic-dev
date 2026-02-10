@@ -218,16 +218,34 @@ User provides a requirement. You must:
    - Make minimal, targeted changes
    - Preserve existing functionality
 
+4. **Incremental Verification (MANDATORY)**
+
+   > [!CAUTION]
+   > After EVERY file modification, run `make test`.
+   > Do NOT batch multiple file changes before testing.
+
+   // turbo
+   ```bash
+   make test
+   ```
+
+   **If tests fail:**
+   - Attempt to fix the regression immediately (max 2 attempts).
+   - If still failing after 2 attempts: rollback the last change and report what went wrong.
+   - Do NOT proceed to the next file until tests pass.
+
+   **Scope guard:** Only modify files listed in the Runbook's `## Files` section. If you need to touch a file not in the Runbook, STOP and report the scope drift to the user before proceeding.
+
 **VERDICT: IMPLEMENTED | BLOCKED**
 
-- IMPLEMENTED: Code changes complete
+- IMPLEMENTED: Code changes complete, `make test` passes
 - BLOCKED: Technical issue prevents implementation
 
 ---
 
 ### PHASE 3: SECURITY REVIEW
 
-**@Sentinel** leads this phase:
+**@Security** leads this phase:
 
 1. **Security Scan**
    - [ ] No secrets in code (API keys, passwords, tokens)
@@ -425,7 +443,7 @@ After all phases complete:
 
 1. **No shortcuts** - All phases must complete
 2. **Surgical changes only** - Minimal edits to achieve goal
-3. **Security first** - @Sentinel veto power
+3. **Security first** - @Security veto power
 4. **Quality gate** - @QA validates all code changes
 5. **Documentation** - @Scribe ensures auditability
 6. **Fail fast** - Stop at first BLOCK, report clearly

@@ -60,3 +60,4 @@ npm-debug.log
 # Persistence
 .agent/storage/
 .agent/cache/notion_state.json
+agentic-executive-premium/

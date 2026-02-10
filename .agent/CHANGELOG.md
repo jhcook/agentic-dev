@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - **Config**: `backup_config()` now lazily creates `backups_dir` on first use, consistent with `logs_dir` initialisation in `logger.py`.
-- **Implement**: Removed duplicate `update_story_state` from `implement.py`; canonical version lives in `core/utils.py`.
+- **Implement**: Removed duplicate `update_story_state` from `implement.py`; canonical version lives in `commands/utils.py`.
 - **Documentation**: `update_story_state` docstring expanded with purpose, callers, args, and internal-only designation.
 
 ## [Unreleased] - 2026-01-13

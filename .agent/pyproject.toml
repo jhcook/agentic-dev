@@ -66,6 +66,26 @@ admin = [
     "PyYAML>=6.0",
 ]
 
+[dependency-groups]
+# uv dev-dependencies are ALWAYS installed by default with `uv sync`/`uv run`.
+# This prevents accidental stripping of AI and admin packages.
+# Mirrors [project.optional-dependencies] ai + admin groups.
+dev = [
+    # AI providers + frameworks (from [ai] extra)
+    "openai>=1.0.0",
+    "anthropic>=0.3.0",
+    "google-genai>=0.1.0",
+    "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=1.0.0",
+    "langchain>=0.3.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-google-genai>=0.2.0",
+    "langchain-openai>=0.2.0",
+    # Admin CLI deps (from [admin] extra)
+    "rich>=13.0.0",
+    "PyYAML>=6.0",
+]
+
 [project.scripts]
 agent = "agent.main:app"
 
@@ -74,6 +94,16 @@ agent = "agent.main:app"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.uv]
+# 'dev' dependency-group is installed by default — no config needed.
+# To also include voice: uv sync --extra voice
+
 [tool.ruff]
 # ADR-016: Allow prints in CLI tools
 per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
+
+[tool.pytest.ini_options]
+markers = [
+    "requires_ai: requires AI optional deps (langchain, openai, anthropic, google-genai)",
+    "requires_voice: requires voice optional deps (deepgram, numpy, onnxruntime)",
+]

@@ -97,7 +97,12 @@ class AIService:
                     api_key=gemini_key,
                     http_options=http_options
                 )
-            except (ImportError, Exception) as e:
+            except ImportError:
+                console.print(
+                    "[dim]ℹ️  Gemini key found but google-genai package not installed. "
+                    "Install with: pip install google-genai[/dim]"
+                )
+            except Exception as e:
                 console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
 
         # 2. Check OpenAI
@@ -107,8 +112,13 @@ class AIService:
                 from openai import OpenAI
                 # Set 120s timeout
                 self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
-            except (ImportError, Exception) as e:
-                 console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
+            except ImportError:
+                console.print(
+                    "[dim]ℹ️  OpenAI key found but openai package not installed. "
+                    "Install with: pip install openai[/dim]"
+                )
+            except Exception as e:
+                console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
 
         # 3. Check GH CLI
         if self._check_gh_cli():
@@ -124,7 +134,12 @@ class AIService:
                     api_key=anthropic_key,
                     timeout=120.0
                 )
-            except (ImportError, Exception) as e:
+            except ImportError:
+                console.print(
+                    "[dim]ℹ️  Anthropic key found but anthropic package not installed. "
+                    "Install with: pip install anthropic[/dim]"
+                )
+            except Exception as e:
                 console.print(
                     f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]"
                 )

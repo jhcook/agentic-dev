@@ -21,7 +21,7 @@ mock_kokoro_module = MagicMock()
 sys.modules["kokoro_onnx"] = mock_kokoro_module
 
 import pytest
-import numpy as np
+np = pytest.importorskip("numpy", reason="requires voice extras (numpy)")
 from backend.speech.providers.local import LocalTTS, TARGET_SAMPLE_RATE
 
 @pytest.fixture

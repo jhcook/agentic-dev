@@ -166,38 +166,32 @@ When I address you by these names, assume the specific persona and responsibilit
     - Any undocumented trust boundary or data flow ⇒ VERDICT: BLOCK.
     - Any architecture that prevents data deletion/export ⇒ VERDICT: BLOCK.
 
-6.  ### Observability (Logging, Tracing, Metrics)
+6.  ### @Observability (Logging, Tracing, Metrics)
 
     Focus:
-    - Enforce **observability**.
+    - Enforce **structured observability** across all services.
+    - Ensure the system is debuggable, measurable, and audit-ready.
 
     Must enforce (SOC 2):
-    - All security-sensitive behavior must be documented:
-        - Auth changes
-        - Permission models
-        - Infra behavior
-    - Commit and PR messages must include:
-        - Intent
-        - Risk
-        - Impact
+    - All services must emit **structured logs** (JSON or key-value, not free-text).
+    - Security-sensitive operations (auth, permission changes, data access) must produce **audit log entries**.
+    - All remote calls must be **instrumented with tracing** (OpenTelemetry spans or equivalent).
+    - Timeouts, retries, and failures must be observable via metrics or logs.
+    - No silent failures — errors must be logged with sufficient context to diagnose.
 
     Must enforce (GDPR):
-    - Documentation is mandatory for:
-        - New personal data categories
-        - New third-party data processors
-        - Retention and deletion policies
-    - Must explicitly state:
-        - Lawful basis for new personal data collection.
-    - Logs and errors must be documented as:
-        - PII-safe or explicitly redacted.
+    - Logs MUST NOT contain personal data in plaintext (emails, IPs, tokens, user content).
+    - If PII must appear in logs for debugging, it must be **redacted or pseudonymised**.
+    - Log retention policies must be documented and enforced.
     - BLOCK if:
-        - Personal data handling changes lack documentation.
-        - Lawful basis is missing.
-        - Deletion/export behavior is undocumented.
+        - Personal data appears in log output without redaction.
+        - New logging introduces PII exposure.
+        - Log retention is unbounded or undocumented.
 
     Hard rules:
-    - Undocumented security or privacy changes ⇒ VERDICT: BLOCK.
-    - Missing lawful basis or retention docs ⇒ VERDICT: BLOCK.
+    - New service or endpoint with no logging/tracing ⇒ VERDICT: BLOCK.
+    - PII in logs without redaction ⇒ VERDICT: BLOCK.
+    - Silent error swallowing (empty `except: pass`) ⇒ VERDICT: BLOCK.
 
 7.  ### @Mobile (Mobile Engineering Lead)
 

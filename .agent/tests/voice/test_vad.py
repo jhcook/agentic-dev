@@ -14,7 +14,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-import numpy as np
+np = pytest.importorskip("numpy", reason="requires voice extras (numpy)")
 from backend.voice.vad import VADProcessor
 
 # Mock OpenTelemetry
@@ -62,14 +62,15 @@ def test_energy_fallback():
     chunk_loud = (np.ones(1000, dtype=np.int16) * 10000).tobytes()
     assert vad.process(chunk_loud) is True
 
-def test_otel_tracing_on_process():
+def test_otel_tracing_on_process(mock_otel):
     vad = VADProcessor()
     vad.use_energy = True # Simplest path
+    vad.silero_session = None
+    vad.webrtc_vad = None
     vad.calibrated = True
     
     chunk_loud = (np.ones(1000, dtype=np.int16) * 10000).tobytes()
     vad.process(chunk_loud)
     
-    # Verify tracer was called
-    from backend.voice.vad import tracer
-    tracer.start_as_current_span.assert_called()
+    # Verify tracer was called (use the mock from the autouse fixture)
+    mock_otel.start_as_current_span.assert_called()

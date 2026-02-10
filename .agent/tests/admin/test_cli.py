@@ -29,6 +29,7 @@ def test_start_success(process_manager):
          patch.object(process_manager, "_get_pids", return_value=None), \
          patch.object(process_manager, "_write_pids") as mock_write, \
          patch.object(process_manager, "_is_port_in_use", return_value=False), \
+         patch("agent.commands.admin.validate_credentials"), \
          patch("os.path.exists", side_effect=lambda p: True if p in [".agent/src/web", ".venv/bin/python"] else False):
         
         mock_backend = MagicMock()

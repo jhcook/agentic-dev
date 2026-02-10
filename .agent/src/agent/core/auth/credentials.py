@@ -59,22 +59,34 @@ def validate_credentials(check_llm: bool = True) -> None:
     found_any = False
     
     for key in target_keys:
-        # Step A: Check Env Var
+        # Step A: Check Env Var (takes precedence)
         if os.getenv(key):
             found_any = True
             break
             
         # Step B: Check Secret Store
-        # Map: OPENAI_API_KEY -> service='openai', key='api_key'
-        # Heuristic: Provider is 'openai', key is 'api_key'
-        # Basic mapping for now
+        # Try unlocked access first, then fall back to file existence check.
+        # This avoids false "missing credential" errors when the store is
+        # locked but the secret is stored.
         service_name = provider
         secret_name = "api_key"
         
-        # Verify mapping logic for known keys if needed, but 'api_key' is the standard constraint
-        if secret_manager.get_secret(service_name, secret_name):
-            found_any = True
-            break
+        if secret_manager.is_unlocked():
+            if secret_manager.get_secret(service_name, secret_name):
+                found_any = True
+                break
+        elif secret_manager.is_initialized():
+            # Store is locked — check if the service file contains the key
+            # without requiring the master password.
+            service_file = secret_manager._get_service_file(service_name)
+            if service_file.exists():
+                try:
+                    data = secret_manager._load_json(service_file)
+                    if secret_name in data:
+                        found_any = True
+                        break
+                except Exception:
+                    pass
             
     if not found_any:
         # Report the primary key name as missing
@@ -83,3 +95,4 @@ def validate_credentials(check_llm: bool = True) -> None:
     if missing_keys:
         logger.warning(f"AUDIT: Missing critical credentials for provider '{provider}': {missing_keys}")
         raise MissingCredentialsError(missing_keys)
+

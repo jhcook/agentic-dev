@@ -66,26 +66,34 @@ class TestInteractiveFixer(unittest.TestCase):
 
 
 
-    @patch('agent.core.fixer.InteractiveFixer._create_backup')
-    def test_apply_fix_success(self, mock_backup):
+    @patch('agent.core.fixer.shutil.copy2')
+    @patch('agent.core.fixer.os.close')
+    @patch('agent.core.fixer.tempfile.mkstemp', return_value=(5, '/tmp/backup'))
+    def test_apply_fix_success(self, mock_mkstemp, mock_close, mock_copy):
 
         mock_path = MagicMock()
         mock_path.read_text.return_value = "Old"
+        mock_path.resolve.return_value = mock_path
+        mock_path.__str__ = MagicMock(return_value="/repo/file.py")
         
         fix = {"patched_content": "New"}
         
         result = self.fixer.apply_fix(fix, mock_path)
         
         self.assertTrue(result)
-        mock_backup.assert_called_once()
+        mock_mkstemp.assert_called_once()
         mock_path.write_text.assert_called_with("New")
 
-    @patch('agent.core.fixer.InteractiveFixer._create_backup')
     @patch('agent.core.fixer.InteractiveFixer._restore_backup')
-    def test_apply_fix_failure(self, mock_restore, mock_backup):
+    @patch('agent.core.fixer.shutil.copy2')
+    @patch('agent.core.fixer.os.close')
+    @patch('agent.core.fixer.tempfile.mkstemp', return_value=(5, '/tmp/backup'))
+    def test_apply_fix_failure(self, mock_mkstemp, mock_close, mock_copy, mock_restore):
 
         mock_path = MagicMock()
         mock_path.read_text.return_value = "Old"
+        mock_path.resolve.return_value = mock_path
+        mock_path.__str__ = MagicMock(return_value="/repo/file.py")
         mock_path.write_text.side_effect = Exception("Write failed")
         
         fix = {"patched_content": "New"}
@@ -93,15 +101,18 @@ class TestInteractiveFixer(unittest.TestCase):
         result = self.fixer.apply_fix(fix, mock_path)
         
         self.assertFalse(result)
-        mock_backup.assert_called_once()
+        mock_mkstemp.assert_called_once()
         mock_restore.assert_called_once() # Should revert
 
-    @patch('agent.core.fixer.InteractiveFixer._remove_backup')
-    def test_verify_fix_success(self, mock_remove):
+    @patch('agent.core.fixer.os.remove')
+    @patch('agent.core.fixer.os.path.exists', return_value=True)
+    def test_verify_fix_success(self, mock_exists, mock_remove):
+        # Simulate an active backup so verify_fix has something to clean up
+        self.fixer._active_backups["/repo/file.py"] = "/tmp/backup"
         check = MagicMock(return_value=True)
         result = self.fixer.verify_fix(check)
         self.assertTrue(result)
-        mock_remove.assert_called_once() # Should remove backup
+        mock_remove.assert_called_once_with("/tmp/backup")
 
     def test_analyze_rejection(self):
         """Test that analyze_failure rejects unsafe content."""
@@ -222,9 +233,8 @@ class TestInteractiveFixer(unittest.TestCase):
             
             options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
             
-        # Fallback
-        self.assertEqual(len(options), 1)
-        self.assertIn("Manual Fix", options[0]["title"])
+        # All options rejected as insecure — returns empty list (not fallback)
+        self.assertEqual(len(options), 0)
 
 if __name__ == '__main__':
     unittest.main()
