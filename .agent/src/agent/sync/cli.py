@@ -88,3 +88,8 @@ def janitor(
 def init(backend: str = typer.Option(None, "--backend", help="Specific backend to initialize (e.g. notion)")):
     """Initialize/Bootstrap sync backends (create databases, etc)."""
     sync_ops.init(backend=backend)
+
+@app.command()
+def flush(hard: bool = typer.Option(False, "--hard", help="Also delete Notion DB linkage (requires re-init)")):
+    """Delete local sync state so the next pull refreshes from remote."""
+    sync_ops.flush(hard=hard)

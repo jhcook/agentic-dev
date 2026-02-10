@@ -24,6 +24,7 @@ from agent.db.client import (
     get_artifacts_metadata,
     upsert_artifact,
 )
+from agent.core.config import config
 from agent.sync.client import get_supabase_client
 from agent.sync.pagination import fetch_page
 from agent.sync.progress import ProgressTracker
@@ -433,3 +434,63 @@ def init(backend: str = None):
             print(f"Notion bootstrap failed: {e}")
     else:
         print(f"Backend '{backend}' does not support initialization.")
+
+
+def flush(hard: bool = False):
+    """Deletes local sync state so the next pull refreshes from remote.
+
+    By default, preserves notion_state.json (the DB linkage) so you don't
+    need to re-run 'agent sync init'. Use --hard to wipe everything,
+    including the Notion DB mapping.
+    """
+    import shutil
+    from rich.console import Console
+    from rich.prompt import Confirm
+
+    console = Console()
+    state_file = config.cache_dir / "notion_state.json"
+    db_file = config.cache_dir / "agent.db"
+    artifact_dirs = [config.stories_dir, config.plans_dir, config.runbooks_dir]
+
+    # Summarise what will be deleted
+    targets = []
+    if db_file.exists():
+        targets.append(f"  • {db_file.relative_to(config.repo_root)}")
+    for d in artifact_dirs:
+        if d.exists() and any(d.iterdir()):
+            targets.append(f"  • {d.relative_to(config.repo_root)}/")
+    if hard and state_file.exists():
+        targets.append(f"  • {state_file.relative_to(config.repo_root)}  [bold red](Notion DB linkage)[/bold red]")
+
+    if not targets:
+        console.print("[dim]Nothing to flush — local state is already clean.[/dim]")
+        return
+
+    console.print("[bold yellow]The following will be deleted:[/bold yellow]")
+    for t in targets:
+        console.print(t)
+
+    if hard:
+        console.print("\n[bold red]⚠  --hard: Notion DB linkage will be removed. "
+                      "You will need to re-run 'agent sync init'.[/bold red]")
+
+    if not Confirm.ask("\nProceed?", default=False):
+        console.print("[dim]Aborted.[/dim]")
+        return
+
+    # Delete
+    if db_file.exists():
+        db_file.unlink()
+        console.print(f"  [red]✗[/red] Deleted {db_file.name}")
+
+    for d in artifact_dirs:
+        if d.exists():
+            shutil.rmtree(d)
+            d.mkdir(parents=True, exist_ok=True)
+            console.print(f"  [red]✗[/red] Cleared {d.relative_to(config.repo_root)}/")
+
+    if hard and state_file.exists():
+        state_file.unlink()
+        console.print(f"  [red]✗[/red] Deleted {state_file.name}")
+
+    console.print("\n[bold green]Flush complete.[/bold green] Run [bold]agent sync pull[/bold] to refresh from remote.")
