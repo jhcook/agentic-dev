@@ -1,7 +1,8 @@
 # INFRA-023: Agent Config Command
 
 ## State
-INFRA-023-023-023-023-023-023-023-023-023
+
+COMMITTED
 
 ## Problem Statement
 Currently, configuring the agent requires manually editing YAML files (e.g., `.agent/etc/router.yaml`). This is error-prone and less convenient than a CLI interface. Users need a quick way to view and modify configuration settings, such as the active AI model or provider, directly from the command line.

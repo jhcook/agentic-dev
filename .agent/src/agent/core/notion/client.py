@@ -130,6 +130,20 @@ class NotionClient:
         payload = {"children": children}
         self._request("PATCH", f"blocks/{block_id}/children", payload)
 
+    def search(self, query: str = "", filter_type: str = "database") -> List[Dict[str, Any]]:
+        """Searches the workspace for objects (databases or pages) by title."""
+        payload: Dict[str, Any] = {
+            "filter": {"value": filter_type, "property": "object"}
+        }
+        if query:
+            payload["query"] = query
+        data = self._request("POST", "search", payload)
+        return data.get("results", [])
+
+    def retrieve_database(self, database_id: str) -> Dict[str, Any]:
+        """Retrieves a database object including its property schema."""
+        return self._request("GET", f"databases/{database_id}")
+
     def delete_block(self, block_id: str) -> None:
         """Deletes (archives) a block."""
         self._request("DELETE", f"blocks/{block_id}")

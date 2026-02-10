@@ -96,7 +96,7 @@ class NotionSync:
         
         # Helper to retry after init
         def _try_init():
-             if Confirm.ask(f"[bold yellow]Notion Database for {category_name} is missing or not configured. Run 'agent sync init' to bootstrap?[/bold yellow]"):
+             if Confirm.ask(f"[bold yellow]Notion Database for {category_name} is missing. Run 'agent sync init' to discover existing databases or create new ones?[/bold yellow]"):
                 from agent.sync.bootstrap import NotionBootstrap
                 NotionBootstrap().run()
                 self.state = self._load_state()

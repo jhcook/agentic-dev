@@ -72,25 +72,26 @@ class NotionBootstrap:
             schema = json.load(f)
 
         state = self._load_state()
+
+        # Phase 1: Discover existing databases that match our schema
+        self._discover_databases(schema, state)
         
-        # Pass 1: Create Databases
+        # Phase 2: Create only databases NOT found during discovery
         for db_key, db_def in schema.get("databases", {}).items():
             if db_key not in state:
-                logger.info(f"Creating {db_def['title']}...")
-                new_id = self._create_database(db_key, db_def)
-                if new_id:
-                    state[db_key] = new_id
+                logger.info(f"No existing database found for '{db_def['title']}'. Creating new one...")
+                if Confirm.ask(f"Create new database '[bold]{db_def['title']}[/bold]'?", default=True):
+                    new_id = self._create_database(db_key, db_def)
+                    if new_id:
+                        state[db_key] = new_id
         
         self._save_state(state)
         
-        # Pass 2: Relations
+        # Phase 3: Relations
         logger.info("Linking relations...")
         for db_key, db_def in schema.get("databases", {}).items():
             self._update_relations(db_key, db_def, state)
             
-        # Pass 3: Templates
-        # TODO: Port template logic if needed, skipping for now to focus on core structure
-        
         logger.info("Bootstrap complete.")
 
     def _extract_page_id(self, input_str: str) -> Optional[str]:
@@ -132,6 +133,87 @@ class NotionBootstrap:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=2)
+
+    def _discover_databases(self, schema: Dict[str, Any], state: Dict[str, str]):
+        """Search Notion for existing databases matching our schema."""
+        for db_key, db_def in schema.get("databases", {}).items():
+            if db_key in state:
+                logger.info(f"'{db_key}' already configured (ID: {state[db_key]}).")
+                continue
+
+            title = db_def["title"]
+            logger.info(f"Searching for existing '{title}' database...")
+
+            try:
+                results = self.client.search(query=title, filter_type="database")
+            except Exception as e:
+                logger.warning(f"Search failed for '{title}': {e}")
+                continue
+
+            # Filter: exact title match + correct parent page
+            candidates = []
+            for db in results:
+                # Check title matches
+                db_title_objs = db.get("title", [])
+                db_title = db_title_objs[0]["plain_text"] if db_title_objs else ""
+                if db_title != title:
+                    continue
+
+                # Check parent is our configured page
+                parent = db.get("parent", {})
+                parent_id = parent.get("page_id", "").replace("-", "")
+                configured_id = (self.parent_page_id or "").replace("-", "")
+                if parent_id != configured_id:
+                    continue
+
+                # Validate schema compatibility
+                if self._schema_matches(db, db_def):
+                    candidates.append(db)
+
+            if not candidates:
+                logger.info(f"No existing database found for '{title}'.")
+                continue
+
+            if len(candidates) == 1:
+                found = candidates[0]
+                db_id = found["id"]
+                logger.info(f"Found existing '{title}' database: {db_id}")
+                if Confirm.ask(f"Use existing '[bold]{title}[/bold]' database ({db_id})?", default=True):
+                    state[db_key] = db_id
+            else:
+                logger.warning(f"Found {len(candidates)} databases matching '{title}'. Using the first match.")
+                found = candidates[0]
+                db_id = found["id"]
+                if Confirm.ask(f"Use existing '[bold]{title}[/bold]' database ({db_id})?", default=True):
+                    state[db_key] = db_id
+
+    def _schema_matches(self, remote_db: Dict[str, Any], expected_def: Dict[str, Any]) -> bool:
+        """Check if a remote database's properties match the expected schema.
+        
+        Validates that every required property in our schema exists in the
+        remote database with the correct type. Does not require exact option
+        matches for select/multi_select — only checks the property type.
+        """
+        remote_props = remote_db.get("properties", {})
+        expected_props = expected_def.get("properties", {})
+
+        for prop_name, prop_def in expected_props.items():
+            expected_type = prop_def["type"]
+
+            # Skip relations — they may not exist yet during bootstrap
+            if expected_type == "relation":
+                continue
+
+            if prop_name not in remote_props:
+                logger.debug(f"Schema mismatch: property '{prop_name}' not found in remote database.")
+                return False
+
+            remote_type = remote_props[prop_name].get("type", "")
+            if remote_type != expected_type:
+                logger.debug(f"Schema mismatch: property '{prop_name}' type is '{remote_type}', expected '{expected_type}'.")
+                return False
+
+        return True
 
     def _create_database(self, db_key: str, db_def: Dict[str, Any]) -> Optional[str]:
         # Minimal creation (Title only first, or full properties sans relations)
