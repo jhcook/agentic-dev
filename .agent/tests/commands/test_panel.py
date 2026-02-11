@@ -35,7 +35,7 @@ def test_panel_run(mock_subproc, mock_read, mock_infer, mock_convene):
     mock_subproc.return_value = mock_run_return
     
     # Mock mock_convene return
-    mock_convene.return_value = "PASS"
+    mock_convene.return_value = {"verdict": "PASS", "log_file": None, "json_report": {"story_id": "TEST-123", "overall_verdict": "PASS", "roles": []}}
 
     result = runner.invoke(app, ["panel"])
     
@@ -58,7 +58,7 @@ def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene)
     mock_run_return.stdout = "modified_file.py"
     mock_subproc.return_value = mock_run_return
     
-    mock_convene.return_value = "PASS"
+    mock_convene.return_value = {"verdict": "PASS", "log_file": None, "json_report": {"story_id": "MY-STORY", "overall_verdict": "PASS", "roles": []}}
 
     result = runner.invoke(app, ["panel", "MY-STORY"])
     

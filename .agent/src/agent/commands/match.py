@@ -46,7 +46,7 @@ def match_story(
             raise typer.Exit(code=1)
 
     if provider:
-        from agent.core.ai import ai_service
+        from agent.core.ai import ai_service  # ADR-025: lazy init
         ai_service.set_provider(provider)
 
     from agent.core.utils import find_best_matching_story

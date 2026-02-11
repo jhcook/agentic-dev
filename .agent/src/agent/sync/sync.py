@@ -49,22 +49,107 @@ def get_total_artifacts(client) -> int:
         print(f"Error fetching total count: {e}")
         return 0
 
+def _sanitize_filename(name: str) -> str:
+    """Sanitizes a string to be safe for filenames."""
+    name = name.lower()
+    name = re.sub(r"[^\w\s-]", "", name)
+    name = re.sub(r"[-\s]+", "-", name)
+    return name[:80]
+
+def _write_to_disk(id: str, type: str, content: str):
+    """Writes the artifact content to the local filesystem."""
+    try:
+        # Determine base directory
+        base_dir = None
+        if type == "story":
+            base_dir = config.stories_dir
+        elif type == "plan":
+            base_dir = config.plans_dir
+        elif type == "runbook":
+            base_dir = config.runbooks_dir
+        elif type == "adr":
+            base_dir = config.adrs_dir
+        else:
+            # Fallback or unknown type
+            return
+
+        # Ensure base directory exists
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        # Extract Title for filename
+        lines = content.splitlines()
+        title = "Untitled"
+        if lines:
+            # Assume first line is header: # ID: Title or # Title
+            header = lines[0].lstrip("#").strip()
+            # Remove ID if present in header
+            if header.startswith(id):
+                header = header[len(id):].strip().lstrip(":").strip()
+            if header:
+                title = header
+
+        safe_title = _sanitize_filename(title)
+        filename = f"{id}-{safe_title}.md"
+        
+        # Determine Target Directory (Scope-based subdirs for Stories/Plans)
+        target_dir = base_dir
+        if type in ["story", "plan"]:
+            # Check for scope in ID (e.g., BACKEND-123)
+            parts = id.split("-")
+            if len(parts) > 1 and parts[0].isalpha():
+                scope = parts[0]
+                target_dir = base_dir / scope
+        
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_file = target_dir / filename
+
+        # Cleanup: Remove duplicates or old filenames from root or other locations
+        # This is a basic cleanup: if we are writing to a subdir, check root for matches
+        if target_dir != base_dir:
+            for existing in base_dir.glob(f"{id}-*.md"):
+                try:
+                    existing.unlink()
+                except Exception:
+                    pass
+        
+        # Check for existing file with same ID but different name (title change)
+        for existing in target_dir.glob(f"{id}-*.md"):
+            if existing.name != filename:
+                try:
+                    existing.unlink()
+                except Exception:
+                    pass
+
+        # Write file
+        target_file.write_text(content, encoding="utf-8")
+        
+    except Exception as e:
+        print(f"Failed to write {id} to disk: {e}")
+
 def process_page(page):
-    """Processes each page of artifacts by upserting them to the local DB."""
+    """Processes each page of artifacts by upserting them to the local DB and writing to disk."""
     if not page:
         return
         
     for item in page:
         try:
+            id = item.get('id')
+            type = item.get('type')
+            content = item.get('content')
+            author = item.get('author', 'remote')
+
             # Upsert into local SQLite
-            # Item keys match Supabase columns: id, type, content, etc.
-            # We map them to upsert_artifact arguments
             upsert_artifact(
-                id=item.get('id'),
-                type=item.get('type'),
-                content=item.get('content'),
-                author=item.get('author', 'remote')
+                id=id,
+                type=type,
+                content=content,
+                author=author
             )
+            
+            # Write to Disk
+            if id and type and content:
+                _write_to_disk(id, type, content)
+
         except Exception as e:
             print(f"Error processing artifact {item.get('id')}: {e}")
 
@@ -93,7 +178,7 @@ def pull(verbose: bool = False, backend: str = None, force: bool = False, artifa
     # 2. Notion
     if run_all or backend == "notion":
         from agent.core.config import get_secret
-        notion_token = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+        notion_token = get_secret("notion_token", service="notion") or os.getenv("NOTION_TOKEN")
         
         if notion_token:
             from agent.sync.notion import NotionSync
@@ -181,7 +266,7 @@ def push(verbose: bool = False, backend: str = None, force: bool = False, artifa
     # 2. Notion
     if run_all or backend == "notion":
         from agent.core.config import get_secret
-        notion_token = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+        notion_token = get_secret("notion_token", service="notion") or os.getenv("NOTION_TOKEN")
         
         if notion_token:
             from agent.sync.notion import NotionSync
@@ -402,7 +487,7 @@ def janitor(
         
         # Resolve Credentials
         if not notion_api_key:
-            notion_api_key = get_secret("notion_token", service="agent") or os.getenv("NOTION_TOKEN")
+            notion_api_key = get_secret("notion_token", service="notion") or os.getenv("NOTION_TOKEN")
             
         if not notion_api_key:
             print("Error: Notion API Key not found. Set NOTION_TOKEN or use --notion-api-key.")

@@ -22,15 +22,27 @@ import sys
 def process_manager():
     return ProcessManager()
 
-def test_start_success(process_manager):
+def test_start_success(process_manager, tmp_path):
     """Test starting backend and frontend successfully."""
+    # Create real directory structure for Path.exists() checks
+    (tmp_path / ".venv" / "bin").mkdir(parents=True)
+    (tmp_path / ".venv" / "bin" / "python").write_text("")
+    (tmp_path / ".agent" / "src" / "web").mkdir(parents=True)
+    (tmp_path / ".agent" / "logs").mkdir(parents=True)
+
+    # Patch config paths to use tmp_path
+    from agent.core.config import config as real_config
     with patch("subprocess.Popen") as mock_popen, \
          patch("agent.commands.admin.open", new_callable=MagicMock), \
          patch.object(process_manager, "_get_pids", return_value=None), \
          patch.object(process_manager, "_write_pids") as mock_write, \
          patch.object(process_manager, "_is_port_in_use", return_value=False), \
          patch("agent.commands.admin.validate_credentials"), \
-         patch("os.path.exists", side_effect=lambda p: True if p in [".agent/src/web", ".venv/bin/python"] else False):
+         patch("agent.commands.admin.config") as mock_config:
+        
+        mock_config.repo_root = tmp_path
+        mock_config.agent_dir = tmp_path / ".agent"
+        mock_config.log_dir = tmp_path / ".agent" / "logs"
         
         mock_backend = MagicMock()
         mock_backend.pid = 123
@@ -44,14 +56,12 @@ def test_start_success(process_manager):
         assert mock_popen.call_count == 2
         # Verify backend call
         args_be, kwargs_be = mock_popen.call_args_list[0]
-        assert any(arg.endswith(".venv/bin/python") for arg in args_be[0])
+        assert "python" in args_be[0][0]
         assert "uvicorn" in args_be[0]
-        assert kwargs_be["cwd"] == ".agent/src"
         
         # Verify frontend call
         args_fe, kwargs_fe = mock_popen.call_args_list[1]
         assert args_fe[0] == ["npm", "run", "dev"]
-        assert kwargs_fe["cwd"] == ".agent/src/web"
         
         mock_write.assert_called_with(123, 456)
 

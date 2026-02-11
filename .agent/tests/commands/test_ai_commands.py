@@ -81,6 +81,11 @@ def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
 
 @patch("agent.core.ai.ai_service.complete")
 def test_new_runbook_command(mock_complete, mock_deps):
+    # Create template dir with template file
+    templates_dir = mock_deps["root"] / ".agent" / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    (templates_dir / "runbook-template.md").write_text("# Runbook Template\n## Plan\n<plan>")
+
     # Mock yaml module since it might not be installed in test env
     mock_yaml = MagicMock()
     mock_yaml.safe_load.return_value = {"team": []}
@@ -89,7 +94,10 @@ def test_new_runbook_command(mock_complete, mock_deps):
         with patch.dict("sys.modules", {"yaml": mock_yaml}):
             with patch("agent.core.config.config.runbooks_dir", mock_deps["root"] / ".agent" / "runbooks"), \
                  patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
-                 patch("agent.core.config.config.rules_dir", mock_deps["root"] / ".agent" / "rules"):
+                 patch("agent.core.config.config.rules_dir", mock_deps["root"] / ".agent" / "rules"), \
+                 patch("agent.core.config.config.templates_dir", templates_dir), \
+                 patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "", "checks": ""}, "instructions": "", "adrs": ""}), \
+                 patch("agent.commands.runbook.upsert_artifact"):
                  
                 mock_complete.return_value = "# Runbook Content"
                 

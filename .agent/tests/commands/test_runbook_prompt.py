@@ -76,13 +76,21 @@ def test_runbook_prompt_construction(mock_validate, mock_complete, mock_deps):
     }
     
 
+    # Create template file
+    templates_dir = target_agent_dir / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    (templates_dir / "runbook-template.md").write_text("# Runbook Template\n## Definition of Done\n- CHANGELOG.md updated\n- Logs are structured and free of PII\n## Plan\n<plan>")
+
     import sys
     # Patch agent_dir on the config instance with the ACTUAL path, not a mock
     with patch("agent.core.config.config.agent_dir", target_agent_dir):
         with patch.dict(sys.modules, {"yaml": mock_yaml}):
             with patch("agent.core.config.config.runbooks_dir", target_agent_dir / "runbooks"), \
                  patch("agent.core.config.config.stories_dir", target_agent_dir / "stories"), \
-                 patch("agent.core.config.config.rules_dir", target_agent_dir / "rules"):
+                 patch("agent.core.config.config.rules_dir", target_agent_dir / "rules"), \
+                 patch("agent.core.config.config.templates_dir", templates_dir), \
+                 patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "Architect Bot\nSec Bot", "checks": "Check ADRs\nCheck PII"}, "instructions": "", "adrs": ""}), \
+                 patch("agent.commands.runbook.upsert_artifact"):
                  
                 mock_complete.return_value = "Runbook Content"
                  

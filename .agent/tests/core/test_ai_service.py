@@ -27,6 +27,7 @@ def ai_service():
                 service = AIService()
                 service.clients = {'gh': 'gh-cli', 'gemini': MagicMock(), 'openai': MagicMock()}
                 service._set_default_provider()
+                service._initialized = True
                 return service
 
 def test_set_valid_provider(ai_service):

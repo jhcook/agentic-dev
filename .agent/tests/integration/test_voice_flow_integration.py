@@ -13,8 +13,12 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import patch, AsyncMock
+import sys
+from unittest.mock import patch, AsyncMock, MagicMock
 from backend.voice.orchestrator import VoiceOrchestrator
+# Force-register backend.voice.vad in sys.modules so patch() can resolve the path
+if "backend.voice.vad" not in sys.modules:
+    sys.modules["backend.voice.vad"] = MagicMock()
 
 @pytest.mark.asyncio
 async def test_voice_integration_flow():

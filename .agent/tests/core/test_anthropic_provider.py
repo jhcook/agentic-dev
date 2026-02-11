@@ -37,6 +37,7 @@ def ai_service_with_anthropic():
                     'anthropic': MagicMock()
                 }
                 service._set_default_provider()
+                service._initialized = True
                 return service
 
 
@@ -117,6 +118,8 @@ def test_anthropic_completion_streaming():
             # Create service (will init anthropic client)
             with patch("agent.core.ai.service.AIService._check_gh_cli", return_value=False):
                 service = AIService()
+                service.reload()
+                service._initialized = True
                 
                 # Verify client was created
                 assert 'anthropic' in service.clients

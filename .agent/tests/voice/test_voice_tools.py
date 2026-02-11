@@ -25,16 +25,21 @@ from backend.voice.tools.security import scan_secrets_in_content
 from backend.voice.tools.observability import get_recent_logs
 
 def test_run_backend_tests():
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.stdout = "Test passed"
-        mock_run.return_value.stderr = ""
-        mock_run.return_value.returncode = 0
+    with patch("backend.voice.tools.qa.subprocess.Popen") as mock_popen, \
+         patch("backend.voice.tools.qa.os.path.exists", return_value=True):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = ["Test passed\n", ""]
+        mock_process.stderr.readline.side_effect = [""]
+        mock_process.stdout.close = MagicMock()
+        mock_process.stderr.close = MagicMock()
+        mock_process.wait.return_value = 0
+        mock_popen.return_value = mock_process
         
         # Use invoke with args dict
         result = run_backend_tests.invoke({"path": ".agent/tests/"})
         assert "Test passed" in result
-        mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
         assert ".venv/bin/pytest" in args or "pytest" in args
 
 def test_run_frontend_lint_missing_dir():

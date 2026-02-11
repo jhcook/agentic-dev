@@ -86,14 +86,20 @@ def test_pull_success(mock_supabase, mock_db_client, capsys):
     page_data = [{"id": "A1", "type": "story", "content": "foo", "version": 1, "state": "C", "author": "remote"}]
     mock_client.table.return_value.select.return_value.range.return_value.execute.return_value.data = page_data
     
-    # Execute
-    sync.pull(verbose=True)
-    
-    # Verify
-    captured = capsys.readouterr()
-    assert "Syncing 1 artifacts" in captured.out
-    
-    # Verify upsert_artifact called
-    mock_db_client["upsert"].assert_called_with(
-        id="A1", type="story", content="foo", author="remote"
-    )
+    # Prevent filesystem side effects and scan() from interfering
+    with patch("agent.sync.sync._write_to_disk"), \
+         patch("agent.sync.sync.scan"), \
+         patch("agent.sync.sync.read_checkpoint", return_value=0), \
+         patch("agent.sync.sync.save_checkpoint"):
+        
+        # Execute
+        sync.pull(verbose=True)
+        
+        # Verify
+        captured = capsys.readouterr()
+        assert "Syncing 1 artifacts" in captured.out
+        
+        # Verify upsert_artifact called with expected args
+        mock_db_client["upsert"].assert_any_call(
+            id="A1", type="story", content="foo", author="remote"
+        )

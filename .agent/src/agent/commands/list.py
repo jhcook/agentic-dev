@@ -288,7 +288,7 @@ def list_models(
     
     If no provider is specified, uses the currently active/default provider.
     """
-    from agent.core.ai import ai_service
+    from agent.core.ai import ai_service  # ADR-025: lazy init
     
     logger.info(f"Listing models (provider={provider}, format={output_format}, output={output_file})")
     

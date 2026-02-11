@@ -24,13 +24,13 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
 
-from agent.core.ai import ai_service
+# from agent.core.ai import ai_service # Moved to local import
 from agent.core.config import config
 from agent.core.utils import (
     find_runbook_file,
-    load_governance_context,
     scrub_sensitive_data,
 )
+from agent.core.context import context_loader
 from agent.commands.utils import update_story_state
 
 app = typer.Typer()
@@ -439,6 +439,7 @@ def implement(
     With --yes, skips confirmation prompts (requires --apply).
     """
     # 0. Configure Provider Override if set
+    from agent.core.ai import ai_service  # ADR-025: lazy init
     if provider:
         ai_service.set_provider(provider)
     
@@ -528,8 +529,12 @@ def implement(
     if guide_path.exists():
         guide_content = scrub_sensitive_data(guide_path.read_text())
     
-    # 3. Load Rules
-    rules_content = scrub_sensitive_data(load_governance_context())
+    # 3. Load Context — single source via context_loader
+    ctx = context_loader.load_context()
+    rules_content = ctx.get("rules", "")
+    instructions_content = ctx.get("instructions", "")
+    adrs_content = ctx.get("adrs", "")
+    
     # COMPRESSION: Remove markdown comments and extra blank lines to save token space
     rules_content = re.sub(r'<!--.*?-->', '', rules_content, flags=re.DOTALL)
     rules_content = re.sub(r'\n{3,}', '\n\n', rules_content)
@@ -553,6 +558,7 @@ CONTEXT:
 1. RUNBOOK (The plan you must follow - ALL sections are mandatory)
 2. IMPLEMENTATION GUIDE (The process you must follow)
 3. RULES (Governance you must obey)
+4. ADRs (Architectural decisions you must respect)
 
 INSTRUCTIONS:
 - Review the ENTIRE Runbook, including:
@@ -562,6 +568,7 @@ INSTRUCTIONS:
 - **CRITICAL**: You MUST generate ALL artifacts specified, not just the main code.
 - **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). 
 - **WARNING**: DO NOT use 'agent/' as a root folder. The source code lives in '.agent/src/agent/'.
+- **IMPORTANT**: Respect all Architectural Decision Records (ADRs). Do not contradict codified decisions.
 - Output code using this format:
 
 File: path/to/file.py
@@ -582,6 +589,12 @@ IMPLEMENTATION GUIDE:
 
 GOVERNANCE RULES:
 {rules_content}
+
+DETAILED ROLE INSTRUCTIONS:
+{instructions_content}
+
+ARCHITECTURAL DECISIONS (ADRs):
+{adrs_content}
 """
         # Log context size
         context_size = len(system_prompt) + len(user_prompt)
@@ -601,12 +614,10 @@ GOVERNANCE RULES:
 
     # Attempt 2: Chunking (Fallback)
     if fallback_needed:
-        # SEMANTIC FILTERING for Fallback Mode
-        # We need to reduce context size to avoid transport crashes.
-        # Instead of truncating, we filter out non-coding rules (process, roles, etc).
+        # Load lean rules (coding only) for fallback — instructions and ADRs still included
         console.print("[yellow]⚠️  Applying semantic context filtering (Coding Rules Only)...[/yellow]")
         
-        # Load lean rules
+        from agent.core.utils import load_governance_context
         filtered_rules = scrub_sensitive_data(load_governance_context(coding_only=True))
         # Compress (remove comments/extra whitespace)
         filtered_rules = re.sub(r'<!--.*?-->', '', filtered_rules, flags=re.DOTALL)
@@ -659,6 +670,12 @@ CURRENT TASK:
 
 RULES (Filtered):
 {filtered_rules}
+
+DETAILED ROLE INSTRUCTIONS:
+{instructions_content}
+
+ARCHITECTURAL DECISIONS (ADRs):
+{adrs_content}
 """
             logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
 

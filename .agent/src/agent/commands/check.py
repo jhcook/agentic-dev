@@ -23,7 +23,7 @@ from rich.prompt import Prompt, Confirm # Needed now for UI logic
 from rich.panel import Panel
 import os
 
-from agent.core.ai import ai_service
+# from agent.core.ai import ai_service # Moved to local import
 from agent.core.ai.prompts import generate_impact_prompt
 from agent.core.config import config
 from agent.core.context import context_loader
@@ -503,10 +503,11 @@ def preflight(
             break
             
             
-    # Load full context (rules + instructions)
+    # Load full context (rules + instructions + ADRs)
     full_context = context_loader.load_context()
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
+    adrs_content = full_context.get("adrs", "")
     
     # Cap diff size - if larger than chunk limit, we might need a smart splitter, 
     # but for assimilating roles, we send the same diff to each role agent.
@@ -541,6 +542,7 @@ def preflight(
             full_diff=full_diff,
             report_file=report_file,
             council_identifier="preflight",
+            adrs_content=adrs_content,
             progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]") if "BLOCK" not in msg and "PASS" not in msg else None
         )
 
@@ -721,6 +723,7 @@ def impact(
     if ai:
         # AI Mode
         console.print("[dim]🤖 Generating AI impact analysis...[/dim]")
+        from agent.core.ai import ai_service  # ADR-025: lazy init
         if provider:
             ai_service.set_provider(provider)
             
@@ -914,6 +917,7 @@ def panel(
     full_context = context_loader.load_context()
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
+    adrs_content = full_context.get("adrs", "")
     
     # 4. Scrum & Run
     full_diff = scrub_sensitive_data(full_diff)
@@ -930,6 +934,7 @@ def panel(
         mode="consultative",
         council_identifier="panel",
         user_question=question,
+        adrs_content=adrs_content,
         progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
     )
     

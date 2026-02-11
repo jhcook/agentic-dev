@@ -113,17 +113,21 @@ def test_run_audit_integration(mock_orphaned, mock_stagnant, mock_repo):
 def test_check_license_headers(mock_repo):
     result = AuditResult(0, [], [], [], [], [])
     
-    # File with Apache license
-    f1 = mock_repo / "licensed.py"
+    # Files under .agent/ use Apache license patterns (dual-license logic)
+    agent_dir = mock_repo / ".agent"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    
+    # File with Apache license (under .agent/)
+    f1 = agent_dir / "licensed.py"
     f1.write_text("# Licensed under the Apache License, Version 2.0")
     
-    # File without
-    f2 = mock_repo / "unlicensed.py"
+    # File without license (under .agent/)
+    f2 = agent_dir / "unlicensed.py"
     f2.write_text("print('oops')")
     
     # check_license_headers returns a list of missing files (relative path)
     missing = check_license_headers(mock_repo, [f1, f2], [])
     
-    # Should have missing for f2
+    # Should have missing for f2 only
     assert len(missing) == 1
     assert "unlicensed.py" in missing[0]

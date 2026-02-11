@@ -32,7 +32,7 @@ def test_sync_fix_applied():
         }
     }
     
-    # Body has "APPROVED" (mismatch)
+    # Body has "APPROVED" (mismatch) and content in a separate section
     stale_body = """# TEST-123: My Title
 
 ## State
@@ -70,3 +70,29 @@ Real content.
     assert "DRAFT" in content_written # From property
     assert "APPROVED" not in content_written # Should be stripped from body
     assert "Real content" in content_written
+
+
+def test_parse_status_extraction():
+    """
+    Verifies that _parse_status correctly extracts status from various header formats.
+    """
+    with patch("agent.sync.notion.get_secret", return_value="fake"), \
+         patch("agent.sync.notion.config"), \
+         patch("os.getenv", return_value="fake"):
+        with patch.object(NotionSync, "_load_state", return_value={}):
+            syncer = NotionSync()
+
+    # Standard ## State header
+    assert syncer._parse_status("# Title\n\n## State\n\nACCEPTED\n") == "ACCEPTED"
+
+    # ## Status header variant
+    assert syncer._parse_status("# Title\n\n## Status\n\nIN_PROGRESS\n") == "IN_PROGRESS"
+
+    # Case-insensitive header matching
+    assert syncer._parse_status("# Title\n\n## state\n\nCOMMITTED\n") == "COMMITTED"
+
+    # Missing state section defaults to DRAFT
+    assert syncer._parse_status("# Title\n\nJust content.\n") == "DRAFT"
+
+    # Status with extra blank lines
+    assert syncer._parse_status("# Title\n\n## State\n\n\nAPPROVED\n") == "APPROVED"

@@ -25,6 +25,7 @@ def mock_service():
         service.models = {"gemini": "gemini-pro", "openai": "gpt-4"}
         service.clients = {}
         service.is_forced = False
+        service._initialized = True  # Skip lazy init in tests
         # Simple round-robin chain for testing
         service._provider_chain = ["gemini", "openai", "anthropic"]
         return service

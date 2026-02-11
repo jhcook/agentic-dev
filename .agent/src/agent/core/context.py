@@ -23,16 +23,18 @@ class ContextLoader:
         self.rules_dir = config.rules_dir
         self.agents_path = config.etc_dir / "agents.yaml"
         self.instructions_dir = config.instructions_dir
+        self.adrs_dir = config.agent_dir / "adrs"
 
     def load_context(self) -> dict:
         """
-        Loads the full context: Global Rules, Agents, and Agent Instructions.
+        Loads the full context: Global Rules, Agents, Agent Instructions, and ADRs.
         Returns a dictionary with formatted strings ready for LLM consumption.
         """
         return {
             "rules": self._load_global_rules(),
             "agents": self._load_agents(),
-            "instructions": self._load_role_instructions()
+            "instructions": self._load_role_instructions(),
+            "adrs": self._load_adrs()
         }
 
     def _load_global_rules(self) -> str:
@@ -87,12 +89,67 @@ class ContextLoader:
                 role_instr_dir = self.instructions_dir / role
                 
                 if role_instr_dir.exists():
-                    for instr_file in role_instr_dir.glob("*.md"):
-                        content = instr_file.read_text(errors="ignore")
-                        instructions += f"\n--- INSTRUCTIONS FOR @{role.upper()} ({instr_file.name}) ---\n{content}\n"
+                    # Load both .md and .mdc files (rules use .mdc convention)
+                    for instr_file in sorted(role_instr_dir.glob("*.md*")):
+                        if instr_file.suffix in (".md", ".mdc"):
+                            content = instr_file.read_text(errors="ignore")
+                            instructions += f"\n--- INSTRUCTIONS FOR @{role.upper()} ({instr_file.name}) ---\n{content}\n"
             
             return scrub_sensitive_data(instructions)
         except Exception:
             return ""
+
+    def _load_adrs(self) -> str:
+        """Loads compact summaries of all ADRs from the adrs directory.
+
+        Each ADR is summarized as: Title + State + Decision (first paragraph only).
+        This keeps the token budget lean while giving AI full architectural context.
+        """
+        import re
+
+        context = "ARCHITECTURAL DECISION RECORDS (ADRs):\n"
+        context += "ADRs have ULTIMATE PRIORITY over all rules and instructions. "
+        context += "When an ADR conflicts with a rule, the ADR WINS. "
+        context += "Code that follows an ADR is COMPLIANT and must NOT be flagged as a required change or cause a BLOCK. "
+        context += "If a conflict exists, note it as an informational finding only.\n\n"
+        has_adrs = False
+
+        if self.adrs_dir.exists():
+            for adr_file in sorted(self.adrs_dir.glob("*.md")):
+                has_adrs = True
+                content = adr_file.read_text(errors="ignore")
+
+                # Extract title (first H1)
+                title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+                title = title_match.group(1).strip() if title_match else adr_file.stem
+
+                # Extract state
+                state_match = re.search(
+                    r"^##\s+State\s*\n+\s*(\w+)",
+                    content,
+                    re.MULTILINE | re.IGNORECASE,
+                )
+                state = state_match.group(1).strip() if state_match else "UNKNOWN"
+
+                # Extract decision section (first paragraph only for brevity)
+                decision = ""
+                decision_match = re.search(
+                    r"^##\s+Decision\s*\n+(.*?)(?=\n##|\n###|\Z)",
+                    content,
+                    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+                )
+                if decision_match:
+                    # Take first paragraph (up to double newline)
+                    raw = decision_match.group(1).strip()
+                    first_para = raw.split("\n\n")[0].strip()
+                    decision = first_para
+
+                context += f"- **{title}** [{state}]: {decision}\n"
+
+        if not has_adrs:
+            context += "(No ADRs found)\n"
+
+        return scrub_sensitive_data(context)
+
 
 context_loader = ContextLoader()

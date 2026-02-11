@@ -65,8 +65,8 @@ def mock_config(tmp_path):
 
 @pytest.fixture
 def mock_ai_service():
-    with patch("agent.commands.onboard.ai_service") as mock, \
-         patch("agent.commands.onboard.AIService") as mock_cls:
+    with patch("agent.core.ai.service.ai_service") as mock, \
+         patch("agent.core.ai.service.AIService") as mock_cls:
         
         # Setup mock behavior
         mock.clients = {"openai": MagicMock(), "gemini": MagicMock()}
@@ -423,7 +423,7 @@ def test_verification_uses_configured_provider(
     mock_config.get_value.return_value = "gemini" 
 
     # Mock AIService to verify set_provider call
-    with patch("agent.commands.onboard.AIService") as mock_cls_local:
+    with patch("agent.core.ai.service.AIService") as mock_cls_local:
         mock_inst = MagicMock()
         mock_inst.clients = {"gemini": "client"} # Ensure gemini is considered available
         mock_inst.complete.return_value = "Hello World"

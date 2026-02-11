@@ -53,7 +53,7 @@ def test_interactive_preflight_typer_e2e(temp_repo):
     # Patch Config to point to temp_repo
     with patch("agent.core.config.config.repo_root", repo_root), \
          patch("agent.core.config.config.stories_dir", story_file.parent.parent.parent), \
-         patch("agent.commands.check.ai_service") as mock_ai, \
+         patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
          patch("subprocess.run") as mock_run:
@@ -107,7 +107,7 @@ def test_interactive_preflight_empty_ai_response(temp_repo):
     
     with patch("agent.core.config.config.repo_root", repo_root), \
          patch("agent.core.config.config.stories_dir", story_file.parent.parent.parent), \
-         patch("agent.commands.check.ai_service") as mock_ai, \
+         patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd:
              
@@ -139,7 +139,7 @@ def test_interactive_preflight_voice_mode(temp_repo):
     
     with patch("agent.core.config.config.repo_root", repo_root), \
          patch("agent.core.config.config.stories_dir", story_file.parent.parent.parent), \
-         patch("agent.commands.check.ai_service") as mock_ai, \
+         patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
          patch("subprocess.run") as mock_run, \

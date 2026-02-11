@@ -47,11 +47,12 @@ def clean_env(tmp_path):
         yield
 
 # We must patch where it is import/used
+@patch("agent.core.auth.decorators.validate_credentials")
 @patch("agent.core.governance.ai_service") 
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 @patch("agent.commands.check.scrub_sensitive_data")
-def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, mock_gov_ai, clean_env):
+def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, mock_gov_ai, mock_validate, clean_env):
     """
     Test that sensitive data is scrubbed and large diffs are chunked correctly.
     """
@@ -91,10 +92,11 @@ def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, m
     # With default roles, we expect many calls
     assert mock_gov_ai.complete.call_count > 6
 
+@patch("agent.core.auth.decorators.validate_credentials")
 @patch("agent.core.governance.ai_service")
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
-def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean_env):
+def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, mock_validate, clean_env):
     """
     Test that a single BLOCK verdict fails the entire command.
     """
@@ -104,24 +106,23 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     mock_run.return_value.stdout = "diff content"
     mock_run.return_value.returncode = 0
     
-    # Mock AI Response: First call returns BLOCK, others PASS (or loop stops)
+    # Mock AI Response: Security returns BLOCK, others PASS
+    # Note: governance.py parses with re.search(r"^VERDICT:\s*BLOCK", ..., re.IGNORECASE)
     def side_effect(sys, user):
-        if "Role: Architect" in sys or "Architect" in sys: 
-            return "Verdict: PASS"
-        if "Role: Security" in sys or "Security" in sys:
-            return "Verdict: BLOCK\nReason: Hardcoded password."
-        return "Verdict: PASS"
+        if "Security" in sys:
+            return "VERDICT: BLOCK\nSUMMARY:\nHardcoded password found.\nFINDINGS:\n- Hardcoded password.\nREQUIRED_CHANGES:\n- Remove hardcoded password."
+        return "VERDICT: PASS\nSUMMARY:\nLooks good.\nFINDINGS:\n- None"
         
     mock_gov_ai.complete.side_effect = side_effect
     
     result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 1
-    assert "Preflight Blocked by Governance Council" in result.stdout
-    assert "Reason: Hardcoded password" in result.stdout
+    assert "Preflight Blocked by Governance Council" in result.output
+    assert "Hardcoded password" in result.output
 
 @patch("agent.core.governance.ai_service")
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env):
     """
@@ -155,7 +156,7 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     assert "PASS" in content
 
 @patch("agent.core.governance.ai_service")
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_verdict_parsing_false_positive(mock_run, mock_check_ai, mock_gov_ai, clean_env):
     """
@@ -180,7 +181,7 @@ It avoids the error markdown for a BLOCK verdict.
     assert "Preflight checks passed" in result.stdout
 
 @patch("agent.core.governance.ai_service") 
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_gov_ai, clean_env):
     """
@@ -205,7 +206,7 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
     assert "Preflight checks passed" in result.stdout
 
 @patch("agent.core.governance.ai_service")
-@patch("agent.commands.check.ai_service")
+@patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, tmp_path):
     """

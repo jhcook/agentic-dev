@@ -112,9 +112,10 @@ def mock_deps(tmp_path):
          patch("agent.commands.implement.is_git_dirty") as mock_dirty, \
          patch("agent.commands.implement.create_branch") as mock_create, \
          patch("agent.core.utils.find_story_file") as mock_find_story, \
-         patch("agent.core.utils.find_runbook_file") as mock_find_runbook, \
-         patch("agent.core.utils.load_governance_context", return_value="Rules"), \
+         patch("agent.commands.implement.find_runbook_file") as mock_find_runbook, \
+         patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {}, "instructions": "", "adrs": ""}), \
          patch("agent.commands.implement.update_story_state"), \
+         patch("agent.core.auth.decorators.validate_credentials"), \
          patch("agent.core.ai.ai_service.complete", return_value="Plan"):
         
         # Setup runbook

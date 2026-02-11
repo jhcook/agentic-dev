@@ -140,22 +140,25 @@ class TestToolsCWD(unittest.TestCase):
     def test_run_backend_tests_cwd(self, mock_config):
         mock_config.repo_root = self.mock_repo_root
         
-        # Mock subprocess
-        with patch('subprocess.run') as mock_run:
-            mock_run.return_value.stdout = "Tests passed"
-            mock_run.return_value.stderr = ""
-            mock_run.return_value.returncode = 0
+        # Mock subprocess — run_backend_tests uses Popen, not subprocess.run
+        with patch('backend.voice.tools.qa.subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["Tests passed\n", ""]
+            mock_process.stderr.readline.side_effect = [""]
+            mock_process.stdout.close = MagicMock()
+            mock_process.stderr.close = MagicMock()
+            mock_process.wait.return_value = 0
+            mock_popen.return_value = mock_process
             
-            # Run tool
             # Need to patch os.path.exists to pass validation
-            with patch('os.path.exists', return_value=True):
+            with patch('backend.voice.tools.qa.os.path.exists', return_value=True):
                 if hasattr(run_backend_tests, "func"):
                     run_backend_tests.func(path="tests/")
                 else:
                     run_backend_tests(path="tests/")
             
             # Verify call
-            args, kwargs = mock_run.call_args
+            args, kwargs = mock_popen.call_args
             assert kwargs.get("cwd") == str(mock_config.repo_root)
 
     @patch('backend.voice.tools.qa.agent_config')
@@ -236,8 +239,12 @@ class TestToolsCWD(unittest.TestCase):
         mock_file.__str__.return_value = "/path/to/WEB-001-story.md"
         mock_config.stories_dir.rglob.return_value = [mock_file]
         
-        with patch('backend.voice.tools.fix_story.subprocess.run') as mock_run:
-            mock_run.return_value.returncode = 0
+        with patch('backend.voice.tools.fix_story.subprocess.Popen') as mock_popen, \
+             patch('backend.voice.tools.fix_story.os.path.exists', return_value=True):
+            mock_process = MagicMock()
+            mock_process.communicate.return_value = ("Story validation passed", "")
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
             
             with patch('backend.voice.events.EventBus.publish'):
                 if hasattr(interactive_fix_story, "func"):
@@ -245,7 +252,7 @@ class TestToolsCWD(unittest.TestCase):
                 else:
                     interactive_fix_story("WEB-001")
             
-            args, kwargs = mock_run.call_args
+            args, kwargs = mock_popen.call_args
             self.assertEqual(kwargs.get("cwd"), str(self.mock_repo_root))
 
     @patch('backend.voice.tools.observability.agent_config')

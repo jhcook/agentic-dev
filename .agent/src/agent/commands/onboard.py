@@ -28,7 +28,7 @@ from opentelemetry import trace
 from rich.console import Console
 from rich.table import Table
 
-from agent.core.ai.service import PROVIDERS, AIService, ai_service
+# from agent.core.ai.service import PROVIDERS, AIService, ai_service # Moved to local imports
 from agent.core.config import config
 from agent.core.secrets import (
     InvalidPasswordError,
@@ -302,6 +302,9 @@ def configure_api_keys() -> None:
     typer.echo("Please provide API keys for the providers you wish to use.")
     typer.echo("(Leave blank to skip a provider)")
 
+
+    from agent.core.ai.service import PROVIDERS, ai_service  # ADR-025: lazy init
+
     for provider_id, provider_config in PROVIDERS.items():
         key_name = provider_config.get("secret_key")
         service_name = provider_config.get("service")
@@ -404,6 +407,7 @@ def configure_agent_settings() -> None:
 
     if should_configure_provider: 
         # Logic to select provider if not skipped
+        from agent.core.ai.service import PROVIDERS  # ADR-025: lazy init
         drivers = list(PROVIDERS.keys())
         
         # Filter based on what keys are set in .env (loaded in process) or just offer all?
@@ -462,6 +466,7 @@ def configure_agent_settings() -> None:
         # So we need to re-init the service or manually add the client.
         
         # Let's try to "reload" the specific client in the service if missing
+        from agent.core.ai.service import ai_service  # ADR-025: lazy init
         if provider not in ai_service.clients:
              # This is a bit internal-knowledge heavy, but necessary since we
              # just set the keys
@@ -509,6 +514,7 @@ def select_default_model(provider: str, config_data: dict, config_path: Path) ->
             pass
         
         # Hack to refresh client if missing
+        from agent.core.ai.service import ai_service  # ADR-025: lazy init
         if provider not in ai_service.clients:
             # Re-run the specific check block from __init__? 
             # Or just tell user we can't list models yet.
@@ -885,6 +891,7 @@ def run_verification() -> None:
         pass # dotenv is optional
     
     # Instantiate a FRESH service to pick up new keys
+    from agent.core.ai.service import AIService  # ADR-025: lazy init
     service = AIService()
     
     # Force the configured provider to ensure we verify what the user selected

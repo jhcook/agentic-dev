@@ -47,7 +47,7 @@ class TestQueryCommand:
         assert "Ask a natural language question" in result.output
         assert "--offline" in result.output
     
-    @patch("agent.commands.query.ai_service")
+    @patch("agent.core.ai.ai_service")
     def test_offline_mode_uses_grep(self, mock_ai_service, runner):
         """Test that --offline flag uses grep fallback."""
         mock_ai_service.provider = "gemini"  # AI is available
@@ -58,7 +58,7 @@ class TestQueryCommand:
             
             mock_grep.assert_called_once_with("test query")
     
-    @patch("agent.commands.query.ai_service")
+    @patch("agent.core.ai.ai_service")
     def test_no_provider_shows_warning_and_falls_back(self, mock_ai_service, runner):
         """Test that missing AI provider triggers fallback."""
         mock_ai_service.provider = None  # AI not available
@@ -70,7 +70,7 @@ class TestQueryCommand:
             assert "No AI provider configured" in result.output
             mock_grep.assert_called_once()
     
-    @patch("agent.commands.query.ai_service")
+    @patch("agent.core.ai.ai_service")
     @patch("agent.commands.query.run_query")
     def test_ai_query_success(self, mock_run_query, mock_ai_service, runner):
         """Test successful AI query."""

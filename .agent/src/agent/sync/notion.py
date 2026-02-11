@@ -369,22 +369,12 @@ class NotionSync:
         local_title = art["title"]
         
         # Normalize whitespace for comparison
-        if remote_title.strip() != local_title.strip():
-             if not force:
-                 # Check if we are running interactively? Typer/Rich Confirm works on stdin.
-                 # If non-interactive (CI), this might hang or fail. Ideally we assume 'No' in CI without force.
-                 
-                 logger.warning(f"Title mismatch detected for {art['id']}")
-                 should_overwrite = Confirm.ask(
-                     f"[bold red]Collision Warning for {art['id']}[/bold red].\n"
-                     f"Remote Title: '{remote_title}'\n"
-                     f"Local Title:  '{local_title}'\n"
-                     f"Are you sure you want to overwrite the Remote Page?",
-                     default=False
-                 )
-                 if not should_overwrite:
-                     logger.warning(f"Skipping {art['id']} to prevent data loss.")
-                     return False
+        norm_remote = re.sub(r"\W+", "", remote_title).lower()
+        norm_local = re.sub(r"\W+", "", local_title).lower()
+        if norm_remote != norm_local:
+            if not force:
+                # Only warn — since we matched by ID, this is a title update, not a collision
+                logger.info(f"[{art['id']}] Title will be updated: '{remote_title}' -> '{local_title}'")
         
         # 2. Update Metadata (including Title now!)
         props = {
@@ -550,7 +540,7 @@ class NotionSync:
         name = name.lower()
         name = re.sub(r"[^\w\s-]", "", name)
         name = re.sub(r"[-\s]+", "-", name)
-        return name
+        return name[:80]
 
     def _blocks_to_markdown_stub(self, blocks: List[Dict[str, Any]]) -> str:
         md = []
@@ -577,13 +567,41 @@ class NotionSync:
         return "".join([t["plain_text"] for t in rich_text])
 
     def _normalize_markdown(self, content: str) -> str:
+        STATUS_VALUES = {"DRAFT", "PROPOSED", "ACCEPTED", "DONE", "IN_PROGRESS", "APPROVED", "REVIEW", "REJECTED", "COMMITTED"}
         lines = content.splitlines()
         filtered = []
+        skip_until_next_header = False
         for line in lines:
-            if line.startswith("# ") and ":" in line: continue 
-            if line.startswith("## Status") or line.startswith("## State"): continue
-            if line.upper().strip() in ["DRAFT", "PROPOSED", "ACCEPTED", "DONE", "IN_PROGRESS", "APPROVED", "REVIEW", "REJECTED"]: continue 
-            if not line.strip(): continue
+            stripped = line.strip()
+            # Strip markdown heading markers for comparison
+            clean = stripped.lstrip("#").strip()
+
+            # Skip title lines (with or without # prefix): e.g. "# ADR-001: Foo" or "ADR-001: Foo"
+            if re.match(r"^[A-Z]+-\d+\s*:", clean):
+                continue
+
+            # Skip State/Status heading lines (with or without ## prefix)
+            if re.match(r"^(State|Status)\s*$", clean, re.IGNORECASE):
+                skip_until_next_header = True
+                continue
+
+            # Skip status value lines (e.g. "DRAFT", "ACCEPTED")
+            if stripped.upper() in STATUS_VALUES:
+                continue
+
+            # If we're inside a State/Status section, skip until next heading
+            if skip_until_next_header:
+                if stripped.startswith("#") or re.match(r"^[A-Z][a-z]", stripped):
+                    # Reached next heading — stop skipping, but process this line
+                    skip_until_next_header = False
+                elif not stripped:
+                    continue
+                else:
+                    continue
+
+            if not stripped:
+                continue
+
             # Normalize Unicode to NFC to avoid false positives (e.g. café vs cafe\u0301)
             line = unicodedata.normalize("NFC", line)
             filtered.append(re.sub(r"\W+", "", line).lower())

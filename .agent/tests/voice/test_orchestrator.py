@@ -16,7 +16,13 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from backend.voice.orchestrator import VoiceOrchestrator
 from langgraph.checkpoint.memory import MemorySaver
-# Force import of modules to ensure they are registered for patching
+# Force-register backend.voice.vad in sys.modules so patch() can resolve the path
+# without importing the real module (which requires numpy from voice extra)
+import sys
+from unittest.mock import MagicMock
+if "backend.voice.vad" not in sys.modules:
+    _mock_vad = MagicMock()
+    sys.modules["backend.voice.vad"] = _mock_vad
 
 @pytest.fixture
 def mock_deps():

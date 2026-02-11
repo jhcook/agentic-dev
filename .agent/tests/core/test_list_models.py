@@ -39,6 +39,7 @@ def mock_ai_service():
                     'anthropic': MagicMock()
                 }
                 service._set_default_provider()
+                service._initialized = True
                 return service
 
 

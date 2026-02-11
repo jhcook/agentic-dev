@@ -17,13 +17,13 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from agent.core.ai import ai_service
+# from agent.core.ai import ai_service # Moved to local import
 from agent.core.config import config
 from agent.core.utils import (
     find_story_file,
-    load_governance_context,
     scrub_sensitive_data,
 )
+from agent.core.context import context_loader
 from agent.db.client import upsert_artifact
 
 app = typer.Typer()
@@ -39,6 +39,7 @@ def new_runbook(
     Generate an implementation runbook using AI Governance Panel.
     """
     # 0. Configure Provider Override if set
+    from agent.core.ai import ai_service  # ADR-025: lazy init
     if provider:
         ai_service.set_provider(provider)
     
@@ -69,39 +70,23 @@ def new_runbook(
         if not typer.confirm("Overwrite?"):
             raise typer.Exit(code=0)
 
-    # 3. Context
+    # 3. Context — single source via context_loader
     console.print(f"🛈 invoking AI Governance Panel for {story_id}...")
     story_content = scrub_sensitive_data(story_file.read_text())
-    rules_full = scrub_sensitive_data(load_governance_context())
+    
+    ctx = context_loader.load_context()
+    rules_full = ctx.get("rules", "")
+    agents_data = ctx.get("agents", {})
+    instructions_content = ctx.get("instructions", "")
+    adrs_content = ctx.get("adrs", "")
+    
+    panel_description = agents_data.get("description", "")
+    panel_checks = agents_data.get("checks", "")
     
     # Truncate rules to avoid token limits (GitHub CLI has 8000 token max)
     rules_content = rules_full[:3000] + "\n\n[...truncated for token limits...]" if len(rules_full) > 3000 else rules_full
-    
 
     # 4. Prompt
-    # Load agents dynamically
-    import yaml
-    agents_path = config.agent_dir / "agents.yaml"
-    panel_description = ""
-    panel_checks = ""
-    
-    if agents_path.exists():
-        try:
-            agents_data = yaml.safe_load(agents_path.read_text())
-            for agent in agents_data.get("team", []):
-                role = agent.get("role", "unknown")
-                name = agent.get("name", role.capitalize())
-                desc = agent.get("description", "")
-                panel_description += f"- @{role.capitalize()} ({name}): {desc}\n"
-                
-                checks = "\n".join([f"  - {c}" for c in agent.get("governance_checks", [])])
-                panel_checks += f"- **@{role.capitalize()}**:\n{checks}\n"
-        except Exception as e:
-             console.print(f"[yellow]⚠️  Failed to load agents.yaml: {e}. Using defaults.[/yellow]")
-             panel_description = "- @Architect, @Security, @QA, @Docs, @Compliance, @Observability"
-    else:
-        panel_description = "- @Architect, @Security, @QA, @Docs, @Compliance, @Observability"
-
     # Load Template
     template_path = config.templates_dir / "runbook-template.md"
     if not template_path.exists():
@@ -109,9 +94,6 @@ def new_runbook(
         raise typer.Exit(code=1)
         
     template_content = template_path.read_text()
-    
-    # We want the LLM to fill in the template. 
-    # We will provide the structure as a requirement.
     
     system_prompt = f"""You are the AI Governance Panel for this repository.
 Your role is to design and document a DETAILED Implementation Runbook for a software engineering task.
@@ -127,10 +109,14 @@ INSTRUCTIONS:
 2. You MUST provide a distinct review section for EVERY role.
 3. You MUST enforce the "Definition of Done".
 4. You MUST follow the structure of the provided TEMPLATE exactly.
+5. You MUST respect all Architectural Decision Records (ADRs) as codified decisions.
+6. You MUST follow the DETAILED ROLE INSTRUCTIONS for each role.
 
 INPUTS:
 1. User Story (Requirements)
 2. Governance Rules (Compliance constraints)
+3. Role Instructions (Per-role detailed guidance)
+4. ADRs (Codified architectural decisions)
 
 TEMPLATE STRUCTURE (Found in {template_path.name}):
 {template_content}
@@ -146,6 +132,12 @@ Update '## Targeted Refactors & Cleanups (INFRA-043)' with any relevant cleanups
 
 GOVERNANCE RULES:
 {rules_content}
+
+DETAILED ROLE INSTRUCTIONS:
+{instructions_content}
+
+ARCHITECTURAL DECISIONS (ADRs):
+{adrs_content}
 
 Generate the runbook now.
 """

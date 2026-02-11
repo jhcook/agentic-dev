@@ -1,7 +1,11 @@
 import pytest
 import asyncio
+import sys
 from unittest.mock import MagicMock, AsyncMock, patch
 from backend.voice.orchestrator import VoiceOrchestrator
+# Force-register backend.voice.vad in sys.modules so patch() can resolve the path
+if "backend.voice.vad" not in sys.modules:
+    sys.modules["backend.voice.vad"] = MagicMock()
 
 # Copyright 2026 Justin Cook
 #

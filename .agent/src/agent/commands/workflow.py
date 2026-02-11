@@ -99,7 +99,7 @@ def pr(
              # Get diff compared to main
              diff_content = subprocess.check_output(["git", "diff", f"{target_branch}...HEAD"], text=True)
              if diff_content:
-                 from agent.core.ai import ai_service
+                 from agent.core.ai import ai_service  # ADR-025: lazy init
                  from agent.core.utils import scrub_sensitive_data
                  
                  # Initialize provider if specified
@@ -151,11 +151,11 @@ def commit(
     """
     # Configure AI if requested
     if ai and provider:
-        from agent.core.ai import ai_service
+        from agent.core.ai import ai_service  # ADR-025: lazy init
         ai_service.set_provider(provider)
     elif ai: 
         # Ensure ai_service init is triggered if not explicitly imported at top level
-        from agent.core.ai import ai_service
+        from agent.core.ai import ai_service  # ADR-025: lazy init
 
     # 1. Infer Story ID
     if not story_id:
@@ -190,7 +190,7 @@ def commit(
         try:
              diff_content = subprocess.check_output(["git", "diff", "--cached"], text=True)
              if diff_content:
-                 from agent.core.ai import ai_service
+                 from agent.core.ai import ai_service  # ADR-025: lazy init
                  from agent.core.utils import scrub_sensitive_data
                  
                  scrubbed_diff = scrub_sensitive_data(diff_content)

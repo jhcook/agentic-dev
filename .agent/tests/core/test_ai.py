@@ -85,6 +85,8 @@ def test_complete_openai(mock_env_openai):
             # Force GH check fail to default to OpenAI
             with patch("subprocess.run", side_effect=FileNotFoundError):
                 ai = AIService()
+                ai.reload()
+                ai._initialized = True
                 # Double check
                 assert ai.provider == "openai"
                 response = ai.complete("System", "User")
@@ -176,6 +178,8 @@ def test_ai_service_priority(mock_run, monkeypatch):
         with patch("agent.core.config.config.load_yaml", return_value={}):
             from agent.core.ai.service import AIService
             ai_service = AIService()
+            ai_service.reload()
+            ai_service._initialized = True
             
             assert ai_service.provider == "gh"
             assert "gh" in ai_service.clients
@@ -210,6 +214,8 @@ def test_ai_service_manual_switch(mock_run, monkeypatch):
         with patch("agent.core.config.config.load_yaml", return_value={}):
             from agent.core.ai.service import AIService
             ai_service = AIService()
+            ai_service.reload()
+            ai_service._initialized = True
             
             # 1. Default GH
             assert ai_service.provider == "gh"
@@ -267,6 +273,8 @@ def test_ai_service_provider_override(mock_run, monkeypatch):
         with patch("agent.core.config.config.load_yaml", return_value={}):
             from agent.core.ai.service import AIService
             ai_service = AIService()
+            ai_service.reload()
+            ai_service._initialized = True
             
             # Default is GH
             assert ai_service.provider == "gh"
@@ -293,6 +301,8 @@ def test_ai_service_api_failure_handling(mock_run, monkeypatch):
         with patch("agent.core.config.config.load_yaml", return_value={}):
             from agent.core.ai.service import AIService
             ai_service = AIService()
+            ai_service.reload()
+            ai_service._initialized = True
             
             # Ensure ONLY openai (and gh) are present to prevent fallback to anthropic/gemini
             keys_to_remove = [k for k in ai_service.clients if k not in ["openai", "gh"]]

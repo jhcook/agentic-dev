@@ -87,60 +87,55 @@ As a user...
         self.assertEqual(len(options), 1)
         self.assertEqual(options[0]["title"], "Add Impact Analysis")
         
-        # 3. Apply Fix
-        # In a real integration, we'd mock the git stash calls to avoid messing with actual git if running locally
-        # But this is a temp dir, so git commands might fail if it's not a git repo.
-        # We should mock git stash for this test.
-        with patch.object(self.fixer, '_git_stash_save') as mock_save, \
-             patch.object(self.fixer, '_git_stash_pop') as mock_pop, \
-             patch.object(self.fixer, '_git_stash_drop') as mock_drop:
-             
-            success = self.fixer.apply_fix(options[0], story_path)
-            self.assertTrue(success)
-            mock_save.assert_called_once()
+        # 3. Apply Fix (uses tempfile-based backup, not git stash)
+        success = self.fixer.apply_fix(options[0], story_path)
+        self.assertTrue(success)
+        
+        # Verify a backup was created
+        file_str = str(story_path.resolve())
+        self.assertIn(file_str, self.fixer._active_backups)
+        
+        # Verify file content was updated
+        new_content = story_path.read_text()
+        self.assertIn("## Impact Analysis Summary", new_content)
+        
+        # 4. Verify Fix — passing check clears backups
+        def check_pass():
+            return "## Impact Analysis Summary" in story_path.read_text()
             
-            # Verify file content
-            new_content = story_path.read_text()
-            self.assertIn("## Impact Analysis Summary", new_content)
-            
-            # 4. Verify Fix
-            # Simulate a passing check
-            def check_pass():
-                return "## Impact Analysis Summary" in story_path.read_text()
-                
-            verified = self.fixer.verify_fix(check_pass)
-            self.assertTrue(verified)
-            mock_drop.assert_called_once() # Stash should be dropped
+        verified = self.fixer.verify_fix(check_pass)
+        self.assertTrue(verified)
+        # Backup should be cleared after successful verify
+        self.assertEqual(len(self.fixer._active_backups), 0)
 
     def test_repair_rollback_on_failure(self):
         """
         Test that fix is rolled back if verification fails.
         """
         story_path = self.repo_root / "WEB-002-story.md"
-        story_path.write_text("Original Checksum")
+        original_content = "Original Checksum"
+        story_path.write_text(original_content)
         
         option = {"patched_content": "Corrupted Content"}
         
-        # We need to simulate the revert (pop) actually restoring content
-        # since we are mocking the git command, we must simulate the effect manually or check the call
+        # Apply fix (creates a real temp backup)
+        self.fixer.apply_fix(option, story_path)
         
-        with patch.object(self.fixer, '_git_stash_save'), \
-             patch.object(self.fixer, '_git_stash_pop') as mock_pop, \
-             patch.object(self.fixer, '_git_stash_drop'):
-             
-             # Apply
-             self.fixer.apply_fix(option, story_path)
-             
-             # Verify - FAIL
-             def check_fail():
-                 return False
-                 
-             verified = self.fixer.verify_fix(check_fail)
-             
-             self.assertFalse(verified)
-             mock_pop.assert_called_once()
-             
-             # Note: In a real git repo, pop would restore. Here we just assert pop was called.
+        # Confirm the file was modified
+        self.assertEqual(story_path.read_text(), "Corrupted Content")
+        
+        # Verify - FAIL → should restore original content from backup
+        def check_fail():
+            return False
+            
+        verified = self.fixer.verify_fix(check_fail)
+        
+        self.assertFalse(verified)
+        # File should be restored to original content
+        self.assertEqual(story_path.read_text(), original_content)
+        # Backups should be cleared
+        self.assertEqual(len(self.fixer._active_backups), 0)
 
 if __name__ == '__main__':
     unittest.main()
+

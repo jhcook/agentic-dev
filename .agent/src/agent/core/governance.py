@@ -126,6 +126,7 @@ def convene_council_full(
     mode: str = "gatekeeper",
     council_identifier: str = "default",
     user_question: Optional[str] = None,
+    adrs_content: str = "",
     progress_callback: Optional[callable] = None
 ) -> Dict:
     """
@@ -142,6 +143,8 @@ def convene_council_full(
                 AI findings are collected verbatim.
                 "VERDICT: BLOCK" in AI output is IGNORED and does not trigger an overall BLOCK.
                 This allows for open-ended discussion without blocking CI/CD pipelines.
+        adrs_content: Compact summaries of Architectural Decision Records.
+            Code that follows an ADR is compliant and must not be flagged.
 
     Returns:
         Dict: Contains 'verdict' (PASS/BLOCK), 'log_file' (path), and 'json_report' (detailed data).
@@ -201,11 +204,18 @@ def convene_council_full(
 
         for i, chunk in enumerate(diff_chunks):
             if mode == "consultative":
-                    system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, Diff."
+                    system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, ADRs, Diff."
                     if user_question: system_prompt += f" Question: {user_question}"
             else:
                     system_prompt = (
                         f"You are {role_name}. Focus: {focus_area}. Task: Review code diff. "
+                        "CRITICAL ADR PRIORITY RULE: "
+                        "Architectural Decision Records (ADRs) have ULTIMATE PRIORITY over all rules and instructions. "
+                        "When an ADR conflicts with a rule, the ADR WINS. "
+                        "Code that follows an ADR is COMPLIANT and must NOT be flagged as a required change or cause a BLOCK. "
+                        "If you notice a conflict between a rule and an ADR, note it as an informational finding "
+                        "(e.g., 'ADR-025 overrides architectural-standards.mdc on local imports') but do NOT block.\n"
+                        "Check the <adrs> section BEFORE raising any issue.\n"
                         "Output format:\n"
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY:\n<one line summary>\n"
@@ -213,7 +223,13 @@ def convene_council_full(
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )
 
-            user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n<diff>{chunk}</diff>"
+            # Build user prompt with all available context
+            user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n"
+            if adrs_content:
+                user_prompt += f"<adrs>{adrs_content}</adrs>\n"
+            if instructions_content:
+                user_prompt += f"<instructions>{instructions_content}</instructions>\n"
+            user_prompt += f"<diff>{chunk}</diff>"
             
             try:
                 review = ai_service.complete(system_prompt, user_prompt)
@@ -515,18 +531,29 @@ def run_audit(
 
 
 def check_license_headers(repo_path: Path, all_files: List[Path], ignore_patterns: List[str]) -> List[str]:
-    """Check for license headers in all source files."""
+    """Check for license headers in all source files.
+    
+    Uses path-aware dual-license logic:
+    - .agent/ files: Justin Cook / Apache License 2.0
+    - All other files: Inspected Holding Pty Ltd / Proprietary
+    """
     
     missing_license_headers = []
     
-    # Define common license header patterns (customize as needed)
-    license_header_patterns = [
-        re.compile(r"Copyright \d{4}-present.*", re.IGNORECASE),
-        re.compile(r"Licensed under the Apache License, Version 2.0.*", re.IGNORECASE),
+    # License patterns for .agent/ (open-source, Justin Cook)
+    agent_license_patterns = [
+        re.compile(r"Copyright \d{4}.*Justin Cook", re.IGNORECASE),
+        re.compile(r"Licensed under the Apache License, Version 2.0", re.IGNORECASE),
+    ]
+    
+    # License patterns for application code (proprietary, Inspected Holding Pty Ltd)
+    app_license_patterns = [
+        re.compile(r"Copyright.*\d{4}.*Inspected Holding Pty Ltd", re.IGNORECASE),
+        re.compile(r"[Pp]roprietary and [Cc]onfidential", re.IGNORECASE),
     ]
     
     # Extensions to check
-    EXTENSIONS = {".py", ".js", ".ts", ".tsx"}
+    EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".sh", ".swift", ".kt"}
 
     for file_path in all_files:
         if file_path.suffix not in EXTENSIONS:
@@ -538,14 +565,21 @@ def check_license_headers(repo_path: Path, all_files: List[Path], ignore_pattern
                  continue
 
         try:
+            rel_path = file_path.relative_to(repo_path)
+            rel_str = str(rel_path)
+            
+            # Select correct license patterns based on file location
+            is_agent = rel_str.startswith(".agent/") or rel_str.startswith(".agent\\")
+            patterns = agent_license_patterns if is_agent else app_license_patterns
+
             with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read() # Read full content as per Security requirement
+                content = f.read()
                 
                 # Check for any matching license header patterns
-                has_license_header = any(pattern.search(content) for pattern in license_header_patterns)
+                has_license_header = any(pattern.search(content) for pattern in patterns)
                 
                 if not has_license_header:
-                    missing_license_headers.append(str(file_path.relative_to(repo_path)))
+                    missing_license_headers.append(rel_str)
         except Exception as e:
             logger.error(f"Error checking license header in {file_path}: {e}")
             # Don't fail the whole audit for one read error, just log it

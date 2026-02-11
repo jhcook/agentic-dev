@@ -22,8 +22,9 @@ from backend.voice.tools.get_installed_packages import get_installed_packages
 
 @pytest.fixture
 def cleanup_custom_tools():
-    # Cleanup any files created during tests
-    custom_dir = ".agent/src/backend/voice/tools/custom"
+    # Build absolute path matching what create_tool uses
+    import backend.voice.tools.create_tool as ct_module
+    custom_dir = os.path.join(os.path.dirname(os.path.abspath(ct_module.__file__)), "custom")
     test_file = os.path.join(custom_dir, "integration_test_tool.py")
     dirty_file = os.path.join(custom_dir, "dirty.py")
     
@@ -52,10 +53,12 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     """
     
     filename = "integration_test_tool.py"
-    # Ensure directory exists
-    os.makedirs(".agent/src/backend/voice/tools/custom", exist_ok=True)
+    # Build absolute path matching what create_tool uses internally
+    import backend.voice.tools.create_tool as ct_module
+    custom_dir = os.path.join(os.path.dirname(os.path.abspath(ct_module.__file__)), "custom")
+    os.makedirs(custom_dir, exist_ok=True)
     
-    path = f".agent/src/backend/voice/tools/custom/{filename}"
+    abs_path = os.path.join(custom_dir, filename)
     code = """
 from langchain_core.tools import tool
 
@@ -66,24 +69,24 @@ def my_integration_test_tool() -> str:
 """
     
     # 1. Create
-    print(f"Creating tool at {path}")
+    print(f"Creating tool at {abs_path}")
     res = create_tool.invoke({"file_path": filename, "code": code})
     print(f"Creation Result: {res}")
     assert "Success" in res
-    assert os.path.exists(path)
+    assert os.path.exists(abs_path)
     
     # 2. Read Source (Check Silent Tags)
-    source = read_tool_source.invoke({"file_path": path})
+    source = read_tool_source.invoke({"file_path": abs_path})
     assert "<silent>" in source
     assert "</silent>" in source
     assert "SYSTEM INSTRUCTION" in source
     
     # 3. Security Scan (Clean)
-    scan_res = scan_file_for_secrets.invoke({"file_path": path})
+    scan_res = scan_file_for_secrets.invoke({"file_path": abs_path})
     assert "No obvious secrets found" in scan_res
     
     # 4. Security Scan (Dirty)
-    dirty_path = ".agent/src/backend/voice/tools/custom/dirty.py"
+    dirty_path = os.path.join(custom_dir, "dirty.py")
     with open(dirty_path, "w") as f:
         f.write("api_key = 'sk-12345678901234567890'")
         f.write("\nemail = 'test@example.com'")

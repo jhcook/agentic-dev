@@ -81,7 +81,13 @@ class AIService:
             'anthropic': 'claude-sonnet-4-5-20250929'
         }
         
-        self.reload()
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Lazy load providers if not already done."""
+        if not self._initialized:
+            self.reload()
+            self._initialized = True
 
     def reload(self) -> None:
         """Reloads providers from secrets/env."""
@@ -274,6 +280,8 @@ class AIService:
         """
         Sends a completion request with automatic fallback.
         """
+        self._ensure_initialized()
+        
         provider_to_use = self.provider
         model_to_use = model
 
@@ -396,6 +404,7 @@ class AIService:
             ValueError: If provider is invalid.
             RuntimeError: If provider is not configured.
         """
+        self._ensure_initialized()
         target_provider = provider or self.provider
         
         if not target_provider:

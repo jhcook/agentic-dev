@@ -30,11 +30,18 @@ def app():
 
 @pytest.fixture
 def mock_fs(tmp_path):
+    # Create template directory with runbook template
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "runbook-template.md").write_text("# Runbook Template\n## Plan\n<plan>")
+
     # Mock config paths
     with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
          patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \
          patch("agent.core.config.config.stories_dir", tmp_path / "stories"), \
-         patch("agent.core.utils.load_governance_context", return_value="Rules"):
+         patch("agent.core.config.config.templates_dir", templates_dir), \
+         patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "", "checks": ""}, "instructions": "", "adrs": ""}), \
+         patch("agent.core.auth.decorators.validate_credentials"):
         
         (tmp_path / "runbooks").mkdir()
         (tmp_path / ".agent").mkdir()

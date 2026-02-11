@@ -95,7 +95,7 @@ def test_agent_help(agent_sandbox):
     # If it fails due to missing deps (not installed in sandbox venv context?), we check return code.
     # But usually help should always work.
     assert result.returncode == 0
-    assert "Governed workflow CLI" in result.stdout
+    assert "A CLI for managing and interacting with the AI agent" in result.stdout
     assert "preflight" in result.stdout
     assert "pr" in result.stdout
 
@@ -218,7 +218,7 @@ def test_agent_no_args(agent_sandbox):
     result = subprocess.run([agent_bin], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
     assert result.returncode == 0
     assert "Usage: agent [COMMAND]" in result.stdout or "Usage: python -m agent.main" in result.stdout
-    assert "Governed workflow CLI" in result.stdout
+    assert "A CLI for managing and interacting with the AI agent" in result.stdout
 
 def test_agent_nested_help(agent_sandbox):
     """Test 'agent <cmd> help' syntax translation."""

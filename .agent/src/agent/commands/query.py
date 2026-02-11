@@ -27,7 +27,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from agent.core.ai import ai_service
+# from agent.core.ai import ai_service # Moved to local imports
 from agent.core.context_builder import ContextBuilder
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ async def run_query(query: str, root_dir: Path) -> str:
 QUESTION:
 {query}"""
     
+    from agent.core.ai import ai_service  # ADR-025: lazy init
     response = ai_service.complete(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt
@@ -118,6 +119,7 @@ def query(
         agent query "what does the implement command do?"
     """
     # Check if AI is available
+    from agent.core.ai import ai_service  # ADR-025: lazy init
     if offline or ai_service.provider is None:
         if not offline:
             console.print("[yellow]⚠️  No AI provider configured.[/yellow]")

@@ -62,6 +62,9 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
     "github": {
         "token": ["GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"],
     },
+    "notion": {
+        "notion_token": ["NOTION_TOKEN"],
+    },
 }
 
 
