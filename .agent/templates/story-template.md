@@ -29,6 +29,10 @@ As a <user>, I want <capability> so that <value>.
 
 - ADR-XXX
 
+## Linked Journeys
+
+- JRN-XXX
+
 ## Impact Analysis Summary
 
 Components touched:

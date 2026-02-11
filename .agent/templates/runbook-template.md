@@ -1,4 +1,4 @@
-# STORY-ID: <Title>
+# STORY-ID: < Title >
 
 ## State
 
@@ -6,7 +6,11 @@ PROPOSED
 
 ## Goal Description
 
-<Clear summary of the objective>
+< Clear summary of the objective >
+
+## Linked Journeys
+
+- JRN-XXX: < Journey title >
 
 ## Panel Review Findings
 
@@ -28,8 +32,8 @@ PROPOSED
 
 #### [MODIFY | NEW | DELETE] [file path]
 
-- <Specific instruction on what to change>
-- <Code snippets if necessary for clarity>
+- < Specific instruction on what to change >
+- < Code snippets if necessary for clarity >
 
 ## Verification Plan
 

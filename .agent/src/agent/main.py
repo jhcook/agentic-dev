@@ -21,6 +21,7 @@ from agent.commands import (
     check,
     config,
     implement,
+    journey,
     lint,
     list as list_cmd,
     match,
@@ -104,6 +105,8 @@ app.command()(with_creds(implement.implement))
 app.command(name="new-story")(with_creds(story.new_story))
 
 app.command(name="new-runbook")(with_creds(runbook.new_runbook))
+app.command(name="new-journey")(journey.new_journey)
+app.command(name="validate-journey")(journey.validate_journey)
 
 app.command(name="new-adr")(adr.new_adr)
 
@@ -126,6 +129,7 @@ app.command("list-stories")(list_cmd.list_stories)
 app.command("list-plans")(list_cmd.list_plans)
 app.command("list-runbooks")(list_cmd.list_runbooks)
 app.command("list-models")(list_cmd.list_models)
+app.command("list-journeys")(list_cmd.list_journeys)
 
 # Helper Commands
 app.command("match-story")(with_creds(match.match_story))

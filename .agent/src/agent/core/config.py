@@ -49,6 +49,7 @@ class Config:
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
         self.runbooks_dir = self.cache_dir / "runbooks"
+        self.journeys_dir = self.cache_dir / "journeys"
 
         # Initialize repo info
         self.repo_owner = "unknown"
