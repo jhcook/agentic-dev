@@ -1,6 +1,7 @@
 # ADR-021: Architectural Exception Records
 
 ## Status
+
 Accepted
 
 ## Context
@@ -21,13 +22,13 @@ We introduce **Exception Records** (`EXC-*`) as a formal subtype of ADR, stored 
 
 Exception Records follow the standard ADR lifecycle (Draft → Accepted → Superseded → Retired) with additional required fields:
 
-| Field | Description |
+|Field|Description|
 |-------|-------------|
-| **Challenged By** | The governance role(s) that raised the finding (e.g. `@Architect`) |
-| **Rule Reference** | The specific rule or standard being deviated from |
-| **Affected Files** | Files or modules covered by the exception |
-| **Justification** | The technical rationale for the deviation |
-| **Conditions** | When the exception should be re-evaluated (scope change, refactor, etc.) |
+|**Challenged By**|The governance role(s) that raised the finding (e.g. `@Architect`)|
+|**Rule Reference**|The specific rule or standard being deviated from|
+|**Affected Files**|Files or modules covered by the exception|
+|**Justification**|The technical rationale for the deviation|
+|**Conditions**|When the exception should be re-evaluated (scope change, refactor, etc.)|
 
 A template is provided at `.agent/templates/exception-template.md`.
 
@@ -35,7 +36,7 @@ A template is provided at `.agent/templates/exception-template.md`.
 
 Exception Records use the prefix `EXC-` followed by a sequential number:
 
-```
+```text
 EXC-001-update-story-state-location.md
 EXC-002-extract-json-function-length.md
 ```
@@ -60,10 +61,12 @@ Exception records follow the same immutability and change-logging rules as stand
 ## Consequences
 
 ### Positive
+
 1. **Audit trail**: Every deviation is documented with justification and review conditions — satisfies SOC 2 evidence requirements.
 2. **No recurring false positives**: Preflight skips challenges covered by active exceptions.
 3. **Lifecycle management**: Exceptions can be retired when the underlying issue is resolved, preventing stale exemptions.
 
 ### Negative
+
 1. **Overhead**: Creating an exception record for trivial findings adds friction. (Mitigation: Reserve exceptions for BLOCK-level findings only.)
 2. **Stale exceptions**: If conditions are not reviewed, exceptions may outlive their validity. (Mitigation: The `Conditions` field documents when to re-evaluate.)
