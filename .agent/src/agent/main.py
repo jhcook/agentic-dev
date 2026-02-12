@@ -21,6 +21,7 @@ from agent.commands import (
     check,
     config,
     implement,
+    importer,
     journey,
     lint,
     list as list_cmd,
@@ -121,6 +122,7 @@ app.add_typer(sync_cli.app, name="sync")
 # Sub-commands (Typer Apps)
 app.add_typer(admin.app, name="admin")
 app.add_typer(config.app, name="config")
+app.add_typer(importer.app, name="import")
 app.add_typer(mcp.app, name="mcp")
 app.add_typer(secret.app, name="secret")
 

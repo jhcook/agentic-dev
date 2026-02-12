@@ -1,0 +1,95 @@
+# Journey: JRN-051
+# Linked Story: N/A (standalone CLI feature)
+# Title: Import Custom Voice Tool
+
+id: JRN-051
+title: Import Custom Voice Tool
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+- voice
+actor: developer using agent CLI
+description: >
+  Import a custom Python tool into the Voice Agent's tool registry using the
+  `agent import tool` command. The command copies the tool file into the
+  voice tools directory and the Voice Agent hot-reloads it automatically.
+preconditions:
+- Agent CLI is installed and configured
+- Developer has a custom Python tool file ready to import
+- Project directory contains .agent/ initialization
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent import tool my_tool.py`
+  system_response: CLI copies the tool file to `.agent/src/backend/voice/tools/custom/my_tool.py`
+  assertions:
+  - Command exits with status 0
+  - Success message displayed with target path
+  - Tool file exists at destination
+- id: 2
+  action: Developer runs `agent import tool my_tool.py --name custom_name.py`
+  system_response: CLI copies the tool with the custom name to the voice tools directory
+  assertions:
+  - Command exits with status 0
+  - File is saved as `custom_name.py` in the target directory
+- id: 3
+  action: Developer runs `agent import tool utils/helper.py`
+  system_response: CLI resolves the path and copies the tool
+  assertions:
+  - Command exits with status 0
+  - Tool file exists at destination with original filename
+- id: 4
+  action: Developer runs `agent import tool my_tool` (no extension, name-only)
+  system_response: CLI looks in `./custom/` directory for `my_tool.py` and copies it
+  assertions:
+  - Command exits with status 0 if `./custom/my_tool.py` exists
+  - Correct file resolved and copied
+error_paths:
+- trigger_step: 1
+  condition: Source file does not exist
+  system_response: CLI displays error "Tool '<name>' not found directly or in './custom/'"
+  assertions:
+  - Error message names the missing tool
+  - Exit code is 1
+  severity: expected
+- trigger_step: 1
+  condition: Source file is not a .py file
+  system_response: CLI displays error "Only Python (.py) tools can be imported"
+  assertions:
+  - Clear error about file type restriction
+  - Exit code is 1
+  severity: expected
+- trigger_step: 1
+  condition: File copy fails (permissions, disk full)
+  system_response: CLI displays error with the underlying exception message
+  assertions:
+  - Error message is actionable
+  - Exit code is 1
+  severity: unexpected
+edge_cases:
+- scenario: Importing a tool that already exists at the destination
+  expected: File is overwritten (shutil.copy2 behavior)
+  severity: warning
+- scenario: Importing a tool with no ./custom/ directory and name-only argument
+  expected: Error displayed since neither direct path nor custom/ path exists
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs:
+  - custom Python tool file (.py)
+  persistent:
+  - copied tool in .agent/src/backend/voice/tools/custom/
+linked_stories: []
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/commands/importer.py
+  - agent/main.py
+  tests: []

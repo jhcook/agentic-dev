@@ -35,9 +35,9 @@ def import_tool(
     if not source_path.exists():
         # Try root/custom/<name>
         alt_path = Path("custom") / source
-        if not alt_path.endswith(".py") and not alt_path.exists():
+        if alt_path.suffix != ".py" and not alt_path.exists():
              alt_path = Path("custom") / (source + ".py")
-             
+
         if alt_path.exists():
             source_path = alt_path
         else:
