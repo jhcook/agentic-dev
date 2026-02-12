@@ -59,7 +59,19 @@ echo "📦 Packaging agent..."
 # 1. /tests/ : Exclude any directory named 'tests'
 # 2. .agent/cache/ : Exclude the entire cache directory
 # 3. .agent/adrs/ : Exclude the entire adrs directory
-grep -v "/tests/" "$DIST_DIR/files_to_package.txt" | grep -v ".agent/cache/" | grep -v ".agent/adrs/" | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
+grep -v "/tests/" "$DIST_DIR/files_to_package.txt" \
+    | grep -v "/test_"          \
+    | grep -v "/conftest.py"    \
+    | grep -v ".agent/cache/"   \
+    | grep -v ".agent/adrs/"    \
+    | grep -v ".agent/scripts/" \
+    | grep -v ".agent/backups/" \
+    | grep -v ".agent/logs/"    \
+    | grep -v ".agent/secrets/" \
+    | grep -v ".agent/storage/" \
+    | grep -v ".agent/.venv/"   \
+    | grep -v ".agent/Makefile" \
+    | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
 
 echo "✅ Build complete!"
 echo "   Archive: $DIST_DIR/$ARCHIVE_NAME"

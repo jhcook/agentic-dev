@@ -2,8 +2,7 @@
 set -e
 
 # Configuration
-#TARGET_DIR="../inspected/inspected-app"
-TARGET_DIR="../cv"
+TARGET_DIR="${1:?Usage: ./release.sh <target_dir>}"
 WORKFLOW_FILE="$TARGET_DIR/.github/workflows/global-governance-preflight.yml"
 
 # Ensure we are in the root
@@ -61,7 +60,7 @@ CONFIGURED_SCOPES="{plans,stories,runbooks}/{INFRA,WEB,MOBILE,BACKEND}"
 # We use eval to expand the braces since variables in quotes don't expand braces in bash by default?
 # Actually simple explicit expansion is safer or enable brace expansion.
 # Let's just run mkdir -p with the brace expansion directly.
-mkdir -p "$TARGET_DIR/.agent/cache/"{plans,stories,runbooks}/{INFRA,WEB,MOBILE,BACKEND}
+mkdir -p "$TARGET_DIR/.agent/cache/"{plans,stories,runbooks,journeys}/{INFRA,WEB,MOBILE,BACKEND}
 mkdir -p "$TARGET_DIR/.agent/adrs"
 
 echo "✅ Agent files deployed."
