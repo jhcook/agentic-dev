@@ -49,6 +49,35 @@ User provides a requirement. You must:
    - Change the `## State` status to `IN_PROGRESS`.
    - Run `agent sync` to propagate this change to Notion.
 
+### PHASE 0.5: JOURNEY GATE
+
+> [!IMPORTANT]
+> User journeys are a **prerequisite for implementation** (ADR-024).
+> This gate prevents implementing stories that have no defined behavioral contract.
+
+1. **Check Linked Journeys**
+   - Read the story's `## Linked Journeys` section.
+   - Extract the journey IDs (e.g., `JRN-001`, `JRN-005`).
+
+2. **Validate Journey Files Exist**
+   - For each linked journey ID, check that a matching YAML file exists in `.agent/cache/journeys/`.
+   - If a journey file is **missing**: `❌ Journey JRN-XXX not found. Run 'agent new-journey JRN-XXX' first.` → **BLOCK**
+   - If `## Linked Journeys` is **empty or only contains the placeholder** (`JRN-XXX`):
+     - `⚠️ No journeys linked to this story. Use --skip-journey-check to proceed without journeys.`
+     - → **BLOCK** (unless `--skip-journey-check` is set)
+
+3. **Load Journey Context**
+   - If journeys exist, load their YAML content for use in subsequent phases.
+   - Pass journey assertions to @QA in Phase 4 for test coverage validation.
+   - Pass journey implementation mappings to Phase 2 for file overlap detection.
+
+**VERDICT: PROCEED | BLOCK**
+
+- PROCEED: All linked journeys exist and are loaded
+- BLOCK: Missing journeys or no journeys linked (override with `--skip-journey-check`)
+
+---
+
 ### PHASE 1: REQUIREMENTS & DESIGN
 
 **@Architect** leads this phase:
@@ -225,6 +254,7 @@ User provides a requirement. You must:
    > Do NOT batch multiple file changes before testing.
 
    // turbo
+
    ```bash
    make test
    ```

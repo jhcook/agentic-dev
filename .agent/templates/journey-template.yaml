@@ -1,0 +1,47 @@
+# Journey: JRN-XXX
+# Title: <Title>
+# State: DRAFT
+
+actor: "<user persona>"
+description: "<what this journey achieves>"
+
+steps:
+  - action: "<user action>"
+    system_response: "<expected system behavior>"
+    assertions:
+      - "<verifiable outcome>"
+
+  - action: "<next user action>"
+    system_response: "<expected system behavior>"
+    assertions:
+      - "<verifiable outcome>"
+
+acceptance_criteria:
+  - "<criterion 1>"
+  - "<criterion 2>"
+
+error_paths:
+  - trigger: "<error condition>"
+    expected: "<expected error handling>"
+
+edge_cases:
+  - scenario: "<edge case description>"
+    expected: "<expected behavior>"
+
+auth_context:
+  roles: []
+  permissions: []
+
+data_state:
+  data_classification: internal
+  preconditions: []
+  postconditions: []
+
+implementation:
+  routes: []
+  files: []
+  tests: []
+
+linked_stories: []
+linked_adrs: []
+depends_on: []

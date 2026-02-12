@@ -1,0 +1,57 @@
+# Journey: JRN-007
+# Linked Story: INFRA-007
+# Title: Implement Agent Impact Command
+
+id: JRN-007
+title: Implement Agent Impact Command
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: This command will generate an AI-driven impact analysis report based on a comparison of the staged changes or
+  against a specific branch (via `--base` flag). As an optional enhancement, the command can also update the "Impact Analysis
+  Summary" section of the corresponding story markdown document directly.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent impact`
+  system_response: CLI processes the impact request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-007
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - README.md
+  - agent/commands/check.py
+  - agent/core/ai/prompts.py
+  - agent/core/logging/impact.py
+  tests: []

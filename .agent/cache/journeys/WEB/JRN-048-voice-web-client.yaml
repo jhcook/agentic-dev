@@ -1,0 +1,56 @@
+# Journey: JRN-048
+# Linked Story: WEB-003
+# Title: Voice Web Client
+
+id: JRN-048
+title: Voice Web Client
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- web
+- voice
+actor: developer using voice assistant
+description: Implement the Voice Web Client to provide a rich, visual interface for voice interactions with the agent.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent admin start`
+  system_response: CLI processes the start request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent admin stop`
+  system_response: CLI processes the stop request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- WEB-003
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files: []
+  tests: []

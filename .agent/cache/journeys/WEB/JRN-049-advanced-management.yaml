@@ -1,0 +1,62 @@
+# Journey: JRN-049
+# Linked Story: WEB-004
+# Title: Advanced Management
+
+id: JRN-049
+title: Advanced Management
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- web
+- voice
+actor: developer using voice assistant
+description: Implement "Advanced Management" for the Agent Console, moving static YAML/Prompt management into a dynamic, schema-driven
+  UI with real-time observability.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer initiates phase: Unified Dashboard Layout'
+  system_response: System executes unified dashboard layout
+  assertions:
+  - Unified Dashboard Layout completes successfully
+- id: 2
+  action: 'Developer initiates phase: Configuration & Prompt Studio'
+  system_response: System executes configuration & prompt studio
+  assertions:
+  - Configuration & Prompt Studio completes successfully
+- id: 3
+  action: 'Developer initiates phase: Activity Log & Observability'
+  system_response: System executes activity log & observability
+  assertions:
+  - Activity Log & Observability completes successfully
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- WEB-004
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent.yaml
+  - backend/main.py
+  tests: []

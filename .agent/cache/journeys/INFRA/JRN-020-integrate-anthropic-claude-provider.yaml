@@ -1,0 +1,53 @@
+# Journey: JRN-020
+# Linked Story: INFRA-025
+# Title: Integrate Anthropic Claude Provider
+
+id: JRN-020
+title: Integrate Anthropic Claude Provider
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: "claude-haiku-4-5:\n    provider: \"anthropic\"\n    deployment_id: \"claude-haiku-4-5-20250929\"\n    tier:\
+  \ \"standard\"\n    context_window: 200000\n    cost_per_1k_input: 0.001\n    cost_per_1k_output: 0.005"
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent impact --provider anthropic`
+  system_response: CLI processes the anthropic request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-025
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - README.md
+  tests: []

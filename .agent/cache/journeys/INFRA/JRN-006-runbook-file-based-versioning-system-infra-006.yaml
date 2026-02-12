@@ -1,0 +1,69 @@
+# Journey: JRN-006
+# Linked Story: INFRA-006
+# Title: Runbook: File-Based Versioning System (INFRA-006)
+
+id: JRN-006
+title: 'Runbook: File-Based Versioning System (INFRA-006)'
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: '**Status**: ACCEPTED
+
+  **Story**: [INFRA-006](.agent/cache/stories/INFRA/INFRA-006-file-based-versioning-system.md)
+
+  **Assignee**: @Backend'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer configures prerequisites for Runbook: File-Based Versioning System (INFRA-006)'
+  system_response: System validates configuration
+  assertions:
+  - Configuration is valid
+- id: 2
+  action: 'Developer executes the runbook: file-based versioning system (infra-006) workflow'
+  system_response: 'System performs #### manual verification
+
+    1.  **git context**: run `agent --version` in current r'
+  assertions:
+  - Operation completes successfully
+  - Output matches expectations
+- id: 3
+  action: Developer verifies the result
+  system_response: System displays confirmation or results
+  assertions:
+  - Expected artifacts created
+  - No errors reported
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-006
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - main.py
+  - tests/core/test_version.py
+  tests: []

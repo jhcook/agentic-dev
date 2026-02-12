@@ -1,0 +1,60 @@
+# Journey: JRN-036
+# Linked Story: INFRA-042
+# Title: Implement Interactive Preflight Repair
+
+id: JRN-036
+title: Implement Interactive Preflight Repair
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Develop an interactive "fix" mode for the `agent preflight` command to help developers resolve errors more efficiently.
+  When preflight checks fail, the tool will identify blockers, propose specific AI-generated fixes, allow developers to apply
+  and verify fixes in real-time, and ensure human oversight before any automated changes are finalized.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent preflight`
+  system_response: CLI processes the preflight request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent preflight --interactive`
+  system_response: CLI processes the --interactive request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-042
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/tests/integration/test_preflight_interactive.py
+  - agent/tests/unit/test_fixer.py
+  tests: []

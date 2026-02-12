@@ -139,6 +139,9 @@ DETAILED ROLE INSTRUCTIONS:
 ARCHITECTURAL DECISIONS (ADRs):
 {adrs_content}
 
+EXISTING USER JOURNEYS:
+{_load_journey_context()}
+
 Generate the runbook now.
 """
 
@@ -161,3 +164,20 @@ Generate the runbook now.
          console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
 
     console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
+
+
+def _load_journey_context() -> str:
+    """Load existing journey YAML files for context injection.
+    
+    Returns a size-bounded, scrubbed string of journey content.
+    """
+    from agent.core.utils import scrub_sensitive_data
+
+    journeys_content = ""
+    if config.journeys_dir.exists():
+        for jf in config.journeys_dir.rglob("*.yaml"):
+            journeys_content += f"\n---\n{jf.read_text()}"
+
+    if journeys_content:
+        return scrub_sensitive_data(journeys_content[:5000])
+    return "None defined yet."

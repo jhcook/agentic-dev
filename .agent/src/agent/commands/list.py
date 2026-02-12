@@ -278,6 +278,91 @@ def list_runbooks(
             console.print(f"[red]❌ {e}[/red]")
             raise typer.Exit(code=1)
 
+def list_journeys(
+    state: Optional[str] = typer.Argument(None, help="Filter by state (e.g. DRAFT, ACCEPTED)."),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file instead of stdout")
+):
+    """
+    List all user journeys in .agent/cache/journeys.
+    """
+    logger.info(f"Listing journeys (format={output_format}, output={output_file})")
+    journeys_data: List[Dict[str, Any]] = []
+
+    for file_path in config.journeys_dir.rglob("*.yaml"):
+        content = file_path.read_text(errors="ignore")
+
+        # Extract metadata from YAML comments at top of file
+        journey_id = "UNKNOWN"
+        title = "(No title)"
+        file_state = "UNKNOWN"
+        actor = ""
+
+        for line in content.splitlines():
+            line = line.strip()
+            id_match = re.match(r"^#\s*Journey:\s*(.+)$", line)
+            if id_match:
+                journey_id = id_match.group(1).strip()
+            title_match = re.match(r"^#\s*Title:\s*(.+)$", line)
+            if title_match:
+                title = title_match.group(1).strip()
+            state_match = re.match(r"^#\s*State:\s*(.+)$", line)
+            if state_match:
+                file_state = state_match.group(1).strip().upper()
+            if not line.startswith("#"):
+                break
+
+        # Try to extract actor from YAML body
+        try:
+            import yaml
+            data = yaml.safe_load(content)
+            if isinstance(data, dict):
+                actor = data.get("actor", "")
+        except Exception:
+            pass
+
+        if state and state.upper() != file_state.upper():
+            continue
+
+        journeys_data.append({
+            "ID": scrub_sensitive_data(journey_id),
+            "Title": scrub_sensitive_data(title),
+            "Actor": scrub_sensitive_data(actor),
+            "State": file_state,
+            "Path": str(file_path.relative_to(config.repo_root))
+        })
+
+    # Handle output formatting
+    if output_format == "pretty" and not output_file:
+        table = Table(title="🗺️  User Journeys")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("Actor", style="green")
+        table.add_column("State", style="magenta")
+        table.add_column("Path", style="dim")
+
+        for journey in journeys_data:
+            table.add_row(
+                journey["ID"], journey["Title"], journey["Actor"],
+                journey["State"], journey["Path"]
+            )
+
+        if journeys_data:
+            console.print(table)
+        else:
+            console.print("  (No journeys found)")
+    else:
+        try:
+            formatted_output = format_data(output_format, journeys_data)
+
+            if output_file:
+                write_output(formatted_output, output_file)
+            else:
+                print(formatted_output)
+        except ValueError as e:
+            console.print(f"[red]❌ {e}[/red]")
+            raise typer.Exit(code=1)
+
 def list_models(
     provider: Optional[str] = typer.Argument(None, help="Provider to list models for (gemini, openai, anthropic, gh)."),
     output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, csv, yaml, markdown, plain, tsv"),

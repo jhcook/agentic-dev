@@ -1,0 +1,62 @@
+# Journey: JRN-050
+# Linked Story: WEB-005
+# Title: Governance Desk
+
+id: JRN-050
+title: Governance Desk
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- web
+- voice
+actor: developer using voice assistant
+description: Develop a "Governance Desk" in the Agent Console to visualize and manage the governance estate (Stories, Plans,
+  Runbooks, ADRs) via a filesystem-backed UI, ensuring architectural consistency and ease of use.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer initiates phase: Backend Infrastructure'
+  system_response: System executes backend infrastructure
+  assertions:
+  - Backend Infrastructure completes successfully
+- id: 2
+  action: 'Developer initiates phase: Governance Desk UI (Shell & Kanban)'
+  system_response: System executes governance desk ui (shell & kanban)
+  assertions:
+  - Governance Desk UI (Shell & Kanban) completes successfully
+- id: 3
+  action: 'Developer initiates phase: Estate Graph & Editor'
+  system_response: System executes estate graph & editor
+  assertions:
+  - Estate Graph & Editor completes successfully
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- WEB-005
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - admin/logger.py
+  - routers/governance.py
+  tests: []

@@ -67,6 +67,8 @@ def _write_to_disk(id: str, type: str, content: str):
             base_dir = config.plans_dir
         elif type == "runbook":
             base_dir = config.runbooks_dir
+        elif type == "journey":
+            base_dir = config.journeys_dir
         elif type == "adr":
             base_dir = config.adrs_dir
         else:
@@ -89,11 +91,12 @@ def _write_to_disk(id: str, type: str, content: str):
                 title = header
 
         safe_title = _sanitize_filename(title)
-        filename = f"{id}-{safe_title}.md"
+        ext = ".yaml" if type == "journey" else ".md"
+        filename = f"{id}-{safe_title}{ext}"
         
         # Determine Target Directory (Scope-based subdirs for Stories/Plans)
         target_dir = base_dir
-        if type in ["story", "plan"]:
+        if type in ["story", "plan", "journey"]:
             # Check for scope in ID (e.g., BACKEND-123)
             parts = id.split("-")
             if len(parts) > 1 and parts[0].isalpha():
@@ -427,6 +430,7 @@ def scan(verbose: bool = False):
         (Path(".agent/cache/stories"), "story"),
         (Path(".agent/cache/plans"), "plan"),
         (Path(".agent/cache/runbooks"), "runbook"),
+        (Path(".agent/cache/journeys"), "journey"),
         (adr_dir, "adr"),
     ]
 
@@ -440,7 +444,10 @@ def scan(verbose: bool = False):
             if verbose: print(f"Skipping missing directory: {path}")
             continue
 
-        for file in path.rglob("*.md"):
+        # Use appropriate glob pattern based on artifact type
+        glob_pattern = "*.yaml" if type == "journey" else "*.md"
+
+        for file in path.rglob(glob_pattern):
             try:
                 content = file.read_text(encoding="utf-8")
                 
@@ -450,8 +457,8 @@ def scan(verbose: bool = False):
                 if match:
                     art_id = match.group(1)
                 else:
-                    # Fallback
-                    art_id = filename.replace(".md", "")
+                    # Fallback: strip extension
+                    art_id = file.stem
 
                 if verbose:
                     print(f"  Found {type.upper()}: {art_id} ({file})")
@@ -535,7 +542,7 @@ def flush(hard: bool = False):
     console = Console()
     state_file = config.cache_dir / "notion_state.json"
     db_file = config.cache_dir / "agent.db"
-    artifact_dirs = [config.stories_dir, config.plans_dir, config.runbooks_dir]
+    artifact_dirs = [config.stories_dir, config.plans_dir, config.runbooks_dir, config.journeys_dir]
 
     # Summarise what will be deleted
     targets = []

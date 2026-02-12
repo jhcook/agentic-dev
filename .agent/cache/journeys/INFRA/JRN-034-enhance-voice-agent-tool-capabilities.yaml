@@ -1,0 +1,70 @@
+# Journey: JRN-034
+# Linked Story: INFRA-039
+# Title: Enhance Voice Agent Tool Capabilities
+
+id: JRN-034
+title: Enhance Voice Agent Tool Capabilities
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- voice
+actor: developer using voice assistant
+description: Enhance the Voice Agent's capabilities by providing it with deeper understanding of its tools and the underlying
+  codebase, enabling it to answer technical questions, explain functionality, and assist with operational activities more
+  effectively. This involves improving the agent's system prompt, enhancing existing tools with new features (hot reloading,
+  syntax validation, etc.), refactoring tools for clarity, and adding observability measures.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer starts voice session via WebSocket or admin console
+  system_response: Voice agent initializes STT/TTS pipeline
+  assertions:
+  - WebSocket connection established
+  - Audio pipeline ready
+- id: 2
+  action: Developer speaks a command or question
+  system_response: System transcribes speech, processes intent, generates response
+  assertions:
+  - Transcription is accurate
+  - Response is relevant
+- id: 3
+  action: Developer receives spoken response
+  system_response: TTS converts response to speech, streams audio back
+  assertions:
+  - Audio plays clearly
+  - Latency is acceptable
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-039
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - architect.py
+  - backend/voice/orchestrator.py
+  - backend/voice/tools/architect.py
+  - backend/voice/tools/create_tool.py
+  - backend/voice/tools/get_installed_packages.py
+  tests: []

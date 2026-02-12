@@ -1,0 +1,64 @@
+# Journey: JRN-032
+# Linked Story: INFRA-037
+# Title: Additional Voice Providers Google and Azure
+
+id: JRN-032
+title: Additional Voice Providers Google and Azure
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- voice
+actor: developer using voice assistant
+description: Implement support for Google Cloud Speech and Azure Cognitive Services as additional voice providers in the platform.
+  This includes STT and TTS implementations for both providers, factory updates for selection, configuration updates for credentials,
+  and observability improvements.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer starts voice session via WebSocket or admin console
+  system_response: Voice agent initializes STT/TTS pipeline
+  assertions:
+  - WebSocket connection established
+  - Audio pipeline ready
+- id: 2
+  action: Developer speaks a command or question
+  system_response: System transcribes speech, processes intent, generates response
+  assertions:
+  - Transcription is accurate
+  - Response is relevant
+- id: 3
+  action: Developer receives spoken response
+  system_response: TTS converts response to speech, streams audio back
+  assertions:
+  - Audio plays clearly
+  - Latency is acceptable
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-037
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files: []
+  tests: []

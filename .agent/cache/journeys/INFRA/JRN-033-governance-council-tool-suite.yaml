@@ -1,0 +1,73 @@
+# Journey: JRN-033
+# Linked Story: INFRA-038
+# Title: Governance Council Tool Suite
+
+id: JRN-033
+title: Governance Council Tool Suite
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- voice
+actor: developer using voice assistant
+description: 'The Voice Agent currently lacks specific tools to perform the duties of the Governance Council roles. It effectively
+  has no "hands" to manipulate the codebase or verify compliance, forcing it to hallucinate responses or fail.
+
+  This Runbook defines the implementation of a **Modular Tool Suite** mapping to the 10 Governance Roles (Architect, QA, Security,
+  etc.), enabling the agent to act as a true proxy for the council.'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer initiates phase: Package Structure (Complete)'
+  system_response: System executes package structure (complete)
+  assertions:
+  - Package Structure (Complete) completes successfully
+- id: 2
+  action: 'Developer initiates phase: Role Module Implementation'
+  system_response: System executes role module implementation
+  assertions:
+  - Role Module Implementation completes successfully
+- id: 3
+  action: 'Developer initiates phase: Meta Tools (Self-Evolution)'
+  system_response: System executes meta tools (self-evolution)
+  assertions:
+  - Meta Tools (Self-Evolution) completes successfully
+- id: 4
+  action: 'Developer initiates phase: Integration'
+  system_response: System executes integration
+  assertions:
+  - Integration completes successfully
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-038
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - architect.py
+  - core.py
+  - git.py
+  - meta.py
+  - observability.py
+  tests: []

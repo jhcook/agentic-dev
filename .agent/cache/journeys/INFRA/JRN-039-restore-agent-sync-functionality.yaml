@@ -1,0 +1,72 @@
+# Journey: JRN-039
+# Linked Story: INFRA-045
+# Title: Restore Agent Sync Functionality
+
+id: JRN-039
+title: Restore Agent Sync Functionality
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Restore the functionality of the `agent sync` command and its subcommands (`pull`, `push`, `scan`, `status`)
+  by correcting the CLI entry point, removing the broken `agent.sync.main` module, and ensuring proper authentication for
+  sensitive operations.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent sync`
+  system_response: CLI processes the sync request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent sync --help`
+  system_response: CLI processes the --help request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 3
+  action: Developer runs `agent sync pull`
+  system_response: CLI processes the pull request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 4
+  action: Developer runs `agent sync status`
+  system_response: CLI processes the status request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-045
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - main.py
+  - sync/cli.py
+  tests: []

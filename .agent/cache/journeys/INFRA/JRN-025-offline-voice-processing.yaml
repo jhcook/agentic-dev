@@ -1,0 +1,65 @@
+# Journey: JRN-025
+# Linked Story: INFRA-030
+# Title: Offline Voice Processing with Kokoro and Faster-Whisper
+
+id: JRN-025
+title: Offline Voice Processing with Kokoro and Faster-Whisper
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- voice
+actor: developer using voice assistant
+description: Set up the local environment and implement the core service layer for offline voice processing using Kokoro (TTS)
+  and Faster-Whisper (STT), enabling "zero-cost" and "air-gapped" voice capabilities.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer starts voice session via WebSocket or admin console
+  system_response: Voice agent initializes STT/TTS pipeline
+  assertions:
+  - WebSocket connection established
+  - Audio pipeline ready
+- id: 2
+  action: Developer speaks a command or question
+  system_response: System transcribes speech, processes intent, generates response
+  assertions:
+  - Transcription is accurate
+  - Response is relevant
+- id: 3
+  action: Developer receives spoken response
+  system_response: TTS converts response to speech, streams audio back
+  assertions:
+  - Audio plays clearly
+  - Latency is acceptable
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-030
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - test_local_tts.py
+  - voices.json
+  tests: []

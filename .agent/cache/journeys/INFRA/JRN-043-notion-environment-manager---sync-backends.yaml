@@ -1,0 +1,57 @@
+# Journey: JRN-043
+# Linked Story: INFRA-054
+# Title: Notion Environment Manager - Sync Backends
+
+id: JRN-043
+title: Notion Environment Manager - Sync Backends
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Integrate Notion synchronization into the core `agent sync` command, allowing users to synchronize their environments
+  with Notion databases using a unified CLI experience. The integration should support a `--backend` flag to specify Notion
+  as the backend, a `--force` flag to overwrite local or remote state, and coexistence with other backends. Additionally,
+  the `agent sync janitor` command should also support the `--backend` flag for Notion.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer initiates phase: Self-Healing & Bootstrapping'
+  system_response: System executes self-healing & bootstrapping
+  assertions:
+  - Self-Healing & Bootstrapping completes successfully
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-054
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - notion.py
+  - src/agent/cli.py
+  - src/agent/sync/bootstrap.py
+  - src/agent/sync/cli.py
+  - src/agent/sync/notion.py
+  tests: []

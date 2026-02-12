@@ -1,7 +1,7 @@
 ---
 trigger: always_on
-description: Enforce strict state transitions for Plans, Stories, and Runbooks.
-globs: ["**/*.md"]
+description: Enforce strict state transitions for Plans, Stories, Runbooks, and Journeys.
+globs: ["**/*.md", "**/*.yaml"]
 ---
 
 # Governance State Enforcement
@@ -24,3 +24,9 @@ To ensure high-quality, governed development, the following state transitions ar
 - **Required State**: `Status: ACCEPTED`
 - **Constraint**: The `agent implement` command will fail unless the Runbook is ACCEPTED.
 - **Meaning**: The implementation plan and architectural approach have been reviewed and approved by the Governance Panel (or the Agent acting as proxy).
+
+## 4. Journeys
+- **File**: `.agent/cache/journeys/<SCOPE>/JRN-*.yaml`
+- **Required State**: `# State: ACCEPTED`
+- **Constraint**: A Journey should be linked to at least one Story before being ACCEPTED.
+- **Meaning**: The behavioral contract is finalized and represents a real user workflow.

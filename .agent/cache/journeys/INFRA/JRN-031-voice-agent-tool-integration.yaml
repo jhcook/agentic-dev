@@ -1,0 +1,52 @@
+# Journey: JRN-031
+# Linked Story: INFRA-036
+# Title: Voice Agent Tool Integration
+
+id: JRN-031
+title: Voice Agent Tool Integration
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- voice
+actor: developer using voice assistant
+description: Enhance the VoiceOrchestrator with tool support, persistent memory, configurable prompts, latency handling, safety
+  mechanisms, and observability, enabling developers to create more sophisticated and useful voice interactions.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent config`
+  system_response: CLI processes the config request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-036
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - docs/openapi.yaml
+  tests: []

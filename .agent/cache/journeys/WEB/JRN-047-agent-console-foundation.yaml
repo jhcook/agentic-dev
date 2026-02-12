@@ -1,0 +1,55 @@
+# Journey: JRN-047
+# Linked Story: WEB-002
+# Title: Agent Console Foundation
+
+id: JRN-047
+title: Agent Console Foundation
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- web
+- cli
+actor: developer using agent CLI
+description: Implement the foundational "Agent Console" infrastructure.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent admin start`
+  system_response: CLI processes the start request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- WEB-002
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/cli.py
+  - backend/main.py
+  - routers/admin.py
+  - src/agent/commands/admin.py
+  - src/backend/routers/admin.py
+  tests: []

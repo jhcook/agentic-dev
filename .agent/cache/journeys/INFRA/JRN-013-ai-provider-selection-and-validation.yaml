@@ -1,0 +1,65 @@
+# Journey: JRN-013
+# Linked Story: INFRA-014
+# Title: AI Provider Selection and Validation
+
+id: JRN-013
+title: AI Provider Selection and Validation
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: '```python
+
+  # agent/services/ai_service.py
+
+  from agent.config import cfg
+
+  # ... other imports'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent implement --help`
+  system_response: CLI processes the --help request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent new-runbook`
+  system_response: CLI processes the new-runbook request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-014
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - commands.md
+  - docs/commands.md
+  tests: []
