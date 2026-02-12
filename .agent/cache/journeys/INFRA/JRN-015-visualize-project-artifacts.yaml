@@ -1,0 +1,79 @@
+# Journey: JRN-015
+# Linked Story: INFRA-016
+# Title: visualize-project-artifacts
+
+id: JRN-015
+title: visualize-project-artifacts
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: "for edge in graph['edges']:\n        output.append(f'    {edge[\"source\"]} --> {edge[\"target\"]}')"
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent visualize`
+  system_response: CLI processes the visualize request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent visualize --help`
+  system_response: CLI processes the --help request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 3
+  action: Developer runs `agent visualize flow NONEXISTENT-STORY`
+  system_response: CLI processes the NONEXISTENT-STORY request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 4
+  action: Developer runs `agent visualize flow STORY-001`
+  system_response: CLI processes the STORY-001 request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 5
+  action: Developer runs `agent visualize graph`
+  system_response: CLI processes the graph request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-016
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - README.md
+  - agent/commands/visualize.py
+  - agent/core/graph.py
+  - agent/utils/text.py
+  tests: []

@@ -1,0 +1,69 @@
+# Journey: JRN-014
+# Linked Story: INFRA-015
+# Title: Create `agent onboard` CLI command
+
+id: JRN-014
+title: Create `agent onboard` CLI command
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: '```python
+
+  import typer
+
+  import shutil
+
+  import getpass
+
+  from pathlib import Path'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent onboard`
+  system_response: CLI processes the onboard request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent onboard --help`
+  system_response: CLI processes the --help request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-015
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+  - README.md
+  - agent/cli.py
+  - agent/commands/onboard.py
+  tests: []

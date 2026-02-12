@@ -1,0 +1,78 @@
+# Journey: JRN-009
+# Linked Story: INFRA-010
+# Title: Enhance Implement Command
+
+id: JRN-009
+title: Enhance Implement Command
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: "Args:\n        runbook (str): The text of the runbook.\n    \n    Returns:\n        List[dict]: A list of dictionaries\
+  \ with 'file', 'line', and 'content' keys.\n    \"\"\"\n    # Pseudocode for Markdown code block extraction\n    code_blocks\
+  \ = []\n    for match in re.finditer(r\"```(.*?)```\", runbook, re.DOTALL):\n        block = match.group(1)\n        file_path,\
+  \ line_no, content = extract_details_from_block(block)\n        if validate_code_snippet(content):\n            code_blocks.append({'file':\
+  \ file_path, "
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer initiates phase: Extend Command Parsing'
+  system_response: System executes extend command parsing
+  assertions:
+  - Extend Command Parsing completes successfully
+- id: 2
+  action: 'Developer initiates phase: Parse the Runbook for Code Blocks'
+  system_response: System executes parse the runbook for code blocks
+  assertions:
+  - Parse the Runbook for Code Blocks completes successfully
+- id: 3
+  action: 'Developer initiates phase: Apply Changes to Files'
+  system_response: System executes apply changes to files
+  assertions:
+  - Apply Changes to Files completes successfully
+- id: 4
+  action: 'Developer initiates phase: Add Logging and Backup Mechanism'
+  system_response: System executes add logging and backup mechanism
+  assertions:
+  - Add Logging and Backup Mechanism completes successfully
+- id: 5
+  action: 'Developer initiates phase: Testing & Validation'
+  system_response: System executes testing & validation
+  assertions:
+  - Testing & Validation completes successfully
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-010
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/commands/implement.py
+  - agent/utils/backup_manager.py
+  - agent/utils/code_parser.py
+  - agent/utils/logger.py
+  - tests/agent/test_implement.py
+  tests: []

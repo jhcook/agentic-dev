@@ -1,0 +1,68 @@
+# Journey: JRN-029
+# Linked Story: INFRA-034
+# Title: Implement ReAct Agent Loop Engine
+
+id: JRN-029
+title: Implement ReAct Agent Loop Engine
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- web_ui
+actor: developer using admin console
+description: Build a robust, stateful `AgentExecutor` engine that enables "ReAct" (Reason + Act) loops. This decouples the
+  agent's cognitive cycle (Thinking -> Tool Call -> Observation) from the stateless `AIService`. It provides the foundational
+  "Brain" needed for Council agents to using tools securely and effectively.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer starts admin console with `agent admin start`
+  system_response: Frontend (5173) and backend (8000) start
+  assertions:
+  - Console is accessible at http://localhost:5173
+- id: 2
+  action: 'Developer navigates to feature: Implement ReAct Agent Loop Engine'
+  system_response: UI renders Implement ReAct Agent Loop Engine view
+  assertions:
+  - View loads without errors
+  - Data is displayed correctly
+- id: 3
+  action: Developer interacts with the feature
+  system_response: System processes the interaction and updates state
+  assertions:
+  - Changes are persisted
+  - UI feedback is immediate
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-034
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/core/ai/service.py
+  - agent/core/engine/executor.py
+  - agent/core/engine/parser.py
+  - agent/core/engine/typedefs.py
+  - scripts/test_agent_loop.py
+  tests: []

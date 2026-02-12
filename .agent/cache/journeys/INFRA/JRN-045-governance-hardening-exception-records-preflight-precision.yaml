@@ -1,0 +1,64 @@
+# Journey: JRN-045
+# Linked Story: INFRA-056
+# Title: Governance Hardening — Exception Records & Preflight Precision
+
+id: JRN-045
+title: Governance Hardening — Exception Records & Preflight Precision
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Introduce a formal mechanism for persisting preflight rebuttals (Architectural Exception Records), harden governance
+  rules to eliminate recurring false positives, and fix the copy-paste bug in `the-team.mdc`. All changes are governance-layer
+  only — no application logic is modified.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer configures prerequisites for Governance Hardening — Exception Records & Preflight Precision
+  system_response: System validates configuration
+  assertions:
+  - Configuration is valid
+- id: 2
+  action: Developer executes the governance hardening — exception records & preflight precision workflow
+  system_response: System performs introduce a formal mechanism for persisting preflight rebuttals (architectural e
+  assertions:
+  - Operation completes successfully
+  - Output matches expectations
+- id: 3
+  action: Developer verifies the result
+  system_response: System displays confirmation or results
+  assertions:
+  - Expected artifacts created
+  - No errors reported
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-056
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - commands/utils.py
+  tests: []

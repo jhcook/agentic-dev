@@ -1,0 +1,64 @@
+# Journey: JRN-041
+# Linked Story: INFRA-050
+# Title: Relational Integrity & Issue Management
+
+id: JRN-041
+title: Relational Integrity & Issue Management
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Implement a `NotionJanitor` to automatically maintain relational links between Stories, Plans, and ADRs in Notion,
+  ensuring data integrity and accurate project visibility. This includes detecting orphan stories, automatically linking stories
+  to ADRs based on text references, and notifying users about missing required fields.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer configures prerequisites for Relational Integrity & Issue Management
+  system_response: System validates configuration
+  assertions:
+  - Configuration is valid
+- id: 2
+  action: Developer executes the relational integrity & issue management workflow
+  system_response: System performs implement a `notionjanitor` to automatically maintain relational links between s
+  assertions:
+  - Operation completes successfully
+  - Output matches expectations
+- id: 3
+  action: Developer verifies the result
+  system_response: System displays confirmation or results
+  assertions:
+  - Expected artifacts created
+  - No errors reported
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-050
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - agent/core/notion/client.py
+  tests: []

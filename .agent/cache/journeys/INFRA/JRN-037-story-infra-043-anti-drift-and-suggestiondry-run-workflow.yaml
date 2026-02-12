@@ -1,0 +1,62 @@
+# Journey: JRN-037
+# Linked Story: INFRA-043
+# Title: STORY-INFRA-043: Anti-Drift and Suggestion/Dry-Run Workflow
+
+id: JRN-037
+title: 'STORY-INFRA-043: Anti-Drift and Suggestion/Dry-Run Workflow'
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: Implement an "Anti-Drift" rule to prevent the agent from making unsolicited code changes, introduce a "Suggestion
+  Workflow" for proposing improvements, and enable a "Dry Run" mode to preview changes before application.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: 'Developer configures prerequisites for STORY-INFRA-043: Anti-Drift and Suggestion/Dry-Run Workflow'
+  system_response: System validates configuration
+  assertions:
+  - Configuration is valid
+- id: 2
+  action: 'Developer executes the story-infra-043: anti-drift and suggestion/dry-run workflow workflow'
+  system_response: System performs implement an "anti-drift" rule to prevent the agent from making unsolicited code
+  assertions:
+  - Operation completes successfully
+  - Output matches expectations
+- id: 3
+  action: Developer verifies the result
+  system_response: System displays confirmation or results
+  assertions:
+  - Expected artifacts created
+  - No errors reported
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-043
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files: []
+  tests: []

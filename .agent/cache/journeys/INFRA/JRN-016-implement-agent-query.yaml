@@ -1,0 +1,59 @@
+# Journey: JRN-016
+# Linked Story: INFRA-017
+# Title: Implement Agent Query
+
+id: JRN-016
+title: Implement Agent Query
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: 'import os
+
+  from pathlib import Path
+
+  import re'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent query`
+  system_response: CLI processes the query request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-017
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+  - README.md
+  - agent/core/ai/rag.py
+  - agent/core/context_builder.py
+  tests: []

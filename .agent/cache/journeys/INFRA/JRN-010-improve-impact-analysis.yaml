@@ -1,0 +1,50 @@
+# Journey: JRN-010
+# Linked Story: INFRA-011
+# Title: Improve Impact Analysis
+
+id: JRN-010
+title: Improve Impact Analysis
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: 'Complete implementation with AST parsing, path resolution, and caching:'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent impact`
+  system_response: CLI processes the impact request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-011
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files: []
+  tests: []

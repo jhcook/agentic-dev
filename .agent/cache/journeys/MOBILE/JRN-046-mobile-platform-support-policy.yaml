@@ -1,0 +1,62 @@
+# Journey: JRN-046
+# Linked Story: MOBILE-001
+# Title: Mobile Platform Support Policy
+
+id: JRN-046
+title: Mobile Platform Support Policy
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- mobile
+- mobile
+actor: mobile developer
+description: Establish and technically enforce a mobile platform support policy of "Current + 2" major versions for iOS and
+  Android, ensuring consistent user experience, reduced maintenance burden, and improved security.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer configures prerequisites for Mobile Platform Support Policy
+  system_response: System validates configuration
+  assertions:
+  - Configuration is valid
+- id: 2
+  action: Developer executes the mobile platform support policy workflow
+  system_response: System performs establish and technically enforce a mobile platform support policy of "current +
+  assertions:
+  - Operation completes successfully
+  - Output matches expectations
+- id: 3
+  action: Developer verifies the result
+  system_response: System displays confirmation or results
+  assertions:
+  - Expected artifacts created
+  - No errors reported
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- MOBILE-001
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files: []
+  tests: []

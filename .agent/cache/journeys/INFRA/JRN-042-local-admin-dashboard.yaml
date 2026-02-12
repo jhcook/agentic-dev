@@ -1,0 +1,60 @@
+# Journey: JRN-042
+# Linked Story: INFRA-051
+# Title: Local Admin Dashboard
+
+id: JRN-042
+title: Local Admin Dashboard
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- web_ui
+actor: developer using admin console
+description: Create a local web-based admin dashboard within the `agent admin` console to display project status, including
+  active stories, pending PRs, total ADRs, and a Kanban board for story management. This will provide developers with an at-a-glance
+  view of project activity without relying on external tools or manual data synchronization.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent admin`
+  system_response: CLI processes the admin request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+- id: 2
+  action: Developer runs `agent admin start`
+  system_response: CLI processes the start request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-051
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - App.tsx
+  - all_stories.json
+  tests: []

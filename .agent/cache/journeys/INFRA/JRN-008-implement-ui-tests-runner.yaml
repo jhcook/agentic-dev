@@ -1,0 +1,59 @@
+# Journey: JRN-008
+# Linked Story: INFRA-009
+# Title: Implement UI Tests Runner
+
+id: JRN-008
+title: Implement UI Tests Runner
+state: COMMITTED
+schema_version: 1
+priority: medium
+tags:
+- infra
+- mobile
+actor: mobile developer
+description: '### Observability
+
+  - [ ] New log file created: `.agent/logs/agent_run_ui_tests.log`.
+
+  - [ ] Error and transaction logs sanitized.
+
+  - [ ] Metrics added for `maestro test` execution (e.g., number of flows, pass rate).'
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+auth_context:
+  level: public
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent run-ui-tests`
+  system_response: CLI processes the run-ui-tests request
+  assertions:
+  - Command exits with status 0
+  - Expected output displayed
+error_paths:
+- trigger_step: 1
+  condition: Missing configuration or prerequisites
+  system_response: CLI displays clear error with remediation steps
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Command run with no network access
+  expected: Graceful degradation or clear offline error
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-009
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - README.md
+  - agent/commands/check.py
+  - tests/test_agent_run_ui_tests.py
+  tests: []
