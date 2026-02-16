@@ -301,19 +301,16 @@ def preflight(
             
             # Find all test files
             all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
-            # Filter matches, but ALLOW .agent/tests while excluding other .agent internals and node_modules
+            # Filter out non-test directories (node_modules, venvs)
+            # NOTE: .agent/ tests are NOT excluded here — the dependency
+            # analysis below ensures only tests related to changed files run.
             filtered_tests = []
             for f in all_test_files:
                 rel_path = f.relative_to(Path.cwd())
                 parts = rel_path.parts
                 
-                
                 # Exclude node_modules and virtual environments
                 if "node_modules" in parts or ".venv" in parts or "venv" in parts:
-                    continue
-                
-                # logic to exclude .agent UNLESS it's .agent/tests
-                if ".agent" in parts and "tests" not in parts:
                     continue
                     
                 filtered_tests.append(rel_path)
@@ -336,9 +333,7 @@ def preflight(
                     relevant_tests.add(test_file)
             
             # Construct pytest command
-            # Update: Don't ignore .agent blindly, as we have tests in .agent/tests
-            # Instead, ignore specific non-test dirs if needed to avoid scanning noise
-            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent/cache", "--ignore=.agent/logs"]
+            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent"]
             
             if relevant_tests:
                 console.print(f"[green]🎯 Found {len(relevant_tests)} relevant test(s).[/green]")
@@ -463,7 +458,7 @@ def preflight(
                     if not line and process.poll() is not None:
                         break
                     if line:
-                        console.print(line, end="")
+                        console.print(line, end="", markup=False)
                         captured_output.append(line)
                         
                 # Ensure we get the return code
