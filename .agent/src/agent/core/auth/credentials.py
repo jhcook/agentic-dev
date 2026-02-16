@@ -45,7 +45,7 @@ def validate_credentials(check_llm: bool = True) -> None:
     provider_key_map = {
         "openai": ["OPENAI_API_KEY"],
         "anthropic": ["ANTHROPIC_API_KEY"],
-        "gemini": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+        "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         "gh": ["GH_API_KEY", "GITHUB_TOKEN"]
     }
     

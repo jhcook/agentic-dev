@@ -686,6 +686,15 @@ def preflight(
     # -----------------
 
     if ai:
+        # Validate credentials before AI governance review
+        from agent.core.auth.credentials import validate_credentials
+        from agent.core.auth.errors import MissingCredentialsError
+        try:
+            validate_credentials(check_llm=True)
+        except MissingCredentialsError as e:
+            console.print(str(e))
+            raise typer.Exit(code=1)
+
         # Interactive repair loop — re-run governance after each fix
         MAX_GOVERNANCE_RETRIES = 3
         governance_passed = False

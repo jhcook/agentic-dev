@@ -92,6 +92,6 @@ def test_dynamic_provider_switching(clear_env, mock_secret_manager):
 
     # 2. Gemini
     with patch("agent.core.auth.credentials.LLM_PROVIDER", "gemini"):
-        # Env check (GOOGLE_API_KEY)
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "AIza..."}):
+        # Env check (GEMINI_API_KEY — canonical name)
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "AIza..."}):
             validate_credentials() # Should pass

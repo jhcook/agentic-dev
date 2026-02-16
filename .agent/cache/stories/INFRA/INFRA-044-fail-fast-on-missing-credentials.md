@@ -1,50 +1,55 @@
-# Patched Content for credentials.py
+# INFRA-044: Fail Fast on Missing Credentials
 
-def validate_credentials():
-    # ... existing code ...
-    missing_keys = [] # assuming 'missing_keys' is populated with missing credential keys
-    if missing_keys:
-        provider = 'OpenAI'  # example provider
-        logger.warning(f"AUDIT: Missing critical credentials for provider '{provider}'.")
-    # ... more code ...
+## State
 
-# In a separate UI error handling module (e.g., ui_utils.py)
+ACCEPTED
 
-def handle_cli_error(cli_call_string: str, exception: Exception):
-    if isinstance(exception, MissingCredentialsError):
-        print(f"ERROR: Missing credentials.  Please check CLI logs for details.")
-    else:
-        print(f"ERROR: Could not launch command `{cli_call_string}`, check the CLI logs for more information.")
-    # Potentially log the full exception for debugging purposes
+## Problem Statement
 
-# Example usage in the UI layer
+The `agent preflight` command fails in CI environments (e.g., GitHub Actions) with a `MissingCredentialsError` for `GOOGLE_API_KEY` even when AI features are not requested (`--ai` not passed). This regression was caused by two issues: (1) preflight being unconditionally wrapped with `with_creds` in `main.py`, and (2) an incomplete rename of the Gemini API key environment variable from `GOOGLE_API_KEY` to `GEMINI_API_KEY`.
 
-from ui_utils import handle_cli_error
+## User Story
 
-try:
-    cli_call = "agent admin"
-    cli_call()
-except Exception as e:
-    handle_cli_error(cli_call, e)
+As a developer running `agent preflight` in CI, I want the command to succeed without requiring LLM API keys so that non-AI governance checks are not blocked by missing credentials.
 
-```
+## Acceptance Criteria
 
-```python
-# Patched Content for agent/core/auth/tests/test_validate_credentials.py
-import pytest
+- [x] **Scenario 1**: Given a CI environment with no LLM API keys, When `agent preflight` is run without `--ai`, Then it completes successfully without credential errors.
+- [x] **Scenario 2**: Given a CI environment with no LLM API keys, When `agent preflight --ai` is run, Then it fails gracefully with a clear "Missing Credentials" message referencing `GEMINI_API_KEY`.
+- [x] **Scenario 3**: Given `GEMINI_API_KEY` is set (the canonical name), When any credential validation occurs for the `gemini` provider, Then it is accepted without requiring the legacy `GOOGLE_API_KEY`.
+- [x] **Negative Test**: System handles locked Secret Manager, missing env vars, and uninitialized secret stores gracefully without crashing.
 
-from agent.core.auth.credentials import validate_credentials
-from agent.core.auth.errors import MissingCredentialsError
+## Non-Functional Requirements
 
-def assert_error_message_contains_key_name_but_not_value(error_message: str, key_name: str):
-    assert key_name in error_message
-    assert "value" not in error_message.lower()
+- Performance: No additional latency — credential checks are inline conditionals
+- Security: Credential values are never logged, only key names appear in error messages
+- Compliance: SOC2 audit logging preserved (`AUDIT: Missing critical credentials` warning)
+- Observability: Clear error messages guide remediation (`export GEMINI_API_KEY=...` or `agent onboard`)
 
+## Linked ADRs
 
-def test_missing_credential_error_message():
-    # ... existing test setup ...
-    with pytest.raises(MissingCredentialsError) as exc_info:
-        validate_credentials()
-    error_message = str(exc_info.value)
-    assert_error_message_contains_key_name_but_not_value(error_message, "OPENAI_API_KEY")  # Example: Replace with actual key name
-    # ... more assertions for other missing keys using the helper function ...
+- N/A
+
+## Linked Journeys
+
+- N/A
+
+## Impact Analysis Summary
+
+Components touched: `main.py`, `check.py`, `credentials.py`, `config.py`
+Workflows affected: `agent preflight`, `agent preflight --ai`, `_get_enabled_providers`, `is_ai_configured`
+Risks identified: Backward compatibility with `GOOGLE_API_KEY` — mitigated by keeping it as a fallback in all checked locations
+
+## Test Strategy
+
+Comprehensive regression test suite added in `test_regression_credentials.py` (36 tests):
+
+- Per-provider credential validation (all 4 providers, both env var and secret store paths)
+- `with_creds` decorator isolation tests
+- CLI registration source-inspection tests (prevents re-wrapping preflight)
+- CI-environment simulation (no API keys + no secret store)
+- Env var naming consistency checks across `credentials.py`, `service.py`, `config.py`
+
+## Rollback Plan
+
+Revert changes to `main.py`, `check.py`, `credentials.py`, and `config.py`. The regression tests in `test_regression_credentials.py` will immediately flag the reverted state as broken with descriptive failure messages.

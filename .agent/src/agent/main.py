@@ -93,7 +93,7 @@ from agent.core.auth.decorators import with_creds
 
 # Governance & Quality
 app.command()(lint.lint)
-app.command()(with_creds(check.preflight))
+app.command()(check.preflight)
 app.command()(with_creds(check.impact))
 app.command()(with_creds(check.panel))
 app.command(name="run-ui-tests")(check.run_ui_tests)

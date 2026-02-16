@@ -145,7 +145,7 @@ class Config:
             providers.append("openai")
         if os.getenv("ANTHROPIC_API_KEY"):
             providers.append("anthropic")
-        if os.getenv("GOOGLE_API_KEY"):
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
             providers.append("gemini")
         return providers
 
@@ -357,9 +357,8 @@ LLM_API_KEY = os.getenv("LLM_API_KEY")
 
 def is_ai_configured() -> bool:
     """Checks if the necessary API keys for AI services are configured."""
-    # Assuming Gemini uses GOOGLE_API_KEY
     if LLM_PROVIDER == "gemini":
-         return bool(os.getenv("GOOGLE_API_KEY")) or bool(LLM_API_KEY)
+         return bool(os.getenv("GEMINI_API_KEY")) or bool(os.getenv("GOOGLE_API_KEY")) or bool(LLM_API_KEY)
     return bool(LLM_API_KEY)
 
 
