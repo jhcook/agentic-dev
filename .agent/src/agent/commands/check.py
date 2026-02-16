@@ -301,9 +301,8 @@ def preflight(
             
             # Find all test files
             all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
-            # Filter out non-test directories (node_modules, venvs)
-            # NOTE: .agent/ tests are NOT excluded here — the dependency
-            # analysis below ensures only tests related to changed files run.
+            # Filter out non-application test files
+            # .agent/ has its own test infra — never run agent tests in preflight
             filtered_tests = []
             for f in all_test_files:
                 rel_path = f.relative_to(Path.cwd())
@@ -311,6 +310,10 @@ def preflight(
                 
                 # Exclude node_modules and virtual environments
                 if "node_modules" in parts or ".venv" in parts or "venv" in parts:
+                    continue
+                
+                # Exclude agent internal tests — preflight is for application code
+                if ".agent" in parts:
                     continue
                     
                 filtered_tests.append(rel_path)
@@ -393,7 +396,8 @@ def preflight(
             console.print("[dim]📱 Detecting Mobile (React Native) changes...[/dim]")
             mobile_root = Path("mobile")
             pkg_json = mobile_root / "package.json"
-            if pkg_json.exists():
+            node_modules = mobile_root / "node_modules"
+            if pkg_json.exists() and node_modules.exists():
                 import json
                 scripts = json.loads(pkg_json.read_text()).get("scripts", {})
                 
@@ -409,13 +413,16 @@ def preflight(
                         "cmd": ["npm", "test"],
                         "cwd": mobile_root
                     })
+            elif pkg_json.exists():
+                console.print("[dim]  ⏭️  Skipping mobile lint/tests (node_modules not installed — handled by mobile-ci workflow)[/dim]")
 
         # --- Web Strategy (NPM) ---
         if web_changes:
             console.print("[dim]🌐 Detecting Web (Next.js) changes...[/dim]")
             web_root = Path("web")
             pkg_json = web_root / "package.json"
-            if pkg_json.exists():
+            node_modules = web_root / "node_modules"
+            if pkg_json.exists() and node_modules.exists():
                 import json
                 scripts = json.loads(pkg_json.read_text()).get("scripts", {})
                 
@@ -431,6 +438,8 @@ def preflight(
                         "cmd": ["npm", "test"],
                         "cwd": web_root
                     })
+            elif pkg_json.exists():
+                console.print("[dim]  ⏭️  Skipping web lint/tests (node_modules not installed — handled by web CI workflow)[/dim]")
 
         # --- EXECUTE CMDS ---
         tests_passed = True
