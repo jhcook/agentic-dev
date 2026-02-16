@@ -2,9 +2,7 @@
 
 ## State
 
-ACCEPTED
-
-## Problem Statement
+COMMITTED## Problem Statement
 
 The `agent preflight` command fails in CI environments (e.g., GitHub Actions) with a `MissingCredentialsError` for `GOOGLE_API_KEY` even when AI features are not requested (`--ai` not passed). This regression was caused by two issues: (1) preflight being unconditionally wrapped with `with_creds` in `main.py`, and (2) an incomplete rename of the Gemini API key environment variable from `GOOGLE_API_KEY` to `GEMINI_API_KEY`.
 
