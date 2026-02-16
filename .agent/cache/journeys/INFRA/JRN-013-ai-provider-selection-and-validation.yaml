@@ -37,6 +37,13 @@ steps:
   assertions:
   - Command exits with status 0
   - Expected output displayed
+  - Expected output displayed
+- id: 3
+  action: Developer runs `agent new-story --ai --prompt "A story about adding AI generation"`
+  system_response: CLI validates credentials and generates story content
+  assertions:
+  - Command exits with status 0
+  - Generated file contains AI content
 error_paths:
 - trigger_step: 1
   condition: Missing configuration or prerequisites

@@ -340,7 +340,18 @@ def get_valid_providers() -> List[str]:
 # Configuration for Agent Query feature (INFRA-017)
 AGENT_VERSION = "1.0.0"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+# Default to loading provider from agent.yaml if possible
+_agent_yaml_path = Path(__file__).resolve().parents[3] / "etc" / "agent.yaml"
+_yaml_provider = "openai"
+if _agent_yaml_path.exists():
+    try:
+        with open(_agent_yaml_path, "r", encoding="utf-8") as f:
+            _yaml_data = yaml.safe_load(f) or {}
+            _yaml_provider = _yaml_data.get("agent", {}).get("provider", "openai")
+    except Exception:
+        pass
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", _yaml_provider)
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 
 

@@ -103,6 +103,17 @@ build-backend = "poetry.core.masonry.api"
 per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
 
 [tool.pytest.ini_options]
+norecursedirs = [
+    ".git", 
+    ".venv", 
+    "venv", 
+    "build", 
+    "dist", 
+    "__pycache__"
+]
+filterwarnings = [
+    "ignore::SyntaxWarning:passlib.*"
+]
 markers = [
     "requires_ai: requires AI optional deps (langchain, openai, anthropic, google-genai)",
     "requires_voice: requires voice optional deps (deepgram, numpy, onnxruntime)",

@@ -47,6 +47,8 @@ def cli(
     provider: str = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
 ) -> None:
     """A CLI for managing and interacting with the AI agent."""
+    # Environment variables loaded by config.py at import time (dotenv)
+
     from agent.core.logger import configure_logging
     configure_logging(verbose)
 
@@ -100,10 +102,10 @@ app.command("audit")(audit.audit)
 
 
 # Workflows
-app.command()(with_creds(workflow.commit))
-app.command()(with_creds(workflow.pr))
+app.command()(workflow.commit)
+app.command()(workflow.pr)
 app.command()(with_creds(implement.implement))
-app.command(name="new-story")(with_creds(story.new_story))
+app.command(name="new-story")(story.new_story)
 
 app.command(name="new-runbook")(with_creds(runbook.new_runbook))
 app.command(name="new-journey")(journey.new_journey)
@@ -136,7 +138,7 @@ app.command("list-journeys")(list_cmd.list_journeys)
 # Helper Commands
 app.command("match-story")(with_creds(match.match_story))
 app.command("validate-story")(check.validate_story)
-app.command("new-plan")(with_creds(plan.new_plan))
+app.command("new-plan")(plan.new_plan)
 
 
 if __name__ == "__main__":

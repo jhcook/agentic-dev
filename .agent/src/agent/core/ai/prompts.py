@@ -93,6 +93,7 @@ OPTIONS TO GENERATE:
 
 OUTPUT FORMAT:
 Return a JSON list of objects. Do NOT wrap in markdown code blocks.
+IMPORTANT: You MUST escape all double quotes and newlines within the JSON strings to ensure it is parseable.
 [
   {
     "title": "Minimal Fix",
@@ -132,6 +133,7 @@ CRITICAL RESPONSE GUIDELINES:
 - You are a JSON generator. You do NOT speak.
 - Output ONLY valid JSON array.
 - Do NOT use markdown code blocks (```json).
+- IMPORTANT: Escape all double quotes (\") and newlines (\\n) inside string values.
 - Do NOT provide an introduction or conclusion.
 - If you cannot generate a fix, return an empty list [].
 
@@ -145,6 +147,63 @@ OUTPUT FORMAT:
   {{
     "title": "Refactor Fix",
     "description": "Robust implementation addressing findings.",
+    "patched_content": "...FULL file content with fix applied..."
+  }}
+]
+"""
+        return base_prompt
+
+    elif failure_type == "test_failure":
+        test_output = context.get("test_output", "")
+        content = context.get("content", "")
+        test_file = context.get("test_file", "unknown_test.py")
+        
+        # Manually escape significant characters if not using json.dumps for the whole prompt
+        # But better to just let the LLM handle raw text if wrapped.
+        # The QA finding specifically asks for escaping in the JSON strings of the *prompt generation*.
+        # We will use triple quotes which usually handles newlines, but for logic safety:
+        # We prefer to keep it readable, but if QA demands escaping, we'll use json.dumps for the content block.
+        import json
+        escaped_output = json.dumps(test_output)
+        
+        base_prompt = f"""
+You are an expert QA Engineer and Python Developer.
+A unit test has failed. Your task is to propose fixes for the TEST FILE to resolve the failure.
+Note: We are primarily fixing the test code itself (e.g. updating assertions, fixing logic), but if the fix is obvious in the prompt, you might suggest it.
+However, you only have write access to the test file content provided below.
+
+TEST FAILURE OUTPUT:
+{escaped_output}
+
+TEST FILE CONTENT ({test_file}):
+{content}
+
+TASK:
+Generate 2-3 distinct options to resolve the test failure by modifying the TEST FILE.
+
+OPTIONS TO GENERATE:
+1. Fix Syntax: Correct syntax errors (e.g. indentation, missing parens, invalid syntax).
+2. Fix Assertion: Update expectations to match reality if the code behavior is correct but test is outdated.
+3. Fix Logic: Correct bugs in the test setup/teardown or logic.
+4. Skip/Ignore: Mark test as skipped (e.g. @pytest.mark.skip) if it's a known issue to be fixed later (use sparingly).
+
+CRITICAL RESPONSE GUIDELINES:
+- You are a JSON generator. You do NOT speak.
+- Output ONLY valid JSON array.
+- Do NOT use markdown code blocks (```json).
+- IMPORTANT: Escape all double quotes (\") and newlines (\\n) inside string values.
+- Changes must be valid Python code.
+
+OUTPUT FORMAT:
+[
+  {{
+    "title": "Fix Assertion",
+    "description": "Updates the expected value.",
+    "patched_content": "...FULL file content with fix applied..."
+  }},
+  {{
+    "title": "Skip Test",
+    "description": "Temporarily skips the failing test.",
     "patched_content": "...FULL file content with fix applied..."
   }}
 ]

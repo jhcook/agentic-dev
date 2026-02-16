@@ -18,6 +18,8 @@ import typer
 from rich.console import Console
 from rich.prompt import IntPrompt, Prompt
 
+from agent.core.auth.credentials import validate_credentials
+
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title
 from agent.db.client import upsert_artifact
@@ -26,7 +28,9 @@ app = typer.Typer()
 console = Console()
 
 def new_story(
-    story_id: Optional[str] = typer.Argument(None, help="The ID of the story (e.g., MOBILE-001).")
+    story_id: Optional[str] = typer.Argument(None, help="The ID of the story (e.g., MOBILE-001)."),
+    ai: bool = typer.Option(False, "--ai", help="Enable AI generation."),
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="Context for AI generation.")
 ):
     """
     Create a new story file.
@@ -80,6 +84,24 @@ def new_story(
         content = template_path.read_text()
         content = content.replace("STORY-XXX", story_id)
         content = content.replace(": Title", f": {title}")
+        
+        if ai:
+            validate_credentials(check_llm=True)
+            from agent.core.ai import ai_service
+            
+            if not prompt:
+                prompt = Prompt.ask("Enter context for AI generation")
+                
+            console.print("[dim]🤖 AI is generating story content...[/dim]")
+            try:
+                sys_prompt = "You are a product manager. Fill in the story template based on the user context. Keep it professional and concise."
+                user_prompt = f"TEMPLATE:\n{content}\n\nCONTEXT:\n{prompt}"
+                generated = ai_service.complete(sys_prompt, user_prompt)
+                if generated:
+                    content = generated
+            except Exception as e:
+                console.print(f"[yellow]⚠️  AI generation failed: {e}[/yellow]")
+
     else:
         # Fallback template
         content = f"""# {story_id}: {title}

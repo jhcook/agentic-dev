@@ -21,6 +21,7 @@ from rich.prompt import Prompt
 
 from agent.commands.check import preflight  # Verify import works or move core logic
 from agent.core.utils import infer_story_id
+from agent.core.auth.credentials import validate_credentials
 
 console = Console()
 
@@ -94,6 +95,7 @@ def pr(
 
     summary = commit_msg
     if ai:
+        validate_credentials(check_llm=True)
         console.print("[dim]🤖 AI is generating a PR summary...[/dim]")
         try:
              # Get diff compared to main
@@ -151,9 +153,11 @@ def commit(
     """
     # Configure AI if requested
     if ai and provider:
+        validate_credentials(check_llm=True)
         from agent.core.ai import ai_service  # ADR-025: lazy init
         ai_service.set_provider(provider)
     elif ai: 
+        validate_credentials(check_llm=True)
         # Ensure ai_service init is triggered if not explicitly imported at top level
         from agent.core.ai import ai_service  # ADR-025: lazy init
 

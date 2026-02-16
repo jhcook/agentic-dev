@@ -9,6 +9,21 @@
   - Implemented `InteractiveFixer` service for identifying and repairing Story schema and governance violations.
   - Added AI-powered fix suggestions and automated verification loop.
   - Added File-based backup mechanism (replacing `git stash`) for safe rollbacks.
+- **Improved Preflight Output & UX** (INFRA-056):
+  - Added **Blocking Issues Summary** to clarify overall status before detailed panels.
+  - Added **Interactive Secret Unlock**: Prompts to unlock Secret Manager if credentials are found but locked.
+  - Added **GH Models Context Limit Handling**: Explicitly warns when prompts exceed 8k token limits (413 errors).
+  - Added **Smart Content Truncation**: Automatically truncates large files in `InteractiveFixer` to fit context windows (simulating chunking).
+  - Fixed duplicate output panels in interactive mode.
+  - Optimized output verbosity.
+- **Architectural Compliance**:
+  - Moved credential validation to `AIService` (Core layer) to clean up CLI dependencies.
+  - Relaxed security restrictions for internal agent development tools (`security.md`).
+- **Bug Fixes**:
+  - Fixed JSON escaping in test failure prompts (QA Prompt Injection).
+  - Fixed "Invalid JSON" errors in preflight response parsing.
+  - Fixed `LLM_PROVIDER` resolution ignoring `agent.yaml`.
+  - Enforced credential validation for locked Secret Manager to prevent silent fallback.
 - **Voice Agent Integration for Preflight** (INFRA-039):
   - Added `AGENT_VOICE_MODE` detection to optimize CLI output for speech-to-text interfaces.
   - Enabled hands-free interactive repair via voice commands.

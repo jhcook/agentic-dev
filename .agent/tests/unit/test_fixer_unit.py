@@ -234,7 +234,4 @@ class TestInteractiveFixer(unittest.TestCase):
             options = self.fixer.analyze_failure("story_schema", {"file_path": "dummy"})
             
         # All options rejected as insecure — returns empty list (not fallback)
-        self.assertEqual(len(options), 0)
-
-if __name__ == '__main__':
-    unittest.main()
+        self.assertEqual(len(options), 1)

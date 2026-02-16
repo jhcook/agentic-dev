@@ -40,18 +40,15 @@ def agent_sandbox(tmp_path):
     subprocess.run(["git", "config", "user.email", "bot@example.com"], cwd=tmp_path, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "Test Bot"], cwd=tmp_path, check=True, capture_output=True)
     
-    # Copy .agent directory
+    # Copy .agent directory — exclude heavy dirs to prevent memory pressure
     src_agent = os.path.join(REPO_ROOT, ".agent")
     dest_agent = tmp_path / ".agent"
     
-    # Ignore __pycache__ and other artifacts if needed, but copytree default is fine usually
-    shutil.copytree(src_agent, dest_agent)
+    def _ignore_heavy_dirs(directory, contents):
+        """Exclude __pycache__, .venv, node_modules, and .git to reduce memory footprint."""
+        return {c for c in contents if c in ('__pycache__', '.venv', 'node_modules', '.git', '.pytest_cache')}
     
-    # Executable path
-    agent_bin = dest_agent / "bin" / "agent"
-    
-    # Make sure it's executable
-    os.chmod(agent_bin, 0o755)
+    shutil.copytree(src_agent, dest_agent, ignore=_ignore_heavy_dirs)
     
     # Executable path
     agent_bin = dest_agent / "bin" / "agent"
@@ -89,8 +86,7 @@ def agent_sandbox(tmp_path):
 def test_agent_help(agent_sandbox):
     """Test standard help output."""
     agent_bin, _ = agent_sandbox
-    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env())
-    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env())
+    result = subprocess.run([agent_bin, "help"], capture_output=True, text=True, env=get_venv_env(), timeout=30)
     # Depending on checking behavior, if no secrets, it might just print help. 
     # If it fails due to missing deps (not installed in sandbox venv context?), we check return code.
     # But usually help should always work.
@@ -113,7 +109,7 @@ def test_new_story_interactive(agent_sandbox):
         cwd=cwd,
         env=get_venv_env()
     )
-    stdout, stderr = proc.communicate(input="Test Story Title\n")
+    stdout, stderr = proc.communicate(input="Test Story Title\n", timeout=30)
     
     assert proc.returncode == 0
     assert "Created story" in stdout
@@ -142,7 +138,7 @@ def test_new_story_auto_id(agent_sandbox):
         cwd=cwd,
         env=get_venv_env()
     )
-    stdout, stderr = proc.communicate(input=inputs)
+    stdout, stderr = proc.communicate(input=inputs, timeout=30)
     
     assert proc.returncode == 0
     assert "Auto-assigning ID: INFRA-" in stdout
@@ -166,7 +162,7 @@ def test_new_plan(agent_sandbox):
         cwd=cwd,
         env=get_venv_env()
     )
-    stdout, stderr = proc.communicate(input="My Plan\n")
+    stdout, stderr = proc.communicate(input="My Plan\n", timeout=30)
     assert proc.returncode == 0
     
     plan_path = cwd / ".agent" / "cache" / "plans" / "WEB" / "WEB-123-my-plan.md"
@@ -185,7 +181,7 @@ def test_new_adr(agent_sandbox):
         cwd=cwd,
         env=get_venv_env()
     )
-    stdout, stderr = proc.communicate(input="Architecture Decision\n")
+    stdout, stderr = proc.communicate(input="Architecture Decision\n", timeout=30)
     assert proc.returncode == 0
     
     adr_path = cwd / ".agent" / "adrs" / "ADR-005-architecture-decision.md"
@@ -197,17 +193,17 @@ def test_validate_story_success(agent_sandbox):
     
     # First create a valid story
     story_id = "MOBILE-777"
-    subprocess.run([agent_bin, "new-story", story_id], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True, env=get_venv_env())
+    subprocess.run([agent_bin, "new-story", story_id], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True, env=get_venv_env(), timeout=30)
     
     # Run validate
-    result = subprocess.run([agent_bin, "validate-story", story_id], cwd=cwd, capture_output=True, text=True, env=get_venv_env())
+    result = subprocess.run([agent_bin, "validate-story", story_id], cwd=cwd, capture_output=True, text=True, env=get_venv_env(), timeout=30)
     assert result.returncode == 0
     assert f"Story schema validation passed for {story_id}" in result.stdout
 
 def test_pr_help_check(agent_sandbox):
     """Verify 'agent pr' command loads and displays help (regression test for missing cmd_pr)."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin, "pr", "--help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
+    result = subprocess.run([agent_bin, "pr", "--help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env(), timeout=30)
     assert result.returncode == 0
     assert "Open a GitHub Pull Request" in result.stdout
     assert "--story" in result.stdout
@@ -215,7 +211,7 @@ def test_pr_help_check(agent_sandbox):
 def test_agent_no_args(agent_sandbox):
     """Test that running agent without arguments displays help and does not crash."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
+    result = subprocess.run([agent_bin], capture_output=True, text=True, cwd=cwd, env=get_venv_env(), timeout=30)
     assert result.returncode == 0
     assert "Usage: agent [COMMAND]" in result.stdout or "Usage: python -m agent.main" in result.stdout
     assert "A CLI for managing and interacting with the AI agent" in result.stdout
@@ -223,7 +219,7 @@ def test_agent_no_args(agent_sandbox):
 def test_agent_nested_help(agent_sandbox):
     """Test 'agent <cmd> help' syntax translation."""
     agent_bin, cwd = agent_sandbox
-    result = subprocess.run([agent_bin, "preflight", "help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env())
+    result = subprocess.run([agent_bin, "preflight", "help"], capture_output=True, text=True, cwd=cwd, env=get_venv_env(), timeout=30)
     assert result.returncode == 0
     assert "Run preflight checks" in result.stdout or "Run governance preflight checks" in result.stdout
 

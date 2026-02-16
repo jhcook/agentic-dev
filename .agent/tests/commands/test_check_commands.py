@@ -46,57 +46,56 @@ def clean_env(tmp_path):
     
         yield
 
-# We must patch where it is import/used
-@patch("agent.core.auth.decorators.validate_credentials")
 @patch("agent.core.governance.ai_service") 
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 @patch("agent.commands.check.scrub_sensitive_data")
-def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, mock_gov_ai, mock_validate, clean_env):
+def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, mock_gov_ai, clean_env):
     """
     Test that sensitive data is scrubbed and large diffs are chunked correctly.
     """
     # Mock AI Provider as GH (limited context -> forces chunking)
     mock_check_ai.provider = "gh"
     
-    # Also ensure governance uses "gh" logic
+    # Mock governance ai provider
     mock_gov_ai.provider = "gh"
     
-    # Mock Subprocess (Git Diff)
-    # Generate large diff > 6000 chars
-    large_diff = "A" * 7000 
-    mock_run.return_value.stdout = large_diff
-    mock_run.return_value.returncode = 0
+    # Patch Environment to satisfy @with_creds
+    with patch.dict("os.environ", {"GH_API_KEY": "dummy", "OPENAI_API_KEY": "dummy"}):
+        # Mock Subprocess (Git Diff)
+        # Generate large diff > 6000 chars
+        large_diff = "A" * 7000 
+        mock_run.return_value.stdout = large_diff
+        mock_run.return_value.returncode = 0
+        
+        # Mock Scrubbing
+        mock_scrub.side_effect = lambda x: x.replace("A", "B") # Fake scrub
+        
+        # Mock AI Response
+        mock_gov_ai.complete.return_value = "Verdict: PASS\nAnalysis: Looks good."
+        
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
-    # Mock Scrubbing
-    mock_scrub.side_effect = lambda x: x.replace("A", "B") # Fake scrub
-    
-    # Mock AI Response
-    mock_gov_ai.complete.return_value = "Verdict: PASS\nAnalysis: Looks good."
-    
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
-    
-    assert result.exit_code == 0
-    assert "running preflight checks" in result.stdout.lower()
-    
-    # Verify Scrubbing was called
-    mock_scrub.assert_called()
-    # Verify call args on the GOVERNANCE ai service
-    call_args = mock_gov_ai.complete.call_args_list[0]
-    user_prompt = call_args[0][1]
-    assert "BBBB" in user_prompt
-    assert "AAAA" not in user_prompt
-    
-    # Verify Chunking happened
-    # 7000 chars / 6000 chunk size = 2 chunks per role
-    # With default roles, we expect many calls
-    assert mock_gov_ai.complete.call_count > 6
+        assert result.exit_code == 0
+        assert "running preflight checks" in result.stdout.lower()
+        
+        # Verify Scrubbing was called
+        mock_scrub.assert_called()
+        # Verify call args on the GOVERNANCE ai service
+        call_args = mock_gov_ai.complete.call_args_list[0]
+        user_prompt = call_args[0][1]
+        assert "BBBB" in user_prompt
+        assert "AAAA" not in user_prompt
+        
+        # Verify Chunking happened
+        # 7000 chars / 6000 chunk size = 2 chunks per role
+        # With default roles, we expect many calls
+        assert mock_gov_ai.complete.call_count > 6
 
-@patch("agent.core.auth.decorators.validate_credentials")
 @patch("agent.core.governance.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
-def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, mock_validate, clean_env):
+def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean_env):
     """
     Test that a single BLOCK verdict fails the entire command.
     """
@@ -115,9 +114,10 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, mock_
         
     mock_gov_ai.complete.side_effect = side_effect
     
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
-    assert result.exit_code == 1
+        assert result.exit_code == 1
     assert "Preflight Blocked by Governance Council" in result.output
     assert "Hardcoded password" in result.output
 
@@ -137,7 +137,8 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     mock_gov_ai.complete.return_value = "Verdict: PASS"
     
     # Run
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 0
     
@@ -155,7 +156,7 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     assert "Story: INFRA-123" in content
     assert "PASS" in content
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core.governance.ai_service") 
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_verdict_parsing_false_positive(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -174,7 +175,8 @@ It avoids the error markdown for a BLOCK verdict.
 """
     mock_gov_ai.complete.return_value = review_text
     
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 0
     assert result.exit_code == 0
@@ -200,7 +202,8 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
 """
     mock_gov_ai.complete.return_value = review_text
     
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
     
     assert result.exit_code == 0
     assert "Preflight checks passed" in result.stdout
@@ -221,7 +224,8 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
     report_file = tmp_path / "report.json"
     
     # Run
-    result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai", "--report-file", str(report_file)])
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai", "--report-file", str(report_file)])
     
     assert result.exit_code == 0
     

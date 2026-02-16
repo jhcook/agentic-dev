@@ -34,7 +34,7 @@ team:
       - "No PII in logs"
       - "No secrets in code"
       - "Are dependencies pinned and safe?"
-    instruction: "Consult the .agent/instructions/security/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
+    instruction: "Consult the .agent/instructions/security/ directory for additional context and checklists. CRITICAL CONTEXT: This is a LOCAL developer CLI tool (Typer), NOT a web service. It has NO network endpoints, NO user-supplied input to subprocess, and NO external attack surface. Subprocess calls use hardcoded internal command lists. Exception handlers print static messages. Only BLOCK for PROVEN vulnerabilities with a clear exploit path — do NOT flag speculative or theoretical risks. Consult ADRs and EXC records before flagging. You must explicitly follow all rules in .agent/rules/."
 
   - role: product
     name: "Product Owner"
@@ -112,10 +112,10 @@ team:
     name: "Backend Lead"
     description: "Expert in FastAPI, Python, and cloud infrastructure."
     responsibilities:
-      - "Enforce Async/Await best practices"
+      - "Enforce Async/Await best practices (except Typer CLI commands per ADR-028)"
       - "Review Pydantic models"
       - "Ensure database migration integrity"
     governance_checks:
       - "Are types strictly enforced?"
       - "Is the API documentation (OpenAPI) accurate?"
-    instruction: "Consult the .agent/instructions/backend/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."
+    instruction: "Consult the .agent/instructions/backend/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/. Per ADR-028, Typer CLI commands are synchronous by design — subprocess.run and subprocess.Popen are the correct APIs. Do NOT flag them."

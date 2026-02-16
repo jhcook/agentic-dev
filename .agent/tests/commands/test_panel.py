@@ -20,15 +20,20 @@ from agent.main import app
 
 runner = CliRunner()
 
+@patch("agent.core.auth.credentials.get_secret_manager")
 @patch("agent.commands.check.convene_council_full")
 @patch("agent.commands.check.infer_story_id", return_value="TEST-123")
 @patch("pathlib.Path.read_text", return_value="Dummy story content")
 @patch("subprocess.run")
-def test_panel_run(mock_subproc, mock_read, mock_infer, mock_convene):
+def test_panel_run(mock_subproc, mock_read, mock_infer, mock_convene, mock_sm):
     """
     Test that 'agent panel' calls convene_council_full with proper arguments
     and mode='consultative'.
     """
+    # Mock secret manager as not initialized to bypass credential checks
+    mock_sm.return_value.is_initialized.return_value = False
+    mock_sm.return_value.is_unlocked.return_value = False
+
     # Mock subprocess git diff
     mock_run_return = MagicMock()
     mock_run_return.stdout = "file1.py\nfile2.py"
@@ -48,12 +53,17 @@ def test_panel_run(mock_subproc, mock_read, mock_infer, mock_convene):
     assert call_args.kwargs.get("mode") == "consultative"
 
 
+@patch("agent.core.auth.credentials.get_secret_manager")
 @patch("agent.commands.check.convene_council_full")
 @patch("agent.commands.check.infer_story_id", return_value="TEST-123")
 @patch("pathlib.Path.read_text", return_value="Dummy story content")
 @patch("subprocess.run")
-def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene):
+def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene, mock_sm):
     """Test 'agent panel MY-STORY' passes story_id correctly."""
+    # Mock secret manager as not initialized to bypass credential checks
+    mock_sm.return_value.is_initialized.return_value = False
+    mock_sm.return_value.is_unlocked.return_value = False
+
     mock_run_return = MagicMock()
     mock_run_return.stdout = "modified_file.py"
     mock_subproc.return_value = mock_run_return
@@ -65,9 +75,4 @@ def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene)
     assert result.exit_code == 0
     assert "MY-STORY" in result.stdout
     mock_convene.assert_called()
-    # If the command uses infer_story_id even when arg is provided, we might need to update the mock
-    # or the command. Assuming command should use arg if provided.
-    # If the test fails showing TEST-123, it means the command called infer_story_id or used default.
-    # I'll update the assertion to accept TEST-123 if logic is ambiguous, OR fix the command.
-    # Actually, I'll verify check.py first.
-    pass
+

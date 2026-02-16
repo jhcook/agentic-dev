@@ -31,6 +31,7 @@ from agent.core.governance import convene_council_full
 from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.fixer import InteractiveFixer
 
+
 console = Console()
 
 def validate_story(
@@ -215,6 +216,7 @@ def preflight(
 
     # 0. Configure Provider Override if set
     if provider:
+        from agent.core.ai import ai_service
         ai_service.set_provider(provider)
     
     if not story_id:
@@ -305,8 +307,9 @@ def preflight(
                 rel_path = f.relative_to(Path.cwd())
                 parts = rel_path.parts
                 
-                # Exclude node_modules
-                if "node_modules" in parts:
+                
+                # Exclude node_modules and virtual environments
+                if "node_modules" in parts or ".venv" in parts or "venv" in parts:
                     continue
                 
                 # logic to exclude .agent UNLESS it's .agent/tests
@@ -444,12 +447,166 @@ def preflight(
         for task in test_commands:
             console.print(f"[bold cyan]🏃 Running: {task['name']}[/bold cyan]")
             try:
-                # Run command
-                res = subprocess.run(task['cmd'], cwd=task['cwd'], check=False)
+                # Stream output line by line but capture it for AI analysis
+                process = subprocess.Popen(
+                    task['cmd'],
+                    cwd=task['cwd'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1  # Line buffered
+                )
+                
+                captured_output = []
+                while True:
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
+                    if line:
+                        console.print(line, end="")
+                        captured_output.append(line)
+                        
+                # Ensure we get the return code
+                rc = process.poll()
+                
+                # Reconstruct res object for backward compatibility with logic below
+                from types import SimpleNamespace
+                res = SimpleNamespace(returncode=rc, stdout="".join(captured_output), stderr="")
+
+                
                 if res.returncode != 0:
                     console.print(f"[bold red]❌ {task['name']} FAILED[/bold red]")
                     tests_passed = False
-                    if not ignore_tests:
+                    
+                    if interactive:
+                        console.print(f"\n[bold yellow]🔧 Interactive Repair available for {task['name']} failure...[/bold yellow]")
+                        
+                        # Heuristic: Try to determine the failing file from the command or output
+                        # We know 'cmd' often ends with the file path if it was specific
+                        target_file = None
+                        
+                        # 1. Parsing output is most reliable to find specific failure
+                        # 1. Parsing output is most reliable to find specific failure
+                        if res.stdout:
+                             import re
+                             # Remove ANSI color codes for cleaner regex
+                             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                             clean_stdout = ansi_escape.sub('', res.stdout)
+                             
+                             # Match `FAILED tests/core/test_foo.py::test_bar`
+                             matches = re.findall(r"FAILED\s+(.+?)::", clean_stdout)
+                             # Also match `ERROR collecting tests/core/test_foo.py`
+                             matches_collect = re.findall(r"ERROR collecting\s+(.+)", clean_stdout)
+                             matches.extend(matches_collect)
+                             
+                             for m in reversed(matches):
+                                 fpath = m.strip().split(" ")[0] # Handle cases where there might be trailing text
+                                 possible = task['cwd'] / fpath
+                                 if possible.exists():
+                                     target_file = possible
+                                     break
+                                     
+                        # 2. Fallback: Check if command explicitly targeted a single file
+                        if not target_file:
+                             last_arg = task['cmd'][-1]
+                             if last_arg.endswith('.py') and (task['cwd'] / last_arg).exists():
+                                 target_file = task['cwd'] / last_arg
+                        
+                        if target_file:
+                             console.print(f"[dim]Detected failing test file: {target_file}[/dim]")
+                             fixer = InteractiveFixer()
+                             
+                             fix_context = {
+                                 "file_path": str(target_file),
+                                 "test_output": (res.stdout or "") + "\n" + (res.stderr or ""),
+                                 "content": target_file.read_text(errors="ignore")
+                             }
+                             
+                             options = fixer.analyze_failure("test_failure", fix_context)
+                             
+                             # --- UI Loop (Duplicated from validate_story, candidate for refactoring to Fixer class UI method) ---
+                             while True:
+                                 chosen_opt = None
+                                 if not options:
+                                     console.print("[yellow]No automated fixes available.[/yellow]")
+                                     break
+                                 else:
+                                     console.print("\n[bold cyan]🔧 Test Fix Options:[/bold cyan]")
+                                     for i, opt in enumerate(options):
+                                         console.print(f"[bold]{i+1}. {opt.get('title')}[/bold]")
+                                         console.print(f"   {opt.get('description')}")
+                                         
+                                     choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
+                                     if choice.lower() == 'q':
+                                         break
+
+                                     try:
+                                         idx = int(choice) - 1
+                                         if 0 <= idx < len(options):
+                                             chosen_opt = options[idx]
+                                     except Exception:
+                                         pass
+                                 
+                                 if chosen_opt:
+                                     if fixer.apply_fix(chosen_opt, target_file):
+                                         console.print(f"[green]✅ Applied fix to {target_file.name}[/green]")
+                                         # Optional: Re-run verification?
+                                         if sorted_cmd := Confirm.ask("Re-run test to verify?", default=True):
+                                             # Re-run verify logic using the specific target file for speed
+                                             # Fix: Use the same python executable as the task
+                                             # task['cmd'][0] is the python executable used for the main test run.
+                                             python_exe = task['cmd'][0]
+                                             verify_cmd = [python_exe, "-m", "pytest", str(target_file)]
+                                             
+                                             def verification_callback():
+                                                 console.print(f"[dim]Running: {' '.join(verify_cmd)}[/dim]")
+                                                 vr = subprocess.run(
+                                                     verify_cmd, 
+                                                     capture_output=True, 
+                                                     text=True
+                                                 )
+                                                 if vr.returncode != 0:
+                                                     console.print(f"[red]❌ Verification Failed:[/red]")
+                                                     console.print(vr.stdout + vr.stderr)
+                                                     return False
+                                                 return True
+
+                                             if fixer.verify_fix(verification_callback):
+                                                 console.print(f"[bold green]✅ Test Passed![/bold green]")
+                                                 # Fix verified. We should re-run the main task loop to ensure everything is clean,
+                                                 # or at least mark this specific test run as passed?
+                                                 # Problem: The main `res` object still holds the failure.
+                                                 # We need to signal that we recovered.
+                                                 
+                                                 # Option 1: Retry the *original* command (the full test suite or this specific task)
+                                                 console.print("[green]🔄 Re-running full test task to confirm system state...[/green]")
+                                                 retry_res = subprocess.run(
+                                                    task['cmd'], 
+                                                    cwd=task['cwd'], 
+                                                    check=False,
+                                                    capture_output=True,
+                                                    text=True
+                                                 )
+                                                 if retry_res.returncode == 0:
+                                                     tests_passed = True
+                                                     console.print(f"[green]✅ {task['name']} PASSED (after fix)[/green]")
+                                                     break # Exit the fix loop AND the failure block, proceeding to next task
+                                                 else:
+                                                     # If it still fails, loop again? Or give up?
+                                                     # For now, let's just update `res` and loop again if we wanted to be robust,
+                                                     # but to avoid infinite loops, let's just report the new result.
+                                                     console.print(f"[red]❌ {task['name']} still failing after fix.[/red]")
+                                                     # Update the capture output for the next iteration of analysis?
+                                                     # For now, we fall through to failure.
+                                                     pass
+                                                 
+                                                 break # Exit the fix loop
+                                             else:
+                                                 console.print("[yellow]⚠️ Fix failed verification and was reverted. Please try another option.[/yellow]")
+                        else:
+                            console.print("[dim]Could not automatically identify a single test file to fix.[/dim]")
+
+                    if not tests_passed and not ignore_tests:
                         break # Stop on first failure if not ignoring
                 else:
                     console.print(f"[green]✅ {task['name']} PASSED[/green]")
@@ -529,137 +686,195 @@ def preflight(
     # -----------------
 
     if ai:
+        # Interactive repair loop — re-run governance after each fix
+        MAX_GOVERNANCE_RETRIES = 3
+        governance_passed = False
         
-        # Determine changed extensions to filter relevant role prompts?
-        # For now, we still run the full council, or we could specialize.
-        # Sticking to full council as per requirement.
-        
-        result = convene_council_full(
-            story_id=story_id,
-            story_content=story_content,
-            rules_content=rules_content,
-            instructions_content=instructions_content,
-            full_diff=full_diff,
-            report_file=report_file,
-            council_identifier="preflight",
-            adrs_content=adrs_content,
-            progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]") if "BLOCK" not in msg and "PASS" not in msg else None
-        )
+        for governance_attempt in range(MAX_GOVERNANCE_RETRIES):
+            if governance_attempt > 0:
+                console.print(f"\n[bold cyan]🔄 Re-running Governance Council (attempt {governance_attempt + 1}/{MAX_GOVERNANCE_RETRIES})...[/bold cyan]")
+                
+                # Re-compute diff after fix was applied
+                diff_cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
+                diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
+                full_diff = diff_res.stdout or ""
+                
+                # Re-scrub sensitive data
+                full_diff = scrub_sensitive_data(full_diff)
+                
+                # Re-load story content (might have been modified by fixer)
+                story_content = ""
+                for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+                    if file_path.name.startswith(story_id):
+                        story_content = file_path.read_text(errors="ignore")
+                        break
+                story_content = scrub_sensitive_data(story_content)
 
-        # Merge AI report details
-        if "json_report" in result:
-             json_report.update(result["json_report"])
+            with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
+                result = convene_council_full(
+                    story_id=story_id,
+                    story_content=story_content,
+                    rules_content=rules_content,
+                    instructions_content=instructions_content,
+                    full_diff=full_diff,
+                    report_file=report_file,
+                    council_identifier="preflight",
+                    adrs_content=adrs_content,
+                    progress_callback=None # Silence individual role progress to reduce noise
+                )
 
-        if result["verdict"] in ["BLOCK", "FAIL"]:
-             console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
-             console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
+            # Merge AI report details
+            if "json_report" in result:
+                 json_report.update(result["json_report"])
+
+            if result["verdict"] not in ["BLOCK", "FAIL"]:
+                governance_passed = True
+                break  # Council passed — exit the retry loop
+            
+            # --- BLOCKED: Display findings ---
+            console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
+            console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
              
-             # Render the full report as a single panel?
-             # User feedback: "Revert the single-panel-report in check.py to show each component separately."
-             
-             console.print("\n[bold]Governance Council Findings:[/bold]")
-             
-             roles = result.get("json_report", {}).get("roles", [])
-             for role in roles:
-                 name = role.get("name", "Unknown")
-                 verdict = role.get("verdict", "UNKNOWN")
-                 findings = role.get("findings", [])
-                 
-                 style = "green" if verdict == "PASS" else "red"
-                 if verdict == "PASS":
-                     title = f"✅ {name}"
-                 else:
-                     title = f"❌ {name}"
-                     
-                 # Format findings
-                 content = ""
-                 if findings:
-                     if isinstance(findings, list):
-                         content = "\n".join(findings)
-                     else:
-                         content = str(findings)
-                 else:
-                     content = "[dim]No issues found.[/dim]"
-                 
-                 console.print(Panel(content, title=title, border_style=style))
+            console.print("\n[bold]Governance Council Findings:[/bold]")
 
-             # Collect Blocking Findings for interactive repair
-             blocking_findings = []
-             for role in roles:
-                  if role.get("verdict") == "BLOCK":
-                      findings = role.get("findings", [])
-                      if isinstance(findings, list):
-                          for finding in findings:
-                              blocking_findings.append(f"{role['name']}: {finding}")
-                      else:
-                           blocking_findings.append(f"{role['name']}: {findings}")
+            # Categorize roles
+            roles = result.get("json_report", {}).get("roles", [])
+            passed_clean = []
+            passed_with_findings = []
+            blocking_roles = []
 
-             if interactive and blocking_findings:
-                 console.print("\n[bold yellow]🔧 Interactive Repair Available for Blocking Findings...[/bold yellow]")
-                 
-                 # Identify target file for repair (Story or Code?)
-                 # For now, default to fixing the Story file as governance usually feedbacks on it.
-                 # If code is needed, simple heuristics or user prompt is needed.
-                 # Let's target the story file location.
-                 target_file_path = None
-                 for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-                     if file_path.name.startswith(story_id):
-                         target_file_path = file_path
-                         break
-                 
-                 if target_file_path:
-                     fixer = InteractiveFixer()
-                     context = {
-                         "story_id": story_id,
-                         "findings": blocking_findings,
-                         "file_path": str(target_file_path)
-                     }
-                     
-                     options = fixer.analyze_failure("governance_rejection", context)
-                     
-                     chosen_opt = None
-                     if not options:
-                        console.print("[yellow]No automated fix options generated.[/yellow]")
-                     else:
-                        is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
-                        if is_voice:
-                             console.print("\nFound the following fix options:")
-                             for i, opt in enumerate(options):
-                                 console.print(f"Option {i+1}: {opt.get('title', 'Option')}. {opt.get('description', '')}")
-                        else:
-                            console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
+            for role in roles:
+                name = role.get("name", "Unknown")
+                verdict = role.get("verdict", "UNKNOWN")
+                findings = role.get("findings", [])
+
+                if verdict == "PASS":
+                    if not findings:
+                        passed_clean.append(name)
+                    else:
+                        passed_with_findings.append(name)
+                else:
+                    blocking_roles.append(role)
+
+            # 1. Summary of Clean Passes
+            if passed_clean:
+                console.print(f"[green]✅ Approved (No Issues): {', '.join(passed_clean)}[/green]")
+
+            # 2. Summary of Passes with Findings (Suppressed Details)
+            if passed_with_findings:
+                console.print(f"[yellow]⚠️  Approved with Notes (Details Suppressed): {', '.join(passed_with_findings)}[/yellow]")
+
+            # 3. Blocking Issues — single pass for both panels and interactive repair list
+            blocking_findings = []
+            if blocking_roles:
+                blocking_names = [r.get("name", "Unknown") for r in blocking_roles]
+                console.print(f"[bold red]❌ Blocking Issues: {', '.join(blocking_names)}[/bold red]")
+
+                for role in blocking_roles:
+                    name = role.get("name", "Unknown")
+                    findings = role.get("findings", [])
+                    summary = role.get("summary", "")
+                    required_changes = role.get("required_changes", [])
+
+                    # Build structured panel content
+                    lines = []
+                    lines.append("VERDICT: BLOCK")
+                    if summary:
+                        lines.append(f"SUMMARY:")
+                        lines.append(f"{summary}")
+                    if findings:
+                        lines.append("FINDINGS:")
+                        for f in findings:
+                            lines.append(f"- {f}")
+                            blocking_findings.append(f"{name}: {f}")
+                    if required_changes:
+                        lines.append("REQUIRED_CHANGES:")
+                        for c in required_changes:
+                            lines.append(f"- {c}")
+                    
+                    if not findings and not required_changes:
+                        lines.append("[dim]Blocking verdict but no specific findings provided.[/dim]")
+                    
+                    content = "\n".join(lines)
+
+                    console.print(Panel(content, title=f"❌ {name}", border_style="red"))
+
+            # --- Interactive repair ---
+            fix_applied = False
+            if interactive and blocking_findings:
+                console.print("\n[bold yellow]🔧 Interactive Repair Available for Blocking Findings...[/bold yellow]")
+                
+                target_file_path = None
+                for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+                    if file_path.name.startswith(story_id):
+                        target_file_path = file_path
+                        break
+                
+                if target_file_path:
+                    fixer = InteractiveFixer()
+                    context = {
+                        "story_id": story_id,
+                        "findings": blocking_findings,
+                        "file_path": str(target_file_path)
+                    }
+                    
+                    try:
+                        options = fixer.analyze_failure("governance_rejection", context)
+                    except Exception as e:
+                        console.print(f"[yellow]⚠️  Automated fix generation failed: {e}[/yellow]")
+                        options = []
+                    
+                    chosen_opt = None
+                    if not options:
+                       console.print("[yellow]No automated fix options generated.[/yellow]")
+                    else:
+                       is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
+                       if is_voice:
+                            console.print("\nFound the following fix options:")
                             for i, opt in enumerate(options):
-                                console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
-                                console.print(f"   {opt.get('description', '')}")
-                        
-                        if is_voice:
-                            console.print("Select option (or say quit):")
-                            choice = Prompt.ask("", default="q")
+                                console.print(f"Option {i+1}: {opt.get('title', 'Option')}. {opt.get('description', '')}")
+                       else:
+                           console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
+                           for i, opt in enumerate(options):
+                               console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
+                               console.print(f"   {opt.get('description', '')}")
+                       
+                       if is_voice:
+                           console.print("Select option (or say quit):")
+                           choice = Prompt.ask("", default="q")
+                       else:
+                           choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
+                       if choice.lower() != 'q':
+                           try:
+                               idx = int(choice) - 1
+                               if 0 <= idx < len(options):
+                                   chosen_opt = options[idx]
+                           except Exception:
+                               pass
+                               
+                    if chosen_opt:
+                        if fixer.apply_fix(chosen_opt, target_file_path):
+                            console.print("[bold green]✅ Fix applied successfully.[/bold green]")
+                            # Re-stage the modified file so the next diff picks it up
+                            subprocess.run(["git", "add", str(target_file_path)], capture_output=True, text=True)
+                            fix_applied = True
+                            console.print("[bold cyan]🔄 Re-running governance checks to verify fix...[/bold cyan]")
+                            continue  # Loop back to re-run governance council
                         else:
-                            choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
-                        if choice.lower() != 'q':
-                            try:
-                                idx = int(choice) - 1
-                                if 0 <= idx < len(options):
-                                    chosen_opt = options[idx]
-                            except Exception:
-                                pass
-                                
-                     if chosen_opt:
-                         if fixer.apply_fix(chosen_opt, target_file_path):
-                             console.print("[bold green]✅ Fix applied successfully. Please re-run preflight to verify.[/bold green]")
-                             # Optionally we could re-run the check loop here, but exit is safer for state
-                             raise typer.Exit(code=0)
-                         else:
-                             console.print("[red]❌ Failed to apply fix.[/red]")
+                            console.print("[red]❌ Failed to apply fix.[/red]")
 
-             if report_file:
-                 json_report["overall_verdict"] = "BLOCK"
-                 json_report["error"] = "Preflight blocked by governance checks."
-                 import json
-                 report_file.write_text(json.dumps(json_report, indent=2))
+            # If we reach here without a fix applied, break out — no point retrying
+            break
+        
+        # After the loop: check outcome
+        if not governance_passed:
+            if report_file:
+                json_report["overall_verdict"] = "BLOCK"
+                json_report["error"] = "Preflight blocked by governance checks."
+                import json
+                report_file.write_text(json.dumps(json_report, indent=2))
 
-             raise typer.Exit(code=1)
+            raise typer.Exit(code=1)
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
@@ -722,6 +937,7 @@ def impact(
     
     if ai:
         # AI Mode
+        # Credentials validated by @with_creds decorator in main.py
         console.print("[dim]🤖 Generating AI impact analysis...[/dim]")
         from agent.core.ai import ai_service  # ADR-025: lazy init
         if provider:
@@ -925,36 +1141,48 @@ def panel(
     rules_content = scrub_sensitive_data(rules_content)
     instructions_content = scrub_sensitive_data(instructions_content)
 
-    result = convene_council_full(
-        story_id=story_id,
-        story_content=scrubbed_content,
-        rules_content=rules_content,
-        instructions_content=instructions_content,
-        full_diff=full_diff,
-        mode="consultative",
-        council_identifier="panel",
-        user_question=question,
-        adrs_content=adrs_content,
-        progress_callback=lambda msg: console.print(f"[bold cyan]{msg}[/bold cyan]")
-    )
+
+    with console.status("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]"):
+        result = convene_council_full(
+            story_id=story_id,
+            story_content=scrubbed_content,
+            rules_content=rules_content,
+            instructions_content=instructions_content,
+            full_diff=full_diff,
+            mode="consultative",
+            council_identifier="panel",
+            user_question=question,
+            adrs_content=adrs_content,
+            progress_callback=None # Silence individual role progress
+        )
     
     # 4.5 Display Results
     console.print("\n[bold]Governance Panel Findings:[/bold]")
+
     roles = result.get("json_report", {}).get("roles", [])
+    silent_roles = []
+    active_roles = []
     
     for role in roles:
+        findings = role.get("findings", [])
+        if not findings:
+            silent_roles.append(role.get("name", "Unknown"))
+        else:
+            active_roles.append(role)
+            
+    if silent_roles:
+        console.print(f"[dim]ℹ️  No advice from: {', '.join(silent_roles)}[/dim]")
+        
+    for role in active_roles:
         name = role.get("name", "Unknown")
         findings = role.get("findings", [])
         
         # In Consultative mode, findings are usually the full advice
         content = ""
-        if findings:
-            if isinstance(findings, list):
-                content = "\n".join(findings)
-            else:
-                content = str(findings)
+        if isinstance(findings, list):
+            content = "\n".join(findings)
         else:
-            content = "[dim]No specific advice provided.[/dim]"
+            content = str(findings)
             
         console.print(Panel(content, title=f"🤖 {name}", border_style="blue"))
 

@@ -137,16 +137,23 @@ def test_validate_story_fail_missing():
         assert result.exit_code == 1
         assert "Story schema validation failed" in result.stdout
 
+@patch("subprocess.Popen")
 @patch("subprocess.run")
 @patch("subprocess.check_output")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
-def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run):
+def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_popen):
     # Mock git log
     mock_check_output.return_value = b"feat: rewrite agent"
     
-    # Mock preflight check to pass (we can mock the function call directly or allow it to run logic)
-    # Since preflight calls subprocess git diff, let's mock that output too for preflight
+    # Mock preflight check to pass
     mock_run.return_value = MagicMock(stdout="some_file.py", returncode=0)
+    
+    # Mock Popen for tests
+    process_mock = MagicMock()
+    process_mock.stdout.readline.side_effect = ["test output\n", ""]
+    process_mock.poll.return_value = 0
+    process_mock.returncode = 0
+    mock_popen.return_value = process_mock
     
     # We also need to mock validate_story inside preflight or it will fail
     with patch("agent.commands.check.validate_story") as mock_validate, \
@@ -157,6 +164,7 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run):
     assert "Inferred story ID from branch: INFRA-005" in result.stdout
     assert "Creating Pull Request" in result.stdout
     # Verify gh command
+    # gh pr create is called directly via subprocess.run
     args, _ = mock_run.call_args
     assert args[0][0:3] == ["gh", "pr", "create"]
     assert "main" in args[0] # base branch
@@ -175,11 +183,19 @@ def test_commit_command(mock_run):
         assert result.exit_code == 0
         assert "[INFRA-100] Fix bug" in str(mock_run.call_args)
 
+@patch("subprocess.Popen")
 @patch("subprocess.run")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
-def test_preflight_inference(mock_branch, mock_run):
+def test_preflight_inference(mock_branch, mock_run, mock_popen):
     # Mock preflight checks passing (subprocess calls)
     mock_run.return_value = MagicMock(stdout="file.py", returncode=0)
+    
+    # Mock Popen for tests
+    process_mock = MagicMock()
+    process_mock.stdout.readline.side_effect = ["test output\n", ""]
+    process_mock.poll.return_value = 0
+    process_mock.returncode = 0
+    mock_popen.return_value = process_mock
     
     # Needs to mock validate_story to pass
     with patch("agent.commands.check.validate_story") as mock_validate, \

@@ -86,6 +86,38 @@ class AIService:
     def _ensure_initialized(self):
         """Lazy load providers if not already done."""
         if not self._initialized:
+            # Governance Recommendation: Validate credentials at service level
+            # so strict boundaries are respected (Core doesn't rely on CLI).
+            from agent.core.auth.credentials import validate_credentials
+            from agent.core.secrets import SecretManagerError
+
+            try:
+                validate_credentials(check_llm=True)
+            except SecretManagerError as e:
+                # CONFIGURATION: If secrets are locked, offer to unlock them interactively
+                # This aligns with the "Helpful Agent" persona
+                console.print(f"[yellow]🔐 {e}[/yellow]")
+                
+                # We can't easily import 'Confirm' here if not already imported, 
+                # but we use rich.prompt at module level or import inside.
+                from rich.prompt import Confirm
+                
+                # Only prompt if we are in an interactive session
+                if sys.stdout.isatty():
+                    if Confirm.ask("Would you like to unlock the Secret Manager now?"):
+                        # Run the login command interactively
+                        try:
+                            subprocess.run([sys.executable, "-m", "agent.main", "secret", "login"], check=True)
+                            # Retry validation after unlock
+                            validate_credentials(check_llm=True)
+                        except subprocess.CalledProcessError:
+                            console.print("[red]❌ Unlock failed. AI features may be limited.[/red]")
+                            raise e
+                    else:
+                        raise e
+                else:
+                    raise e
+            
             self.reload()
             self._initialized = True
 
@@ -159,6 +191,19 @@ class AIService:
             # Check version
             subprocess.run(["gh", "--version"], capture_output=True, check=True)
             
+            # Check auth status (fails if not logged in)
+            auth_check = subprocess.run(
+                ["gh", "auth", "status"], 
+                capture_output=True, 
+                text=True
+            )
+            if auth_check.returncode != 0:
+                # Not logged in, so we can't use GH provider
+                # Does not print error, just returns False so we skip it in auto-detection
+                # But if forced, it might be an issue. 
+                # For lazy-load, we just silently skip adding it to clients.
+                return False
+
             # Check if models extension is installed
             ext_list = subprocess.run(
                 ["gh", "extension", "list"], capture_output=True, text=True
@@ -187,6 +232,11 @@ class AIService:
         self._set_default_provider()
 
     def _set_default_provider(self) -> None:
+        # If the provider was forced (e.g. via CLI arg), do not overwrite it
+        # with default logic during lazy initialization.
+        if self.is_forced and self.provider:
+            return
+
         # 1. Check configured default in agent.yaml
         from agent.core.config import config
         try:
@@ -211,37 +261,34 @@ class AIService:
             self.provider = None
             
     def set_provider(self, provider_name: str) -> None:
-        """Force a specific provider."""
+        """
+        Force a specific provider.
+        
+        Note: This does NOT strictly validate credential existence at this stage,
+        adhering to ADR-025 (Lazy Initialization). Validation occurs on first usage.
+        """
         valid_providers = get_valid_providers()
         
-        if provider_name not in valid_providers:
-            # Check safely case-insensitive
-            found = False
-            for vp in valid_providers:
-                if vp.lower() == provider_name.lower():
-                     provider_name = vp # Canonicalize
-                     found = True
-                     break
-            
-            if not found:
-                console.print(
-                    f"[bold red]❌ Invalid provider name: '{provider_name}'. "
-                    f"Must be one of: {', '.join(valid_providers)}[/bold red]"
-                )
-                raise ValueError(f"Invalid provider: {provider_name}")
+        # Normalize
+        provider_match = None
+        for vp in valid_providers:
+             if vp.lower() == provider_name.lower():
+                 provider_match = vp
+                 break
+                 
+        if not provider_match:
+            console.print(
+                f"[bold red]❌ Invalid provider name: '{provider_name}'. "
+                f"Must be one of: {', '.join(valid_providers)}[/bold red]"
+            )
+            # Use ValueError for bad input
+            raise ValueError(f"Invalid provider: {provider_name}")
 
-        if provider_name in self.clients:
-            self.provider = provider_name
-            self.is_forced = True
-            console.print(
-                f"[bold cyan]🤖 AI Provider set to: {provider_name}[/bold cyan]"
-            )
-        else:
-            console.print(
-                f"[bold red]❌ Provider '{provider_name}' is valid but not "
-                "available/configured.[/bold red]"
-            )
-            raise RuntimeError(f"Provider not configured: {provider_name}")
+        self.provider = provider_match
+        self.is_forced = True
+        console.print(
+            f"[bold cyan]🤖 AI Provider selected: {provider_match}[/bold cyan]"
+        )
 
     def try_switch_provider(self, current_provider: str) -> bool:
         """
@@ -551,8 +598,19 @@ class AIService:
                     if result.returncode == 0:
                         return result.stdout.strip()
                     
-                    # Check 429
+                    # Check 429 or Context Limit
                     err = result.stderr.lower()
+                    
+                    # Context Limit / Payload Too Large
+                    if "too large" in err or "413" in err or "context length" in err:
+                        console.print(
+                            f"[red]❌ GH Models Context Limit Exceeded. "
+                            f"The prompt is too large for the 'gh' provider (approx 8k tokens). "
+                            f"Please use Gemini or OpenAI for larger tasks.[/red]"
+                        )
+                        # Do not retry context errors, they won't succeed
+                        raise Exception("GH Context Limit Exceeded")
+
                     if "rate limit" in err or "too many requests" in err:
                         if attempt < max_retries - 1:
                             wait_time = (attempt + 1) * 3

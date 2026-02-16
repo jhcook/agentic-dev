@@ -50,11 +50,15 @@ data_state:
   persistent: []
 linked_stories:
 - INFRA-042
-linked_adrs: []
+linked_adrs:
+- ADR-015
+- ADR-022
 depends_on: []
 implementation:
   routes: []
   files:
+  - agent/commands/check.py
+  - agent/core/fixer.py
   - agent/tests/integration/test_preflight_interactive.py
   - agent/tests/unit/test_fixer.py
   tests: []

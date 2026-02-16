@@ -83,8 +83,17 @@ def validate_credentials(check_llm: bool = True) -> None:
                 try:
                     data = secret_manager._load_json(service_file)
                     if secret_name in data:
-                        found_any = True
-                        break
+                        # Found validation data, but store is locked.
+                        # We cannot use this credential.
+                        from agent.core.secrets import SecretManagerError
+                        raise SecretManagerError(
+                            f"Credentials for '{provider}' exist but Secret Manager is locked. "
+                            "Run 'agent secret login' to unlock."
+                        )
+                except ImportError:
+                    raise
+                except SecretManagerError:
+                    raise
                 except Exception:
                     pass
             

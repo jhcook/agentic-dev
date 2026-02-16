@@ -248,11 +248,13 @@ def test_ai_service_exception_propagation(mock_run, monkeypatch):
     
     from agent.core.ai.service import AIService
     ai_service = AIService()
+    ai_service.reload()
+    ai_service._initialized = True
     
     # Mock _try_complete to fail
     with patch.object(ai_service, "_try_complete", side_effect=Exception("GH Failed")):
         with pytest.raises(Exception) as excinfo:
-            ai_service.complete("sys", "user")
+            ai_service.complete("System prompt", "User prompt")
         assert "GH Failed" in str(excinfo.value)
 
 @patch("agent.core.ai.service.subprocess.run")

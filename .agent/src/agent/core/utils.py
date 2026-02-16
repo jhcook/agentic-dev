@@ -13,6 +13,9 @@
 # limitations under the License.
 
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 import json
 import subprocess
 from pathlib import Path
@@ -340,113 +343,159 @@ def sanitize_id(input_str: str) -> str:
     return s
 
 
+def _repair_json(text: str) -> str:
+    """
+    Attempt to repair common LLM JSON mistakes:
+    1. Trailing commas before ] or }
+    2. Unescaped newlines/tabs inside string values
+    3. Single quotes instead of double quotes (simple cases)
+    4. Truncated responses (unclosed brackets)
+    """
+    if not text:
+        return text
+
+    # 1. Remove trailing commas: ,\s*] or ,\s*}
+    repaired = re.sub(r',\s*(\]|})', r'\1', text)
+
+    # 2. Fix unescaped control characters inside JSON string values.
+    #    Walk the string and escape raw newlines/tabs that appear between quotes.
+    result = []
+    in_string = False
+    i = 0
+    while i < len(repaired):
+        ch = repaired[i]
+        if ch == '"' and (i == 0 or repaired[i-1] != '\\'):
+            in_string = not in_string
+            result.append(ch)
+        elif in_string and ch == '\n':
+            result.append('\\n')
+        elif in_string and ch == '\t':
+            result.append('\\t')
+        elif in_string and ch == '\r':
+            result.append('\\r')
+        else:
+            result.append(ch)
+        i += 1
+    repaired = ''.join(result)
+
+    # 3. Try to close truncated responses (unclosed brackets)
+    open_sq = repaired.count('[') - repaired.count(']')
+    open_curly = repaired.count('{') - repaired.count('}')
+
+    # Only attempt auto-close if we're missing a small number of brackets
+    if 0 < open_curly <= 3:
+        # Try to cleanly truncate: find last complete object/value and close
+        # First, strip any trailing partial string (unmatched quote)
+        stripped = repaired.rstrip()
+        if stripped and stripped[-1] not in ']}",':
+            # Likely a truncated string value — close it
+            stripped += '"'
+            open_curly_new = stripped.count('{') - stripped.count('}')
+            repaired = stripped + '}' * open_curly_new
+        else:
+            repaired = stripped + '}' * open_curly
+
+    open_sq = repaired.count('[') - repaired.count(']')
+    if 0 < open_sq <= 3:
+        repaired = repaired.rstrip() + ']' * open_sq
+
+    return repaired
+
+
 def extract_json_from_response(response: str) -> str:
     """
     Robustly extract JSON from AI response, handling markdown code blocks
     and various formatting issues. Supports JSON arrays, objects, and
     top-level primitives (strings, numbers, booleans, null).
 
+    Includes a repair stage for common LLM JSON mistakes (trailing commas,
+    unescaped newlines, truncated responses).
+
     NOTE: This function intentionally exceeds the 50-line guideline.  It is a
     single-purpose, sequential extraction pipeline (stages 0-5) whose steps
     share local state (``stripped``, ``cleaned``).  Splitting into sub-functions
     would scatter control-flow without improving readability.
     """
+    
     if not response:
         return ""
+    
     response = response.strip()
 
-    # 0. Strip markdown code fences as a preprocessing step.
-    #    This handles ```json ... ```, ``` ... ```, and variants.
-    stripped = response
-    fence_pattern = re.compile(
-        r"^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$",
-        re.DOTALL
-    )
-    fence_match = fence_pattern.match(stripped)
-    if fence_match:
-        stripped = fence_match.group(1).strip()
-
-    # Also handle cases where fences are not the only content
-    # (e.g., "Here is the JSON:\n```json\n[...]\n```\nLet me know...")
-    if not fence_match:
-        fence_pattern_inner = re.compile(
-            r"```(?:json|JSON)?\s*\n(.*?)\n\s*```",
-            re.DOTALL
-        )
-        fence_match_inner = fence_pattern_inner.search(stripped)
-        if fence_match_inner:
-            stripped = fence_match_inner.group(1).strip()
-
-    # 0b. Pre-process: strip JS-style single-line comments and trailing commas
-    #     that LLMs sometimes include in JSON output.
-    cleaned = re.sub(r'//[^\n]*', '', stripped)          # remove // comments
-    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)     # remove trailing commas
-
-    # 1. Direct parse: try the cleaned content first
+    # 1. Try direct parsing first (best case)
     try:
-        json.loads(cleaned, strict=False)
-        return cleaned
+        json.loads(response, strict=False)
+        return response
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # 1b. Direct parse: try the stripped (pre-comment-removal) content
-    if cleaned != stripped:
+    # 2. Extract from markdown fences
+    fence_pattern = re.compile(r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
+    match = fence_pattern.search(response)
+    if match:
+        candidate = match.group(1).strip()
         try:
-            json.loads(stripped, strict=False)
-            return stripped
+             json.loads(candidate, strict=False)
+             return candidate
         except (json.JSONDecodeError, ValueError):
-            pass
+             # Try repairing the fenced content
+             repaired = _repair_json(candidate)
+             try:
+                 json.loads(repaired, strict=False)
+                 return repaired
+             except (json.JSONDecodeError, ValueError):
+                 pass  # Fallthrough
 
-    # 2. Bracket/Brace Matching Logic - find JSON array or object
-    # Try both '[' (array) and '{' (object) as potential roots
-    for open_char, close_char in [('[', ']'), ('{', '}')]:
-        start_idx = stripped.find(open_char)
+    # 3. Aggressive Bracketing (Find outer-most { } or [ ])
+    first_curly = response.find('{')
+    first_square = response.find('[')
+    
+    search_order = []
+    if first_curly != -1 and (first_square == -1 or first_curly < first_square):
+        search_order = [('{', '}'), ('[', ']')]
+    elif first_square != -1:
+        search_order = [('[', ']'), ('{', '}')]
+    else:
+        return ""
+
+    best_fallback = ""
+
+    for open_char, close_char in search_order:
+        start_idx = response.find(open_char)
         if start_idx == -1:
             continue
-
-        # Collect all indices of the closing char after start_idx
+            
         end_indices = [
-            i for i, char in enumerate(stripped)
+            i for i, char in enumerate(response)
             if char == close_char and i > start_idx
         ]
+        
+        if not end_indices:
+             continue
 
-        # Reverse iterate (try largest block first)
+        widest_candidate = response[start_idx : end_indices[-1] + 1]
+        if not best_fallback or len(widest_candidate) > len(best_fallback):
+             best_fallback = widest_candidate
+        
+        # Try largest candidate first, then shrink
         for end_idx in reversed(end_indices):
-            candidate = stripped[start_idx : end_idx + 1]
+            candidate = response[start_idx : end_idx + 1]
             try:
                 json.loads(candidate, strict=False)
                 return candidate
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError):
                 continue
 
-    # 3. Last resort: try the same bracket matching on the ORIGINAL response
-    #    (in case fence stripping removed too much)
-    if stripped != response:
-        for open_char, close_char in [('[', ']'), ('{', '}')]:
-            start_idx = response.find(open_char)
-            if start_idx == -1:
-                continue
-            end_indices = [
-                i for i, char in enumerate(response)
-                if char == close_char and i > start_idx
-            ]
-            for end_idx in reversed(end_indices):
-                candidate = response[start_idx : end_idx + 1]
-                try:
-                    json.loads(candidate, strict=False)
-                    return candidate
-                except json.JSONDecodeError:
-                    continue
+    # 4. Repair stage — attempt to fix the best candidate we found
+    if best_fallback:
+        repaired = _repair_json(best_fallback)
+        try:
+            json.loads(repaired, strict=False)
+            logger.info("JSON repair succeeded on AI response.")
+            return repaired
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"JSON repair failed. First 100 chars: {best_fallback[:100]}")
 
-    # 4. Fallback: return the first bracket-delimited substring even if
-    #    it isn't valid JSON (callers may need the raw content).
-    for open_char, close_char in ('[', ']'), ('{', '}'):
-        start_idx = stripped.find(open_char)
-        if start_idx == -1:
-            continue
-        end_idx = stripped.rfind(close_char)
-        if end_idx > start_idx:
-            return stripped[start_idx : end_idx + 1]
+    # 5. Return best_fallback as-is (caller will handle the parse error)
+    return best_fallback if best_fallback else ""
 
-    # 5. Return empty string if nothing worked
-    return ""

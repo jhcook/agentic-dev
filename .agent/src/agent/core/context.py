@@ -131,20 +131,32 @@ class ContextLoader:
                 )
                 state = state_match.group(1).strip() if state_match else "UNKNOWN"
 
-                # Extract decision section (first paragraph only for brevity)
+                # Extract Decision OR Justification
+                # EXC records use "Justification", ADRs use "Decision"
                 decision = ""
+                # Try Decision first
                 decision_match = re.search(
                     r"^##\s+Decision\s*\n+(.*?)(?=\n##|\n###|\Z)",
                     content,
                     re.MULTILINE | re.DOTALL | re.IGNORECASE,
                 )
+                # Fallback to Justification
+                if not decision_match:
+                    decision_match = re.search(
+                        r"^##\s+Justification\s*\n+(.*?)(?=\n##|\n###|\Z)",
+                        content,
+                        re.MULTILINE | re.DOTALL | re.IGNORECASE,
+                    )
+
                 if decision_match:
                     # Take first paragraph (up to double newline)
                     raw = decision_match.group(1).strip()
                     first_para = raw.split("\n\n")[0].strip()
                     decision = first_para
 
-                context += f"- **{title}** [{state}]: {decision}\n"
+                # Prefix based on type
+                prefix = "[EXCEPTION]" if adr_file.name.startswith("EXC-") else "[ADR]"
+                context += f"- **{prefix} {title}** [{state}]: {decision}\n"
 
         if not has_adrs:
             context += "(No ADRs found)\n"

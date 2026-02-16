@@ -44,16 +44,19 @@ As a **developer governed by the agent framework**, I want preflight checks to b
 ## Impact Analysis Summary
 
 Components touched:
+
 - `.agent/adrs/` — new ADR-021, new EXC-001
 - `.agent/templates/` — new exception-template.md
 - `.agent/rules/` — modified `adr-standards.mdc`, `architectural-standards.mdc`, `the-team.mdc`; new `breaking-changes.mdc`
 - `.agent/workflows/preflight.md` — new LOAD EXCEPTIONS step
 
 Workflows affected:
+
 - `/preflight` — now loads exception records before role reviews
 - `/commit` — indirectly, as preflight precision reduces false blocks
 
 Risks identified:
+
 - Stale exceptions: If conditions are not reviewed, exceptions may outlive their validity. Mitigated by the `Conditions` field.
 
 ## Test Strategy

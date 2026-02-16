@@ -30,3 +30,13 @@ You should **WARN** (but not necessarily block, unless severe) if:
 1. **Weak Cryptography**: Usage of MD5/SHA1.
 2. **Missing Security headers**.
 3. **Complex permission logic** that is hard to audit.
+
+## 🔓 Exceptions & Allow-Lists
+
+### Agent Development Tools (`.agent/src/`)
+
+Since this codebase *is* a local developer tool, it requires access to system resources. The following strict rules are RELAXED for code within `.agent/src/`:
+
+- **System Imports**: `os`, `sys`, `subprocess`, `shutil` are **PERMITTED** for necessary file system and process operations.
+- **File Operations**: `open()`, `write()`, `read()` are permitted.
+- **Validation**: Ensure all paths and inputs are validated before use, but do not block the distinct libraries themselves.

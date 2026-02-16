@@ -18,6 +18,8 @@ import typer
 from rich.console import Console
 from rich.prompt import IntPrompt, Prompt
 
+from agent.core.auth.credentials import validate_credentials
+
 from agent.core.config import config
 from agent.core.utils import get_next_id, sanitize_title
 from agent.db.client import upsert_artifact
@@ -25,7 +27,9 @@ from agent.db.client import upsert_artifact
 console = Console()
 
 def new_plan(
-    plan_id: Optional[str] = typer.Argument(None, help="The ID of the plan (e.g., INFRA-001).")
+    plan_id: Optional[str] = typer.Argument(None, help="The ID of the plan (e.g., INFRA-001)."),
+    ai: bool = typer.Option(False, "--ai", help="Enable AI generation."),
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="Context for AI generation.")
 ):
     """
     Create a new implementation plan manually from a template.
@@ -77,6 +81,23 @@ def new_plan(
     if template_path.exists():
         content = template_path.read_text()
         content = f"# {plan_id}: {title}\n\n" + content
+        
+        if ai:
+            validate_credentials(check_llm=True)
+            from agent.core.ai import ai_service
+            
+            if not prompt:
+                prompt = Prompt.ask("Enter context for AI generation")
+                
+            console.print("[dim]🤖 AI is generating plan content...[/dim]")
+            try:
+                sys_prompt = "You are a technical architect. Fill in the plan template based on the user context. Focus on implementation details."
+                user_prompt = f"TEMPLATE:\n{content}\n\nCONTEXT:\n{prompt}"
+                generated = ai_service.complete(sys_prompt, user_prompt)
+                if generated:
+                    content = generated
+            except Exception as e:
+                console.print(f"[yellow]⚠️  AI generation failed: {e}[/yellow]")
     else:
         # Fallback template
         content = f"""# {plan_id}: {title}

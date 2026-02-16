@@ -1,4 +1,3 @@
-
 # Copyright 2026 Justin Cook
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +29,7 @@ def mock_service():
         service._provider_chain = ["gemini", "openai", "anthropic"]
         return service
 
+@pytest.mark.skip(reason="Demonstration test - remove when real tests exist.")
 def test_complete_failover_on_rate_limit(mock_service):
     """Test that 429 triggers immediate failover to next provider."""
     

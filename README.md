@@ -39,7 +39,7 @@ The agent requires credentials for certain commands that interact with AI provid
 
 `[❌ Missing Credentials] The following required credentials are not found: - OPENAI_API_KEY`
 
-It means the agent cannot authenticate with the configured AI provider.
+It means you are trying to use an AI feature (e.g., `--ai`) without valid credentials. Credentials are **optional** for core commands and only required when utilizing AI capabilities.
 
 ### Prerequisites
 
@@ -106,3 +106,24 @@ It supports:
 - **Interactive Conflict Resolution**: Prompts when content differs between local and remote.
 - **Self-Healing**: Detects missing environments (e.g., Notion 404s) and offers to bootstrap them via `agent sync init`.
 - **Janitor**: `agent sync janitor` ensures relational integrity (linking Stories to Plans/ADRs).
+
+## 🧠 AI Assisted Workflows
+
+The agent supports AI-driven content generation and review. Use the `--ai` flag to enable these features.
+
+### Create Content
+
+Generate drafts with AI context:
+
+```bash
+agent new-story <STORY_ID> --ai --prompt "Implement a new caching layer for the user profile service"
+agent new-plan <PLAN_ID> --ai --prompt "Migration plan for upgrading to Postgres 16"
+```
+
+### Governance Review
+
+Run AI-powered preflight checks:
+
+```bash
+agent preflight --story <STORY_ID> --ai
+```

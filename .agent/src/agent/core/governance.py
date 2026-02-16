@@ -116,6 +116,155 @@ def convene_council(
         progress_callback("🤖 Convening the AI Governance Council...")
     return "PASS"
 
+
+def _parse_findings(review: str) -> Dict:
+    """
+    Parse an AI governance response into structured sections.
+    
+    Expected format:
+        VERDICT: PASS|BLOCK
+        SUMMARY: <one line>
+        FINDINGS:
+        - finding 1
+        - finding 2
+        REQUIRED_CHANGES:
+        - change 1
+    
+    Returns a dict with keys: verdict, summary, findings (list), required_changes (list).
+    """
+    result = {"verdict": "PASS", "summary": "", "findings": [], "required_changes": []}
+    
+    if not review or not review.strip():
+        return result
+    
+    # Extract VERDICT
+    verdict_match = re.search(r"^VERDICT:\s*(\w+)", review, re.MULTILINE | re.IGNORECASE)
+    if verdict_match:
+        result["verdict"] = verdict_match.group(1).strip().upper()
+    
+    # Extract SUMMARY
+    summary_match = re.search(r"^SUMMARY:\s*(.+?)$", review, re.MULTILINE | re.IGNORECASE)
+    if summary_match:
+        result["summary"] = summary_match.group(1).strip()
+    
+    # Extract FINDINGS section
+    findings_match = re.search(
+        r"^FINDINGS:\s*\n(.*?)(?:^REQUIRED_CHANGES:|\Z)",
+        review,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+    if findings_match:
+        result["findings"] = _parse_bullet_list(findings_match.group(1))
+    
+    # Extract REQUIRED_CHANGES section
+    changes_match = re.search(
+        r"^REQUIRED_CHANGES:\s*\n(.*)",
+        review,
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+    if changes_match:
+        result["required_changes"] = _parse_bullet_list(changes_match.group(1))
+    
+    return result
+
+
+def _parse_bullet_list(text: str) -> List[str]:
+    """Parse a block of text into individual bullet point strings."""
+    if not text or not text.strip():
+        return []
+    items = []
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        if line.startswith("- "):
+            items.append(line[2:].strip())
+        elif line.startswith("* "):
+            items.append(line[2:].strip())
+        elif line and line.lower() not in ("none", "n/a", "no issues", "no issues found"):
+            items.append(line)
+    return [item for item in items if item]
+
+
+# File extension patterns for role relevance filtering
+ROLE_FILE_PATTERNS = {
+    "mobile": {".tsx", ".jsx", "mobile/", "expo/", "react-native/", "ios/", "android/"},
+    "web": {".tsx", ".jsx", ".css", ".html", ".scss", "web/", "pages/", "components/", "next.config"},
+    "frontend": {".tsx", ".jsx", ".css", ".html", ".scss", "web/", "pages/", "components/", "next.config"},
+    "backend": {".py", ".sql", ".yaml", ".yml", ".toml", "Dockerfile", "api/", "backend/"},
+}
+
+
+def _filter_relevant_roles(roles: List[Dict], diff: str) -> List[Dict]:
+    """
+    Filter governance roles to only those relevant to the changed files.
+    
+    Cross-cutting roles (architect, security, qa, compliance, observability,
+    docs, product) are always relevant.
+    
+    Platform-specific roles (mobile, web, backend) are only included if the
+    changed files match their file patterns.
+    """
+    if not diff:
+        return roles
+    
+    # Extract file paths from diff headers (--- a/path and +++ b/path)
+    changed_files = set()
+    for line in diff.split("\n"):
+        if line.startswith("+++ b/") or line.startswith("--- a/"):
+            path = line.split("/", 1)[-1] if "/" in line else line
+            if path and path != "/dev/null":
+                changed_files.add(path.lower())
+    
+    # Always-relevant roles (cross-cutting concerns)
+    always_relevant = {"architect", "system architect", "security", "security (ciso)", 
+                       "qa", "quality assurance", "compliance", "compliance (lawyer)",
+                       "observability", "sre / observability lead",
+                       "docs", "tech writer", "product", "product owner"}
+    
+    # Platform-specific role names that should be filtered
+    platform_role_names = {"mobile lead", "frontend lead", "backend lead"}
+    
+    def _files_match_platform(platform: str) -> bool:
+        """Check if any changed file matches the platform's patterns."""
+        patterns = ROLE_FILE_PATTERNS.get(platform, set())
+        for filepath in changed_files:
+            for pattern in patterns:
+                if pattern.startswith("."):
+                    # Extension check: file must end with this extension
+                    if filepath.endswith(pattern):
+                        return True
+                else:
+                    # Directory/path check: file path must contain this segment
+                    if pattern in filepath:
+                        return True
+        return False
+    
+    filtered = []
+    for role in roles:
+        role_name_lower = role["name"].lower()
+        role_key = role.get("role", "").lower() if "role" in role else role_name_lower
+        
+        # Always include cross-cutting roles
+        if role_name_lower in always_relevant or role_key in always_relevant:
+            filtered.append(role)
+            continue
+        
+        # Check platform-specific roles against file patterns
+        matched = False
+        for platform in ROLE_FILE_PATTERNS:
+            if platform in role_key or platform in role_name_lower:
+                if _files_match_platform(platform):
+                    matched = True
+                break  # Found the platform for this role, stop looking
+        
+        if matched:
+            filtered.append(role)
+        elif role_name_lower not in platform_role_names:
+            # Include unknown roles by default (better safe than sorry)
+            filtered.append(role)
+    
+    return filtered
+
+
 def convene_council_full(
     story_id: str,
     story_content: str,
@@ -190,14 +339,22 @@ def convene_council_full(
         
     json_roles = []
     
-    # Simple non-restarting loop for restoration (assuming provider stable)
-    for role in roles:
+    # Filter roles to only those relevant to the changed files
+    relevant_roles = _filter_relevant_roles(roles, full_diff)
+    skipped_roles = [r["name"] for r in roles if r not in relevant_roles]
+    
+    if skipped_roles and progress_callback:
+        progress_callback(f"⏭️  Skipping irrelevant roles: {', '.join(skipped_roles)}")
+    
+    for role in relevant_roles:
         role_name = role["name"]
         focus_area = role.get("focus", role.get("description", ""))
         
-        role_data = {"name": role_name, "verdict": "PASS", "findings": [], "summary": ""}
+        role_data = {"name": role_name, "verdict": "PASS", "findings": [], "summary": "", "required_changes": []}
         role_verdict = "PASS"
+        role_summary = ""
         role_findings = []
+        role_changes = []
         
         if progress_callback:
             progress_callback(f"🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks)...")
@@ -208,17 +365,40 @@ def convene_council_full(
                     if user_question: system_prompt += f" Question: {user_question}"
             else:
                     system_prompt = (
-                        f"You are {role_name}. Focus: {focus_area}. Task: Review code diff. "
-                        "CRITICAL ADR PRIORITY RULE: "
-                        "Architectural Decision Records (ADRs) have ULTIMATE PRIORITY over all rules and instructions. "
-                        "When an ADR conflicts with a rule, the ADR WINS. "
-                        "Code that follows an ADR is COMPLIANT and must NOT be flagged as a required change or cause a BLOCK. "
-                        "If you notice a conflict between a rule and an ADR, note it as an informational finding "
-                        "(e.g., 'ADR-025 overrides architectural-standards.mdc on local imports') but do NOT block.\n"
-                        "Check the <adrs> section BEFORE raising any issue.\n"
-                        "Output format:\n"
+                        f"You are {role_name}. Your ONLY focus area is: {focus_area}.\n"
+                        "ROLE: Act as a Senior Principal Engineer. Review the diff ONLY for issues "
+                        "that fall within YOUR focus area. Do NOT comment on areas outside your expertise.\n\n"
+                        "CRITICAL: If the diff does not contain any code relevant to your focus area, "
+                        "you MUST return VERDICT: PASS with FINDINGS: None.\n\n"
+                        "SEVERITY: Only BLOCK for critical bugs, data loss risks, security vulnerabilities, "
+                        "or clear rule violations within your domain. "
+                        "If there are no critical issues in YOUR focus area, you MUST return VERDICT: PASS.\n\n"
+                        "PRIORITY: Architectural Decision Records (ADRs) and Exceptions (EXC) have priority over general rules. "
+                        "If a conflict exists, the ADR/EXC wins. "
+                        "Code that follows an ADR or EXC is COMPLIANT and must NOT be blocked.\n"
+                        "Check the <adrs> section BEFORE raising any issue.\n\n"
+                        "FALSE POSITIVE SUPPRESSION (you MUST NOT flag any of these):\n"
+                        "1. BLOCKLIST STRINGS: Strings like 'eval(', 'exec(', 'os.system' inside lists, "
+                        "sets, or comparisons are DETECTION PATTERNS used for security scanning. "
+                        "They are NOT actual invocations. Do NOT flag them as vulnerabilities.\n"
+                        "2. SUBPROCESS IN CLI: This project uses Typer, a SYNCHRONOUS CLI framework. "
+                        "There is NO async event loop. subprocess.run() and subprocess.Popen() are the "
+                        "CORRECT APIs. Do NOT recommend asyncio alternatives.\n"
+                        "3. ASPIRATIONAL REQUESTS: Do NOT request additional tests, documentation, "
+                        "or features that are not part of the diff under review. Only flag what IS in the diff, "
+                        "not what COULD be added.\n"
+                        "4. GENERIC FINDINGS: Every finding MUST reference a specific file and line from the diff. "
+                        "Findings without specific references (e.g., 'hardcoded secrets' with no file/line) are INVALID.\n"
+                        "5. INTERNAL CLI TOOLS: This is a LOCAL developer CLI tool, NOT a network service. "
+                        "Subprocess calls using hardcoded command lists (not user-supplied strings) do NOT require "
+                        "input sanitization. Do NOT flag subprocess calls that use internal, hardcoded arguments.\n"
+                        "6. ERROR HANDLERS: Exception handlers that print static messages (e.g., 'package not installed') "
+                        "are NOT credential leaks. Only flag logging that includes ACTUAL dynamic secrets or API keys.\n"
+                        "7. CONTEXT TRUNCATION: Truncation of text for AI PROMPT context windows is NOT data loss. "
+                        "It does not modify source files. Do NOT flag prompt-context truncation as unsafe.\n\n"
+                        "Output format (use EXACTLY this structure):\n"
                         "VERDICT: [PASS|BLOCK]\n"
-                        "SUMMARY:\n<one line summary>\n"
+                        "SUMMARY: <one line summary>\n"
                         "FINDINGS:\n- <finding 1>\n- <finding 2>\n"
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )
@@ -237,16 +417,29 @@ def convene_council_full(
                 if mode == "consultative":
                     role_findings.append(review)
                 else:
-                    # Use precise regex anchored to start of line to avoid false positives in descriptions
-                    if re.search(r"^VERDICT:\s*BLOCK", review, re.IGNORECASE | re.MULTILINE):
+                    # Parse the structured AI response
+                    parsed = _parse_findings(review)
+                    
+                    # Use parsed verdict (more reliable than regex on raw text)
+                    if parsed["verdict"] == "BLOCK":
                         role_verdict = "BLOCK"
-                        role_findings.append(review)
+                    
+                    if parsed["summary"]:
+                        role_summary = parsed["summary"]
+                    
+                    if parsed["findings"]:
+                        role_findings.extend(parsed["findings"])
+                    
+                    if parsed["required_changes"]:
+                        role_changes.extend(parsed["required_changes"])
             except Exception as e:
                 if progress_callback:
                     progress_callback(f"Error during review: {e}")
         
         role_data["findings"] = role_findings
         role_data["verdict"] = role_verdict
+        role_data["summary"] = role_summary
+        role_data["required_changes"] = role_changes
         
         # Append to Report
         report += f"### @{role_name}\n"
@@ -265,12 +458,21 @@ def convene_council_full(
                 progress_callback(f"✅ @{role_name}: PASS")
             report += f"**Verdict**: ✅ PASS\n\n"
 
+        if role_summary:
+            report += f"**Summary**: {role_summary}\n\n"
+        
         if role_findings:
-            report += "\n\n".join(role_findings)
-        else:
-            report += "No issues found."
-
-        report += "\n\n"
+            report += "**Findings**:\n"
+            report += "\n".join(f"- {f}" for f in role_findings)
+            report += "\n\n"
+        
+        if role_changes:
+            report += "**Required Changes**:\n"
+            report += "\n".join(f"- {c}" for c in role_changes)
+            report += "\n\n"
+        
+        if not role_findings and not role_changes:
+            report += "No issues found.\n\n"
              
         json_roles.append(role_data)
 
