@@ -40,7 +40,7 @@ data_state:
 implementation:
   routes: []
   files: []
-  tests: []
+  tests: [] # Required for COMMITTED journeys. List paths to test files relative to project root.
 
 linked_stories: []
 linked_adrs: []

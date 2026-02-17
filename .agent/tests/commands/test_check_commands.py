@@ -33,9 +33,11 @@ def clean_env(tmp_path):
     mock_agent.mkdir()
     
     # Patch the config object instances in the loaded module
+    noop_coverage = {"passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": []}
     with patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.config.config.rules_dir", mock_rules), \
-         patch("agent.core.config.config.agent_dir", mock_agent):
+         patch("agent.core.config.config.agent_dir", mock_agent), \
+         patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
     
         # Create fake story
         (mock_stories / "INFRA").mkdir()

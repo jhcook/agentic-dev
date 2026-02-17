@@ -15,7 +15,7 @@
 import re
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import typer
 from rich.console import Console
@@ -33,6 +33,67 @@ from agent.core.fixer import InteractiveFixer
 
 
 console = Console()
+
+
+def check_journey_coverage(
+    repo_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Check journey → test coverage for COMMITTED/ACCEPTED journeys.
+
+    Returns:
+        Dict with keys: passed (bool), total, linked, missing, warnings (list[str])
+    """
+    import yaml  # ADR-025: local import
+
+    root = repo_root or config.repo_root
+    journeys_dir = root / ".agent" / "cache" / "journeys"
+    result: Dict[str, Any] = {
+        "passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": [],
+    }
+
+    if not journeys_dir.exists():
+        return result
+
+    for scope_dir in sorted(journeys_dir.iterdir()):
+        if not scope_dir.is_dir():
+            continue
+        for jfile in sorted(scope_dir.glob("JRN-*.yaml")):
+            try:
+                data = yaml.safe_load(jfile.read_text())
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            state = (data.get("state") or "DRAFT").upper()
+            if state not in ("COMMITTED", "ACCEPTED"):
+                continue
+
+            result["total"] += 1
+            tests = data.get("implementation", {}).get("tests", [])
+            jid = data.get("id", jfile.stem)
+
+            if not tests:
+                result["missing"] += 1
+                result["warnings"].append(f"{jid}: No tests linked")
+                continue
+
+            all_exist = True
+            for t in tests:
+                tp = Path(t)
+                if tp.is_absolute():
+                    result["warnings"].append(f"{jid}: Absolute test path '{t}'")
+                    all_exist = False
+                    continue
+                if not (root / tp).exists():
+                    result["warnings"].append(f"{jid}: Test file not found: '{t}'")
+                    all_exist = False
+
+            if all_exist:
+                result["linked"] += 1
+            else:
+                result["missing"] += 1
+
+    return result
 
 def validate_story(
     story_id: str = typer.Argument(..., help="The ID of the story to validate."),
@@ -655,6 +716,21 @@ def preflight(
     else:
         console.print("[green]✅ ADR Enforcement passed.[/green]")
         json_report["adr_enforcement"] = "PASS"
+
+    # 1.8 Journey Coverage Check (Phase 1: Warning — INFRA-058)
+    console.print("\n[bold blue]📋 Checking Journey Test Coverage...[/bold blue]")
+    coverage_result = check_journey_coverage()
+    json_report["journey_coverage"] = coverage_result
+
+    if coverage_result["warnings"]:
+        console.print(
+            f"[yellow]⚠️  Journey Coverage: {coverage_result['linked']}/{coverage_result['total']}"
+            f" COMMITTED journeys linked[/yellow]"
+        )
+        for w in coverage_result["warnings"][:10]:  # Cap output
+            console.print(f"  [yellow]• {w}[/yellow]")
+    else:
+        console.print("[green]✅ Journey Coverage: All linked.[/green]")
 
     # 2. Get Changed Files (for AI review)
     # Re-run diff cleanly

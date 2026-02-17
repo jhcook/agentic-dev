@@ -1,0 +1,76 @@
+# Journey: JRN-053
+# Linked Story: INFRA-058
+# Title: Journey Test Coverage
+
+id: JRN-053
+title: Journey Test Coverage
+state: DRAFT
+schema_version: 1
+priority: high
+tags:
+- infra
+- governance
+- testing
+actor: developer managing journey artifacts
+description: >
+  Ensure every committed user journey is linked to regression test files that verify
+  its behavioral contract. The journey schema enforces a non-empty tests field for
+  committed journeys, and preflight validates that linked test files exist on disk.
+preconditions:
+- Agent CLI is installed and configured
+- At least one journey YAML exists in .agent/cache/journeys/
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent journey coverage`
+  system_response: CLI reports journey → test mapping with coverage status
+  assertions:
+  - Each journey shows linked/missing/stale status
+  - Output includes journey ID, title, and test file paths
+- id: 2
+  action: Developer commits a journey with empty `implementation.tests`
+  system_response: `agent validate-journey` flags the missing tests
+  assertions:
+  - Validation fails for COMMITTED journeys with empty tests
+  - Validation passes for DRAFT journeys with empty tests
+- id: 3
+  action: Developer runs `agent preflight`
+  system_response: Preflight includes journey coverage check
+  assertions:
+  - Preflight blocks if a COMMITTED journey has no linked test files
+  - Preflight passes if all COMMITTED journeys have valid test links
+- id: 4
+  action: Developer creates a new journey via `/journey`
+  system_response: Creation workflow prompts for test file paths
+  assertions:
+  - Workflow asks for test file paths or generates placeholder stubs
+  - Generated journey includes populated `implementation.tests` field
+error_paths:
+- trigger_step: 3
+  condition: Linked test file path exists in YAML but file is missing from disk
+  system_response: Preflight reports missing test file with suggested path
+  assertions:
+  - Error message includes the expected file path
+  severity: expected
+edge_cases:
+- scenario: Journey references a test file that exists but has zero test functions
+  expected: Coverage report shows "stale" status for that test link
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-058
+linked_adrs:
+- ADR-005
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - commands/journey.py
+  - commands/check.py
+  tests:
+  - tests/commands/test_journey.py

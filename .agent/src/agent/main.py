@@ -127,6 +127,7 @@ app.add_typer(config.app, name="config")
 app.add_typer(importer.app, name="import")
 app.add_typer(mcp.app, name="mcp")
 app.add_typer(secret.app, name="secret")
+app.add_typer(journey.app, name="journey")
 
 # List Commands
 app.command("list-stories")(list_cmd.list_stories)

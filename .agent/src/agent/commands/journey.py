@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json as json_mod
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import typer
 import yaml
@@ -212,6 +213,38 @@ Generate the journey YAML now.
     logger.info("journey_created", extra={"journey_id": journey_id, "scope": scope, "path": str(file_path)})
     console.print(f"[bold green]✅ Created journey: {file_path}[/bold green]")
 
+    # Prompt to link test files (INFRA-058)
+    test_paths_input = Prompt.ask(
+        "[bold]Link test files? [comma-separated paths or Enter to generate stub][/bold]",
+        default="",
+    )
+    if test_paths_input.strip():
+        linked_paths = [p.strip() for p in test_paths_input.split(",")]
+    else:
+        slug = journey_id.lower().replace("-", "_")
+        stub_dir = config.repo_root / "tests" / "journeys"
+        stub_dir.mkdir(parents=True, exist_ok=True)
+        stub_path = stub_dir / f"test_{slug}.py"
+        if not stub_path.exists():
+            stub_path.write_text(
+                f'"""Auto-generated stub for {journey_id}."""\n'
+                "import pytest\n\n\n"
+                f'@pytest.mark.journey("{journey_id}")\n'
+                f"def test_{slug}():\n"
+                '    pytest.skip("Not yet implemented")\n'
+            )
+            console.print(f"[green]📝 Generated test stub: {stub_path}[/green]")
+        linked_paths = [str(stub_path.relative_to(config.repo_root))]
+
+    # Update the journey YAML with test paths
+    data = yaml.safe_load(file_path.read_text())
+    if not isinstance(data, dict):
+        data = {}
+    if "implementation" not in data:
+        data["implementation"] = {}
+    data["implementation"]["tests"] = linked_paths
+    file_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+
     # Auto-sync to local DB
     if upsert_artifact(journey_id, "journey", content, author="agent"):
         console.print("[bold green]🔄 Synced to local cache[/bold green]")
@@ -276,6 +309,35 @@ def validate_journey(
         if field not in data or not data[field]:
             warnings.append(f"Recommended field missing or empty: '{field}'")
 
+    # State-aware test enforcement (INFRA-058: AC-1, AC-2, AC-7)
+    state = (data.get("state") or "DRAFT").upper()
+    impl_tests = data.get("implementation", {}).get("tests", [])
+
+    if state in ("COMMITTED", "ACCEPTED"):
+        if not impl_tests:
+            errors.append(
+                "COMMITTED/ACCEPTED journey requires non-empty 'implementation.tests'"
+            )
+        else:
+            for test_path_str in impl_tests:
+                test_path = Path(test_path_str)
+                # Reject absolute paths
+                if test_path.is_absolute():
+                    errors.append(f"Test path must be relative: '{test_path_str}'")
+                    continue
+                # Reject path traversal
+                try:
+                    resolved = (config.repo_root / test_path).resolve()
+                    resolved.relative_to(config.repo_root.resolve())
+                except ValueError:
+                    errors.append(
+                        f"Test path escapes project root: '{test_path_str}'"
+                    )
+                    continue
+                # Check file exists (extension-agnostic)
+                if not resolved.exists():
+                    errors.append(f"Test file not found: '{test_path_str}'")
+
     # Report
     if errors:
         logger.warning("journey_validation_failed", extra={"path": journey_path, "errors": errors})
@@ -293,3 +355,184 @@ def validate_journey(
     else:
         logger.info("journey_validated", extra={"path": journey_path})
         console.print("[bold green]✅ Journey is valid and complete[/bold green]")
+
+
+@app.command()
+def coverage(
+    json_output: bool = typer.Option(
+        False, "--json", help="Output as JSON for CI."
+    ),
+    scope: Optional[str] = typer.Option(
+        None, "--scope", help="Filter by scope (INFRA, MOBILE, WEB, BACKEND)."
+    ),
+) -> None:
+    """Report journey → test mapping with coverage status."""
+    journeys_dir = config.journeys_dir
+    if not journeys_dir.exists():
+        console.print("[yellow]No journeys directory found.[/yellow]")
+        raise typer.Exit(0)
+
+    results: List[Dict[str, Any]] = []
+    for scope_dir in sorted(journeys_dir.iterdir()):
+        if not scope_dir.is_dir():
+            continue
+        if scope and scope_dir.name.upper() != scope.upper():
+            continue
+        for jfile in sorted(scope_dir.glob("JRN-*.yaml")):
+            try:
+                data = yaml.safe_load(jfile.read_text())
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+
+            j_state = (data.get("state") or "DRAFT").upper()
+            tests = data.get("implementation", {}).get("tests", [])
+            jid = data.get("id", jfile.stem)
+            title = data.get("title", "")
+
+            statuses: List[Dict[str, Any]] = []
+            for t in tests:
+                resolved = (config.repo_root / t).resolve()
+                statuses.append({"path": t, "exists": resolved.exists()})
+
+            if not tests:
+                overall = "❌ No tests"
+            elif all(s["exists"] for s in statuses):
+                overall = "✅ Linked"
+            else:
+                overall = "⚠️ Missing"
+
+            results.append({
+                "id": jid,
+                "title": title,
+                "state": j_state,
+                "tests": len(tests),
+                "status": overall,
+                "details": statuses,
+            })
+
+    if json_output:
+        console.print_json(json_mod.dumps(results))
+        return
+
+    from rich.table import Table
+
+    table = Table(title="Journey Test Coverage")
+    table.add_column("Journey ID", style="cyan")
+    table.add_column("Title")
+    table.add_column("State")
+    table.add_column("Tests", justify="right")
+    table.add_column("Status")
+    for r in results:
+        table.add_row(
+            r["id"], str(r["title"])[:40], r["state"],
+            str(r["tests"]), r["status"],
+        )
+    console.print(table)
+
+    linked = sum(1 for r in results if "✅" in r["status"])
+    total = sum(1 for r in results if r["state"] in ("COMMITTED", "ACCEPTED"))
+    pct = (linked / total * 100) if total else 0
+    console.print(
+        f"\nCoverage: {linked}/{total} COMMITTED+ journeys linked ({pct:.0f}%)"
+    )
+
+
+@app.command("backfill-tests")
+def backfill_tests(
+    scope: Optional[str] = typer.Option(
+        None, "--scope", help="Filter by scope."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview without writing."
+    ),
+) -> None:
+    """Generate pytest test stubs for COMMITTED journeys with empty tests."""
+    journeys_dir = config.journeys_dir
+    tests_dir = config.repo_root / "tests" / "journeys"
+
+    if not dry_run:
+        tests_dir.mkdir(parents=True, exist_ok=True)
+
+    generated = 0
+    for scope_dir in sorted(journeys_dir.iterdir()):
+        if not scope_dir.is_dir():
+            continue
+        if scope and scope_dir.name.upper() != scope.upper():
+            continue
+        for jfile in sorted(scope_dir.glob("JRN-*.yaml")):
+            try:
+                data = yaml.safe_load(jfile.read_text())
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+
+            j_state = (data.get("state") or "DRAFT").upper()
+            tests = data.get("implementation", {}).get("tests", [])
+            jid = data.get("id", jfile.stem)
+
+            if j_state != "COMMITTED" or tests:
+                continue
+
+            slug = jid.lower().replace("-", "_")
+            stub_path = tests_dir / f"test_{slug}.py"
+
+            if stub_path.exists():
+                console.print(
+                    f"[yellow]⚠️  Skipping {jid}: {stub_path} already exists[/yellow]"
+                )
+                continue
+
+            if dry_run:
+                console.print(f"[dim]Would create: {stub_path}[/dim]")
+                generated += 1
+                continue
+
+            # Generate stub from journey assertions
+            steps = data.get("steps", [])
+            test_funcs: List[str] = []
+            for i, step in enumerate(steps, 1):
+                assertions = step.get("assertions", []) if isinstance(step, dict) else []
+                assertion_comments = (
+                    "\n".join(f"    # {a}" for a in assertions)
+                    if assertions
+                    else "    # No assertions defined"
+                )
+                action_str = (
+                    step.get("action", "unnamed")[:60]
+                    if isinstance(step, dict)
+                    else "unnamed"
+                )
+                test_funcs.append(
+                    f'\n@pytest.mark.journey("{jid}")\n'
+                    f"def test_{slug}_step_{i}():\n"
+                    f'    """Step {i}: {action_str}"""\n'
+                    f"{assertion_comments}\n"
+                    '    pytest.skip("Not yet implemented")\n'
+                )
+
+            content = (
+                f'"""Auto-generated test stubs for {jid}."""\n'
+                "import pytest\n"
+                + "".join(test_funcs)
+            )
+
+            stub_path.write_text(content)
+
+            # Update journey YAML
+            if "implementation" not in data:
+                data["implementation"] = {}
+            data["implementation"]["tests"] = [
+                str(stub_path.relative_to(config.repo_root))
+            ]
+            jfile.write_text(
+                yaml.dump(data, default_flow_style=False, sort_keys=False)
+            )
+
+            console.print(f"[green]✅ Generated: {stub_path}[/green]")
+            generated += 1
+
+    verb = "Would generate" if dry_run else "Generated"
+    console.print(f"\n{verb} {generated} test stub(s)")
