@@ -12,12 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import fnmatch
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import os
+import types
 from pathlib import Path
-from typing import List, Optional, Set, Callable
+from typing import Any, Dict, List, Optional, Set, Callable
+
+import yaml
 from opentelemetry import trace
 
 import typer
@@ -319,6 +325,236 @@ def run_markdownlint(files: List[str], fix: bool = False) -> bool:
     return run_linter("markdownlint", files, build_cmd, fix=fix)
 
 
+# ---------------------------------------------------------------------------
+# ADR Enforcement Engine (INFRA-057)
+# ---------------------------------------------------------------------------
+
+
+def parse_adr_enforcement_blocks(content: str) -> List[Dict[str, str]]:
+    """Extract enforcement rules from ```enforcement fenced blocks in ADR content.
+
+    Returns a list of dicts, each with keys: type, pattern, scope, violation_message.
+    Malformed YAML blocks are silently skipped.
+    """
+    blocks: List[Dict[str, str]] = []
+    matches = re.findall(r"```enforcement\s*\n(.*?)\n```", content, re.DOTALL)
+    for match in matches:
+        try:
+            parsed = yaml.safe_load(match)
+            if isinstance(parsed, list):
+                blocks.extend(parsed)
+            elif isinstance(parsed, dict):
+                blocks.append(parsed)
+        except yaml.YAMLError:
+            pass  # Malformed blocks recorded via span, not crash
+    return blocks
+
+
+def parse_adr_state(content: str) -> str:
+    """Extract ADR state from the ``## State`` section.
+
+    Returns the first non-blank token after the heading, or ``'UNKNOWN'``.
+    """
+    match = re.search(r"^## State\s*$\s*^\s*(\S+)", content, re.MULTILINE)
+    return match.group(1).strip() if match else "UNKNOWN"
+
+
+def load_exception_records(adrs_dir: Path) -> List[Dict[str, Any]]:
+    """Load ACCEPTED exception records (``EXC-*``) for violation suppression."""
+    exceptions: List[Dict[str, Any]] = []
+    for exc_file in sorted(adrs_dir.glob("EXC-*.md")):
+        try:
+            content = exc_file.read_text(errors="ignore")
+        except OSError:
+            continue
+        state = parse_adr_state(content)
+        if state == "ACCEPTED":
+            exceptions.append({
+                "id": exc_file.stem,
+                "content": content,
+                "path": exc_file,
+            })
+    return exceptions
+
+
+def _is_suppressed_by_exception(
+    adr_id: str,
+    file_path: str,
+    pattern: str,
+    exceptions: List[Dict[str, Any]],
+) -> bool:
+    """Return ``True`` if a matching ACCEPTED exception record suppresses this violation."""
+    for exc in exceptions:
+        content = exc["content"]
+        # Exception must reference both the ADR *and* the violating file
+        if adr_id in content and file_path in content:
+            return True
+    return False
+
+
+def run_adr_enforcement(
+    files: Optional[List[str]] = None,
+    repo_root: Optional[Path] = None,
+) -> bool:
+    """Run deterministic ADR enforcement lint checks.
+
+    Parses `````enforcement`` blocks from ACCEPTED ADRs, matches regex patterns
+    against in-scope files, and reports structured violations.
+
+    Args:
+        files: Optional explicit file list (intersection with scope globs).
+        repo_root: Repository root. Defaults to ``config.repo_root``.
+
+    Returns:
+        ``True`` if no violations were found, ``False`` otherwise.
+    """
+    from agent.core.config import config  # ADR-025: local import
+
+    root = repo_root or config.repo_root
+    adrs_dir = root / ".agent" / "adrs"
+
+    if not adrs_dir.exists():
+        console.print("[dim]⚠️  No ADRs directory found, skipping ADR enforcement.[/dim]")
+        return True
+
+    with tracer.start_as_current_span("lint.adr_enforcement") as span:
+        # 1. Collect enforcement rules from ACCEPTED ADRs
+        rules: List[Dict[str, Any]] = []
+        adr_files = sorted(adrs_dir.glob("ADR-*.md"))
+        for adr_file in adr_files:
+            try:
+                content = adr_file.read_text(errors="ignore")
+            except OSError:
+                continue
+            state = parse_adr_state(content)
+            if state != "ACCEPTED":
+                continue
+            blocks = parse_adr_enforcement_blocks(content)
+            # Derive ADR ID from filename (e.g. ADR-025)
+            stem_parts = adr_file.stem.split("-")
+            adr_id = f"{stem_parts[0]}-{stem_parts[1]}" if len(stem_parts) >= 2 else adr_file.stem
+            for block in blocks:
+                if block.get("type") == "lint":
+                    rules.append({
+                        "adr_id": adr_id,
+                        "adr_file": adr_file.name,
+                        "pattern": block.get("pattern", ""),
+                        "scope": block.get("scope", "**/*"),
+                        "message": block.get("violation_message", "ADR violation"),
+                    })
+
+        span.set_attribute("adr_count", len(adr_files))
+        span.set_attribute("rule_count", len(rules))
+
+        if not rules:
+            console.print("[dim]No ADR enforcement rules found.[/dim]")
+            return True
+
+        console.print(f"[bold blue]Running ADR enforcement ({len(rules)} rules)...[/bold blue]")
+
+        # 2. Load exception records
+        exceptions = load_exception_records(adrs_dir)
+        exception_count = 0
+
+        # 3. Evaluate each rule
+        violations: List[Dict[str, Any]] = []
+
+        for rule in rules:
+            scope = rule["scope"]
+
+            # Reject absolute scope paths
+            if Path(scope).is_absolute():
+                violations.append({
+                    "file": rule["adr_file"],
+                    "line": 0,
+                    "col": 0,
+                    "message": f"{rule['adr_id']}: Invalid absolute scope '{scope}'",
+                })
+                continue
+
+            # Resolve scope glob against repo root
+            matched_files = sorted(root.glob(scope))
+
+            # Intersect with explicit file list when provided
+            if files is not None:
+                file_set = {str(Path(f).resolve()) for f in files}
+                matched_files = [f for f in matched_files if str(f.resolve()) in file_set]
+
+            # Compile regex — invalid patterns are reported, not crashed
+            try:
+                compiled = re.compile(rule["pattern"])
+            except re.error as exc:
+                violations.append({
+                    "file": rule["adr_file"],
+                    "line": 0,
+                    "col": 0,
+                    "message": f"{rule['adr_id']}: Invalid regex '{rule['pattern']}': {exc}",
+                })
+                continue
+
+            for target_file in matched_files:
+                if not target_file.is_file():
+                    continue
+                try:
+                    file_content = target_file.read_text(errors="ignore")
+                except OSError:
+                    continue
+
+                # Apply regex with SIGALRM timeout (5 s) to mitigate ReDoS
+                old_handler = signal.getsignal(signal.SIGALRM)
+
+                def _timeout_handler(signum: int, frame: types.FrameType | None) -> None:
+                    raise TimeoutError("Regex execution timed out")
+
+                signal.signal(signal.SIGALRM, _timeout_handler)
+                try:
+                    signal.alarm(5)
+                    for line_num, line in enumerate(file_content.splitlines(), 1):
+                        m = compiled.search(line)
+                        if m:
+                            rel_path = str(target_file.relative_to(root))
+                            if _is_suppressed_by_exception(
+                                rule["adr_id"], rel_path, rule["pattern"], exceptions
+                            ):
+                                exception_count += 1
+                                continue
+                            violations.append({
+                                "file": rel_path,
+                                "line": line_num,
+                                "col": m.start() + 1,
+                                "message": f"{rule['adr_id']}: {rule['message']}",
+                            })
+                except TimeoutError:
+                    violations.append({
+                        "file": rule["adr_file"],
+                        "line": 0,
+                        "col": 0,
+                        "message": f"{rule['adr_id']}: Regex timed out for pattern '{rule['pattern']}'",
+                    })
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+
+        # 4. Report
+        span.set_attribute("violation_count", len(violations))
+        span.set_attribute("exception_count", exception_count)
+
+        if violations:
+            console.print(
+                f"\n[bold red]❌ ADR Enforcement: {len(violations)} violation(s) found[/bold red]"
+            )
+            for v in violations:
+                console.print(
+                    f"  {v['file']}:{v['line']}:{v['col']}: {v['message']}"
+                )
+            span.set_attribute("status", "failed")
+            return False
+
+        console.print("[green]✅ ADR Enforcement: No violations found.[/green]")
+        span.set_attribute("status", "success")
+        return True
+
+
 def lint(
     path: Optional[Path] = typer.Argument(
         None, help="Path to file or directory to lint."
@@ -337,14 +573,27 @@ def lint(
     fix: bool = typer.Option(
         False, "--fix", help="Automatically fix lint errors where possible."
     ),
+    adr_only: bool = typer.Option(
+        False, "--adr-only", help="Run only ADR enforcement checks."
+    ),
 ):
     """
-    Lint the code using ruff (Python), shellcheck (Shell), and eslint (JS/TS).
+    Lint the code using ruff (Python), shellcheck (Shell), eslint (JS/TS), and ADR enforcement.
 
     Default behavior (no args): Lints staged files.
+    Use --adr-only to run only ADR enforcement checks.
     """
 
     files = get_files_to_lint(path, all_files, base, staged)
+
+    # --adr-only: skip conventional linters, run only ADR enforcement
+    if adr_only:
+        if not run_adr_enforcement(files=files if files else None):
+            console.print("[bold red]ADR enforcement failed.[/bold red]")
+            raise typer.Exit(1)
+        else:
+            console.print("[bold green]ADR enforcement passed.[/bold green]")
+        return
 
     if not files:
         console.print("[green]No files to lint.[/green]")
@@ -372,6 +621,10 @@ def lint(
     if md_files:
         if not run_markdownlint(md_files, fix=fix):
             success = False
+
+    # Always run ADR enforcement alongside conventional linters
+    if not run_adr_enforcement(files=files):
+        success = False
 
     if not success:
         console.print("[bold red]Linting failed.[/bold red]")

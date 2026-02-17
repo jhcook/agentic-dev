@@ -35,3 +35,17 @@ We adopt **lazy initialization** for `AIService`:
 - **Positive**: Lightweight commands (`sync`, `status`, `--help`) execute instantly without network dependencies.
 - **Positive**: AI-dependent commands initialise on first use with no behaviour change.
 - **Negative**: Local imports are unconventional — this ADR exists to prevent reviewers from reverting them.
+
+## Enforcement
+
+```enforcement
+- type: lint
+  pattern: "^from agent\\.core\\.ai import ai_service"
+  scope: "agent/commands/*.py"
+  violation_message: "ADR-025: Do not import ai_service at module scope in commands/. Use a local import inside the function body."
+
+- type: lint
+  pattern: "^ai_service\\s*=\\s*AIService\\(\\)"
+  scope: "agent/commands/*.py"
+  violation_message: "ADR-025: Do not instantiate AIService at module scope. Use lazy initialization via _ensure_initialized()."
+```

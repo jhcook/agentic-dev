@@ -478,7 +478,10 @@ def preflight(
                 res = SimpleNamespace(returncode=rc, stdout="".join(captured_output), stderr="")
 
                 
-                if res.returncode != 0:
+                if res.returncode == 5:
+                    # pytest exit code 5 = no tests collected — treat as warning, not failure
+                    console.print(f"[yellow]⚠️  {task['name']}: No tests collected (skipped)[/yellow]")
+                elif res.returncode != 0:
                     console.print(f"[bold red]❌ {task['name']} FAILED[/bold red]")
                     tests_passed = False
                     
@@ -634,6 +637,24 @@ def preflight(
             console.print("[bold green]✅ All tests passed.[/bold green]")
             json_report["overall_verdict"] = "PASS"
 
+    # 1.7 ADR Enforcement (Deterministic Gate — INFRA-057)
+    console.print("\n[bold blue]📐 Running ADR Enforcement Checks...[/bold blue]")
+    from agent.commands.lint import run_adr_enforcement  # ADR-025: local import
+
+    adr_passed = run_adr_enforcement()
+
+    if not adr_passed:
+        console.print("[bold red]❌ ADR Enforcement FAILED — violations must be fixed before merge.[/bold red]")
+        json_report["adr_enforcement"] = "FAIL"
+        if not interactive:
+            if report_file:
+                json_report["overall_verdict"] = "BLOCK"
+                import json
+                report_file.write_text(json.dumps(json_report, indent=2))
+            raise typer.Exit(code=1)
+    else:
+        console.print("[green]✅ ADR Enforcement passed.[/green]")
+        json_report["adr_enforcement"] = "PASS"
 
     # 2. Get Changed Files (for AI review)
     # Re-run diff cleanly
