@@ -19,18 +19,8 @@ from pathlib import Path
 
 def get_db_path() -> Path:
     """Returns the path to the local SQLite database."""
-    # Assuming run from repo root or .agent/src
-    # We want .agent/cache/agent.db
-    # Find .agent root
-    current = Path.cwd()
-    agent_dir = current / ".agent"
-    if not agent_dir.exists():
-        # Try to find from src?
-        # Fallback to looking up
-        pass 
-    
-    # Just use absolute path relative to CWD if we assume CWD is repo root
-    cache_dir = agent_dir / "cache"
+    from agent.core.config import config
+    cache_dir = config.cache_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / "agent.db"
 

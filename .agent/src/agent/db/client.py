@@ -24,8 +24,8 @@ from agent.db.init import init_db
 
 def get_db_path() -> Path:
     """Returns the path to the local Agent SQLite database."""
-    # Assuming run from repo root
-    return Path(".agent/cache/agent.db")
+    from agent.core.config import config
+    return config.cache_dir / "agent.db"
 
 def get_connection() -> sqlite3.Connection:
     """Creates a connection to the SQLite database."""
