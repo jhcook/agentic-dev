@@ -321,7 +321,7 @@ The panel convenes role-based AI reviewers:
 | @Compliance | Regulatory enforcement |
 | + Scope-specific | @Mobile, @Web, or @Backend |
 
-> The `--panel-engine adk` flag uses Google's Agent Development Kit for multi-agent orchestration. Falls back to the legacy sequential engine if ADK is unavailable. See [ADR-029](../adrs/ADR-029-adk-multi-agent-integration.md).
+> The `--panel-engine adk` flag uses Google's Agent Development Kit for multi-agent orchestration. Falls back to the native sequential engine if ADK is unavailable. See [ADR-029](../adrs/ADR-029-adk-multi-agent-integration.md).
 
 ---
 

@@ -133,3 +133,40 @@ def test_complete_triggers_initialization():
         # Assert
         # Initialization SHOULD be called now
         mock_init.assert_called_once()
+
+
+def test_rate_limit_retry_backoff(ai_service):
+    """Verify 429 errors trigger exponential backoff retries on the same provider,
+    not an immediate provider switch."""
+    ai_service.provider = 'openai'
+    ai_service.is_forced = True
+
+    call_count = 0
+    mock_client = MagicMock()
+
+    def openai_side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:
+            raise Exception("429 Too Many Requests")
+        result = MagicMock()
+        result.choices = [MagicMock()]
+        result.choices[0].message.content = "Success after backoff"
+        return result
+
+    mock_client.chat.completions.create.side_effect = openai_side_effect
+    ai_service.clients['openai'] = mock_client
+
+    with patch("agent.core.ai.service.time.sleep") as mock_sleep, \
+         patch("agent.core.config.config") as mock_cfg:
+        mock_cfg.panel_num_retries = 5
+        result = ai_service.complete("sys", "user")
+
+    assert result == "Success after backoff"
+    # Should have retried same provider, not switched
+    assert ai_service.provider == "openai"
+    assert call_count == 3
+    # Exponential backoff: 2^0=1, 2^1=2
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_any_call(1)
+    mock_sleep.assert_any_call(2)

@@ -391,6 +391,7 @@ def configure_agent_settings() -> None:
     # 1. Select Provider
     current_provider = config.get_value(data, "agent.provider")
     should_configure_provider = True
+    should_configure_model = True
 
     if current_provider:
         typer.secho(f"[OK] Default AI provider is already set to '{current_provider}'.", fg=typer.colors.GREEN)
@@ -403,7 +404,7 @@ def configure_agent_settings() -> None:
             if current_model:
                  typer.secho(f"[OK] Default model for {current_provider} is set to '{current_model}'.", fg=typer.colors.GREEN)
                  if not typer.confirm(f"Would you like to re-configure model for {current_provider}?", default=False):
-                     return # Skip model selection as well
+                     should_configure_model = False
 
     if should_configure_provider: 
         # Logic to select provider if not skipped
@@ -436,66 +437,65 @@ def configure_agent_settings() -> None:
         config.set_value(data, "agent.provider", provider)
     
     # 2. Select Model
-    # We need to reload .env to ensure the keys we just set are available to AIService
-    # We need to reload .env to ensure the keys we just set are available to AIService
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(override=True)
-    except ImportError:
-        pass
-    
-    # Force the service to recognize the new key/provider?
-    # aiservice singleton is already initialized.
-    # We might need to manually refresh it or just instantiate a new client
-    # in get_available_models if possible.
-    # Actually, service.py checks os.getenv at init. 
-    # But get_available_models re-checks or uses client?
-    # We might need to handle this carefully.
-    
-    typer.echo(f"\n[INFO] Fetching available models for {provider}...")
-    try:
-        # We need to hackily update the singleton's state if we just added keys
-        # Or simply rely on the fact that we just set the .env file and load_dotenv()
-        # But `service.py` init ran at import time.
-        # We should probably force a re-init or use a raw client check if we
-        # want to be safe.
-        # Let's rely on basic `ai_service.get_available_models` but we might
-        # need to "reload" the service.
-        # Actually `service.py` logic:
-        # __init__ checks env vars. 
-        # So we need to re-init the service or manually add the client.
+    if should_configure_model:
+        # We need to reload .env to ensure the keys we just set are available to AIService
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+        except ImportError:
+            pass
         
-        # Let's try to "reload" the specific client in the service if missing
-        from agent.core.ai.service import ai_service  # ADR-025: lazy init
-        if provider not in ai_service.clients:
-             # This is a bit internal-knowledge heavy, but necessary since we
-             # just set the keys
-             pass 
-             # For now, let's just proceed. The user might have had keys or we
-             # just restart.
-             # Actually, if we just set the ENV var in this process, we need to
-             # update os.environ
-             # load_dotenv(override=True) does update os.environ.
-             # But aiservice.__init__ ran already.
-             # We can't easily re-run __init__.
-             # We will skip model selection if client not ready, or warn user.
-             pass
+        typer.echo(f"\n[INFO] Fetching available models for {provider}...")
+        try:
+            from agent.core.ai.service import ai_service  # ADR-025: lazy init
+            if provider not in ai_service.clients:
+                 pass
+        except Exception:
+            pass
 
-        # We will attempt to list. If it fails because client is missing
-        # (due to init timing), we catch it.
-        # To fix this properly, we should probably have a `reload_config()`
-        # on AIService.
-        pass
+        # Save back to file
+        config.save_yaml(agent_config_path, data)
+        typer.echo(f"[OK] Default provider set to '{provider}'.")
+        
+        # Now lets try to select model
+        select_default_model(provider, data, agent_config_path)
 
-    except Exception:
-        pass
+    # 3. Select Panel Engine (INFRA-061)
+    # Reload data after model selection may have saved
+    try:
+        data = config.load_yaml(agent_config_path)
+    except FileNotFoundError:
+        data = {}
 
-    # Save back to file
-    config.save_yaml(agent_config_path, data)
-    typer.echo(f"[OK] Default provider set to '{provider}'.")
-    
-    # Now lets try to select model
-    select_default_model(provider, data, agent_config_path)
+    current_engine = config.get_value(data, "panel.engine")
+    should_configure_engine = True
+
+    if current_engine:
+        typer.secho(f"[OK] Panel engine is already set to '{current_engine}'.", fg=typer.colors.GREEN)
+        if not typer.confirm("Would you like to re-configure?", default=False):
+            should_configure_engine = False
+
+    if should_configure_engine:
+        engines = [
+            ("native", "Sequential panel (default)"),
+            ("adk", "Multi-agent via Google ADK (requires google-adk)"),
+        ]
+        typer.echo("\nSelect panel engine:")
+        for i, (key, desc) in enumerate(engines, 1):
+            typer.echo(f"{i}. {key} — {desc}")
+
+        choice = typer.prompt("Enter number", default="1")
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(engines):
+                selected_engine = engines[idx][0]
+                config.set_value(data, "panel.engine", selected_engine)
+                config.save_yaml(agent_config_path, data)
+                typer.secho(f"[OK] Panel engine set to '{selected_engine}'.", fg=typer.colors.GREEN)
+            else:
+                typer.echo("Invalid selection. Keeping default.")
+        except ValueError:
+            typer.echo("Invalid input. Keeping default.")
 
 
 def select_default_model(provider: str, config_data: dict, config_path: Path) -> None:

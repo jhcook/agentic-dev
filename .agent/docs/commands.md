@@ -328,7 +328,7 @@ agent panel WEB-001 --panel-engine adk
 | `--base <branch>` | Base branch for comparison (e.g. main) |
 | `--provider <name>` | Force AI provider (gh, gemini, openai) |
 | `--apply` | Automatically apply panel advice to the Story/Runbook |
-| `--panel-engine <engine>` | Override panel engine: `adk` or `legacy` |
+| `--panel-engine <engine>` | Override panel engine: `adk` or `native` |
 
 ---
 
@@ -423,7 +423,7 @@ agent preflight [OPTIONS]
 - `--ai`: Enable AI-powered governance review (requires API key).
 - `--base [BRANCH]`: Verify changes against a specific base branch (default: staged vs HEAD).
 - `--skip-tests`: Skip automated tests.
-- `--panel-engine [ENGINE]`: Override panel engine: `adk` or `legacy`.
+- `--panel-engine [ENGINE]`: Override panel engine: `adk` or `native`.
 
 ### Voice Agent Integration
 

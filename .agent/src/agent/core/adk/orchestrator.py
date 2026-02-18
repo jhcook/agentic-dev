@@ -18,7 +18,7 @@ ADK Governance Council Orchestrator.
 Entry point for running the governance panel via ADK multi-agent
 orchestration. Creates a coordinator agent with role sub-agents,
 executes them, parses findings, and returns an audit-log-compatible
-result dict in the same format as the legacy panel.
+result dict in the same format as the native panel.
 
 Design:
   - Coordinator agent aggregates role verdicts (any BLOCK → overall BLOCK).
@@ -44,8 +44,12 @@ from agent.core.security import scrub_sensitive_data
 
 logger = logging.getLogger(__name__)
 
-# Timeout per role agent execution (seconds)
-AGENT_TIMEOUT = 120
+# Timeout per role agent execution (seconds).
+# Set high enough to accommodate:
+#   - 3-slot semaphore queuing (8 agents, 3 concurrent)
+#   - Server disconnect retries with exponential backoff (2s, 4s, 8s…)
+#   - Actual LLM inference time (~10-30s per call)
+AGENT_TIMEOUT = 300
 
 
 def _parse_agent_output(output: str) -> Dict:
@@ -127,12 +131,10 @@ async def _run_role_agent(
         The agent's text output.
     """
     from google.adk.runners import InMemoryRunner
-    from google.adk.sessions import InMemorySessionService
 
-    session_service = InMemorySessionService()
-    runner = InMemoryRunner(agent=agent, session_service=session_service)
+    runner = InMemoryRunner(agent=agent, app_name=agent.name)
 
-    session = await session_service.create_session(
+    session = await runner.session_service.create_session(
         app_name=agent.name, user_id="governance"
     )
 
@@ -196,20 +198,21 @@ async def _orchestrate_async(
 
     json_roles = []
 
-    for agent in agents:
+    # Build user prompt once (same for all agents)
+    user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n"
+    if adrs_content:
+        user_prompt += f"<adrs>{adrs_content}</adrs>\n"
+    if instructions_content:
+        user_prompt += f"<instructions>{instructions_content}</instructions>\n"
+    if user_question:
+        user_prompt += f"<question>{user_question}</question>\n"
+    user_prompt += f"<diff>{full_diff}</diff>"
+
+    async def _run_single_agent(agent):
+        """Run a single agent and return parsed role_data dict."""
         role_name = agent.name
         if progress_callback:
             progress_callback(f"🤖 @{role_name} is reviewing (ADK)...")
-
-        # Build user prompt
-        user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n"
-        if adrs_content:
-            user_prompt += f"<adrs>{adrs_content}</adrs>\n"
-        if instructions_content:
-            user_prompt += f"<instructions>{instructions_content}</instructions>\n"
-        if user_question:
-            user_prompt += f"<question>{user_question}</question>\n"
-        user_prompt += f"<diff>{full_diff}</diff>"
 
         try:
             raw_output = await asyncio.wait_for(
@@ -236,8 +239,7 @@ async def _orchestrate_async(
                 progress_callback(f"⚠️ @{role_name} error: {e}")
 
         parsed = _parse_agent_output(raw_output)
-
-        role_data = {
+        return {
             "name": role_name,
             "verdict": parsed["verdict"],
             "summary": parsed["summary"],
@@ -248,10 +250,107 @@ async def _orchestrate_async(
                 "valid": [],
                 "invalid": [],
             },
+            "_parsed": parsed,  # carry for report generation
         }
 
-        # In gatekeeper mode, any BLOCK → overall BLOCK
-        if mode == "gatekeeper" and parsed["verdict"] == "BLOCK":
+    # Dispatch all agents concurrently
+    if progress_callback:
+        progress_callback(
+            f"🚀 Dispatching {len(agents)} agents in parallel..."
+        )
+    agent_results = await asyncio.gather(
+        *[_run_single_agent(agent) for agent in agents]
+    )
+
+    # Aggregate results (deterministic order — same as input)
+    # Import validation helpers from native governance path
+    from agent.core.governance import (
+        _validate_finding_against_source,
+        _validate_references,
+    )
+    import re as _re
+
+    _all_valid_refs = []
+    _all_invalid_refs = []
+
+    for role_data in agent_results:
+        parsed = role_data.pop("_parsed")
+        role_name = role_data["name"]
+        role_verdict = parsed["verdict"]
+        role_findings = list(parsed["findings"])
+        role_changes = list(parsed["required_changes"])
+
+        # ── Finding validation (same as native path) ──
+        _ai_total = len(role_findings) if mode == "gatekeeper" else 0
+        _ai_filtered = 0
+        if role_findings and mode == "gatekeeper":
+            original_count = len(role_findings)
+            role_findings = [
+                f for f in role_findings
+                if _validate_finding_against_source(f, full_diff)
+            ]
+            _ai_filtered = original_count - len(role_findings)
+            if _ai_filtered > 0 and progress_callback:
+                progress_callback(
+                    f"🛡️  Filtered {_ai_filtered} false positive(s) from @{role_name}"
+                )
+        # Also validate required_changes
+        if role_changes and mode == "gatekeeper":
+            original_changes_count = len(role_changes)
+            role_changes = [
+                c for c in role_changes
+                if _validate_finding_against_source(c, full_diff)
+            ]
+            _changes_filtered = original_changes_count - len(role_changes)
+            _ai_filtered += _changes_filtered
+            _ai_total += original_changes_count
+            if _changes_filtered > 0 and progress_callback:
+                progress_callback(
+                    f"🛡️  Filtered {_changes_filtered} false positive(s) from @{role_name} required changes"
+                )
+
+        # If ALL findings AND required changes were filtered, demote BLOCK → PASS
+        if (_ai_filtered > 0 and not role_findings and not role_changes
+                and role_verdict == "BLOCK"):
+            role_verdict = "PASS"
+            if progress_callback:
+                progress_callback(
+                    f"✅ @{role_name}: BLOCK demoted to PASS (all findings were false positives)"
+                )
+
+        _ai_validated = _ai_total - _ai_filtered
+
+        # ── Reference validation ──
+        role_refs = sorted(set(parsed.get("references", [])))
+        from pathlib import Path as _Path
+        valid_refs, invalid_refs = _validate_references(
+            role_refs, config.adrs_dir,
+            config.journeys_dir if hasattr(config, 'journeys_dir') else _Path("/nonexistent"),
+        )
+        _all_valid_refs.extend(valid_refs)
+        _all_invalid_refs.extend(invalid_refs)
+
+        for inv in invalid_refs:
+            if progress_callback:
+                progress_callback(f"⚠️ @{role_name} cited {inv} which does not exist")
+
+        # ── Build role_data ──
+        role_data["verdict"] = role_verdict
+        role_data["findings"] = role_findings
+        role_data["required_changes"] = role_changes
+        role_data["references"] = {
+            "cited": role_refs,
+            "valid": valid_refs,
+            "invalid": invalid_refs,
+        }
+        role_data["finding_validation"] = {
+            "total": _ai_total,
+            "validated": _ai_validated,
+            "filtered": _ai_filtered,
+        }
+
+        # ── Verdict logic ──
+        if mode == "gatekeeper" and role_verdict == "BLOCK":
             overall_verdict = "BLOCK"
             if progress_callback:
                 progress_callback(f"❌ @{role_name}: BLOCK")
@@ -267,20 +366,49 @@ async def _orchestrate_async(
 
         if parsed["summary"]:
             report += f"**Summary**: {parsed['summary']}\n\n"
-        if parsed["findings"]:
+        if role_findings:
             report += "**Findings**:\n"
-            report += "\n".join(f"- {f}" for f in parsed["findings"])
+            report += "\n".join(f"- {f}" for f in role_findings)
             report += "\n\n"
-        if parsed["required_changes"]:
+        if role_changes:
             report += "**Required Changes**:\n"
-            report += "\n".join(f"- {c}" for c in parsed["required_changes"])
+            report += "\n".join(f"- {c}" for c in role_changes)
             report += "\n\n"
-        if not parsed["findings"] and not parsed["required_changes"]:
+        if not role_findings and not role_changes:
             report += "No issues found.\n\n"
 
         json_roles.append(role_data)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
+
+    # ── Reference metrics (aggregate) ──
+    _unique_valid = sorted(set(_all_valid_refs))
+    _unique_invalid = sorted(set(_all_invalid_refs))
+    _total_refs = len(_unique_valid) + len(_unique_invalid)
+    _citation_rate = round(len(_unique_valid) / _total_refs, 2) if _total_refs > 0 else 0.0
+    _hallucination_rate = round(len(_unique_invalid) / _total_refs, 2) if _total_refs > 0 else 0.0
+
+    # ── Finding validation metrics (aggregate) ──
+    _agg_total = sum(r.get("finding_validation", {}).get("total", 0) for r in json_roles)
+    _agg_validated = sum(r.get("finding_validation", {}).get("validated", 0) for r in json_roles)
+    _agg_filtered = sum(r.get("finding_validation", {}).get("filtered", 0) for r in json_roles)
+    _fp_rate = round(_agg_filtered / _agg_total, 2) if _agg_total > 0 else 0.0
+
+    # ── Append validation tables to report ──
+    report += "\n## Reference Validation\n\n"
+    report += "| Metric | Value |\n|---|---|\n"
+    report += f"| Total References | {_total_refs} |\n"
+    report += f"| Valid | {len(_unique_valid)} |\n"
+    report += f"| Invalid | {len(_unique_invalid)} |\n"
+    report += f"| Citation Rate | {_citation_rate} |\n"
+    report += f"| Hallucination Rate | {_hallucination_rate} |\n\n"
+
+    report += "\n## Finding Validation\n\n"
+    report += "| Metric | Value |\n|---|---|\n"
+    report += f"| AI Findings (raw) | {_agg_total} |\n"
+    report += f"| Validated (kept) | {_agg_validated} |\n"
+    report += f"| Filtered (false +) | {_agg_filtered} |\n"
+    report += f"| False Positive Rate | {_fp_rate:.0%} |\n\n"
 
     # Save log
     timestamp = int(time.time())
@@ -297,6 +425,19 @@ async def _orchestrate_async(
         "engine": "adk",
         "runtime_ms": elapsed_ms,
         "error": None,
+        "reference_metrics": {
+            "total_refs": _total_refs,
+            "valid": _unique_valid,
+            "invalid": _unique_invalid,
+            "citation_rate": _citation_rate,
+            "hallucination_rate": _hallucination_rate,
+        },
+        "finding_validation": {
+            "total_ai_findings": _agg_total,
+            "validated": _agg_validated,
+            "filtered_false_positives": _agg_filtered,
+            "false_positive_rate": _fp_rate,
+        },
     }
 
     return {

@@ -474,11 +474,36 @@ agent preflight --story WEB-001
 # After making changes
 agent preflight --story WEB-001 --ai
 
-# Before committing
-agent preflight --story WEB-001 --ai
+# Before committing (thorough mode for highest accuracy)
+agent preflight --story WEB-001 --ai --thorough
 ```
 
-### 2. Address Blockers First
+### 2. Use `--thorough` for Critical Changes
+
+The `--thorough` flag enables deeper AI review that significantly reduces false positives.
+It adds full-file context (AST-extracted function/class signatures) and post-processing
+validation (cross-references findings against actual source code). Uses more tokens but
+is recommended for production-bound changes:
+
+```bash
+agent preflight --ai --thorough
+```
+
+**What `--thorough` does (in addition to the always-on protections):**
+
+| Layer | Description | Cost |
+| --- | --- | --- |
+| Full-File Context | Injects AST signatures of changed files into the AI prompt | +tokens |
+| Post-Processing Validator | Cross-references "missing X" claims against actual source | +time |
+
+**Always-on protections** (no flag needed):
+
+| Layer | Description |
+| --- | --- |
+| Suppression Rules | 8 prompt rules suppress common false-positive categories |
+| Expanded Diff Context | `git diff -U10` provides ±10 lines of context (vs default ±3) |
+
+### 3. Address Blockers First
 
 Preflight output shows severity:
 
@@ -490,7 +515,7 @@ Preflight output shows severity:
 
 Fix blockers before warnings.
 
-### 3. Keep Rules Updated
+### 4. Keep Rules Updated
 
 Review and update governance rules regularly:
 
@@ -498,7 +523,7 @@ Review and update governance rules regularly:
 - When adopting new technologies
 - When compliance requirements change
 
-### 4. Document Exceptions
+### 5. Document Exceptions
 
 If you must bypass a rule:
 
@@ -511,7 +536,7 @@ Approved by: @Architect, @QA
 Expiration: 2026-06-01
 ```
 
-### 5. Use Local Overrides
+### 6. Use Local Overrides
 
 For experimental branches:
 

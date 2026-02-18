@@ -232,51 +232,89 @@ def validate_story(
 
 
 
-def _print_reference_summary(console: Console, roles_data: list, ref_metrics: dict) -> None:
-    """Print a Reference Summary Table after governance panel results (INFRA-060 AC-9)."""
+def _print_reference_summary(console: Console, roles_data: list, ref_metrics: dict, finding_validation: dict | None = None) -> None:
+    """Print a Governance Validation Summary combining finding validation and reference checks."""
     from rich.table import Table as RefTable
 
-    ref_table = RefTable(title="📚 Reference Summary", show_lines=True)
+    ref_table = RefTable(title="🔍 Governance Validation Summary", show_lines=True)
     ref_table.add_column("Role", style="cyan")
-    ref_table.add_column("Cited", justify="right")
-    ref_table.add_column("Valid", justify="right", style="green")
-    ref_table.add_column("Invalid", justify="right", style="red")
+    # Finding validation columns
+    ref_table.add_column("Findings", justify="right", style="bold")
+    ref_table.add_column("Validated", justify="right", style="green")
+    ref_table.add_column("Filtered", justify="right", style="red")
+    # Reference validation columns
+    ref_table.add_column("Refs Cited", justify="right", style="dim")
+    ref_table.add_column("Refs Valid", justify="right", style="dim green")
+    ref_table.add_column("Refs Invalid", justify="right", style="dim red")
 
     has_data = False
     for role in roles_data:
+        fv = role.get("finding_validation", {})
+        f_total = fv.get("total", 0)
+        f_validated = fv.get("validated", 0)
+        f_filtered = fv.get("filtered", 0)
+
+        # Skip roles that had nothing to validate (no AI findings produced)
+        if f_total == 0:
+            continue
+
         refs = role.get("references", {})
         if isinstance(refs, dict):
             cited = refs.get("cited", [])
             valid = refs.get("valid", [])
             invalid = refs.get("invalid", [])
-            ref_table.add_row(
-                role.get("name", "Unknown"),
-                str(len(cited)),
-                str(len(valid)),
-                str(len(invalid)),
-            )
-            if cited:
-                has_data = True
+        else:
+            cited, valid, invalid = [], [], []
+
+        # Style filtered count red if > 0
+        filtered_str = f"[bold red]{f_filtered}[/bold red]" if f_filtered > 0 else str(f_filtered)
+
+        ref_table.add_row(
+            role.get("name", "Unknown"),
+            str(f_total),
+            str(f_validated),
+            filtered_str,
+            str(len(cited)),
+            str(len(valid)),
+            str(len(invalid)),
+        )
+        has_data = True
 
     # Aggregate row
-    total = ref_metrics.get("total_refs", 0)
+    total_refs = ref_metrics.get("total_refs", 0)
     citation_rate = ref_metrics.get("citation_rate", 0.0)
     hallucination_rate = ref_metrics.get("hallucination_rate", 0.0)
+
+    fv_agg = finding_validation or {}
+    agg_total = fv_agg.get("total_ai_findings", 0)
+    agg_validated = fv_agg.get("validated", 0)
+    agg_filtered = fv_agg.get("filtered_false_positives", 0)
+    fp_rate = fv_agg.get("false_positive_rate", 0.0)
+
+    agg_filtered_str = f"[bold red]{agg_filtered}[/bold red]" if agg_filtered > 0 else str(agg_filtered)
+
     ref_table.add_row(
         "[bold]TOTAL[/bold]",
-        f"[bold]{total}[/bold]",
+        f"[bold]{agg_total}[/bold]",
+        f"[bold]{agg_validated}[/bold]",
+        agg_filtered_str,
+        f"[bold]{total_refs}[/bold]",
         f"[bold]{len(ref_metrics.get('valid', []))}[/bold]",
         f"[bold]{len(ref_metrics.get('invalid', []))}[/bold]",
     )
 
-    if has_data or total > 0:
+    if has_data or total_refs > 0 or agg_total > 0:
         console.print(ref_table)
-        console.print(
-            f"[dim]Citation Rate: {citation_rate:.0%} | "
-            f"Hallucination Rate: {hallucination_rate:.0%}[/dim]"
-        )
+        summary_parts = []
+        if agg_total > 0:
+            summary_parts.append(f"False Positive Rate: {fp_rate:.0%}")
+        if total_refs > 0:
+            summary_parts.append(f"Citation Rate: {citation_rate:.0%}")
+            summary_parts.append(f"Hallucination Rate: {hallucination_rate:.0%}")
+        if summary_parts:
+            console.print(f"[dim]{' | '.join(summary_parts)}[/dim]")
     else:
-        console.print("[dim]📚 No governance references cited by panel.[/dim]")
+        console.print("[dim]🔍 No governance findings or references to validate.[/dim]")
 
 
 def preflight(
@@ -288,7 +326,8 @@ def preflight(
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
     interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode."),
-    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'legacy'.")
+    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'."),
+    thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens).")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -301,7 +340,8 @@ def preflight(
         report_file: Path to save the preflight report as JSON.
         skip_tests: Skip running tests.
         ignore_tests: Run tests but ignore failure.
-        panel_engine: Override panel engine ('adk' or 'legacy').
+        panel_engine: Override panel engine ('adk' or 'native').
+        thorough: Enable thorough AI review with full-file context and post-processing validation.
     """
     # Apply panel engine override (INFRA-061)
     if panel_engine:
@@ -876,7 +916,7 @@ def preflight(
     # Cap diff size - if larger than chunk limit, we might need a smart splitter, 
     # but for assimilating roles, we send the same diff to each role agent.
     # We'll stick to a reasonable cap for now to fit in context.
-    diff_cmd = cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
+    diff_cmd = cmd = ["git", "diff", "--cached", "-U10", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "-U10", "."]
     diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
     # Full diff for chunking
     full_diff = diff_res.stdout
@@ -911,7 +951,7 @@ def preflight(
                 console.print(f"\n[bold cyan]🔄 Re-running Governance Council (attempt {governance_attempt + 1}/{MAX_GOVERNANCE_RETRIES})...[/bold cyan]")
                 
                 # Re-compute diff after fix was applied
-                diff_cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
+                diff_cmd = ["git", "diff", "--cached", "-U10", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "-U10", "."]
                 diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
                 full_diff = diff_res.stdout or ""
                 
@@ -936,6 +976,7 @@ def preflight(
                     report_file=report_file,
                     council_identifier="preflight",
                     adrs_content=adrs_content,
+                    thorough=thorough,
                     progress_callback=None # Silence individual role progress to reduce noise
                 )
 
@@ -1087,8 +1128,9 @@ def preflight(
         # Display Reference Summary Table (INFRA-060 AC-9)
         _ref_metrics = result.get("json_report", {}).get("reference_metrics", {})
         _roles_data = result.get("json_report", {}).get("roles", [])
+        _fv_metrics = result.get("json_report", {}).get("finding_validation", {})
         if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
-            _print_reference_summary(console, _roles_data, _ref_metrics)
+            _print_reference_summary(console, _roles_data, _ref_metrics, _fv_metrics)
 
         if not governance_passed:
             if report_file:
@@ -1357,7 +1399,7 @@ def panel(
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
     apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
-    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'legacy'.")
+    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
 ):
     """
     Convening the Governance Panel to review changes or discuss design.
@@ -1507,8 +1549,9 @@ def panel(
     # Display Reference Summary Table (INFRA-060 AC-9)
     _ref_metrics = result.get("json_report", {}).get("reference_metrics", {})
     _roles_data = result.get("json_report", {}).get("roles", [])
+    _fv_metrics = result.get("json_report", {}).get("finding_validation", {})
     if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
-        _print_reference_summary(console, _roles_data, _ref_metrics)
+        _print_reference_summary(console, _roles_data, _ref_metrics, _fv_metrics)
 
     # 5. Apply Advice
     if apply and target_file and result["log_file"]:

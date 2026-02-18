@@ -539,7 +539,8 @@ class AIService:
         model: Optional[str] = None
     ) -> str:
         model_used = model or self.models.get(provider)
-        max_retries = 3
+        from agent.core.config import config as _cfg
+        max_retries = max(3, _cfg.panel_num_retries)
         
         for attempt in range(max_retries):
             try:
@@ -698,20 +699,39 @@ class AIService:
                     "rate limit",
                     "dns resolution",
                     "429",
-                    "resource exhausted"
+                    "resource exhausted",
+                    "503",
+                    "unavailable",
+                    "high demand",
                 ]
                 
                 if (
                     any(ind in error_str for ind in transient_indicators)
                     and attempt < max_retries - 1
                 ):
-                    # Smart Failover for Rate Limits:
-                    # If it's a Rate Limit (429), don't hammer the same provider.
-                    # Fail immediately so the outer loop can switch providers.
-                    if "429" in error_str or "rate limit" in error_str or "resource exhausted" in error_str:
-                         console.print(f"[yellow]⚠️  Rate Limit detected ({provider}). switching providers...[/yellow]")
-                         time.sleep(1) # Brief pause before switch
-                         raise e
+                    # Treat 503/unavailable/high-demand same as rate-limit
+                    rate_limit_indicators = [
+                        "429", "rate limit", "resource exhausted",
+                        "503", "unavailable", "high demand",
+                    ]
+                    if any(ind in error_str for ind in rate_limit_indicators):
+                         rate_limit_max = _cfg.panel_num_retries
+                         if attempt < rate_limit_max - 1:
+                             wait_time = min(2 ** attempt, 60)
+                             console.print(
+                                 f"[yellow]⚠️ Rate limit ({provider}). "
+                                 f"Backoff retry {attempt+1}/{rate_limit_max} "
+                                 f"in {wait_time}s...[/yellow]"
+                             )
+                             time.sleep(wait_time)
+                             continue
+                         else:
+                             console.print(
+                                 f"[yellow]⚠️ Rate limit ({provider}). "
+                                 f"Exhausted {rate_limit_max} retries, "
+                                 f"switching providers...[/yellow]"
+                             )
+                             raise e
                     
                     wait_time = (attempt + 1) * 2
                     console.print(

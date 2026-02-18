@@ -15,19 +15,21 @@
 """
 AIService ↔ ADK Bridge Adapter.
 
-Wraps the synchronous AIService.complete() behind ADK's BaseLlm interface
-so that ADK agents can use any provider configured in the CLI (Gemini,
+Wraps the synchronous AIService._try_complete() behind ADK's BaseLlm
+interface so that ADK agents can use the configured provider (Gemini,
 OpenAI, Anthropic, GitHub CLI) without knowing about them directly.
 
 Design decisions:
   - Uses asyncio.run_in_executor() to bridge sync → async.
-  - Uses threading.Lock() because AIService is a global singleton.
+  - Calls _try_complete() directly instead of complete() to avoid
+    mutating shared provider-fallback state on the singleton.  This
+    makes concurrent agent execution (via asyncio.gather) safe.
   - Caps output at 50 000 chars to protect against runaway responses.
 """
 
 import asyncio
-import threading
 import logging
+import threading
 from typing import AsyncGenerator
 
 from google.genai import types
@@ -37,35 +39,66 @@ from agent.core.ai import ai_service
 
 logger = logging.getLogger(__name__)
 
+# Limit concurrent API calls to avoid overwhelming the provider.
+# Uses a threading.Semaphore (not asyncio.Semaphore) because the actual
+# blocking happens in threads via asyncio.to_thread().
+_MAX_CONCURRENT_API_CALLS = 3
+_thread_semaphore = threading.Semaphore(_MAX_CONCURRENT_API_CALLS)
+
 
 class AIServiceModelAdapter(BaseLlm):
     """Adapts the synchronous AIService to ADK's async BaseLlm interface.
 
-    Thread-safe: a threading.Lock guards the underlying singleton so
-    concurrent agent calls do not interleave provider state.
+    Thread-safe for concurrent usage: calls _try_complete() directly
+    with the configured provider, avoiding shared fallback state.
+
+    Uses asyncio.to_thread() (not loop.run_in_executor) because the
+    latter deadlocks when ADK's InMemoryRunner consumes the async
+    generator — the runner's internal event-loop consumption pattern
+    prevents the executor future from resolving.
     """
 
     def __init__(self):
+        # BaseLlm is Pydantic and requires `model: str`.
+        # Pull the configured model name from ai_service / config.
+        from agent.core.config import config
+        model_name = getattr(config, "default_model", None) or "default"
+        super().__init__(model=model_name)
         self._ai_service = ai_service
-        self._lock = threading.Lock()
 
-    # ---- Sync bridge ----
+    # ---- Sync bridge (runs in thread via asyncio.to_thread) ----
 
     def _sync_complete(self, system_prompt: str, user_prompt: str) -> str:
-        """Thread-safe synchronous completion via AIService."""
-        with self._lock:
-            result = self._ai_service.complete(system_prompt, user_prompt)
+        """Synchronous completion via AIService._try_complete().
+
+        Bypasses the outer complete() fallback chain so concurrent
+        agents don't race on shared provider state.  Rate-limit
+        retries with exponential backoff are handled inside
+        _try_complete() itself.
+
+        Acquires a threading.Semaphore to cap concurrent API calls.
+        """
+        with _thread_semaphore:
+            self._ai_service._ensure_initialized()
+            provider = self._ai_service.provider or "gemini"
+            result = self._ai_service._try_complete(
+                provider, system_prompt, user_prompt
+            )
         return (result or "")[:50_000]
 
     # ---- ADK interface ----
 
     async def generate_content_async(
-        self, llm_request: LlmRequest, **kwargs
-    ) -> LlmResponse:
-        """ADK calls this method for non-streaming completions.
+        self, llm_request: LlmRequest, stream: bool = False
+    ) -> AsyncGenerator[LlmResponse, None]:
+        """ADK calls this as an async generator.
 
         Extracts system + user prompts from the LlmRequest, runs through
-        AIService.complete() in a thread pool, and wraps the result.
+        AIService._try_complete() in a separate thread, and yields the result.
+        Since AIService does not support streaming, yields a single response.
+
+        Uses asyncio.to_thread() instead of loop.run_in_executor() to avoid
+        deadlocking inside ADK's InMemoryRunner async generator consumption.
         """
         system_prompt = ""
         if llm_request.config and llm_request.config.system_instruction:
@@ -87,9 +120,7 @@ class AIServiceModelAdapter(BaseLlm):
                             parts.append(part.text)
             user_prompt = "\n".join(parts)
 
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            None,  # Default thread pool
+        result = await asyncio.to_thread(
             self._sync_complete,
             system_prompt,
             user_prompt,
@@ -100,17 +131,9 @@ class AIServiceModelAdapter(BaseLlm):
             len(system_prompt), len(user_prompt), len(result),
         )
 
-        return LlmResponse(
+        yield LlmResponse(
             content=types.Content(
                 role="model",
                 parts=[types.Part.from_text(text=result)],
             )
         )
-
-    async def generate_content_async_stream(
-        self, llm_request: LlmRequest, **kwargs
-    ) -> AsyncGenerator[LlmResponse, None]:
-        """Streaming variant — delegates to non-streaming since AIService
-        does not support streaming."""
-        response = await self.generate_content_async(llm_request, **kwargs)
-        yield response

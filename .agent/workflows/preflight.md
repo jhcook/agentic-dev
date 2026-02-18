@@ -37,6 +37,15 @@ WORKFLOW:
     agent preflight --ai --story <STORY_ID>
     ```
 
+    - For the highest accuracy (fewer false positives), use `--thorough`:
+
+    ```bash
+    agent preflight --ai --thorough
+    ```
+
+    > **Note**: `--thorough` adds full-file context and post-processing validation.
+    > It uses more tokens but significantly reduces false BLOCK verdicts.
+
 2. **Review Output**
     - The command will output a report.
     - If the result is `BLOCK`, you must address the findings.
@@ -47,3 +56,8 @@ WORKFLOW:
         - Global Compliance (GDPR, SOC2)
         - Role-specific constraints (@Security, @Architect, etc.)
         - Architectural Decision Records (ADRs) and Exceptions (EXC)
+
+4. **False Positive Prevention**
+    - The system includes 8 built-in suppression rules and expanded diff context (±10 lines).
+    - If you suspect a false positive, re-run with `--thorough` for AST-based validation.
+    - See [ADR-005](../adrs/ADR-005-ai-driven-governance-preflight.md) for details.

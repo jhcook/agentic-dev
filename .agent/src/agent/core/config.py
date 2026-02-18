@@ -266,11 +266,11 @@ class Config:
 
     @property
     def panel_engine(self) -> str:
-        """Returns the panel engine to use ('adk' or 'legacy').
+        """Returns the panel engine to use ('adk' or 'native').
 
         Reads from agent.yaml under the 'panel:' section.
         Can be overridden per-invocation via _panel_engine_override.
-        Defaults to 'legacy' if not specified.
+        Defaults to 'native' if not specified.
         """
         # CLI override takes precedence
         override = getattr(self, "_panel_engine_override", None)
@@ -278,9 +278,22 @@ class Config:
             return override
         try:
             data = self.load_yaml(self.etc_dir / "agent.yaml")
-            return data.get("panel", {}).get("engine", "legacy")
+            return data.get("panel", {}).get("engine", "native")
         except Exception:
-            return "legacy"
+            return "native"
+
+    @property
+    def panel_num_retries(self) -> int:
+        """Returns the max retries for rate-limited requests.
+
+        Reads from agent.yaml under 'panel.num_retries'.
+        Defaults to 5 if not specified.
+        """
+        try:
+            data = self.load_yaml(self.etc_dir / "agent.yaml")
+            return int(data.get("panel", {}).get("num_retries", 5))
+        except Exception:
+            return 5
 
     def get_council_tools(self, council_name: str) -> List[str]:
         """Retrieve allowed tools for a specific council."""
