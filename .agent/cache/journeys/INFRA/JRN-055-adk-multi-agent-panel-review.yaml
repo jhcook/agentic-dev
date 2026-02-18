@@ -1,0 +1,105 @@
+# Journey: JRN-055
+# Linked Story: INFRA-061
+# Title: ADK Multi-Agent Panel Review
+
+id: JRN-055
+title: ADK Multi-Agent Panel Review
+state: DRAFT
+schema_version: 1
+priority: high
+tags:
+- infra
+- governance
+- adk
+- multi-agent
+actor: developer running governance panel
+description: >
+  Replace the sequential-prompt governance panel with an ADK multi-agent system.
+  Each role becomes an LlmAgent with tools, delegation, and loop capabilities.
+  A CoordinatorAgent orchestrates parallel role reviews and produces the final verdict.
+  The existing AIService is used as the model backend for vendor agnosticism.
+preconditions:
+- Agent CLI is installed and configured
+- google-adk optional dependency is installed
+- Developer has staged changes
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer sets `council.engine: adk` in config
+  system_response: Configuration is updated to use ADK panel
+  assertions:
+  - Config validates the engine value (adk or legacy)
+- id: 2
+  action: Developer runs `agent preflight`
+  system_response: ADK CoordinatorAgent delegates to role agents in parallel
+  assertions:
+  - Each relevant role is instantiated as an LlmAgent
+  - Role agents use tools (read_file, search_codebase, list_adrs, check_test_coverage)
+  - Irrelevant roles are skipped per existing _filter_relevant_roles logic
+- id: 3
+  action: Architect agent identifies a dependency concern
+  system_response: Architect delegates to Security agent for deeper analysis
+  assertions:
+  - Delegation produces a sub-finding attached to the Architect's review
+  - Security agent uses search_codebase tool to investigate
+- id: 4
+  action: QA agent finds ambiguous test coverage
+  system_response: QA agent loops (max 3 iterations) to refine analysis
+  assertions:
+  - Loop uses check_test_coverage tool to verify assertions
+  - Loop terminates when verdict is conclusive or max iterations reached
+- id: 5
+  action: CoordinatorAgent collects all role verdicts
+  system_response: Final verdict produced in VERDICT/SUMMARY/FINDINGS/REQUIRED_CHANGES format
+  assertions:
+  - Any BLOCK from a role agent means overall BLOCK
+  - Output is structurally identical to legacy panel output
+- id: 6
+  action: Developer runs `agent panel` in consultative mode
+  system_response: ADK panel runs in advisory mode (BLOCK verdicts ignored)
+  assertions:
+  - Consultative mode is supported with ADK engine
+  - Findings are collected verbatim without enforcing verdicts
+error_paths:
+- trigger_step: 2
+  condition: google-adk not installed
+  system_response: Falls back to legacy sequential panel with warning
+  assertions:
+  - Warning indicates ADK is not available
+  - Legacy panel produces identical output format
+  severity: expected
+- trigger_step: 2
+  condition: ADK orchestration fails mid-review
+  system_response: Falls back to legacy panel for remaining roles
+  assertions:
+  - Partial ADK results are preserved
+  - Error is logged to governance log
+  severity: expected
+edge_cases:
+- scenario: All roles are filtered out (no relevant roles for changeset)
+  expected: CoordinatorAgent returns PASS with no findings
+  severity: warning
+- scenario: Model provider is GitHub CLI (synchronous, no async)
+  expected: AIService adapter handles sync provider within ADK async loop
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-061
+linked_adrs:
+- ADR-005
+- ADR-028
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - core/governance.py
+  - core/governance_tools.py
+  - core/config.py
+  - pyproject.toml
+  tests:
+  - tests/core/test_governance_adk.py

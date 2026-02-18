@@ -1,5 +1,9 @@
 # Story: Standardize SSL Error Handling
 
+## State
+
+COMMITTED
+
 ## Problem Statement
 
 The codebase currently handles SSL errors inconsistently across different modules (`notion_schema_manager.py`, `download_models.py`, `vad.py`, `service.py`).

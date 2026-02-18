@@ -27,11 +27,11 @@ Google's Agent Development Kit (ADK) provides multi-agent orchestration with too
 
 3. **Read-only tool whitelist**: Exactly 5 tools are exposed — `read_file`, `search_codebase`, `list_directory`, `read_adr`, `read_journey`. All paths are validated against `repo_root` to prevent traversal. No write or network tools.
 
-4. **Feature flag**: Engine selection is via `agent.yaml` (`panel.engine: adk`) or CLI flag (`--panel-engine adk`). Default is `legacy`.
+4. **Feature flag**: Engine selection is via `agent.yaml` (`panel.engine: adk`) or CLI flag (`--panel-engine adk`). Default is `native`.
 
-5. **Graceful fallback**: If `google-adk` is not installed, or if the ADK engine raises any exception (`ImportError`, `TimeoutError`, generic `Exception`), the system falls back to the legacy sequential panel with an install suggestion.
+5. **Graceful fallback**: If `google-adk` is not installed, or if the ADK engine raises any exception (`ImportError`, `TimeoutError`, generic `Exception`), the system falls back to the native sequential panel with an install suggestion.
 
-6. **Audit log parity**: ADK panel output uses the same JSON structure and markdown log format as the legacy panel for SOC 2 compliance.
+6. **Audit log parity**: ADK panel output uses the same JSON structure and markdown log format as the native panel for SOC 2 compliance.
 
 ## Alternatives Considered
 
@@ -43,7 +43,7 @@ Google's Agent Development Kit (ADK) provides multi-agent orchestration with too
 
 - **Positive**: Governance agents can now validate findings against actual codebase files, reducing false positives.
 - **Positive**: Vendor-agnostic — all existing AI providers work without modification.
-- **Positive**: Opt-in with zero breaking changes — legacy panel is the default.
+- **Positive**: Opt-in with zero breaking changes — native panel is the default.
 - **Negative**: Adds `google-adk` as a transitive dependency (when opted in), bringing `google-genai` and related packages.
 - **Negative**: `asyncio.run()` in a sync CLI creates a new event loop per invocation, which is slightly wasteful but acceptable for a CLI tool.
 

@@ -68,7 +68,7 @@ Secrets are managed securely via the system keyring (see [ADR-006](adrs/ADR-006-
 - **Pull Request**: `agent pr --story WEB-001`
 - **Audit**: `agent audit --output report.json`
 
-  Use `--interactive` on preflight to auto-fix violations. Use `--panel-engine adk` for multi-agent governance.
+  Use `--interactive` on preflight to auto-fix violations. Use `--panel-engine adk` for multi-agent governance. Use `--thorough` for deeper AI review with full-file context and false-positive filtering (uses more tokens).
 
 ### Voice Mode
 

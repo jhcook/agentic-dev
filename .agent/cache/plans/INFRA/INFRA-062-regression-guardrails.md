@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Related Stories
 

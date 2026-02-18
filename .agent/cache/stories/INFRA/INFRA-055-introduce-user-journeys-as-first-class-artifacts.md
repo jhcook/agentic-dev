@@ -2,7 +2,9 @@
 
 ## State
 
-COMMITTED## Problem Statement
+COMMITTED
+
+## Problem Statement
 
 AI agents currently have no stable behavioral contract to reference when generating or modifying code. Changes to one feature frequently break existing user flows because the agent has no awareness of how code maps to end-to-end user journeys. There is no mechanism to define "what the system should do from the user's perspective" as a persistent, machine-readable artifact that survives across conversations and runbooks.
 

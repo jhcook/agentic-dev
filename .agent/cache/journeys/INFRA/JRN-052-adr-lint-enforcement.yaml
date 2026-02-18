@@ -1,0 +1,78 @@
+# Journey: JRN-052
+# Linked Story: INFRA-057
+# Title: ADR Lint Enforcement
+
+id: JRN-052
+title: ADR Lint Enforcement
+state: DRAFT
+schema_version: 1
+priority: high
+tags:
+- infra
+- governance
+- adr
+actor: developer running preflight checks
+description: >
+  Enforce architectural constraints defined in ADRs through deterministic lint rules.
+  ADRs declare enforcement blocks (type, pattern, scope) that generate automated checks
+  run during preflight, catching violations without relying on AI interpretation.
+preconditions:
+- Agent CLI is installed and configured
+- At least one ADR with an `enforcement` block exists
+- Developer has staged changes
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer adds an `enforcement` block to an ADR markdown file
+  system_response: ADR file is saved with enforcement metadata
+  assertions:
+  - Enforcement block contains type, pattern, scope, and violation_message fields
+- id: 2
+  action: Developer runs `agent check lint`
+  system_response: CLI reads enforcement blocks from all active ADRs and runs patterns against matching files
+  assertions:
+  - Command exits with status 0 if no violations
+  - Violations produce structured output with ADR reference, file, line, and message
+- id: 3
+  action: Developer introduces a violation (e.g., eager singleton in commands/)
+  system_response: `agent check lint` detects the violation
+  assertions:
+  - Command exits with non-zero status
+  - Output references the specific ADR, file path, and line number
+- id: 4
+  action: Developer runs `agent preflight`
+  system_response: Preflight runs ADR lint checks as a deterministic gate before the AI panel
+  assertions:
+  - ADR lint runs before panel review
+  - A lint violation blocks preflight regardless of panel verdict
+error_paths:
+- trigger_step: 2
+  condition: ADR has status SUPERSEDED
+  system_response: Superseded ADRs are skipped — no lint checks generated
+  assertions:
+  - No enforcement from superseded ADRs
+  severity: expected
+edge_cases:
+- scenario: ADR enforcement block has invalid regex pattern
+  expected: Lint reports a configuration error for that ADR, does not crash
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-057
+linked_adrs:
+- ADR-005
+- ADR-021
+- ADR-025
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - commands/check.py
+  - commands/lint.py
+  tests:
+  - tests/commands/test_lint.py
