@@ -132,7 +132,7 @@ def _parse_findings(review: str) -> Dict:
     
     Returns a dict with keys: verdict, summary, findings (list), required_changes (list).
     """
-    result = {"verdict": "PASS", "summary": "", "findings": [], "required_changes": []}
+    result = {"verdict": "PASS", "summary": "", "findings": [], "required_changes": [], "references": []}
     
     if not review or not review.strip():
         return result
@@ -164,7 +164,11 @@ def _parse_findings(review: str) -> Dict:
     )
     if changes_match:
         result["required_changes"] = _parse_bullet_list(changes_match.group(1))
-    
+
+    # Extract references — dual strategy (INFRA-060 AC-3):
+    # Parse formal REFERENCES: section if present, AND scan full text as fallback
+    result["references"] = _extract_references(review)
+
     return result
 
 
@@ -182,6 +186,52 @@ def _parse_bullet_list(text: str) -> List[str]:
         elif line and line.lower() not in ("none", "n/a", "no issues", "no issues found"):
             items.append(line)
     return [item for item in items if item]
+
+
+def _extract_references(text: str) -> List[str]:
+    """Extract ADR, JRN, and EXC reference IDs from text using regex.
+
+    Scans the full text for reference patterns. Returns a deduplicated,
+    sorted list. Handles both formal REFERENCES: sections and inline citations.
+    """
+    if not text:
+        return []
+    refs = set(re.findall(r'\b(ADR-\d+|JRN-\d+|EXC-\d+)\b', text))
+    return sorted(refs)
+
+
+def _validate_references(
+    refs: List[str],
+    adrs_dir: Path,
+    journeys_dir: Path,
+) -> Tuple[List[str], List[str]]:
+    """Validate references against the filesystem.
+
+    ADR-NNN and EXC-NNN: check adrs_dir for matching .md files.
+    JRN-NNN: check journeys_dir (recursive) for matching .yaml files.
+
+    Returns:
+        Tuple of (valid_refs, invalid_refs).
+    """
+    valid: List[str] = []
+    invalid: List[str] = []
+    for ref in refs:
+        prefix = ref.split("-")[0]
+        if prefix in ("ADR", "EXC"):
+            matches = list(adrs_dir.glob(f"{ref}*.md")) if adrs_dir.exists() else []
+        elif prefix == "JRN":
+            matches = (
+                list(journeys_dir.rglob(f"{ref}*.yaml"))
+                if journeys_dir and journeys_dir.exists()
+                else []
+            )
+        else:
+            matches = []
+        if matches:
+            valid.append(ref)
+        else:
+            invalid.append(ref)
+    return valid, invalid
 
 
 # File extension patterns for role relevance filtering
@@ -339,6 +389,26 @@ def convene_council_full(
         
     json_roles = []
     
+    # Build compact reference ID list (INFRA-060 AC-2)
+    _available_ids: List[str] = sorted(
+        set(re.findall(r'\b(ADR-\d+|EXC-\d+)\b', adrs_content))
+    )
+    # Scan journeys_dir for JRN IDs
+    if hasattr(config, 'journeys_dir') and config.journeys_dir and config.journeys_dir.exists():
+        _jrn_ids = sorted(set(
+            re.match(r'(JRN-\d+)', f.stem).group(1)
+            for _scope in config.journeys_dir.iterdir() if _scope.is_dir()
+            for f in _scope.glob("JRN-*.yaml")
+            if re.match(r'(JRN-\d+)', f.stem)
+        ))
+        _available_ids.extend(_jrn_ids)
+    _available_ids = sorted(set(_available_ids))
+    _available_refs_line = f"AVAILABLE REFERENCES: {', '.join(_available_ids)}" if _available_ids else ""
+
+    # Aggregate reference tracking for audit log (INFRA-060 AC-10)
+    _all_valid_refs: List[str] = []
+    _all_invalid_refs: List[str] = []
+
     # Filter roles to only those relevant to the changed files
     relevant_roles = _filter_relevant_roles(roles, full_diff)
     skipped_roles = [r["name"] for r in roles if r not in relevant_roles]
@@ -355,6 +425,7 @@ def convene_council_full(
         role_summary = ""
         role_findings = []
         role_changes = []
+        all_role_refs: List[str] = []  # Track references across chunks (INFRA-060)
         
         if progress_callback:
             progress_callback(f"🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks)...")
@@ -362,6 +433,8 @@ def convene_council_full(
         for i, chunk in enumerate(diff_chunks):
             if mode == "consultative":
                     system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, ADRs, Diff."
+                    if _available_refs_line:
+                        system_prompt += f"\n{_available_refs_line}"
                     if user_question: system_prompt += f" Question: {user_question}"
             else:
                     system_prompt = (
@@ -400,6 +473,7 @@ def convene_council_full(
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY: <one line summary>\n"
                         "FINDINGS:\n- <finding 1>\n- <finding 2>\n"
+                        "REFERENCES:\n- <ADR-NNN, JRN-NNN, or EXC-NNN that support your findings>\n"
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )
 
@@ -409,6 +483,8 @@ def convene_council_full(
                 user_prompt += f"<adrs>{adrs_content}</adrs>\n"
             if instructions_content:
                 user_prompt += f"<instructions>{instructions_content}</instructions>\n"
+            if _available_refs_line:
+                user_prompt += f"\n{_available_refs_line}\n"
             user_prompt += f"<diff>{chunk}</diff>"
             
             try:
@@ -416,6 +492,8 @@ def convene_council_full(
                 review = scrub_sensitive_data(review) # Scrub AI output
                 if mode == "consultative":
                     role_findings.append(review)
+                    # Also extract references from consultative output (INFRA-060 AC-5)
+                    all_role_refs.extend(_extract_references(review))
                 else:
                     # Parse the structured AI response
                     parsed = _parse_findings(review)
@@ -432,10 +510,57 @@ def convene_council_full(
                     
                     if parsed["required_changes"]:
                         role_changes.extend(parsed["required_changes"])
+
+                    # Collect references from parsed output (AC-3, AC-13)
+                    if parsed.get("references"):
+                        all_role_refs.extend(parsed["references"])
             except Exception as e:
                 if progress_callback:
                     progress_callback(f"Error during review: {e}")
         
+        # Deduplicate references across chunks (INFRA-060 AC-13)
+        role_refs = sorted(set(all_role_refs))
+
+        # Validate references against filesystem (AC-4)
+        valid_refs, invalid_refs = _validate_references(
+            role_refs, config.adrs_dir,
+            config.journeys_dir if hasattr(config, 'journeys_dir') else Path("/nonexistent")
+        )
+
+        role_data["references"] = {
+            "cited": role_refs,
+            "valid": valid_refs,
+            "invalid": invalid_refs,
+        }
+
+        # Emit warnings for invalid/missing references (AC-7, AC-8)
+        for inv in invalid_refs:
+            if progress_callback:
+                progress_callback(f"⚠️ @{role_name} cited {inv} which does not exist")
+
+        if not role_refs:
+            if progress_callback:
+                progress_callback(f"⚠️ @{role_name} — no references provided")
+
+        # Check for SUPERSEDED ADRs (AC-14)
+        for ref in valid_refs:
+            if ref.startswith("ADR-") or ref.startswith("EXC-"):
+                try:
+                    adr_files = list(config.adrs_dir.glob(f"{ref}*.md"))
+                    if adr_files:
+                        content = adr_files[0].read_text()
+                        if re.search(r'(?i)\bSUPERSEDED\b', content):
+                            if progress_callback:
+                                progress_callback(
+                                    f"ℹ️ {ref} is SUPERSEDED — consider citing its replacement"
+                                )
+                except Exception:
+                    pass  # Best-effort superseded check
+
+        # Accumulate aggregates for audit log
+        _all_valid_refs.extend(valid_refs)
+        _all_invalid_refs.extend(invalid_refs)
+
         role_data["findings"] = role_findings
         role_data["verdict"] = role_verdict
         role_data["summary"] = role_summary
@@ -484,6 +609,36 @@ def convene_council_full(
     log_dir = config.agent_dir / "logs"
     log_dir.mkdir(exist_ok=True, parents=True)
     log_file = log_dir / f"governance-{story_id}-{timestamp}.md"
+
+    # Append Reference Validation section to audit log (INFRA-060 AC-10)
+    _unique_valid = sorted(set(_all_valid_refs))
+    _unique_invalid = sorted(set(_all_invalid_refs))
+    _total_refs = len(_unique_valid) + len(_unique_invalid)
+    _citation_rate = round(len(_unique_valid) / _total_refs, 2) if _total_refs > 0 else 0.0
+    _hallucination_rate = round(len(_unique_invalid) / _total_refs, 2) if _total_refs > 0 else 0.0
+
+    report += "\n## Reference Validation\n\n"
+    report += f"| Metric | Value |\n|---|---|\n"
+    report += f"| Total References | {_total_refs} |\n"
+    report += f"| Valid | {len(_unique_valid)} |\n"
+    report += f"| Invalid | {len(_unique_invalid)} |\n"
+    report += f"| Citation Rate | {_citation_rate} |\n"
+    report += f"| Hallucination Rate | {_hallucination_rate} |\n\n"
+    if _unique_invalid:
+        report += "**Invalid References:**\n"
+        for inv in _unique_invalid:
+            report += f"- ⚠️ {inv}\n"
+        report += "\n"
+
+    # Add reference metrics to JSON report (AC-10)
+    json_report["reference_metrics"] = {
+        "total_refs": _total_refs,
+        "valid": _unique_valid,
+        "invalid": _unique_invalid,
+        "citation_rate": _citation_rate,
+        "hallucination_rate": _hallucination_rate,
+    }
+
     log_file.write_text(report)
     json_report["log_file"] = str(log_file)
     

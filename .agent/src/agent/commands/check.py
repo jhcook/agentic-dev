@@ -27,7 +27,7 @@ import os
 from agent.core.ai.prompts import generate_impact_prompt
 from agent.core.config import config
 from agent.core.context import context_loader
-from agent.core.governance import convene_council_full
+from agent.core.governance import convene_council_full, _extract_references, _validate_references
 from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.fixer import InteractiveFixer
 
@@ -229,6 +229,54 @@ def validate_story(
         console.print(f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]")
         if return_bool:
             return True
+
+
+
+def _print_reference_summary(console: Console, roles_data: list, ref_metrics: dict) -> None:
+    """Print a Reference Summary Table after governance panel results (INFRA-060 AC-9)."""
+    from rich.table import Table as RefTable
+
+    ref_table = RefTable(title="📚 Reference Summary", show_lines=True)
+    ref_table.add_column("Role", style="cyan")
+    ref_table.add_column("Cited", justify="right")
+    ref_table.add_column("Valid", justify="right", style="green")
+    ref_table.add_column("Invalid", justify="right", style="red")
+
+    has_data = False
+    for role in roles_data:
+        refs = role.get("references", {})
+        if isinstance(refs, dict):
+            cited = refs.get("cited", [])
+            valid = refs.get("valid", [])
+            invalid = refs.get("invalid", [])
+            ref_table.add_row(
+                role.get("name", "Unknown"),
+                str(len(cited)),
+                str(len(valid)),
+                str(len(invalid)),
+            )
+            if cited:
+                has_data = True
+
+    # Aggregate row
+    total = ref_metrics.get("total_refs", 0)
+    citation_rate = ref_metrics.get("citation_rate", 0.0)
+    hallucination_rate = ref_metrics.get("hallucination_rate", 0.0)
+    ref_table.add_row(
+        "[bold]TOTAL[/bold]",
+        f"[bold]{total}[/bold]",
+        f"[bold]{len(ref_metrics.get('valid', []))}[/bold]",
+        f"[bold]{len(ref_metrics.get('invalid', []))}[/bold]",
+    )
+
+    if has_data or total > 0:
+        console.print(ref_table)
+        console.print(
+            f"[dim]Citation Rate: {citation_rate:.0%} | "
+            f"Hallucination Rate: {hallucination_rate:.0%}[/dim]"
+        )
+    else:
+        console.print("[dim]📚 No governance references cited by panel.[/dim]")
 
 
 def preflight(
@@ -1028,6 +1076,13 @@ def preflight(
             break
         
         # After the loop: check outcome
+
+        # Display Reference Summary Table (INFRA-060 AC-9)
+        _ref_metrics = result.get("json_report", {}).get("reference_metrics", {})
+        _roles_data = result.get("json_report", {}).get("roles", [])
+        if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
+            _print_reference_summary(console, _roles_data, _ref_metrics)
+
         if not governance_passed:
             if report_file:
                 json_report["overall_verdict"] = "BLOCK"
@@ -1435,6 +1490,12 @@ def panel(
             content = str(findings)
             
         console.print(Panel(content, title=f"🤖 {name}", border_style="blue"))
+
+    # Display Reference Summary Table (INFRA-060 AC-9)
+    _ref_metrics = result.get("json_report", {}).get("reference_metrics", {})
+    _roles_data = result.get("json_report", {}).get("roles", [])
+    if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
+        _print_reference_summary(console, _roles_data, _ref_metrics)
 
     # 5. Apply Advice
     if apply and target_file and result["log_file"]:
