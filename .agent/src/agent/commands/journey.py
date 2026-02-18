@@ -16,7 +16,7 @@ import json as json_mod
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 import typer
 import yaml
@@ -439,23 +439,46 @@ def coverage(
     )
 
 
-@app.command("backfill-tests")
-def backfill_tests(
-    scope: Optional[str] = typer.Option(
-        None, "--scope", help="Filter by scope."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview without writing."
-    ),
-) -> None:
-    """Generate pytest test stubs for COMMITTED journeys with empty tests."""
-    journeys_dir = config.journeys_dir
-    tests_dir = config.repo_root / "tests" / "journeys"
+# -- License header for AI-generated test files --
+_LICENSE_HEADER = """\
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-    if not dry_run:
-        tests_dir.mkdir(parents=True, exist_ok=True)
+"""
 
-    generated = 0
+_MAX_SOURCE_CHARS = 32_000  # ~8k tokens
+
+logger = logging.getLogger(__name__)
+
+
+class EligibleJourney(TypedDict):
+    """Typed structure for an eligible journey record."""
+    file: Path
+    data: Dict[str, Any]
+    jid: str
+
+
+def _iter_eligible_journeys(
+    journeys_dir: Path,
+    scope: Optional[str] = None,
+    journey_id: Optional[str] = None,
+) -> List[EligibleJourney]:
+    """Return list of dicts with 'file', 'data', 'jid' for eligible journeys.
+
+    Eligible = COMMITTED state and no tests already defined.
+    """
+    results: List[EligibleJourney] = []
     for scope_dir in sorted(journeys_dir.iterdir()):
         if not scope_dir.is_dir():
             continue
@@ -468,60 +491,317 @@ def backfill_tests(
                 continue
             if not isinstance(data, dict):
                 continue
-
+            jid = data.get("id", jfile.stem)
+            if journey_id and jid != journey_id:
+                continue
             j_state = (data.get("state") or "DRAFT").upper()
             tests = data.get("implementation", {}).get("tests", [])
-            jid = data.get("id", jfile.stem)
-
             if j_state != "COMMITTED" or tests:
                 continue
+            results.append({"file": jfile, "data": data, "jid": jid})
+    return results
 
+
+def _generate_stub(data: dict, jid: str) -> str:
+    """Generate a pytest stub from journey assertions."""
+    slug = jid.lower().replace("-", "_")
+    steps = data.get("steps", [])
+    test_funcs: List[str] = []
+    for i, step in enumerate(steps, 1):
+        assertions = (
+            step.get("assertions", []) if isinstance(step, dict) else []
+        )
+        assertion_comments = (
+            "\n".join(f"    # {a}" for a in assertions)
+            if assertions
+            else "    # No assertions defined"
+        )
+        action_str = (
+            step.get("action", "unnamed")[:60]
+            if isinstance(step, dict)
+            else "unnamed"
+        )
+        test_funcs.append(
+            f'\n@pytest.mark.journey("{jid}")\n'
+            f"def test_{slug}_step_{i}():\n"
+            f'    """Step {i}: {action_str}"""\n'
+            f"{assertion_comments}\n"
+            '    pytest.skip("Not yet implemented")\n'
+        )
+    return (
+        f'"""Auto-generated test stubs for {jid}."""\n'
+        "import pytest\n" + "".join(test_funcs)
+    )
+
+
+def _generate_ai_test(
+    data: dict,
+    jid: str,
+    repo_root: Path,
+) -> Optional[str]:
+    """Generate a pytest test using the AI service.
+
+    Returns generated test code on success, None on failure
+    (caller falls back to stub).
+
+    GDPR Lawful Basis (Art. 6(1)(f) — Legitimate Interest):
+    This function processes *source code* (not personal data) to generate
+    test scaffolding.  All input is scrubbed by ``scrub_sensitive_data``
+    before submission to the AI service.  No PII is collected, stored,
+    or transmitted.
+    """
+    import ast
+    import time
+
+    from agent.core.ai import ai_service  # ADR-025: lazy init
+    from agent.core.security import scrub_sensitive_data
+
+    start = time.monotonic()
+    steps = data.get("steps", [])
+    if not steps:
+        logger.warning(
+            "journey=%s | No steps defined, skipping AI generation", jid
+        )
+        return None
+
+    # Build source context from implementation.files
+    impl_files = data.get("implementation", {}).get("files", [])
+    source_context = ""
+    for rel_path in impl_files:
+        fpath = repo_root / rel_path
+        if not fpath.is_file():
+            logger.warning(
+                "journey=%s | Source file not found: %s", jid, rel_path
+            )
+            continue
+        # Path containment check
+        try:
+            fpath.resolve().relative_to(repo_root.resolve())
+        except ValueError:
+            logger.warning(
+                "journey=%s | Path escapes repo root: %s", jid, rel_path
+            )
+            continue
+        try:
+            raw = fpath.read_text(errors="replace")[:20_000]
+            scrubbed = scrub_sensitive_data(raw)
+            source_context += f"\n--- {rel_path} ---\n{scrubbed}"
+        except Exception:
+            logger.warning(
+                "journey=%s | Error reading %s", jid, rel_path, exc_info=True
+            )
+
+    # Truncate to token budget
+    if len(source_context) > _MAX_SOURCE_CHARS:
+        source_context = source_context[:_MAX_SOURCE_CHARS]
+
+    # Build prompt
+    from agent.core.ai.prompts import generate_test_prompt
+
+    system_prompt, user_prompt = generate_test_prompt(
+        data, jid, source_context
+    )
+
+    # Call AI service
+    try:
+        response = ai_service.complete(system_prompt, user_prompt)
+    except Exception:
+        logger.exception("journey=%s | AI service call failed", jid)
+        return None
+
+    if not response:
+        logger.warning("journey=%s | AI returned empty response", jid)
+        return None
+
+    # Strip markdown code fences if present
+    if response.startswith("```"):
+        lines = response.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        response = "\n".join(lines)
+
+    # Validate generated code with ast.parse (never exec/eval)
+    try:
+        ast.parse(response)
+    except SyntaxError as e:
+        logger.warning(
+            "journey=%s | AI output has syntax error: %s", jid, e
+        )
+        return None
+
+    duration = time.monotonic() - start
+    scope_name = data.get("scope", "UNKNOWN")
+    logger.info(
+        "journey=%s | scope=%s | chars=%d | duration_s=%.1f | status=success",
+        jid,
+        scope_name,
+        len(source_context),
+        duration,
+    )
+
+    slug = jid.lower().replace("-", "_")
+    return (
+        _LICENSE_HEADER
+        + f'"""AI-generated regression tests for {jid}."""\n'
+        + response
+    )
+
+
+@app.command("backfill-tests")
+def backfill_tests(
+    scope: Optional[str] = typer.Option(
+        None, "--scope", help="Filter by scope."
+    ),
+    journey_id: Optional[str] = typer.Option(
+        None, "--journey", help="Target single journey (JRN-XXX)."
+    ),
+    ai: bool = typer.Option(
+        False,
+        "--ai",
+        help="Generate tests with AI. Previews and prompts before writing.",
+    ),
+    write: bool = typer.Option(
+        False, "--write", help="Batch-write all without prompts (CI mode)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview only, no prompts, no writes."
+    ),
+) -> None:
+    """Generate pytest test stubs for COMMITTED journeys with empty tests."""
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich.syntax import Syntax
+
+    journeys_dir = config.journeys_dir
+    tests_dir = config.repo_root / "tests" / "journeys"
+
+    if not dry_run:
+        tests_dir.mkdir(parents=True, exist_ok=True)
+
+    eligible = _iter_eligible_journeys(journeys_dir, scope, journey_id)
+    if not eligible:
+        if ai:
+            console.print("[yellow]No eligible journeys found.[/yellow]")
+        else:
+            verb = "Would generate" if dry_run else "Generated"
+            console.print(f"\n{verb} 0 test stub(s)")
+        return
+
+    ai_successes = 0
+    fallbacks = 0
+    skips = 0
+    errors = 0
+    written = 0
+    write_all = False  # Tracks "all" response in interactive mode
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            "[cyan]Processing journeys...", total=len(eligible)
+        )
+
+        for entry in eligible:
+            jfile = entry["file"]
+            data = entry["data"]
+            jid = entry["jid"]
             slug = jid.lower().replace("-", "_")
             stub_path = tests_dir / f"test_{slug}.py"
 
+            progress.update(task, description=f"[cyan]{jid}...")
+
             if stub_path.exists():
-                console.print(
-                    f"[yellow]⚠️  Skipping {jid}: {stub_path} already exists[/yellow]"
-                )
+                logger.info("journey=%s | skipped=file_exists", jid)
+                skips += 1
+                progress.update(task, advance=1)
                 continue
 
+            # Generate content
+            content: Optional[str] = None
+            used_ai = False
+
+            if ai:
+                try:
+                    content = _generate_ai_test(
+                        data, jid, config.repo_root
+                    )
+                    if content:
+                        used_ai = True
+                        ai_successes += 1
+                    else:
+                        # Fallback to stub
+                        content = _generate_stub(data, jid)
+                        fallbacks += 1
+                except Exception:
+                    logger.exception(
+                        "journey=%s | AI generation error", jid
+                    )
+                    content = _generate_stub(data, jid)
+                    fallbacks += 1
+                    errors += 1
+            else:
+                content = _generate_stub(data, jid)
+
+            if not content:
+                errors += 1
+                progress.update(task, advance=1)
+                continue
+
+            # Determine output mode
             if dry_run:
-                console.print(f"[dim]Would create: {stub_path}[/dim]")
-                generated += 1
+                progress.stop()
+                if ai:
+                    label = "AI-generated" if used_ai else "Stub"
+                    console.print(
+                        f"\n[bold]{label} test for {jid}[/bold] → {stub_path}"
+                    )
+                    console.print(
+                        Syntax(content, "python", theme="monokai", line_numbers=True)
+                    )
+                else:
+                    console.print(f"[dim]Would create: {stub_path}[/dim]")
+                written += 1
+                progress.start()
+                progress.update(task, advance=1)
                 continue
 
-            # Generate stub from journey assertions
-            steps = data.get("steps", [])
-            test_funcs: List[str] = []
-            for i, step in enumerate(steps, 1):
-                assertions = step.get("assertions", []) if isinstance(step, dict) else []
-                assertion_comments = (
-                    "\n".join(f"    # {a}" for a in assertions)
-                    if assertions
-                    else "    # No assertions defined"
+            if ai and not write and not write_all:
+                # Interactive confirm mode
+                progress.stop()
+                label = "AI-generated" if used_ai else "Stub (AI fallback)"
+                console.print(
+                    f"\n[bold]{label} test for {jid}[/bold] → {stub_path}"
                 )
-                action_str = (
-                    step.get("action", "unnamed")[:60]
-                    if isinstance(step, dict)
-                    else "unnamed"
+                console.print(
+                    Syntax(content, "python", theme="monokai", line_numbers=True)
                 )
-                test_funcs.append(
-                    f'\n@pytest.mark.journey("{jid}")\n'
-                    f"def test_{slug}_step_{i}():\n"
-                    f'    """Step {i}: {action_str}"""\n'
-                    f"{assertion_comments}\n"
-                    '    pytest.skip("Not yet implemented")\n'
+                choice = Prompt.ask(
+                    "Write?",
+                    choices=["y", "n", "all", "skip"],
+                    default="n",
                 )
+                progress.start()
 
-            content = (
-                f'"""Auto-generated test stubs for {jid}."""\n'
-                "import pytest\n"
-                + "".join(test_funcs)
-            )
+                if choice == "n":
+                    skips += 1
+                    progress.update(task, advance=1)
+                    continue
+                elif choice == "skip":
+                    skips += 1
+                    break
+                elif choice == "all":
+                    write_all = True
+                # choice == "y" or write_all: fall through to write
 
+            # Write file
+            stub_path.parent.mkdir(parents=True, exist_ok=True)
             stub_path.write_text(content)
 
-            # Update journey YAML
+            # Update journey YAML with test path
             if "implementation" not in data:
                 data["implementation"] = {}
             data["implementation"]["tests"] = [
@@ -531,8 +811,21 @@ def backfill_tests(
                 yaml.dump(data, default_flow_style=False, sort_keys=False)
             )
 
+            logger.info("journey=%s | written=%s", jid, stub_path)
             console.print(f"[green]✅ Generated: {stub_path}[/green]")
-            generated += 1
+            written += 1
+            progress.update(task, advance=1)
 
-    verb = "Would generate" if dry_run else "Generated"
-    console.print(f"\n{verb} {generated} test stub(s)")
+    # Summary metrics
+    total = len(eligible)
+    if ai:
+        console.print(f"\n[bold]Summary:[/bold]")
+        console.print(f"  Total processed: {total}")
+        console.print(f"  Written:         {written}")
+        console.print(f"  AI successes:    {ai_successes}")
+        console.print(f"  AI fallbacks:    {fallbacks}")
+        console.print(f"  Skipped:         {skips}")
+        console.print(f"  Errors:          {errors}")
+    else:
+        verb = "Would generate" if dry_run else "Generated"
+        console.print(f"\n{verb} {written} test stub(s)")

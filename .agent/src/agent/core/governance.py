@@ -315,6 +315,454 @@ def _filter_relevant_roles(roles: List[Dict], diff: str) -> List[Dict]:
     return filtered
 
 
+def _build_file_context(diff: str) -> str:
+    """Build file-level context from changed files in the diff (--thorough mode).
+
+    Parses diff headers to find changed files, then reads each Python file
+    and extracts function/class signatures using AST. For non-Python files,
+    includes a limited preview of the file content.
+
+    Returns a formatted string suitable for injection into the AI prompt.
+    """
+    import ast
+    from pathlib import Path
+
+    # Extract file paths from diff headers
+    changed_files: List[str] = []
+    for line in diff.split("\n"):
+        if line.startswith("+++ b/"):
+            path = line[6:].strip()
+            if path and path != "/dev/null":
+                changed_files.append(path)
+
+    if not changed_files:
+        return ""
+
+    context_parts: List[str] = []
+
+    for filepath in changed_files:
+        fpath = Path(filepath)
+        if not fpath.exists():
+            continue
+
+        try:
+            content = fpath.read_text(errors="ignore")
+        except Exception:
+            continue
+
+        if fpath.suffix == ".py":
+            # Use AST to extract function/class signatures
+            try:
+                tree = ast.parse(content)
+                signatures: List[str] = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                        # Build signature with type hints
+                        args = []
+                        for arg in node.args.args:
+                            annotation = ""
+                            if arg.annotation:
+                                annotation = f": {ast.unparse(arg.annotation)}"
+                            args.append(f"{arg.arg}{annotation}")
+                        returns = ""
+                        if node.returns:
+                            returns = f" -> {ast.unparse(node.returns)}"
+                        prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+                        signatures.append(
+                            f"  L{node.lineno}: {prefix} {node.name}({', '.join(args)}){returns}"
+                        )
+                    elif isinstance(node, ast.ClassDef):
+                        bases = ", ".join(ast.unparse(b) for b in node.bases)
+                        base_str = f"({bases})" if bases else ""
+                        signatures.append(f"  L{node.lineno}: class {node.name}{base_str}")
+
+                if signatures:
+                    context_parts.append(
+                        f"FILE: {filepath}\n" + "\n".join(signatures)
+                    )
+            except SyntaxError:
+                # Fallback: show first 50 lines
+                lines = content.split("\n")[:50]
+                context_parts.append(
+                    f"FILE: {filepath} (syntax error, showing first 50 lines)\n"
+                    + "\n".join(lines)
+                )
+        else:
+            # Non-Python: show first 30 lines as preview
+            lines = content.split("\n")[:30]
+            context_parts.append(
+                f"FILE: {filepath} (preview)\n" + "\n".join(lines)
+            )
+
+    if not context_parts:
+        return ""
+
+    # Cap total context to avoid token explosion
+    result = "\n\n".join(context_parts)
+    max_chars = 30000  # ~7500 tokens
+    if len(result) > max_chars:
+        result = result[:max_chars] + "\n... (file context truncated)"
+
+    return result
+
+
+# Python standard library module names (never belong in pyproject.toml)
+_STDLIB_MODULES = frozenset({
+    "abc", "argparse", "ast", "asyncio", "atexit", "base64", "bisect",
+    "calendar", "cmath", "code", "codecs", "collections", "colorsys",
+    "compileall", "concurrent", "configparser", "contextlib", "contextvars",
+    "copy", "copyreg", "csv", "ctypes", "dataclasses", "datetime",
+    "decimal", "difflib", "dis", "email", "enum", "errno", "faulthandler",
+    "filecmp", "fileinput", "fnmatch", "fractions", "ftplib", "functools",
+    "gc", "getopt", "getpass", "gettext", "glob", "gzip", "hashlib",
+    "heapq", "hmac", "html", "http", "idlelib", "imaplib", "importlib",
+    "inspect", "io", "ipaddress", "itertools", "json", "keyword",
+    "linecache", "locale", "logging", "lzma", "mailbox", "math",
+    "mimetypes", "mmap", "multiprocessing", "numbers", "operator", "os",
+    "pathlib", "pdb", "pickle", "pkgutil", "platform", "plistlib",
+    "pprint", "profile", "pstats", "py_compile", "queue", "quopri",
+    "random", "re", "readline", "reprlib", "resource", "rlcompleter",
+    "runpy", "sched", "secrets", "select", "selectors", "shelve",
+    "shlex", "shutil", "signal", "site", "smtplib", "socket",
+    "socketserver", "sqlite3", "ssl", "stat", "statistics", "string",
+    "struct", "subprocess", "sys", "sysconfig", "syslog", "tarfile",
+    "tempfile", "termios", "test", "textwrap", "threading", "time",
+    "timeit", "tkinter", "token", "tokenize", "tomllib", "trace",
+    "traceback", "tracemalloc", "tty", "turtle", "types", "typing",
+    "unicodedata", "unittest", "urllib", "uuid", "venv", "warnings",
+    "wave", "weakref", "webbrowser", "xml", "xmlrpc", "zipapp",
+    "zipfile", "zipimport", "zlib",
+})
+
+# Keywords that indicate code-specific claims (used for line-drift detection)
+_CODE_CLAIM_KEYWORDS = {
+    "path": ["path", "resolve", "relative_to", "symlink", ".exists()", "is_file", "is_dir"],
+    "import": ["import", "from "],
+    "validation": ["validate", "check", "assert", "raise", "if not"],
+    "type_hint": ["-> ", ": str", ": int", ": bool", ": Optional", ": List", ": Dict"],
+    "async": ["async", "await", "asyncio"],
+    "ai_service": ["ai_service", "complete(", "ai."],
+    "mock": ["mock", "patch", "return_value", "MagicMock"],
+    "docstring": ['"""', "'''"],
+}
+
+
+def _validate_finding_against_source(
+    finding: str,
+    diff: str,
+) -> bool:
+    """Validate an AI finding against actual source files (--thorough mode).
+
+    Cross-checks claims in the finding text against the real file content.
+    Returns True if the finding appears valid, False if it's a false positive.
+
+    Detected false-positive patterns:
+    - "missing type hint" when the function actually has type hints
+    - "missing import" when the import actually exists
+    - "missing check" / "missing validation" when the check exists in the file
+    - stdlib module flagged as missing dependency (pyproject.toml)
+    - sync method claimed to need await (checks actual def vs async def)
+    - lazy in-function import flagged as "direct import"
+    """
+    from pathlib import Path
+
+    finding_lower = finding.lower()
+
+    # ── Check 0: Line-number drift detection ──
+    # If the finding cites specific file:line references, verify the actual
+    # line content is relevant to the claim.  Line numbers from diff @@ headers
+    # often drift, causing the AI to describe code that lives elsewhere.
+    file_line_refs = re.findall(
+        r'[`"]?([a-zA-Z0-9_/.-]+\.py)[`"]?:(\d+)(?:-\d+)?', finding
+    )
+    if file_line_refs:
+        # Identify what the finding is about
+        claim_categories: list[str] = []
+        for cat, keywords in _CODE_CLAIM_KEYWORDS.items():
+            if any(kw in finding_lower for kw in keywords):
+                claim_categories.append(cat)
+
+        if claim_categories:
+            drift_count = 0
+            checked_count = 0
+            for filepath_str, line_num_str in file_line_refs:
+                fpath = _resolve_file_path(filepath_str)
+                if not fpath:
+                    continue
+                try:
+                    lines = fpath.read_text(errors="ignore").split("\n")
+                except Exception:
+                    continue
+                line_num = int(line_num_str)
+                if line_num < 1 or line_num > len(lines):
+                    drift_count += 1
+                    checked_count += 1
+                    continue
+
+                checked_count += 1
+                # Check ±3 lines around the cited line for ANY of the claim keywords
+                start = max(0, line_num - 4)
+                end = min(len(lines), line_num + 3)
+                region = "\n".join(lines[start:end]).lower()
+
+                # The region must contain at least one keyword from the claim categories
+                region_matches = False
+                for cat in claim_categories:
+                    if any(kw in region for kw in _CODE_CLAIM_KEYWORDS[cat]):
+                        region_matches = True
+                        break
+
+                if not region_matches:
+                    drift_count += 1
+
+            # If ALL cited lines drifted, the finding is likely a false positive
+            if checked_count > 0 and drift_count == checked_count:
+                logger.info(
+                    "False positive filtered (line drift): '%s' — cited lines don't contain claimed code",
+                    finding[:80],
+                )
+                return False
+
+    # ── Check 1: Stdlib dependency false positive ──
+    # AI claims a stdlib module should be in pyproject.toml / requirements
+    if "pyproject" in finding_lower or "requirements" in finding_lower or "dependency" in finding_lower:
+        # Extract module names mentioned alongside dependency claims
+        dep_modules = re.findall(
+            r'(?:import|module|package|dependency|depend)\w*\s+(?:to\s+)?[`"\']?(\w+)[`"\']?',
+            finding, re.IGNORECASE,
+        )
+        # Also catch patterns like "`ast` ... pyproject.toml"
+        dep_modules += re.findall(r'`(\w+)`', finding)
+        for mod in dep_modules:
+            if mod.lower() in _STDLIB_MODULES:
+                logger.info(
+                    "False positive filtered: '%s' flags stdlib module '%s' as missing dependency",
+                    finding[:80], mod,
+                )
+                return False
+
+    # ── Check 2: Sync/async misclassification ──
+    # AI claims a function should be awaited or converted to async
+    is_async_claim = any(kw in finding_lower for kw in [
+        "await", "not awaited", "should be async", "convert to async",
+        "missing await", "without awaiting", "async function",
+    ])
+    if is_async_claim:
+        # Extract function/method names from the finding
+        func_names = re.findall(
+            r'(?:function|method|call(?:ing)?|`)(\s*\w+\.)?`?(\w+)`?\s*\(',
+            finding,
+        )
+        if not func_names:
+            func_names = re.findall(r'`(\w+)`\s*(?:is|should|must|not)', finding)
+            func_names = [("", n) for n in func_names]
+
+        for _, func_name in func_names:
+            if not func_name:
+                continue
+            # Search the diff AND source files for the actual definition
+            # If we find `def func_name(` (sync), the await claim is false
+            sync_pattern = rf'^\s*def\s+{re.escape(func_name)}\s*\('
+            async_pattern = rf'^\s*async\s+def\s+{re.escape(func_name)}\s*\('
+
+            # Check in the diff first
+            if re.search(sync_pattern, diff, re.MULTILINE):
+                if not re.search(async_pattern, diff, re.MULTILINE):
+                    logger.info(
+                        "False positive filtered: '%s' claims '%s' needs await but it is sync (def, not async def)",
+                        finding[:80], func_name,
+                    )
+                    return False
+
+            # Check in source files referenced by the finding
+            file_refs = re.findall(r'[`"]?([a-zA-Z0-9_/.-]+\.py)[`"]?', finding)
+            for fref in file_refs:
+                fpath = _resolve_file_path(fref)
+                if not fpath:
+                    continue
+                try:
+                    content = fpath.read_text(errors="ignore")
+                except Exception:
+                    continue
+                if re.search(sync_pattern, content, re.MULTILINE):
+                    if not re.search(async_pattern, content, re.MULTILINE):
+                        logger.info(
+                            "False positive filtered: '%s' claims '%s' needs await but it is sync in %s",
+                            finding[:80], func_name, fref,
+                        )
+                        return False
+
+    # ── Check 3: Lazy-init import blindness ──
+    # AI claims a "direct import" violates ADR-025 when the import is inside a function body
+    is_import_violation_claim = any(kw in finding_lower for kw in [
+        "direct import", "lazy init", "lazy initial", "violates adr-025",
+        "should be lazy", "top-level import",
+    ])
+    if is_import_violation_claim:
+        # Extract the import statement or module name
+        import_modules = re.findall(
+            r'(?:from\s+)(\S+)(?:\s+import)', finding,
+        )
+        if not import_modules:
+            import_modules = re.findall(r'import\s+`?(\w[\w.]+)`?', finding)
+
+        file_refs = re.findall(r'[`"]?([a-zA-Z0-9_/.-]+\.py)[`"]?(?::(\d+))?', finding)
+        for filepath_str, line_num_str in file_refs:
+            fpath = _resolve_file_path(filepath_str)
+            if not fpath:
+                continue
+            try:
+                content = fpath.read_text(errors="ignore")
+            except Exception:
+                continue
+
+            lines = content.split("\n")
+            # If we have a line number, check if that line is inside a function body
+            if line_num_str:
+                line_num = int(line_num_str)
+                if 0 < line_num <= len(lines):
+                    line_content = lines[line_num - 1]
+                    # Check if this import line is indented (inside a function body)
+                    if re.match(r'^\s{4,}(from|import)\s', line_content):
+                        logger.info(
+                            "False positive filtered: '%s' claims direct import at L%s but it is indented (lazy init)",
+                            finding[:80], line_num_str,
+                        )
+                        return False
+                    # Also check for ADR-025 comment on the same line
+                    if 'adr-025' in line_content.lower() or 'lazy' in line_content.lower():
+                        logger.info(
+                            "False positive filtered: '%s' claims direct import at L%s but ADR-025/lazy comment present",
+                            finding[:80], line_num_str,
+                        )
+                        return False
+
+            # No line number — scan for the import and check if ANY occurrence is inside a function
+            for mod in import_modules:
+                for i, line in enumerate(lines):
+                    if mod in line and ('import' in line):
+                        # Check if indented (inside function body)
+                        if re.match(r'^\s{4,}', line):
+                            logger.info(
+                                "False positive filtered: '%s' claims direct import of %s but found lazy import at L%d",
+                                finding[:80], mod, i + 1,
+                            )
+                            return False
+
+    # ── Original checks: "missing X" patterns ──
+    file_refs = re.findall(r'[`"]?([a-zA-Z0-9_/.-]+\.py)[`"]?(?::(\d+))?', finding)
+
+    if not file_refs:
+        # No file reference — can't validate, assume valid
+        return True
+
+    is_missing_claim = any(kw in finding_lower for kw in [
+        "missing type hint", "missing type annotation", "lacks type hint",
+        "no type hint", "untyped", "missing return type",
+        "missing import", "should import", "import from wrong",
+        "missing validation", "missing check", "no validation",
+        "missing error handling", "no error handling",
+    ])
+
+    if not is_missing_claim:
+        # Not a "missing X" claim — can't validate this way, assume valid
+        return True
+
+    # Check each referenced file
+    for filepath_str, line_num_str in file_refs:
+        fpath = _resolve_file_path(filepath_str)
+        if not fpath:
+            continue
+
+        try:
+            content = fpath.read_text(errors="ignore")
+        except Exception:
+            continue
+
+        # Check for type hints if that's the claim
+        if "type hint" in finding_lower or "type annotation" in finding_lower or "untyped" in finding_lower:
+            func_names = re.findall(r'`?(\w+)`?\s*(?:function|method|def|is missing|lacks|has no)', finding)
+            if not func_names:
+                func_names = re.findall(r'(?:function|method|def)\s+`?(\w+)`?', finding)
+
+            for name in func_names:
+                pattern = rf'def\s+{re.escape(name)}\s*\([^)]*\)\s*->'
+                if re.search(pattern, content):
+                    logger.info(
+                        "False positive filtered: '%s' claims missing type hint on %s but annotation exists",
+                        finding[:80], name
+                    )
+                    return False
+
+        # Check for imports if that's the claim
+        if "import" in finding_lower:
+            import_names = re.findall(r'import\s+`?(\w+)`?', finding)
+            for name in import_names:
+                if re.search(rf'\bimport\s+{re.escape(name)}\b', content) or \
+                   re.search(rf'from\s+\S+\s+import\s+.*\b{re.escape(name)}\b', content):
+                    logger.info(
+                        "False positive filtered: '%s' claims missing import but import exists",
+                        finding[:80]
+                    )
+                    return False
+
+        # Check for validation/check claims
+        if "validation" in finding_lower or "check" in finding_lower:
+            if line_num_str:
+                line_num = int(line_num_str)
+                lines = content.split("\n")
+                start = max(0, line_num - 20)
+                end = min(len(lines), line_num + 20)
+                region = "\n".join(lines[start:end])
+                validation_patterns = [
+                    r'\.resolve\(\)\.relative_to\(',
+                    r'if\s+not\s+\w+',
+                    r'raise\s+\w+Error',
+                    r'validate\w*\(',
+                    r'assert\s+',
+                ]
+                for vp in validation_patterns:
+                    if re.search(vp, region):
+                        logger.info(
+                            "False positive filtered: '%s' claims missing validation but check exists near L%s",
+                            finding[:80], line_num_str
+                        )
+                        return False
+
+    # Could not disprove the finding — assume valid
+    return True
+
+
+def _resolve_file_path(filepath_str: str):
+    """Resolve a file path string from an AI finding to an actual Path.
+
+    Tries the raw path, relative to CWD, and common project prefixes.
+    Returns Path if found, None otherwise.
+    """
+    from pathlib import Path
+
+    fpath = Path(filepath_str)
+    if fpath.exists():
+        return fpath
+    fpath = Path.cwd() / filepath_str
+    if fpath.exists():
+        return fpath
+    # Try common project prefixes (e.g. "agent/commands/x.py" -> ".agent/src/agent/commands/x.py")
+    for prefix in [".agent/src/", ".agent/", "backend/", "web/", "mobile/"]:
+        candidate = Path.cwd() / prefix / filepath_str
+        if candidate.exists():
+            return candidate
+    # Try partial-path matching: "agent/x.py" -> ".agent/src/agent/x.py"
+    # This handles AI findings that strip common prefixes
+    stripped = filepath_str
+    for strip_prefix in ["agent/", "tests/"]:
+        if stripped.startswith(strip_prefix):
+            for base in [".agent/src/", ".agent/"]:
+                candidate = Path.cwd() / base / stripped
+                if candidate.exists():
+                    return candidate
+    return None
+
 def convene_council_full(
     story_id: str,
     story_content: str,
@@ -326,6 +774,7 @@ def convene_council_full(
     council_identifier: str = "default",
     user_question: Optional[str] = None,
     adrs_content: str = "",
+    thorough: bool = False,
     progress_callback: Optional[callable] = None
 ) -> Dict:
     """
@@ -344,6 +793,8 @@ def convene_council_full(
                 This allows for open-ended discussion without blocking CI/CD pipelines.
         adrs_content: Compact summaries of Architectural Decision Records.
             Code that follows an ADR is compliant and must not be flagged.
+        thorough: Enable full-file context augmentation and post-processing validation.
+            Uses more tokens but significantly reduces false positives.
 
     Returns:
         Dict: Contains 'verdict' (PASS/BLOCK), 'log_file' (path), and 'json_report' (detailed data).
@@ -455,6 +906,15 @@ def convene_council_full(
     
     if skipped_roles and progress_callback:
         progress_callback(f"⏭️  Skipping irrelevant roles: {', '.join(skipped_roles)}")
+
+    # Build full-file context for --thorough mode (Fix 3)
+    _file_context = ""
+    if thorough:
+        if progress_callback:
+            progress_callback("🔍 --thorough: Building full-file context for changed files...")
+        _file_context = _build_file_context(full_diff)
+        if _file_context and progress_callback:
+            progress_callback(f"📄 File context: {len(_file_context)} chars from changed files")
     
     for role in relevant_roles:
         role_name = role["name"]
@@ -508,7 +968,29 @@ def convene_council_full(
                         "6. ERROR HANDLERS: Exception handlers that print static messages (e.g., 'package not installed') "
                         "are NOT credential leaks. Only flag logging that includes ACTUAL dynamic secrets or API keys.\n"
                         "7. CONTEXT TRUNCATION: Truncation of text for AI PROMPT context windows is NOT data loss. "
-                        "It does not modify source files. Do NOT flag prompt-context truncation as unsafe.\n\n"
+                        "It does not modify source files. Do NOT flag prompt-context truncation as unsafe.\n"
+                        "8. DIFF CONTEXT LIMITATIONS: You can only see a limited window of lines around each change. "
+                        "Do NOT claim that code is missing (e.g., missing type hints, missing validation checks, "
+                        "missing imports, missing error handling) when it may exist OUTSIDE your visible diff window. "
+                        "If you cannot verify the ABSENCE of something from the diff alone, ASSUME it exists and PASS. "
+                        "Only flag issues you can CONFIRM are present in the visible code.\n"
+                        "9. STDLIB MODULES: Python standard library modules (ast, os, sys, re, json, pathlib, typing, "
+                        "collections, functools, itertools, dataclasses, abc, io, copy, math, hashlib, hmac, secrets, "
+                        "subprocess, shutil, tempfile, textwrap, unittest, logging, argparse, configparser, enum, "
+                        "contextlib, inspect, importlib, etc.) are BUILT INTO Python. "
+                        "They NEVER need to be declared in pyproject.toml or requirements files. "
+                        "Do NOT flag stdlib imports as missing dependencies.\n"
+                        "10. SYNC/ASYNC IN TYPER CLI: This project uses Typer, a SYNCHRONOUS CLI framework. "
+                        "Functions are synchronous by default. Do NOT assume a method is async unless you can "
+                        "see 'async def' in its definition. Do NOT recommend 'await' for synchronous method calls. "
+                        "Do NOT recommend converting sync generators to async generators.\n"
+                        "11. LAZY INITIALIZATION PATTERN: Imports placed INSIDE function bodies (not at module "
+                        "top level) are INTENTIONAL lazy imports per ADR-025. Comments like '# ADR-025: lazy init' "
+                        "confirm this pattern. Do NOT flag in-function imports as 'direct imports' or as violating "
+                        "lazy initialization — they ARE the lazy initialization.\n"
+                        "12. MARKDOWN FILE LINKS: 'file:///' URIs in markdown documents (.md files) are standard "
+                        "clickable links for local navigation. They are NOT 'absolute paths that won't work on "
+                        "other machines'. Do NOT flag file:// links in markdown, runbooks, or documentation files.\n\n"
                         "Output format (use EXACTLY this structure):\n"
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY: <one line summary>\n"
@@ -525,6 +1007,8 @@ def convene_council_full(
                 user_prompt += f"<instructions>{instructions_content}</instructions>\n"
             if _available_refs_line:
                 user_prompt += f"\n{_available_refs_line}\n"
+            if _file_context:
+                user_prompt += f"<file_context>\nFull file signatures for changed files (use to avoid false positives about missing code):\n{_file_context}\n</file_context>\n"
             user_prompt += f"<diff>{chunk}</diff>"
             
             try:
@@ -558,6 +1042,30 @@ def convene_council_full(
                 if progress_callback:
                     progress_callback(f"Error during review: {e}")
         
+        # Post-processing: validate findings against source (always-on)
+        # The validator checks are lightweight file reads — not gated by --thorough.
+        # Only the full-file context augmentation (AST parsing) is thorough-only.
+        if role_findings and mode == "gatekeeper":
+            original_count = len(role_findings)
+            role_findings = [
+                f for f in role_findings
+                if _validate_finding_against_source(f, full_diff)
+            ]
+            filtered_count = original_count - len(role_findings)
+            if filtered_count > 0:
+                if progress_callback:
+                    progress_callback(
+                        f"🛡️  Filtered {filtered_count} false positive(s) from @{role_name}"
+                    )
+                # If ALL findings were filtered, demote BLOCK to PASS
+                if not role_findings and role_verdict == "BLOCK":
+                    role_verdict = "PASS"
+                    role_changes = []  # Clear required changes too
+                    if progress_callback:
+                        progress_callback(
+                            f"✅ @{role_name}: BLOCK demoted to PASS (all findings were false positives)"
+                        )
+
         # Deduplicate references across chunks (INFRA-060 AC-13)
         role_refs = sorted(set(all_role_refs))
 

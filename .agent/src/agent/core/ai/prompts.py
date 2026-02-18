@@ -211,3 +211,56 @@ OUTPUT FORMAT:
         return base_prompt
 
     return "Invalid failure type."
+
+
+def generate_test_prompt(
+    data: Dict[str, Any], jid: str, source_context: str
+) -> tuple[str, str]:
+    """Generate a (system_prompt, user_prompt) tuple for AI test generation.
+
+    Args:
+        data: Parsed journey YAML data.
+        jid: Journey ID (e.g. JRN-053).
+        source_context: Scrubbed source code context from implementation.files.
+
+    Returns:
+        Tuple of (system_prompt, user_prompt) for AIService.complete().
+    """
+    steps = data.get("steps", [])
+    steps_text = "\n".join(
+        f"  {i}. {s.get('action', 'unnamed')}"
+        + (
+            ("\n     Assertions: " + ", ".join(s.get("assertions", [])))
+            if s.get("assertions")
+            else ""
+        )
+        for i, s in enumerate(steps, 1)
+        if isinstance(s, dict)
+    )
+    slug = jid.lower().replace("-", "_")
+
+    system_prompt = """You are an expert Python test engineer.
+Write complete, executable pytest test modules.
+Output ONLY valid Python code — no markdown fences, no explanations.
+All generated code must pass `ast.parse()` without errors."""
+
+    user_prompt = f"""Write a pytest test module for user journey {jid}.
+
+JOURNEY STEPS:
+{steps_text}
+
+SOURCE CODE CONTEXT:
+{source_context if source_context else "No source files available."}
+
+REQUIREMENTS:
+- Use pytest framework only (no unittest, no selenium).
+- Include `import pytest` at the top.
+- Add `@pytest.mark.journey("{jid}")` decorator on each test function.
+- Name test functions as `test_{slug}_step_N` (one per journey step).
+- Write real assertions based on the step assertions (not `pytest.skip`).
+- Mock external dependencies with `unittest.mock` as needed.
+- Include descriptive docstrings referencing the step action.
+- Output ONLY valid Python code, no markdown fences.
+"""
+    return system_prompt, user_prompt
+
