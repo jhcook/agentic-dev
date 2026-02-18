@@ -287,7 +287,8 @@ def preflight(
     report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
-    interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode.")
+    interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode."),
+    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'legacy'.")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -300,7 +301,13 @@ def preflight(
         report_file: Path to save the preflight report as JSON.
         skip_tests: Skip running tests.
         ignore_tests: Run tests but ignore failure.
+        panel_engine: Override panel engine ('adk' or 'legacy').
     """
+    # Apply panel engine override (INFRA-061)
+    if panel_engine:
+        config._panel_engine_override = panel_engine
+        console.print(f"[dim]Panel engine override: {panel_engine}[/dim]")
+
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
 
     # Check for unstaged changes (Security Maintenance)
@@ -1349,12 +1356,18 @@ def panel(
     input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
-    apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook.")
+    apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
+    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'legacy'.")
 ):
     """
     Convening the Governance Panel to review changes or discuss design.
     """
-    # 0. Configure Provider Override if set
+    # 0. Configure Panel Engine Override (INFRA-061)
+    if panel_engine:
+        config._panel_engine_override = panel_engine
+        console.print(f"[dim]Panel engine override: {panel_engine}[/dim]")
+
+    # 1. Configure Provider Override if set
     if provider:
         ai_service.set_provider(provider)
     

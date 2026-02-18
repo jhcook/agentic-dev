@@ -301,6 +301,85 @@ agent pr --story WEB-101
 
 ---
 
+## `agent panel` — AI Governance Panel
+
+Convene the AI Governance Council for a standalone review outside of preflight. Accepts either a story ID or a freeform question.
+
+### Usage
+
+```bash
+# Review changes against a story
+agent panel WEB-001
+
+# Ask a design question
+agent panel "Should we use WebSockets or SSE?"
+
+# Auto-apply panel advice to the story/runbook
+agent panel WEB-001 --apply
+
+# Use ADK multi-agent engine
+agent panel WEB-001 --panel-engine adk
+```
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `--base <branch>` | Base branch for comparison (e.g. main) |
+| `--provider <name>` | Force AI provider (gh, gemini, openai) |
+| `--apply` | Automatically apply panel advice to the Story/Runbook |
+| `--panel-engine <engine>` | Override panel engine: `adk` or `legacy` |
+
+---
+
+## `agent new-journey` — User Journey Management
+
+Create, validate, and list user journeys that define behavioral contracts.
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `agent new-journey [ID]` | Create a new journey from template |
+| `agent new-journey [ID] --ai` | Create a journey with AI-generated content |
+| `agent validate-journey` | Validate journey YAML against schema |
+| `agent list-journeys` | List all journeys with ID, title, state |
+
+### File Location
+
+Journeys are stored in `.agent/cache/journeys/` as YAML files.
+
+See [User Journeys](user_journeys.md) for the full lifecycle and [Journey YAML Spec](journey_yaml_spec.md) for the schema reference.
+
+---
+
+## `agent new-adr` — Architecture Decision Records
+
+Create a new Architectural Decision Record.
+
+### Usage
+
+```bash
+agent new-adr
+```
+
+ADRs are created in `.agent/adrs/` following the format `ADR-NNN-title.md`.
+
+---
+
+## `agent query` — Natural Language Codebase Query
+
+Ask natural-language questions about your codebase.
+
+### Usage
+
+```bash
+agent query "Which files handle authentication?"
+agent query "How does the sync backend work?"
+```
+
+---
+
 ## `--provider` Option
 
 ### Purpose
@@ -340,10 +419,11 @@ agent preflight [OPTIONS]
 #### Options
 
 - `--story [ID]`: Link the preflight check to a specific Story ID (e.g., `WEB-001`).
-- `--interactive`: **[NEW]** Enable interactive repair mode. The agent will propose fixes for failures.
+- `--interactive`: Enable interactive repair mode. The agent will propose fixes for failures.
 - `--ai`: Enable AI-powered governance review (requires API key).
 - `--base [BRANCH]`: Verify changes against a specific base branch (default: staged vs HEAD).
 - `--skip-tests`: Skip automated tests.
+- `--panel-engine [ENGINE]`: Override panel engine: `adk` or `legacy`.
 
 ### Voice Agent Integration
 

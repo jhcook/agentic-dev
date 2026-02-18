@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Multi-Agent Governance Panel via Google ADK** (INFRA-061):
+  - Opt-in ADK-based multi-agent orchestration for the governance panel.
+  - Configure with `panel.engine: adk` in `agent.yaml` or `--panel-engine adk` CLI flag.
+  - 5 read-only tools for agents: `read_file`, `search_codebase`, `list_directory`, `read_adr`, `read_journey`.
+  - Graceful fallback to legacy panel if `google-adk` is not installed or fails.
+  - Install with: `pip install 'agent[adk]'`.
+  - See ADR-029 for architecture decisions.
+
 - **Interactive Preflight Repair** (INFRA-042):
   - Added `--interactive` flag to `agent preflight`.
   - Implemented `InteractiveFixer` service for identifying and repairing Story schema and governance violations.

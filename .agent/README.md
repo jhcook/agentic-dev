@@ -14,6 +14,8 @@ The tool follows a layered architecture:
 
 - **Smart AI Router**: Dynamically selects the best AI model (Gemini, OpenAI, Anthropic) based on task complexity and cost.
 - **Governance Engine**: Enforces preflight checks, ensuring stories are well-defined and code changes are safe.
+- **ADK Multi-Agent Panel**: Optional Google ADK-powered governance panel with parallel agent execution (see [ADR-029](adrs/ADR-029-adk-multi-agent-integration.md)).
+- **User Journeys**: Behavioral contracts that define what the system does from a user's perspective (see [ADR-024](adrs/ADR-024-introduce-user-journeys.md)).
 - **Interactive Repair**: Automatically detects and fixes governance failures using AI (see [ADR-015](adrs/ADR-015-interactive-preflight-repair.md)).
 - **Voice Integration**: Supports hands-free development via real-time voice commands (see [ADR-007](adrs/ADR-007-voice-service-abstraction-layer.md)).
 
@@ -55,33 +57,18 @@ Secrets are managed securely via the system keyring (see [ADR-006](adrs/ADR-006-
 
 ### Core Workflows
 
-- **Create a Story**:
+- **Create a Journey**: `agent new-journey JRN-001`
+- **Create a Story**: `agent new-story`
+- **Generate Runbook**: `agent new-runbook WEB-001`
+- **Implement**: `agent implement WEB-001`
+- **Preflight Checks**: `agent preflight --story WEB-001 --ai`
+- **Governance Panel**: `agent panel WEB-001`
+- **Impact Analysis**: `agent impact WEB-001 --ai`
+- **Commit**: `agent commit --story WEB-001 --ai`
+- **Pull Request**: `agent pr --story WEB-001`
+- **Audit**: `agent audit --output report.json`
 
-  ```bash
-  agent story new --title "Implement Feature X"
-  ```
-
-- **Run Preflight Checks**:
-
-  ```bash
-  agent preflight --story WEB-001 --ai
-  ```
-
-  Use `--interactive` to automatically fix schema violations.
-
-- **Check Code Quality**:
-
-  ```bash
-  agent check --story WEB-001
-  ```
-
-- **Audit Governance**:
-
-  ```bash
-  agent audit --output report.json
-  ```
-
-  Use `.auditignore` to exclude files from the audit.
+  Use `--interactive` on preflight to auto-fix violations. Use `--panel-engine adk` for multi-agent governance.
 
 ### Voice Mode
 

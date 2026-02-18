@@ -1,165 +1,224 @@
 # Getting Started with Agent CLI
 
-This guide will help you get up and running with the Agent CLI in less than 10 minutes.
+This guide walks you through the full story-driven development lifecycle — from installation through your first pull request.
 
 ## Prerequisites
 
-- **Python 3.9+**
-- **Git** (for repository management)
-- **pip** (Python package manager)
-- **ShellCheck** (for shell script linting)
-- **Node.js & npm** (for JavaScript/TypeScript linting)
-- Optional: API keys for AI providers (Gemini or OpenAI)
+- **Python 3.11+** and **pip**
+- **Git** (repository management)
+- **ShellCheck** (shell script linting)
+- **Node.js & npm** (JavaScript/TypeScript linting)
+- Optional: API keys for AI providers (Gemini, OpenAI, or Anthropic)
 
 ## Installation
 
-### 1. Create Virtual Environment (Required)
-
-The Agent CLI requires a virtual environment named `.venv` in the project root to ensure tools can reliably find dependencies.
+### 1. Create Virtual Environment
 
 ```bash
-# Navigate to your repository
 cd /path/to/your/repo
 
-# Create virtual environment
 python3 -m venv .venv
-
-# Activate it
 source .venv/bin/activate
 
-# Install the agent package
+# Standard install
 pip install -e .agent/
 
-# OR: Install with Voice Support (Recommended for Voice Agent)
+# With voice support
 pip install -e ".agent/[voice]"
 
-# OR: Install with ALL features (Voice + Advanced AI)
-pip install -e ".agent/[voice,ai]"
+# With ADK multi-agent governance panel
+pip install -e ".agent/[adk]"
+
+# Everything (voice + ADK + advanced AI)
+pip install -e ".agent/[voice,adk,ai]"
 ```
 
-The agent requires (automatically installed):
+### 2. Set Up AI Provider
 
-- `typer>=0.21.1` - CLI framework
-- `rich>=14.2.0` - Terminal formatting
-- `pydantic>=2.12.5` - Data validation
-- `tiktoken>=0.12.0` - Token counting
-- `google-genai>=1.57.0` - Google Gemini AI
-- `openai>=2.15.0` - OpenAI API
-- `PyYAML>=6.0.2` - Configuration parsing
+Pick one:
 
-### 2. Set Up AI Provider (Optional but Recommended)
-
-Choose one of the following providers:
-
-#### Option A: Google Gemini (Recommended)
+**Google Gemini (Recommended)**
 
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
-# Or alternatively:
-export GOOGLE_GEMINI_API_KEY="your-api-key-here"
 ```
 
-**Get your API key**: [Google AI Studio](https://makersuite.google.com/app/apikey)
+Get your key at [Google AI Studio](https://aistudio.google.com/apikey).
 
-#### Option B: OpenAI
+**OpenAI**
 
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-**Get your API key**: [OpenAI Platform](https://platform.openai.com/api-keys)
-
-#### Option C: GitHub CLI (Fallback)
-
-If you don't have an API key, Agent will use GitHub's AI models:
+**GitHub CLI (Fallback — 8k context window)**
 
 ```bash
-# Install GitHub CLI
-brew install gh  # macOS
-# or: sudo apt install gh  # Linux
-
-# Authenticate
-gh auth login
+brew install gh && gh auth login
 ```
 
-**Note**: GitHub CLI has a smaller context window (8k tokens) which may limit functionality on large files.
-
-### 3. Test Installation
+### 3. Verify
 
 ```bash
-# Run from repository root
-./.agent/bin/agent --version
-
-# Or add to PATH
 export PATH="$PATH:$(pwd)/.agent/bin"
 agent --version
+agent list-models   # confirm AI connectivity
 ```
 
-You should see output like:
+## The Lifecycle
 
+Every code change follows a structured path:
+
+```mermaid
+graph LR
+    J["Journey"] --> S["Story"]
+    S --> A["ADR (if needed)"]
+    S --> R["Runbook"]
+    R --> I["Implement"]
+    I --> P["Preflight"]
+    P --> PA["Panel Review"]
+    PA --> IM["Impact Analysis"]
+    IM --> C["Commit"]
+    C --> PR["Pull Request"]
 ```
-Agent CLI v0.2.0
-```
 
-### 4. Verify AI Connection
+**Quality gates** at every stage: journey linking, story commitment, runbook acceptance, governance review, and automated preflight checks.
 
-Check that your AI provider is correctly configured and models are available:
+## Quick Start (5-Minute Path)
+
+If you want to skip straight to building, here is the minimum viable flow — no journeys, no ADRs, no panel:
 
 ```bash
-agent list-models
+agent new-story                          # 1. Create story (INFRA/WEB/MOBILE/BACKEND)
+# Edit the generated .md file, set State: COMMITTED
+agent new-runbook WEB-001                # 2. Generate runbook
+# Review, set Status: ACCEPTED
+agent implement WEB-001                  # 3. AI-assisted implementation
+agent preflight --story WEB-001          # 4. Run checks
+agent commit --story WEB-001 --ai        # 5. Commit
+agent pr --story WEB-001                 # 6. Create PR
 ```
 
-## Your First Story
+For full governance compliance, keep reading.
 
-Let's create your first story using the agent:
+---
 
-### Step 1: Create a Story
+## Step 1: Define User Journeys
+
+Journeys describe **what your system does from a user's perspective**. They act as a behavioral contract — the agent reads them before writing code and avoids breaking existing behavior.
+
+```bash
+# Scaffold from template
+agent new-journey JRN-001
+
+# AI-generated from a brief description
+agent new-journey JRN-001 --ai
+```
+
+This creates a YAML file in `.agent/cache/journeys/`:
+
+```yaml
+id: JRN-001
+title: "User signs up and verifies email"
+actor: "unauthenticated user"
+description: "New user creates an account and verifies their email."
+steps:
+  - action: "User navigates to /signup"
+    system_response: "Renders signup form"
+    assertions:
+      - "Signup form is visible"
+  - action: "User submits email and password"
+    system_response: "Creates account, sends verification email"
+    assertions:
+      - "HTTP 201 returned"
+      - "Verification email sent"
+```
+
+Five required fields: `id`, `title`, `actor`, `description`, `steps`. Everything else is optional.
+
+**Validate your journey:**
+
+```bash
+agent validate-journey
+```
+
+**List all journeys:**
+
+```bash
+agent list-journeys
+```
+
+> **Why journeys first?** Without them, the agent has no memory of existing behavior. When it implements a new story it may break something that was working. See [User Journeys](user_journeys.md) for the full reference and [Journey YAML Spec](journey_yaml_spec.md) for the schema.
+
+---
+
+## Step 2: Create a Story
+
+Stories are the unit of work. Every code change must be traceable to a story.
 
 ```bash
 agent new-story
 ```
 
-You'll be prompted:
+You'll be prompted for scope (INFRA / WEB / MOBILE / BACKEND) and title. The CLI creates a file like `.agent/cache/stories/WEB/WEB-001-add-user-profile-page.md`.
 
-```
-Select Story Category:
-1. INFRA (Governance, CI/CD)
-2. WEB (Frontend)
-3. MOBILE (React Native)
-4. BACKEND (FastAPI)
+**Fill in:**
 
-Choice: 2
+- **Problem Statement** — what problem are we solving?
+- **User Story** — As a [user], I want [capability] so that [value]
+- **Acceptance Criteria** — specific, testable conditions
+- **Test Strategy** — how will we verify this works?
+- **Linked Journeys** — which JRN-IDs does this story implement?
 
-Enter Story Title: Add user profile page
-✅ Created Story: .agent/cache/stories/WEB/WEB-001-add-user-profile-page.md
-```
-
-### Step 2: Edit Your Story
-
-Open the generated file and fill in the details:
-
-```bash
-# Open in your editor
-vim .agent/cache/stories/WEB/WEB-001-add-user-profile-page.md
-```
-
-Key sections to complete:
-
-- **Problem Statement**: What problem are we solving?
-- **User Story**: As a [user], I want [capability] so that [value]
-- **Acceptance Criteria**: Specific, testable conditions
-- **Test Strategy**: How will we verify this works?
-
-### Step 3: Update Story State
-
-Change the state from `DRAFT` to `COMMITTED`:
+**Set state to COMMITTED when ready:**
 
 ```markdown
 ## State
 COMMITTED
 ```
 
-### Step 4: Generate a Runbook
+**Other story commands:**
+
+```bash
+agent list-stories           # List all stories
+agent validate-story WEB-001 # Validate schema
+```
+
+---
+
+## Step 3: Create an ADR (If Needed)
+
+Architectural Decision Records document significant design choices. Create one when introducing a new pattern, dependency, or architectural boundary.
+
+```bash
+agent new-adr
+```
+
+ADRs live in `.agent/adrs/` and follow the format:
+
+```markdown
+# ADR-NNN: Title
+
+## State
+ACCEPTED
+
+## Context
+Why this decision is needed.
+
+## Decision
+What we chose.
+
+## Consequences
+Trade-offs and implications.
+```
+
+> Not every story needs an ADR. Use them for choices future developers will ask "why?".
+
+---
+
+## Step 4: Generate a Runbook
+
+Once the story is `COMMITTED`, generate an implementation plan:
 
 ```bash
 agent new-runbook WEB-001
@@ -167,203 +226,327 @@ agent new-runbook WEB-001
 
 The AI will:
 
-1. Read your story
-2. Load governance rules
-3. Generate a detailed implementation plan
-4. Save to `.agent/cache/runbooks/WEB/WEB-001-runbook.md`
+1. Read your story and any linked journeys
+2. Load governance rules from `agents.yaml`
+3. Generate a detailed implementation plan with files, steps, and compliance checklist
 
-### Step 5: Review the Runbook
-
-Open the generated runbook:
-
-```bash
-cat .agent/cache/runbooks/WEB/WEB-001-runbook.md
-```
-
-The runbook contains:
-
-- **Goal description**
-- **Compliance checklist** (what the governance panel will review)
-- **Proposed changes** (files to create/modify)
-- **Verification plan** (how to test)
-
-### Step 6: Update Runbook State
-
-Once you've reviewed the runbook, mark it as `ACCEPTED`:
+**Review and accept:**
 
 ```markdown
 Status: ACCEPTED
 ```
 
-### Step 7: Implement (Optional - AI Assisted)
+Runbooks are saved in `.agent/cache/runbooks/WEB/WEB-001-runbook.md`.
+
+---
+
+## Step 5: Implement
+
+### AI-Assisted
 
 ```bash
 agent implement WEB-001
 ```
 
-The AI will:
+The AI reads the runbook, generates code, and creates or modifies files. **Always review AI-generated code.**
 
-1. Read the runbook
-2. Generate code changes
-3. Create/modify files according to the plan
+> Use `--skip-journey-check` for infrastructure stories that have no user-facing behavior.
 
-## Running Preflight Checks
+### Manual
 
-Before committing, always run preflight:
+Just write the code yourself. The story and runbook are reference docs — you don't have to use AI implementation.
+
+---
+
+## Step 6: Run Preflight Checks
+
+Preflight validates your changes against governance rules before commit.
 
 ```bash
-# Basic checks (lint, tests)
+# Basic checks (lint, tests, schema)
 agent preflight --story WEB-001
 
 # Full AI governance review
 agent preflight --story WEB-001 --ai
+
+# Interactive repair mode — auto-fix schema violations
+agent preflight --story WEB-001 --ai --interactive
+
+# Use ADK multi-agent panel engine
+agent preflight --story WEB-001 --ai --panel-engine adk
 ```
 
-The AI governance panel will review:
+**What preflight checks:**
 
+- ✅ Linting (ShellCheck, ESLint, ruff)
+- ✅ Tests pass
+- ✅ Story schema valid
 - ✅ Architecture compliance
-- ✅ Security (no secrets/PII)
+- ✅ Security (no secrets/PII in code)
 - ✅ Test coverage
 - ✅ Documentation updates
-- ✅ API contract validation
-- ✅ Compliance requirements
+- ✅ Scope-specific checks (Mobile/Web/Backend)
 
-## Committing Your Changes
+**Interactive repair** (`--interactive`) will propose AI-powered fixes for failures and ask for confirmation before applying them.
 
-### Option 1: Manual Commit
+---
+
+## Step 7: Convene the Governance Panel
+
+For standalone governance review or design consultation:
 
 ```bash
+# Review changes against a story
+agent panel WEB-001
+
+# Ask a design question
+agent panel "Should we use WebSockets or SSE for real-time updates?"
+
+# Auto-apply panel advice to the story
+agent panel WEB-001 --apply
+
+# Use ADK multi-agent engine
+agent panel WEB-001 --panel-engine adk
+```
+
+The panel convenes role-based AI reviewers:
+
+| Role | Focus |
+| --- | --- |
+| @Architect | System design, ADR compliance |
+| @Security | SOC2, GDPR, secrets |
+| @QA | Test coverage, reliability |
+| @Product | Acceptance criteria, user value |
+| @Docs | Documentation sync |
+| @Compliance | Regulatory enforcement |
+| + Scope-specific | @Mobile, @Web, or @Backend |
+
+> The `--panel-engine adk` flag uses Google's Agent Development Kit for multi-agent orchestration. Falls back to the legacy sequential engine if ADK is unavailable. See [ADR-029](../adrs/ADR-029-adk-multi-agent-integration.md).
+
+---
+
+## Step 8: Impact Analysis
+
+Before committing, understand the blast radius:
+
+```bash
+# Stage changes first
+git add .
+
+# Static analysis (AST-based dependency graph)
+agent impact WEB-001
+
+# AI-enhanced (risk assessment, breaking change detection)
+agent impact WEB-001 --ai
+
+# Write analysis back into the story
+agent impact WEB-001 --ai --update-story
+```
+
+---
+
+## Step 9: Commit
+
+```bash
+# Manual conventional commit
 agent commit --story WEB-001
-```
 
-You'll be prompted to enter a conventional commit message:
-
-```
-feat(web): add user profile page component [WEB-001]
-```
-
-### Option 2: AI-Generated Commit
-
-```bash
+# AI-generated commit message
 agent commit --story WEB-001 --ai
 ```
 
-The AI will:
+Commit format: `feat(web): add user profile page [WEB-001]`
 
-1. Analyze your staged changes
-2. Generate a conventional commit message
-3. Link to the story automatically
+---
 
-## Creating a Pull Request
+## Step 10: Create a Pull Request
 
 ```bash
-# Run preflight and create PR
 agent pr --story WEB-001
 
-# Create draft PR
+# Draft PR
 agent pr --story WEB-001 --draft
 
-# Open PR in browser
+# Open in browser
 agent pr --story WEB-001 --web
 ```
 
-## Next Steps
+The PR includes: story summary, acceptance criteria checklist, governance report, and test verification.
 
-Now that you've completed your first workflow, explore:
+---
 
-- **[Commands Reference](commands.md)** - Learn all available commands
-- **[Governance System](governance.md)** - Understand the review process
-- **[Workflows](workflows.md)** - Master story-driven development
-- **[Configuration](configuration.md)** - Customize for your team
+## Advanced Features
 
-## Quick Tips
+### Secret Management
 
-### 1. Use Tab Completion
+Store API keys securely instead of using environment variables:
 
 ```bash
-# Add this to your ~/.zshrc or ~/.bashrc
-eval "$(_AGENT_COMPLETE=zsh_source agent)"
+agent secret init                     # First-time setup
+agent secret login                    # Store master password in keychain
+agent secret import gemini            # Import from env vars
+agent secret set openai api_key       # Set manually
 ```
 
-### 2. Set Default Provider
+See [ADR-006](../adrs/ADR-006-encrypted-secret-management.md).
+
+### Artifact Synchronization
+
+Sync stories, plans, and runbooks to Notion or Supabase:
 
 ```bash
-# Always use Gemini
-agent --provider gemini new-runbook WEB-001
+agent sync pull                       # Pull from remote
+agent sync push                       # Push to remote
+agent sync status                     # View inventory
+agent sync init --backend notion      # Bootstrap Notion workspace
 ```
 
-### 3. Check Story Status
+### Admin Console
+
+Visual dashboard for project management:
 
 ```bash
-agent list-stories
+agent admin start                     # Launch (FastAPI + Vite/React)
+agent admin status                    # Check if running
+agent admin stop                      # Shut down
 ```
 
-### 4. Validate Before Committing
+Opens at `localhost:8080` with the API at `localhost:8000`.
+
+### Natural Language Query
+
+Ask questions about your codebase:
 
 ```bash
-agent validate-story WEB-001
+agent query "Which files handle authentication?"
 ```
 
-### 5. View Governance Logs
+### Governance Audit
+
+Full-repository traceability audit:
 
 ```bash
-# Preflight logs are saved here
-cat .agent/logs/preflight-*.log
+agent audit                           # Default 80% traceability threshold
+agent audit --min-traceability 90     # Stricter
+agent audit --output reports/q1.md    # Save report
 ```
+
+---
+
+## Command Quick Reference
+
+### Lifecycle
+
+| Command | Description |
+| --- | --- |
+| `agent new-journey [ID]` | Create a user journey |
+| `agent new-story` | Create a story |
+| `agent new-adr` | Create an Architectural Decision Record |
+| `agent new-runbook <ID>` | Generate an implementation runbook |
+| `agent new-plan` | Create an epic plan |
+| `agent implement <ID>` | AI-assisted implementation |
+
+### Quality & Governance
+
+| Command | Description |
+| --- | --- |
+| `agent preflight` | Run governance checks |
+| `agent panel [ID or question]` | Convene governance panel |
+| `agent impact <ID>` | Run impact analysis |
+| `agent audit` | Full repository audit |
+| `agent validate-story <ID>` | Validate story schema |
+| `agent validate-journey` | Validate journey YAML |
+| `agent lint` | Run linters |
+
+### Workflow
+
+| Command | Description |
+| --- | --- |
+| `agent commit` | Commit with conventional message |
+| `agent pr` | Create pull request |
+| `agent match-story` | Match changes to a story |
+
+### Listing
+
+| Command | Description |
+| --- | --- |
+| `agent list-stories` | All stories |
+| `agent list-runbooks` | All runbooks |
+| `agent list-plans` | All plans |
+| `agent list-journeys` | All journeys |
+| `agent list-models` | Available AI models |
+
+### Infrastructure
+
+| Command | Description |
+| --- | --- |
+| `agent admin start/stop/status` | Admin console |
+| `agent sync pull/push/status` | Artifact sync |
+| `agent secret init/login/set/get` | Secret management |
+| `agent config` | Configuration management |
+| `agent query` | Natural language codebase query |
+| `agent onboard` | Onboard new repository |
+| `agent mcp` | MCP server management |
+
+---
 
 ## Troubleshooting
 
-### "Story file not found"
-
-Ensure your story exists and has the correct ID:
-
-```bash
-agent list-stories
-```
-
-### "AI returned empty response"
-
-Check your API key is set:
-
-```bash
-echo $GEMINI_API_KEY
-# Or
-echo $OPENAI_API_KEY
-```
-
-### "Preflight failed"
-
-Read the failure details carefully. Common issues:
-
-- Missing test coverage
-- No CHANGELOG entry
-- Undocumented API changes
-- Security violations
-
 ### "Command not found: agent"
-
-Add to PATH or use full path:
 
 ```bash
 export PATH="$PATH:$(pwd)/.agent/bin"
 ```
 
+### "Story file not found"
+
+```bash
+agent list-stories   # verify the story exists
+```
+
+### "AI returned empty response"
+
+Check your API key:
+
+```bash
+echo $GEMINI_API_KEY    # or $OPENAI_API_KEY
+agent list-models       # verify connectivity
+```
+
+### "Preflight failed"
+
+Read the failure details. Common issues:
+
+- Missing test coverage
+- No CHANGELOG entry
+- Undocumented API changes
+- Security violations (PII, hardcoded secrets)
+
+Use `--interactive` to auto-fix schema violations.
+
+### "No journeys linked to this story"
+
+Implementation is blocked. Either:
+
+1. Create journeys with `agent new-journey` and link them in the story
+2. Use `--skip-journey-check` for infrastructure stories
+
+---
+
 ## Getting Help
 
 ```bash
-# Show all commands
-agent --help
-
-# Get help for specific command
-agent new-story --help
-agent preflight --help
+agent --help                 # All commands
+agent preflight --help       # Help for specific command
 ```
 
-For more detailed help, see:
+## Further Reading
 
-- [Commands Reference](commands.md)
-- [Troubleshooting Guide](troubleshooting.md)
-- GitHub Issues
+- [Commands Reference](commands.md) — detailed options for every command
+- [Governance System](governance.md) — how the AI review panel works
+- [Workflows](workflows.md) — story-driven development patterns
+- [User Journeys](user_journeys.md) — behavioral contracts
+- [Journey YAML Spec](journey_yaml_spec.md) — journey schema reference
 
 ---
 

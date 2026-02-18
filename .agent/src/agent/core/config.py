@@ -264,6 +264,24 @@ class Config:
         else:
             current[last_key] = value
 
+    @property
+    def panel_engine(self) -> str:
+        """Returns the panel engine to use ('adk' or 'legacy').
+
+        Reads from agent.yaml under the 'panel:' section.
+        Can be overridden per-invocation via _panel_engine_override.
+        Defaults to 'legacy' if not specified.
+        """
+        # CLI override takes precedence
+        override = getattr(self, "_panel_engine_override", None)
+        if override:
+            return override
+        try:
+            data = self.load_yaml(self.etc_dir / "agent.yaml")
+            return data.get("panel", {}).get("engine", "legacy")
+        except Exception:
+            return "legacy"
+
     def get_council_tools(self, council_name: str) -> List[str]:
         """Retrieve allowed tools for a specific council."""
         # TODO: Load from agent.yaml or config file if present, otherwise default

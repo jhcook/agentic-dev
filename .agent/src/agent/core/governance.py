@@ -351,6 +351,46 @@ def convene_council_full(
     if progress_callback:
         progress_callback("🤖 Convening the AI Governance Council...")
     
+    # --- Engine Dispatch (INFRA-061) ---
+    engine = config.panel_engine
+    if engine == "adk":
+        if progress_callback:
+            progress_callback("⚙️  Panel engine: ADK multi-agent")
+        try:
+            from agent.core.adk.compat import ADK_AVAILABLE, ADK_IMPORT_ERROR
+            if not ADK_AVAILABLE:
+                raise ImportError(
+                    f"google-adk is not installed: {ADK_IMPORT_ERROR}. "
+                    "Install with: pip install 'agent[adk]'"
+                )
+            from agent.core.adk.orchestrator import convene_council_adk
+            roles = load_roles()
+            relevant_roles = _filter_relevant_roles(roles, full_diff)
+            return convene_council_adk(
+                story_id=story_id,
+                story_content=story_content,
+                rules_content=rules_content,
+                instructions_content=instructions_content,
+                full_diff=full_diff,
+                roles=relevant_roles,
+                mode=mode,
+                user_question=user_question,
+                adrs_content=adrs_content,
+                progress_callback=progress_callback,
+            )
+        except ImportError as e:
+            logger.warning("ADK unavailable, falling back to legacy: %s", e)
+            if progress_callback:
+                progress_callback(
+                    f"⚠️  ADK unavailable: {e}. Falling back to legacy panel. "
+                    "Install with: pip install 'agent[adk]'"
+                )
+        except Exception as e:
+            logger.warning("ADK panel failed, falling back to legacy: %s", e)
+            if progress_callback:
+                progress_callback(f"⚠️  ADK error: {e}. Falling back to legacy panel.")
+
+    # --- Legacy Implementation ---
     
     roles = load_roles()
     

@@ -1,3 +1,6 @@
+panel:
+  engine: legacy  # Set to 'adk' to use ADK multi-agent orchestration
+
 agent:
   provider: gemini
   models:

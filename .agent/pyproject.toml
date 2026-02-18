@@ -66,6 +66,10 @@ admin = [
     "PyYAML>=6.0",
 ]
 
+adk = [
+    "google-adk>=1.0.0",
+]
+
 [dependency-groups]
 # uv dev-dependencies are ALWAYS installed by default with `uv sync`/`uv run`.
 # This prevents accidental stripping of AI and admin packages.
