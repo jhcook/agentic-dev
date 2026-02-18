@@ -732,6 +732,57 @@ def preflight(
     else:
         console.print("[green]✅ Journey Coverage: All linked.[/green]")
 
+    # 1.9 Journey Impact Mapping (INFRA-059)
+    console.print("\n[bold blue]🗺️  Mapping Changed Files → Journeys...[/bold blue]")
+    from agent.db.journey_index import (
+        get_affected_journeys as _get_affected,
+        is_stale as _is_stale,
+        rebuild_index as _rebuild_idx,
+    )
+    from agent.db.init import get_db_path as _get_db_path
+    import sqlite3 as _sqlite3
+
+    _db = _sqlite3.connect(_get_db_path())
+    _journeys_dir = config.journeys_dir
+    _repo_root = config.repo_root
+
+    if _is_stale(_db, _journeys_dir):
+        _idx = _rebuild_idx(_db, _journeys_dir, _repo_root)
+        console.print(
+            f"[dim]  Rebuilt index: {_idx['journey_count']} journeys, "
+            f"{_idx['file_glob_count']} patterns[/dim]"
+        )
+
+    # Compute changed files early for journey mapping
+    _pf_cmd = (
+        ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
+        if base
+        else ["git", "diff", "--cached", "--name-only"]
+    )
+    _pf_res = subprocess.run(_pf_cmd, capture_output=True, text=True)
+    _pf_files = _pf_res.stdout.strip().splitlines()
+    _pf_files = [f for f in _pf_files if f]
+
+    if _pf_files:
+        _affected = _get_affected(_db, _pf_files, _repo_root)
+        if _affected:
+            _test_files: list[str] = []
+            for _j in _affected:
+                _test_files.extend(_j.get("tests", []))
+            console.print(
+                f"[cyan]  {len(_affected)} journey(s) affected by changed files.[/cyan]"
+            )
+            if _test_files:
+                _cmd_str = "pytest " + " ".join(sorted(set(_test_files)))
+                console.print(f"  [bold]Run:[/bold] [cyan]{_cmd_str}[/cyan]")
+            json_report["affected_journeys"] = _affected
+        else:
+            console.print("[dim]  No journeys affected.[/dim]")
+    else:
+        console.print("[dim]  No changed files for journey mapping.[/dim]")
+
+    _db.close()
+
     # 2. Get Changed Files (for AI review)
     # Re-run diff cleanly
     if base:
@@ -1002,7 +1053,9 @@ def impact(
     ai: bool = typer.Option(False, "--ai", help="Enable AI-powered impact analysis."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai).")
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
+    rebuild_index: bool = typer.Option(False, "--rebuild-index", help="Force rebuild journey file index."),
+    json_output: bool = typer.Option(False, "--json", help="Output results as JSON."),
 ):
     """
     Run impact analysis for a story.
@@ -1122,6 +1175,93 @@ Risks identified: {total_impacted} files depend on changed code
                     console.print(f"    ... and {len(dependents) - 10} more")
             else:
                 console.print("  [green]✓ No direct dependents[/green]")
+
+    # 3b. Journey Impact Mapping (INFRA-059)
+    from agent.db.journey_index import (
+        get_affected_journeys,
+        is_stale,
+        rebuild_index as rebuild_journey_index,
+    )
+    from agent.db.init import get_db_path
+    import sqlite3 as _sqlite3
+
+    db_path = get_db_path()
+    jconn = _sqlite3.connect(db_path)
+    repo_root_path = config.repo_root
+    journeys_dir = config.journeys_dir
+
+    if rebuild_index or is_stale(jconn, journeys_dir):
+        console.print("[dim]📇 Rebuilding journey file index...[/dim]")
+        idx_result = rebuild_journey_index(jconn, journeys_dir, repo_root_path)
+        console.print(
+            f"[dim]  Indexed {idx_result['journey_count']} journeys, "
+            f"{idx_result['file_glob_count']} patterns "
+            f"({idx_result['rebuild_duration_ms']:.0f}ms)[/dim]"
+        )
+        for w in idx_result.get("warnings", []):
+            console.print(f"  [yellow]⚠️  {w}[/yellow]")
+
+    affected = get_affected_journeys(jconn, files, repo_root_path)
+    jconn.close()
+
+    if affected:
+        from rich.table import Table as RichTable
+
+        jtable = RichTable(title="Affected Journeys", show_lines=True)
+        jtable.add_column("Journey ID", style="cyan")
+        jtable.add_column("Title")
+        jtable.add_column("Matched Files", style="yellow")
+        jtable.add_column("Test File", style="green")
+
+        test_markers: list[str] = []
+        for j in affected:
+            tests = j.get("tests", [])
+            test_str = "\n".join(tests) if tests else "[red]— none —[/red]"
+            jtable.add_row(
+                j["id"],
+                j["title"],
+                "\n".join(j["matched_files"][:5]),
+                test_str,
+            )
+            for t in tests:
+                test_markers.append(t)
+
+        console.print(jtable)
+
+        if test_markers:
+            cmd_str = "pytest " + " ".join(sorted(set(test_markers)))
+            console.print(f"\n[bold]Run affected tests:[/bold]\n  [cyan]{cmd_str}[/cyan]")
+
+        # Warn about ungoverned files
+        governed_files = set()
+        for j in affected:
+            governed_files.update(j["matched_files"])
+        ungoverned = [f for f in files if f not in governed_files]
+        if ungoverned:
+            console.print(
+                f"\n[yellow]⚠️  {len(ungoverned)} file(s) not mapped to any journey:[/yellow]"
+            )
+            for uf in ungoverned[:5]:
+                console.print(f"  [dim]• {uf}[/dim]")
+            console.print(
+                "[dim]  Tip: Run 'agent journey backfill-tests' to link them.[/dim]"
+            )
+    else:
+        console.print("\n[dim]📋 No journeys affected by changed files.[/dim]")
+
+    # JSON output mode (INFRA-059 AC-5)
+    if json_output:
+        import json as _json
+        import time as _time
+
+        report = {
+            "story_id": story_id,
+            "changed_files": files,
+            "affected_journeys": affected,
+            "rebuild_timestamp": _time.time(),
+        }
+        console.print(_json.dumps(report, indent=2))
+        return
 
     console.print("\n[bold]Impact Analysis:[/bold]")
     console.print(analysis)

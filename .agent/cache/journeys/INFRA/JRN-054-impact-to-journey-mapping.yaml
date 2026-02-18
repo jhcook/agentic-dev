@@ -1,0 +1,79 @@
+# Journey: JRN-054
+# Linked Story: INFRA-059
+# Title: Impact-to-Journey Mapping
+
+id: JRN-054
+title: Impact-to-Journey Mapping
+state: DRAFT
+schema_version: 1
+priority: high
+tags:
+- infra
+- governance
+- impact
+actor: developer assessing change impact
+description: >
+  Map code changes to affected user journeys by building a reverse index from
+  journey implementation.files to changed files. The impact command identifies
+  which journeys are affected and preflight ensures their tests are run.
+preconditions:
+- Agent CLI is installed and configured
+- Journeys exist with populated `implementation.files` fields
+- Developer has staged changes
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent impact --story STORY-ID`
+  system_response: Impact output includes an "Affected Journeys" section
+  assertions:
+  - Journeys whose implementation.files overlap with the changeset are listed
+  - Each affected journey shows its ID, title, and matched files
+- id: 2
+  action: Developer modifies a file tracked by a journey (e.g., commands/journey.py)
+  system_response: Impact analysis maps the change to the relevant journey
+  assertions:
+  - Path suffix matching works (journey.py matches commands/journey.py)
+  - Multiple journeys can be affected by a single file change
+- id: 3
+  action: Developer runs `agent preflight`
+  system_response: Preflight uses impact-to-journey map to identify required tests
+  assertions:
+  - Only tests for affected journeys are required, not all tests
+  - Required tests are listed in preflight output
+- id: 4
+  action: Developer modifies a file not tracked by any journey
+  system_response: Impact output shows "ungoverned file" warning
+  assertions:
+  - Warning identifies the file as not mapped to any journey
+error_paths:
+- trigger_step: 1
+  condition: Journey reverse index is stale
+  system_response: System rebuilds the index before running impact
+  assertions:
+  - Rebuilt index reflects current journey YAML contents
+  severity: expected
+edge_cases:
+- scenario: A journey has very broad implementation.files entries
+  expected: Impact reports the mapping but doesn't suppress other journeys
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent:
+  - journey reverse index in SQLite DB
+linked_stories:
+- INFRA-059
+linked_adrs:
+- ADR-005
+depends_on:
+- JRN-053
+implementation:
+  routes: []
+  files:
+  - commands/check.py
+  - core/governance.py
+  - db/client.py
+  tests:
+  - tests/core/test_impact_journey.py

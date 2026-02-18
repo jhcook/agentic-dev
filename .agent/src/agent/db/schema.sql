@@ -35,3 +35,13 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(type);
 CREATE INDEX IF NOT EXISTS idx_history_artifact ON history(artifact_id, artifact_type);
 CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id, source_type);
 CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_id, target_type);
+
+CREATE TABLE IF NOT EXISTS journey_file_index (
+    file_pattern TEXT NOT NULL,
+    journey_id TEXT NOT NULL,
+    journey_title TEXT NOT NULL DEFAULT '',
+    updated_at REAL NOT NULL,
+    PRIMARY KEY (file_pattern, journey_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_journey_file_index_jid ON journey_file_index(journey_id);

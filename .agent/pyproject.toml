@@ -109,7 +109,8 @@ norecursedirs = [
     "venv", 
     "build", 
     "dist", 
-    "__pycache__"
+    "__pycache__",
+    "src"
 ]
 filterwarnings = [
     "ignore::SyntaxWarning:passlib.*"
