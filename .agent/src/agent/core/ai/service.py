@@ -59,6 +59,12 @@ PROVIDERS = {
         "secret_key": None,
         "env_var": None,
     },
+    "vertex": {
+        "name": "Google Vertex AI",
+        "service": "vertex",
+        "secret_key": None,
+        "env_var": "GOOGLE_CLOUD_PROJECT",
+    },
 }
 
 
@@ -66,7 +72,7 @@ PROVIDERS = {
 
 class AIService:
     """
-    Service for interacting with AI providers (GitHub CLI, Gemini, OpenAI).
+    Service for interacting with AI providers (GitHub CLI, Gemini, Vertex AI, OpenAI).
     
     Handles provider selection, fallback logic, and context management.
     """
@@ -77,6 +83,7 @@ class AIService:
         self.models = {
             'gh': 'openai/gpt-4o',
             'gemini': 'gemini-pro-latest',
+            'vertex': 'gemini-2.0-flash',
             'openai': os.getenv("OPENAI_MODEL", "gpt-4o"),
             'anthropic': 'claude-sonnet-4-5-20250929'
         }
@@ -121,20 +128,55 @@ class AIService:
             self.reload()
             self._initialized = True
 
+    @staticmethod
+    def _build_genai_client(provider: str) -> "genai.Client":
+        """Factory for google-genai Client construction.
+
+        Builds a ``genai.Client`` configured for either Gemini (API-key auth)
+        or Vertex AI (Application Default Credentials).  Both providers use
+        the same SDK; only the authentication mechanism differs.
+
+        Args:
+            provider: ``"gemini"`` or ``"vertex"``.
+
+        Returns:
+            A configured ``genai.Client`` instance.
+
+        Raises:
+            ImportError: If ``google-genai`` is not installed.
+            ValueError: If *provider* is not ``"gemini"`` or ``"vertex"``.
+        """
+        from google import genai
+        from google.genai import types
+
+        http_options = types.HttpOptions(timeout=600000)
+
+        if provider == "gemini":
+            api_key = get_secret("api_key", service="gemini")
+            return genai.Client(api_key=api_key, http_options=http_options)
+
+        if provider == "vertex":
+            project = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+            location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            logging.debug(
+                "Vertex AI client: project=%s, location=%s", project, location
+            )
+            return genai.Client(
+                vertexai=True,
+                project=project,
+                location=location,
+                http_options=http_options,
+            )
+
+        raise ValueError(f"Unsupported genai provider: {provider}")
+
     def reload(self) -> None:
         """Reloads providers from secrets/env."""
         # 1. Check Gemini
         gemini_key = get_secret("api_key", service="gemini")
         if gemini_key:
             try:
-                from google import genai
-                from google.genai import types
-                # Set 600s timeout (600,000ms) for large contexts
-                http_options = types.HttpOptions(timeout=600000)
-                self.clients['gemini'] = genai.Client(
-                    api_key=gemini_key,
-                    http_options=http_options
-                )
+                self.clients['gemini'] = self._build_genai_client("gemini")
             except ImportError:
                 console.print(
                     "[dim]ℹ️  Gemini key found but google-genai package not installed. "
@@ -143,7 +185,23 @@ class AIService:
             except Exception as e:
                 console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
 
-        # 2. Check OpenAI
+        # 2. Check Vertex AI (ADC-based — no API key needed)
+        if os.getenv("GOOGLE_CLOUD_PROJECT"):
+            try:
+                self.clients['vertex'] = self._build_genai_client("vertex")
+                logging.info(
+                    "Vertex AI provider initialized (project=%s)",
+                    os.getenv("GOOGLE_CLOUD_PROJECT"),
+                )
+            except ImportError:
+                console.print(
+                    "[dim]ℹ️  GOOGLE_CLOUD_PROJECT set but google-genai package not installed. "
+                    "Install with: pip install google-genai[/dim]"
+                )
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Vertex AI initialization failed: {e}[/yellow]")
+
+        # 3. Check OpenAI
         openai_key = get_secret("api_key", service="openai")
         if openai_key:
             try:
@@ -158,11 +216,11 @@ class AIService:
             except Exception as e:
                 console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
 
-        # 3. Check GH CLI
+        # 4. Check GH CLI
         if self._check_gh_cli():
              self.clients['gh'] = "gh-cli" # Marker
 
-        # 4. Check Anthropic
+        # 5. Check Anthropic
         anthropic_key = get_secret("api_key", service="anthropic")
         if anthropic_key:
             try:
@@ -182,7 +240,7 @@ class AIService:
                     f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]"
                 )
 
-        # Default Priority: GH -> Gemini -> OpenAI
+        # Default Priority: GH -> Gemini -> Vertex -> OpenAI
         self._set_default_provider()
 
     def _check_gh_cli(self) -> bool:
@@ -253,6 +311,8 @@ class AIService:
             self.provider = 'gh'
         elif 'gemini' in self.clients:
             self.provider = 'gemini'
+        elif 'vertex' in self.clients:
+            self.provider = 'vertex'
         elif 'openai' in self.clients:
             self.provider = 'openai'
         elif 'anthropic' in self.clients:
@@ -295,9 +355,9 @@ class AIService:
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
         """
-        # Chain order: gh -> gemini -> openai
+        # Chain order: gh -> gemini -> vertex -> openai -> anthropic
         # TODO: This chain could also be dynamic from config
-        fallback_chain = ['gh', 'gemini', 'openai', 'anthropic']
+        fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic']
         
         current_idx = -1
         try:
@@ -475,9 +535,9 @@ class AIService:
         models: List[dict] = []
         
         try:
-            if target_provider == "gemini":
-                client = self.clients['gemini']
-                # Use the Gemini models.list() API
+            if target_provider in ("gemini", "vertex"):
+                client = self.clients[target_provider]
+                # Use the genai models.list() API (works for both Gemini and Vertex)
                 for model in client.models.list():
                     model_id = model.name if hasattr(model, 'name') else str(model)
                     display_name = (
@@ -544,16 +604,11 @@ class AIService:
         
         for attempt in range(max_retries):
             try:
-                if provider == "gemini":
+                if provider in ("gemini", "vertex"):
                     # Re-initialize client per request to avoid stiff/dead sockets
-                    gemini_key = get_secret("api_key", service="gemini")
-                    from google import genai
                     from google.genai import types
-                    
-                    bg_client = genai.Client(
-                        api_key=gemini_key, 
-                        http_options=types.HttpOptions(timeout=600000)
-                    )
+
+                    bg_client = self._build_genai_client(provider)
                     
                     config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
@@ -678,6 +733,7 @@ class AIService:
                 host_map = {
                     "openai": "api.openai.com",
                     "gemini": "generativelanguage.googleapis.com",
+                    "vertex": "us-central1-aiplatform.googleapis.com",
                     "anthropic": "api.anthropic.com", 
                     "gh": "models.github.com"
                 }

@@ -147,6 +147,8 @@ class Config:
             providers.append("anthropic")
         if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
             providers.append("gemini")
+        if os.getenv("GOOGLE_CLOUD_PROJECT"):
+            providers.append("vertex")
         return providers
 
     def load_yaml(self, path: Path) -> Dict[str, Any]:
@@ -350,6 +352,7 @@ def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]
         "openai": "OPENAI_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
+        "vertex": "GOOGLE_CLOUD_PROJECT",
     }
     
     if provider not in env_map:
@@ -365,7 +368,7 @@ def get_valid_providers() -> List[str]:
     """
     Returns list of valid AI provider names.
     """
-    return ["gh", "openai", "gemini", "anthropic"]
+    return ["gh", "openai", "gemini", "anthropic", "vertex"]
 
 
 # Configuration for Agent Query feature (INFRA-017)

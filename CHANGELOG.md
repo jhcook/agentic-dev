@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Vertex AI Provider Support** (INFRA-065):
+  - New `provider: vertex` option in `agent.yaml` for Google Vertex AI with ADC authentication.
+  - Higher rate limits and production-grade scalability vs free-tier Gemini.
+  - Shared `_build_genai_client()` factory for Gemini and Vertex (same SDK, different auth).
+  - Vertex participates in the fallback chain: `gh → gemini → vertex → openai → anthropic`.
+  - Set `GOOGLE_CLOUD_PROJECT` (and optionally `GOOGLE_CLOUD_LOCATION`) to enable.
+  - See `docs/getting_started.md` for setup instructions.
+
 - **Multi-Agent Governance Panel via Google ADK** (INFRA-061):
   - Opt-in ADK-based multi-agent orchestration for the governance panel.
   - Configure with `panel.engine: adk` in `agent.yaml` or `--panel-engine adk` CLI flag.

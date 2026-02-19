@@ -46,7 +46,8 @@ def validate_credentials(check_llm: bool = True) -> None:
         "openai": ["OPENAI_API_KEY"],
         "anthropic": ["ANTHROPIC_API_KEY"],
         "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-        "gh": ["GH_API_KEY", "GITHUB_TOKEN"]
+        "gh": ["GH_API_KEY", "GITHUB_TOKEN"],
+        "vertex": ["GOOGLE_CLOUD_PROJECT"],
     }
     
     # Default to OpenAI if unknown, or just check nothing if provider is 'local' etc.
