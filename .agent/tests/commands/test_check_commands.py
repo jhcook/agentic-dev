@@ -41,12 +41,118 @@ def clean_env(tmp_path):
     
         # Create fake story
         (mock_stories / "INFRA").mkdir()
-        (mock_stories / "INFRA" / "INFRA-123-test.md").write_text("# Title\n\n## Problem Statement\n\n## User Story\n\n## Acceptance Criteria\n\n## Non-Functional Requirements\n\n## Impact Analysis Summary\n\n## Test Strategy\n\n## Rollback Plan")
+        (mock_stories / "INFRA" / "INFRA-123-test.md").write_text("# Title\n\n## Problem Statement\n\n## User Story\n\n## Acceptance Criteria\n\n## Non-Functional Requirements\n\n## Linked Journeys\n\n- JRN-001 (Test Journey)\n\n## Impact Analysis Summary\n\n## Test Strategy\n\n## Rollback Plan")
         
         # Create fake rule
         (mock_rules / "test.mdc").write_text("Rule 1")
     
         yield
+
+
+# ─── Journey Gate: validate_linked_journeys ───────────────────────────
+
+
+def test_validate_linked_journeys_valid(tmp_path):
+    """Story with real JRN IDs passes."""
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "TEST").mkdir()
+    (mock_stories / "TEST" / "TEST-001-example.md").write_text(
+        "# Title\n\n## Linked Journeys\n\n- JRN-044 (User login)\n- JRN-053 (Coverage)\n\n## Impact Analysis Summary\n"
+    )
+
+    with patch("agent.core.config.config.stories_dir", mock_stories):
+        from agent.commands.check import validate_linked_journeys
+        result = validate_linked_journeys("TEST-001")
+
+    assert result["passed"] is True
+    assert result["journey_ids"] == ["JRN-044", "JRN-053"]
+    assert result["error"] is None
+
+
+def test_validate_linked_journeys_placeholder(tmp_path):
+    """Story with only JRN-XXX placeholder fails."""
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "TEST").mkdir()
+    (mock_stories / "TEST" / "TEST-002-example.md").write_text(
+        "# Title\n\n## Linked Journeys\n\n- JRN-XXX\n\n## Impact Analysis Summary\n"
+    )
+
+    with patch("agent.core.config.config.stories_dir", mock_stories):
+        from agent.commands.check import validate_linked_journeys
+        result = validate_linked_journeys("TEST-002")
+
+    assert result["passed"] is False
+    assert "placeholder" in result["error"]
+
+
+def test_validate_linked_journeys_empty(tmp_path):
+    """Story with empty Linked Journeys section fails."""
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "TEST").mkdir()
+    (mock_stories / "TEST" / "TEST-003-example.md").write_text(
+        "# Title\n\n## Linked Journeys\n\n## Impact Analysis Summary\n"
+    )
+
+    with patch("agent.core.config.config.stories_dir", mock_stories):
+        from agent.commands.check import validate_linked_journeys
+        result = validate_linked_journeys("TEST-003")
+
+    assert result["passed"] is False
+    assert result["error"] is not None  # Should fail: no valid JRN IDs or empty section
+
+
+def test_validate_linked_journeys_missing_section(tmp_path):
+    """Story without Linked Journeys section at all fails."""
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "TEST").mkdir()
+    (mock_stories / "TEST" / "TEST-004-example.md").write_text(
+        "# Title\n\n## Problem Statement\n\n## Impact Analysis Summary\n"
+    )
+
+    with patch("agent.core.config.config.stories_dir", mock_stories):
+        from agent.commands.check import validate_linked_journeys
+        result = validate_linked_journeys("TEST-004")
+
+    assert result["passed"] is False
+    assert "missing" in result["error"].lower()
+
+
+@patch("agent.core.governance.ai_service")
+@patch("agent.core.ai.ai_service")
+@patch("agent.commands.check.subprocess.run")
+def test_preflight_journey_gate_blocks(mock_run, mock_check_ai, mock_gov_ai, tmp_path):
+    """Preflight exits 1 when story has no linked journeys (placeholder only)."""
+    mock_stories = tmp_path / "stories"
+    mock_rules = tmp_path / "rules"
+    mock_agent = tmp_path / "agent"
+
+    mock_stories.mkdir()
+    mock_rules.mkdir()
+    mock_agent.mkdir()
+
+    # Story with placeholder only
+    (mock_stories / "INFRA").mkdir()
+    (mock_stories / "INFRA" / "INFRA-999-test.md").write_text(
+        "# Title\n\n## Problem Statement\n\n## User Story\n\n## Acceptance Criteria\n\n"
+        "## Non-Functional Requirements\n\n## Linked Journeys\n\n- JRN-XXX\n\n"
+        "## Impact Analysis Summary\n\n## Test Strategy\n\n## Rollback Plan"
+    )
+    (mock_rules / "test.mdc").write_text("Rule 1")
+
+    noop_coverage = {"passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": []}
+    with patch("agent.core.config.config.stories_dir", mock_stories), \
+         patch("agent.core.config.config.rules_dir", mock_rules), \
+         patch("agent.core.config.config.agent_dir", mock_agent), \
+         patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
+
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-999"])
+
+    assert result.exit_code == 1
+    assert "Journey Gate" in result.output
 
 @patch("agent.core.governance.ai_service") 
 @patch("agent.core.ai.ai_service")

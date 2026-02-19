@@ -25,7 +25,7 @@ import subprocess
 def match_story(
     files: Optional[str] = typer.Argument(None, help="List of changed files (space or newline separated). Defaults to staged git files."),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
 ):
     """

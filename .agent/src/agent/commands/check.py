@@ -95,6 +95,61 @@ def check_journey_coverage(
 
     return result
 
+
+def validate_linked_journeys(story_id: str) -> dict:
+    """
+    Validate that a story has real linked journeys (not just placeholder JRN-XXX).
+
+    Returns:
+        dict with keys: passed (bool), journey_ids (list[str]), error (str|None)
+    """
+    result = {"passed": False, "journey_ids": [], "error": None}
+
+    # Find story file
+    found_file = None
+    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+        if file_path.name.startswith(story_id):
+            found_file = file_path
+            break
+
+    if not found_file:
+        result["error"] = f"Story file not found for {story_id}"
+        return result
+
+    content = found_file.read_text(errors="ignore")
+
+    # Extract ## Linked Journeys section
+    import re as _re
+    match = _re.search(
+        r"## Linked Journeys\s*\n(.*?)(?=\n## |\Z)",
+        content,
+        _re.DOTALL,
+    )
+
+    if not match:
+        result["error"] = "Story is missing '## Linked Journeys' section"
+        return result
+
+    section_text = match.group(1).strip()
+    if not section_text:
+        result["error"] = "Story '## Linked Journeys' section is empty"
+        return result
+
+    # Extract JRN-NNN IDs (exclude placeholder JRN-XXX)
+    journey_ids = _re.findall(r"\bJRN-\d+\b", section_text)
+
+    if not journey_ids:
+        result["error"] = (
+            "No valid journey IDs found in '## Linked Journeys' — "
+            "replace the JRN-XXX placeholder with real journey IDs"
+        )
+        return result
+
+    result["passed"] = True
+    result["journey_ids"] = journey_ids
+    return result
+
+
 def validate_story(
     story_id: str = typer.Argument(..., help="The ID of the story to validate."),
     return_bool: bool = False,
@@ -321,7 +376,7 @@ def preflight(
     story_id: Optional[str] = typer.Option(None, "--story", help="The story ID to validate against."),
     ai: bool = typer.Option(False, "--ai", help="Enable AI-powered governance review."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)"),
     report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
@@ -336,7 +391,7 @@ def preflight(
         story_id: The ID of the story to validate.
         ai: Enable AI-powered governance review (requires keys or gh cli).
         base: Base branch for comparison (defaults to staged changes).
-        provider: Force a specific AI provider (gh, gemini, openai).
+        provider: Force a specific AI provider (gh, gemini, vertex, openai, anthropic).
         report_file: Path to save the preflight report as JSON.
         skip_tests: Skip running tests.
         ignore_tests: Run tests but ignore failure.
@@ -398,6 +453,24 @@ def preflight(
              import json
              report_file.write_text(json.dumps(json_report, indent=2))
         raise typer.Exit(code=1)
+
+    # 1.2 Journey Gate (INFRA-055)
+    console.print("\n[bold blue]🗺️  Checking Journey Gate...[/bold blue]")
+    journey_gate = validate_linked_journeys(story_id)
+    json_report["journey_gate"] = {
+        "passed": journey_gate["passed"],
+        "journey_ids": journey_gate["journey_ids"],
+        "error": journey_gate["error"],
+    }
+    if not journey_gate["passed"]:
+        msg = f"Journey Gate failed: {journey_gate['error']}"
+        console.print(f"[bold red]❌ {msg}[/bold red]")
+        json_report["overall_verdict"] = "BLOCK"
+        if report_file:
+            import json
+            report_file.write_text(json.dumps(json_report, indent=2))
+        raise typer.Exit(code=1)
+    console.print(f"[green]✅ Journey Gate passed — linked: {', '.join(journey_gate['journey_ids'])}[/green]")
 
     # 1.5 Run Automated Tests
     if skip_tests:
@@ -1139,7 +1212,7 @@ def impact(
     ai: bool = typer.Option(False, "--ai", help="Enable AI-powered impact analysis."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."),
     rebuild_index: bool = typer.Option(False, "--rebuild-index", help="Force rebuild journey file index."),
     json_output: bool = typer.Option(False, "--json", help="Output results as JSON."),
 ):
@@ -1379,7 +1452,7 @@ Risks identified: {total_impacted} files depend on changed code
 def panel(
     input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."),
     apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
 ):

@@ -56,6 +56,7 @@ WORKFLOW:
         - Global Compliance (GDPR, SOC2)
         - Role-specific constraints (@Security, @Architect, etc.)
         - Architectural Decision Records (ADRs) and Exceptions (EXC)
+        - Journey Gate: stories must have real linked journeys (not placeholder `JRN-XXX`)
 
 4. **False Positive Prevention**
     - The system includes 8 built-in suppression rules and expanded diff context (±10 lines).

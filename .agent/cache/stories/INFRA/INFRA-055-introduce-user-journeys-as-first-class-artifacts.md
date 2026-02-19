@@ -73,6 +73,10 @@ This results in:
 
 - ADR-024: Introduce User Journeys
 
+## Linked Journeys
+
+- JRN-001 (User Journey Creation and Management)
+
 ## Impact Analysis Summary
 
 **Components touched**: `config.py`, `main.py`, `journey.py` (new), `list.py`, `sync.py`, `runbook.py`, `implement.py`

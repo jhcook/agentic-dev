@@ -32,6 +32,7 @@ from agent.commands import (
     runbook,
     secret,
     story,
+    visualize,
     workflow,
     query,
 )
@@ -44,7 +45,7 @@ def cli(
     ctx: typer.Context,
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Increase verbosity level."),
     version: bool = typer.Option(None, "--version", help="Show version and exit"),
-    provider: str = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)")
+    provider: str = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)")
 ) -> None:
     """A CLI for managing and interacting with the AI agent."""
     # Environment variables loaded by config.py at import time (dotenv)
@@ -87,8 +88,6 @@ def help(ctx: typer.Context):
 
 
 
-# Governance & Quality
-app.command()(lint.lint)
 from agent.core.auth.decorators import with_creds
 
 # Governance & Quality
@@ -128,6 +127,7 @@ app.add_typer(importer.app, name="import")
 app.add_typer(mcp.app, name="mcp")
 app.add_typer(secret.app, name="secret")
 app.add_typer(journey.app, name="journey")
+app.add_typer(visualize.app, name="visualize")
 
 # List Commands
 app.command("list-stories")(list_cmd.list_stories)

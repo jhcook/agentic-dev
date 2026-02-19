@@ -31,8 +31,20 @@ def app():
 @pytest.fixture
 def clean_env(tmp_path):
     # Mock config paths
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "INFRA").mkdir()
+    # Story with valid linked journeys so existing tests pass the journey gate
+    (mock_stories / "INFRA" / "INFRA-000-test.md").write_text(
+        "# INFRA-000: Test\n\n## State\n\nDRAFT\n\n## Problem Statement\n\n"
+        "## User Story\n\n## Acceptance Criteria\n\n## Non-Functional Requirements\n\n"
+        "## Linked Journeys\n\n- JRN-001 (Test Journey)\n\n"
+        "## Impact Analysis Summary\n\n## Test Strategy\n\n## Rollback Plan"
+    )
+
     with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
          patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \
+         patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.utils.load_governance_context", return_value="Rules"), \
          patch("agent.commands.implement.get_current_branch", return_value="main"), \
          patch("agent.commands.implement.is_git_dirty", return_value=False), \
@@ -107,4 +119,39 @@ def test_implement_with_provider(clean_env, app):
         assert result.exit_code == 0
         mock_set_provider.assert_called_once_with("gemini")
         assert "AI Provider set to: gemini" in result.stdout or True # Console print might be captured or mocked
+
+def test_implement_journey_gate_blocks(tmp_path):
+    """Implement exits 1 when story has no real linked journeys."""
+    test_app = typer.Typer()
+    test_app.command()(implement)
+
+    # Story with placeholder JRN-XXX only
+    mock_stories = tmp_path / "stories"
+    mock_stories.mkdir()
+    (mock_stories / "INFRA").mkdir()
+    (mock_stories / "INFRA" / "INFRA-000-test.md").write_text(
+        "# INFRA-000: Test\n\n## State\n\nDRAFT\n\n## Problem Statement\n\n"
+        "## User Story\n\n## Acceptance Criteria\n\n## Non-Functional Requirements\n\n"
+        "## Linked Journeys\n\n- JRN-XXX\n\n"
+        "## Impact Analysis Summary\n\n## Test Strategy\n\n## Rollback Plan"
+    )
+
+    runbook_file = tmp_path / "runbooks" / "INFRA-005-runbook.md"
+    (tmp_path / "runbooks").mkdir()
+    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content")
+
+    with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
+         patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \
+         patch("agent.core.config.config.stories_dir", mock_stories), \
+         patch("agent.core.utils.load_governance_context", return_value="Rules"), \
+         patch("agent.commands.implement.get_current_branch", return_value="main"), \
+         patch("agent.commands.implement.is_git_dirty", return_value=False), \
+         patch("agent.commands.implement.extract_story_id", return_value="INFRA-000"), \
+         patch("agent.commands.implement.create_branch"):
+
+        (tmp_path / ".agent").mkdir()
+        result = runner.invoke(test_app, ["INFRA-005"])
+
+    assert result.exit_code == 1
+    assert "Journey Gate FAILED" in result.stdout
 

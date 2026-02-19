@@ -27,7 +27,7 @@ from agent.core.config import config
 from agent.core.utils import sanitize_title
 from agent.db.client import upsert_artifact
 
-app = typer.Typer()
+app = typer.Typer(help="User journey management.")
 console = Console()
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def new_journey(
         False, "--ai", help="Use AI to generate journey content from a description."
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
 ):
     """

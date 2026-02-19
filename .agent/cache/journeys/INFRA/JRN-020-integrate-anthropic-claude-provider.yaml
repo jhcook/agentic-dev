@@ -11,32 +11,53 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: "claude-haiku-4-5:\n    provider: \"anthropic\"\n    deployment_id: \"claude-haiku-4-5-20250929\"\n    tier:\
-  \ \"standard\"\n    context_window: 200000\n    cost_per_1k_input: 0.001\n    cost_per_1k_output: 0.005"
+description: >
+  A developer configures and uses the Anthropic Claude provider with the
+  Agent CLI. Claude is one of five supported AI providers and can be
+  selected globally in agent.yaml or per-command via --provider anthropic.
+  Requires ANTHROPIC_API_KEY environment variable.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
+- ANTHROPIC_API_KEY environment variable is set
 auth_context:
   level: authenticated
   permissions: []
 steps:
 - id: 1
-  action: Developer runs `agent impact --provider anthropic`
-  system_response: CLI processes the anthropic request
+  action: Developer runs `agent impact --provider anthropic` to use Anthropic explicitly
+  system_response: CLI uses Anthropic Claude provider for the impact analysis
   assertions:
   - Command exits with status 0
-  - Expected output displayed
+  - Output indicates Anthropic provider is active
+- id: 2
+  action: Developer sets `provider: anthropic` in `.agent/etc/agent.yaml`
+  system_response: Configuration persisted; all subsequent AI commands use Anthropic
+  assertions:
+  - agent.yaml contains `provider: anthropic`
+- id: 3
+  action: Developer runs `agent list-models` to see available Claude models
+  system_response: CLI lists available Anthropic Claude models
+  assertions:
+  - Command exits with status 0
+  - Output lists claude model names
 error_paths:
 - trigger_step: 1
-  condition: Missing configuration or prerequisites
-  system_response: CLI displays clear error with remediation steps
+  condition: ANTHROPIC_API_KEY is not set
+  system_response: CLI raises MissingCredentialsError with actionable message to set ANTHROPIC_API_KEY
   assertions:
-  - Error message is actionable
+  - Error message names ANTHROPIC_API_KEY
+  severity: expected
+- trigger_step: 1
+  condition: Anthropic API rate limit hit
+  system_response: CLI falls back to next provider in fallback chain
+  assertions:
+  - Fallback attempt is logged
   severity: expected
 edge_cases:
-- scenario: Command run with no network access
-  expected: Graceful degradation or clear offline error
-  severity: warning
+- scenario: Invalid or expired ANTHROPIC_API_KEY
+  expected: CLI displays authentication error with clear remediation steps
+  severity: error
 data_state:
   data_classification: internal
   inputs: []
@@ -48,6 +69,8 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - README.md
-  tests: []
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/auth/credentials.py
+  - .agent/etc/agent.yaml
+  tests:
+  - tests/journeys/test_jrn_020.py

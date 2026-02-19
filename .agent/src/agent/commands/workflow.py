@@ -32,7 +32,7 @@ def pr(
     web: bool = typer.Option(False, "--web", help="Open PR in browser."),
     draft: bool = typer.Option(False, "--draft", help="Create draft PR."),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
     ai: bool = typer.Option(False, "--ai", help="Enable AI to generate a detailed PR body summary."),
 ):
@@ -145,7 +145,7 @@ def commit(
     runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Runbook ID."),
     message: Optional[str] = typer.Option(None, "--message", "-m", help="Commit message."),
     ai: bool = typer.Option(False, "--ai", help="Enable AI to infer story and generate commit message."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, openai)"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation/editing.")
 ):
     """

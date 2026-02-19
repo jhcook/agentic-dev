@@ -425,7 +425,7 @@ def implement(
         False, "--yes", "-y", help="Skip confirmation prompts (use with --apply)."
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, openai)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
     model: Optional[str] = typer.Option(
         None, "--model", help="Force specific AI model deployment ID."
@@ -520,6 +520,15 @@ def implement(
              if current_state in ["RETIRED", "DEPRECATED", "SUPERSEDED"]:
                  console.print(f"[bold red]⛔ Cannot implement Story {story_id}: Status is '{current_state}'[/bold red]")
                  raise typer.Exit(code=1)
+
+    # 1.2.5 JOURNEY GATE (INFRA-055)
+    from agent.commands.check import validate_linked_journeys  # ADR-025: local import
+    journey_result = validate_linked_journeys(story_id)
+    if not journey_result["passed"]:
+        console.print(f"[bold red]⛔ Journey Gate FAILED for {story_id}: {journey_result['error']}[/bold red]")
+        console.print("[dim]Hint: Add real journey IDs (e.g., JRN-044) to 'Linked Journeys' in the story file.[/dim]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✅ Journey Gate passed — linked: {', '.join(journey_result['journey_ids'])}[/green]")
 
     update_story_state(story_id, "IN_PROGRESS", context_prefix="Phase 0")
 

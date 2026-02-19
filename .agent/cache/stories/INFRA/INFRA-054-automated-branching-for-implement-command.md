@@ -1,4 +1,4 @@
-# INFRA-055: Automated Branching for Implement Command
+# INFRA-054: Automated Branching for Implement Command
 
 ## State
 
@@ -28,6 +28,10 @@ As a developer, I want `agent implement` to handle branching automatically, so t
 ## Linked ADRs
 
 - None
+
+## Linked Journeys
+
+- JRN-013 (AI Provider Selection and Validation)
 
 ## Impact Analysis Summary
 
