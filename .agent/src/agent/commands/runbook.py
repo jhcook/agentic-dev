@@ -79,6 +79,11 @@ def new_runbook(
     agents_data = ctx.get("agents", {})
     instructions_content = ctx.get("instructions", "")
     adrs_content = ctx.get("adrs", "")
+    source_tree = ctx.get("source_tree", "")
+    source_code = ctx.get("source_code", "")
+    
+    if source_tree:
+        console.print(f"[dim]ℹ️  Including source context ({len(source_tree) + len(source_code)} chars)[/dim]")
     
     panel_description = agents_data.get("description", "")
     panel_checks = agents_data.get("checks", "")
@@ -111,12 +116,15 @@ INSTRUCTIONS:
 4. You MUST follow the structure of the provided TEMPLATE exactly.
 5. You MUST respect all Architectural Decision Records (ADRs) as codified decisions.
 6. You MUST follow the DETAILED ROLE INSTRUCTIONS for each role.
+7. You MUST use the SOURCE CODE CONTEXT to derive accurate file paths, existing patterns, and SDK usage. Do NOT invent file paths or SDK calls — use only what appears in the source tree and code outlines.
 
 INPUTS:
 1. User Story (Requirements)
 2. Governance Rules (Compliance constraints)
 3. Role Instructions (Per-role detailed guidance)
 4. ADRs (Codified architectural decisions)
+5. Source File Tree (Repository structure)
+6. Source Code Outlines (Imports, class/function signatures)
 
 TEMPLATE STRUCTURE (Found in {template_path.name}):
 {template_content}
@@ -141,6 +149,12 @@ ARCHITECTURAL DECISIONS (ADRs):
 
 EXISTING USER JOURNEYS:
 {_load_journey_context()}
+
+SOURCE FILE TREE:
+{source_tree if source_tree else "(No source directory found)"}
+
+SOURCE CODE OUTLINES:
+{source_code if source_code else "(No source files found)"}
 
 Generate the runbook now.
 """

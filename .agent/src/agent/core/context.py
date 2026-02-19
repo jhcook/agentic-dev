@@ -12,10 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+import os
+import re as _re
+
 import yaml
 
 from agent.core.config import config
 from agent.core.utils import scrub_sensitive_data
+
+logger = logging.getLogger(__name__)
 
 
 class ContextLoader:
@@ -27,14 +33,23 @@ class ContextLoader:
 
     def load_context(self) -> dict:
         """
-        Loads the full context: Global Rules, Agents, Agent Instructions, and ADRs.
+        Loads the full context: Global Rules, Agents, Agent Instructions, ADRs,
+        and Source Code context.
         Returns a dictionary with formatted strings ready for LLM consumption.
         """
+        source_tree = self._load_source_tree()
+        source_code = self._load_source_snippets()
+        logger.debug(
+            "Source context: tree=%d chars, snippets=%d chars",
+            len(source_tree), len(source_code),
+        )
         return {
             "rules": self._load_global_rules(),
             "agents": self._load_agents(),
             "instructions": self._load_role_instructions(),
-            "adrs": self._load_adrs()
+            "adrs": self._load_adrs(),
+            "source_tree": source_tree,
+            "source_code": source_code,
         }
 
     def _load_global_rules(self) -> str:
@@ -162,6 +177,126 @@ class ContextLoader:
             context += "(No ADRs found)\n"
 
         return scrub_sensitive_data(context)
+
+    def _load_source_tree(self) -> str:
+        """Loads a file tree of the source directory for codebase context.
+
+        Excludes __pycache__, .pyc, .env files, and other non-essential items.
+        Returns an indented tree string or empty string if src/ doesn't exist.
+        """
+        src_dir = config.agent_dir / "src"
+        if not src_dir.exists() or not src_dir.is_dir():
+            return ""
+
+        exclude_dirs = {"__pycache__", ".pytest_cache", "node_modules", ".git"}
+        exclude_exts = {".pyc", ".pyo"}
+        exclude_files = {".env", ".env.local", ".env.production"}
+
+        tree = "SOURCE FILE TREE:\n"
+        file_count = 0
+        for dirpath, dirnames, filenames in os.walk(src_dir):
+            # Filter excluded directories in-place (os.walk respects this)
+            dirnames[:] = sorted(
+                d for d in dirnames if d not in exclude_dirs
+            )
+            rel = os.path.relpath(dirpath, src_dir)
+            level = 0 if rel == "." else rel.count(os.sep) + 1
+            indent = "  " * level
+            dirname = os.path.basename(dirpath)
+            tree += f"{indent}{dirname}/\n"
+            sub_indent = "  " * (level + 1)
+            for fname in sorted(filenames):
+                if (
+                    not any(fname.endswith(ext) for ext in exclude_exts)
+                    and fname not in exclude_files
+                ):
+                    tree += f"{sub_indent}{fname}\n"
+                    file_count += 1
+
+        logger.debug("Source tree: %d files found", file_count)
+        return scrub_sensitive_data(tree)
+
+    def _load_source_snippets(self, budget: int = 0) -> str:
+        """Loads compact source outlines (imports + signatures) from Python files.
+
+        Walks all .py files under src/, extracts import lines and
+        class/def signatures (not bodies), and concatenates them until
+        the character budget is exhausted.
+
+        Args:
+            budget: Maximum character count for combined snippets.
+                    If 0 (default), reads from AGENT_SOURCE_CONTEXT_CHAR_LIMIT
+                    env var, falling back to 8000.
+
+        Returns:
+            Formatted string of source outlines, or empty string if unavailable.
+        """
+        src_dir = config.agent_dir / "src"
+        if not src_dir.exists():
+            return ""
+
+        if budget <= 0:
+            budget = int(
+                os.environ.get("AGENT_SOURCE_CONTEXT_CHAR_LIMIT", "8000")
+            )
+
+        exclude_dirs = {"__pycache__", ".pytest_cache", "tests"}
+        # Match class/def/async def signatures, including indented and decorated
+        sig_pattern = _re.compile(
+            r"^[ \t]*((?:@\w+.*\n[ \t]*)*"
+            r"(?:class|def|async\s+def)\s+\S+.*?):\s*$",
+            _re.MULTILINE,
+        )
+
+        snippets = "SOURCE CODE OUTLINES:\n"
+        remaining = budget - len(snippets)
+        file_count = 0
+
+        for py_file in sorted(src_dir.rglob("*.py")):
+            # Skip excluded directories
+            if any(part in exclude_dirs for part in py_file.parts):
+                continue
+            # Skip trivial __init__.py files
+            if py_file.name == "__init__.py" and py_file.stat().st_size < 200:
+                continue
+
+            try:
+                content = py_file.read_text(errors="ignore")
+            except OSError:
+                continue
+
+            rel_path = py_file.relative_to(config.agent_dir)
+            lines: list[str] = []
+
+            # Imports (first 20 import lines max)
+            import_lines = [
+                line
+                for line in content.splitlines()
+                if line.startswith(("import ", "from "))
+            ][:20]
+            if import_lines:
+                lines.extend(import_lines)
+
+            # Class/function signatures (with optional decorators)
+            for m in sig_pattern.finditer(content):
+                lines.append(m.group(1))
+
+            if not lines:
+                continue
+
+            block = f"\n--- {rel_path} ---\n" + "\n".join(lines) + "\n"
+
+            if len(block) > remaining:
+                truncated = block[: remaining - 20] + "\n[...truncated...]\n"
+                snippets += truncated
+                file_count += 1
+                break
+            snippets += block
+            remaining -= len(block)
+            file_count += 1
+
+        logger.debug("Source snippets: %d files included", file_count)
+        return scrub_sensitive_data(snippets)
 
 
 context_loader = ContextLoader()

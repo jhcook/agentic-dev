@@ -507,29 +507,11 @@ def preflight(
                     if backend_changes: pytest_args.append("backend")
                     if root_py_changes: pytest_args.append(".")
             else:
-                # No strictly dependent tests found.
-                # If we have changes, we might want to run everything to be safe, OR minimal.
-                # User asked for "relevant". If analysis says none, maybe none?
-                # BUT, side effects exist.
-                # Let's fallback to "backend" if backend changed, and "." if root changed, 
-                # UNLESS we are confident.
-                # Let's trust the analyzer? No, it might be incomplete.
-                # Let's fallback to running project roots if no specific tests found but changes exist.
-                
-                targets = []
-                if backend_changes: targets.append("backend")
-                if root_py_changes: targets.append(".")
-                
-                if targets:
-                    console.print("[yellow]⚠️  No direct test dependencies found, running project-level tests.[/yellow]")
-                    # Avoid duplicates if "." covers "backend"
-                    if "." in targets:
-                        pytest_args.append(".")
-                    else:
-                        pytest_args.extend(targets)
-                else:
-                     console.print("[dim]No Python changes requiring verification found.[/dim]")
-                     pytest_args = None
+                # No strictly dependent tests found — trust the analyzer and skip.
+                # Running all tests (e.g. `pytest .`) is too broad and pulls in
+                # unrelated test suites, causing false failures on PRs.
+                console.print("[dim]ℹ️  No test files depend on the changed code — skipping Python tests.[/dim]")
+                pytest_args = None
 
             if pytest_args:
                  # Check for venv
