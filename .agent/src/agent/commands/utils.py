@@ -71,7 +71,7 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
         console.print(f"[red]❌ Could not read {story_file}: {exc}[/red]")
         return
 
-    state_regex = r"(^## State\s*\n+)([A-Za-z_\s]+)"
+    state_regex = r"(^## State\s*\n+)([A-Za-z_]+)"
 
     match = re.search(state_regex, content, re.MULTILINE)
     if not match:
