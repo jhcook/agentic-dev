@@ -17,6 +17,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from agent.core.logger import get_logger
+
 import typer
 from rich.console import Console
 from rich.prompt import Prompt, Confirm # Needed now for UI logic
@@ -1222,6 +1224,7 @@ def impact(
     Default: Static analysis (files touched).
     --ai: AI-powered analysis (risk, breaking changes).
     """
+    logger = get_logger(__name__)
     console.print(f"[bold blue]🔍 Running impact analysis for {story_id}...[/bold blue]")
 
     # 1. Find the story file
@@ -1273,6 +1276,11 @@ def impact(
         story_content = scrub_sensitive_data(story_content)
         
         prompt = generate_impact_prompt(diff=full_diff, story=story_content)
+        logger.debug(
+            "AI impact prompt: %d chars, diff: %d chars",
+            len(prompt),
+            len(full_diff),
+        )
         
         try:
             analysis = ai_service.get_completion(prompt)
@@ -1302,6 +1310,12 @@ def impact(
         reverse_deps = analyzer.find_reverse_dependencies(changed_files, all_files)
         
         total_impacted = sum(len(deps) for deps in reverse_deps.values())
+        logger.debug(
+            "Dependency graph: %d changed files, %d all files, %d reverse deps",
+            len(changed_files),
+            len(all_files),
+            total_impacted,
+        )
         
         # Build analysis summary
         components = set()
@@ -1313,10 +1327,17 @@ def impact(
                 components.add("root")
         
         analysis = f"""## Impact Analysis Summary
-Components touched: {', '.join(files)}
-Reverse dependencies: {total_impacted} file(s) impacted
-Workflows affected: {', '.join(components)}
-Risks identified: {total_impacted} files depend on changed code
+
+**Components**: {', '.join(sorted(components))}
+**Files Changed**: {len(files)}
+**Reverse Dependencies**: {total_impacted} file(s) impacted
+
+### Changed Files
+{chr(10).join('- ' + f for f in files)}
+
+### Risk Summary
+- Blast radius: {'🔴 High' if total_impacted > 20 else '🟡 Medium' if total_impacted > 5 else '🟢 Low'} ({total_impacted} dependent files)
+- Components affected: {len(components)}
 """
         
         # Display detailed reverse dependencies

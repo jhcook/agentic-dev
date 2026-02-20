@@ -10,6 +10,12 @@
   - Configurable character budget via `AGENT_SOURCE_CONTEXT_CHAR_LIMIT` env var (default: 8000).
   - Graceful degradation when `src/` directory is absent.
 
+- **Align `/impact` Workflow with CLI** (INFRA-068):
+  - Simplified `/impact` workflow from 98-line manual process to CLI-first instructions calling `agent impact`.
+  - Improved structured output with markdown formatting, component grouping, and blast-radius risk summary.
+  - Added DEBUG logging for dependency graph size and AI prompt character count.
+  - Added 5 unit tests for `agent impact` (no-changes, static output, update-story, base branch, JSON).
+
 - **Post-Apply Governance Gates for Implement Command** (INFRA-067):
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.
