@@ -1,0 +1,67 @@
+# Journey: JRN-062
+# Title: Implement Oracle Preflight Pattern
+# State: COMMITTED
+
+actor: "Agentic Developer / Framework Maintainer"
+description: "Preflight checks use dynamic tool-driven retrieval (Oracle Pattern) across all providers to prevent hallucinations. Includes NotebookLM MCP routing and local vector DB fallback."
+
+steps:
+  - action: "User initiates `agent preflight` on a staged branch."
+    system_response: "The system assembles the governance panel, prioritizing tools over static context."
+    assertions:
+      - "The initial prompt does not contain <adrs>, <rules>, or global <instructions>."
+      - "The diff context is reduced to -U3."
+      - "The agent system instructions strictly forbid out-of-domain evaluation."
+
+  - action: "Agent needs architectural context for a changed file."
+    system_response: "Agent utilizes the `read_adr`, `read_file`, or `search_codebase` tools to retrieve context."
+    assertions:
+      - "The agent retrieves context via tools and cites the retrieved sources (`Source: [Exact file path or ADR ID]`)."
+      - "If NotebookLM MCP is available, the agent queries it first."
+      - "If NotebookLM MCP is unavailable, the agent queries the local vector database."
+
+  - action: "Agent evaluates the change against retrieved context."
+    system_response: "Agent produces a VERDICT and FINDINGS."
+    assertions:
+      - "Findings without explicit tool-verified citations are discarded."
+      - "Preflight output strict format is followed."
+
+acceptance_criteria:
+  - "AC-1: Reduced diff context to -U3."
+  - "AC-2: Removed global context from initial prompt."
+  - "AC-3: Legacy mode `--legacy-context` preserves original behavior."
+  - "AC-4: Scoped agent instructions."
+  - "AC-5: Verified citation requirement."
+  - "AC-6: Tool availability across all providers."
+  - "AC-7: Local Vector DB fallback available."
+  - "AC-8: Preflight test confirms tool usage."
+  - "AC-9: Oracle pattern functions across Anthropic, Vertex, Gemini."
+  - "AC-10: Notion Sync Awareness check before Oracle preflight."
+  - "AC-11: NotebookLM Routing priority."
+
+error_paths:
+  - trigger: "Tool-retrieved finding is missing a citation."
+    expected: "The finding is rejected from the final output."
+  
+edge_cases:
+  - scenario: "A project has no ADRs or rules defined."
+    expected: "Oracle pattern executes quickly and passes without forcing tool calls."
+
+auth_context:
+  roles: []
+  permissions: []
+
+data_state:
+  data_classification: internal
+  preconditions: []
+  postconditions: []
+
+implementation:
+  routes: []
+  files: []
+  tests: []
+
+linked_stories: 
+  - "INFRA-074"
+linked_adrs: []
+depends_on: []
