@@ -20,6 +20,13 @@
   - Simplified `/panel` workflow from 59-line manual simulation to CLI-first instructions calling `agent panel`.
   - Added negative test for missing story ID scenario.
 
+- **Align `/pr` Workflow with CLI** (INFRA-070):
+  - Simplified `/pr` workflow from 73-line manual process to CLI-first instructions calling `agent pr`.
+  - Added `--skip-preflight` flag with timestamped audit logging for SOC2 compliance.
+  - PR body now scrubbed via `scrub_sensitive_data()` in all modes (not just AI).
+  - Governance status in PR body reflects whether preflight was skipped.
+  - Added 4 unit tests for `agent pr` (title format, skip-preflight, gh-not-found, body scrubbing).
+
 - **Post-Apply Governance Gates for Implement Command** (INFRA-067):
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.

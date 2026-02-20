@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import subprocess
+import time
 from typing import Optional
 
 import typer
@@ -35,6 +36,7 @@ def pr(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
     ai: bool = typer.Option(False, "--ai", help="Enable AI to generate a detailed PR body summary."),
+    skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip preflight checks (audit-logged)."),
 ):
     """
     Open a GitHub Pull Request for the current branch.
@@ -44,16 +46,13 @@ def pr(
         
     target_branch = "main"
     
-    if story_id:
+    preflight_passed = True
+    if skip_preflight:
+        console.print(f"[yellow]⚠️  Preflight SKIPPED at {time.strftime('%Y-%m-%dT%H:%M:%S')} (--skip-preflight)[/yellow]")
+        preflight_passed = False
+    elif story_id:
         console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
         try:
-             # Calling preflight function directly. 
-             # Note: Typer commands when called as functions expect arguments.
-             # We can't easily call the `preflight` command function if it's decorated or complicated.
-             # Better to extract shared logic. But for now, let's call it.
-             # `preflight` takes (story_id, ai, base, provider).
-             # We must pass all args to avoid Typer OptionInfo defaults being treated as values.
-             # BUG FIX: Explicitly pass skip_tests=False, otherwise typer.Option object is truthy.
              preflight(
                  story_id=story_id, 
                  base=target_branch, 
@@ -67,9 +66,9 @@ def pr(
             if e.exit_code != 0:
                 console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")
                 raise typer.Exit(code=1)
-                
     else:
         console.print("[yellow]⚠️  Skipping preflight (no Story ID).[/yellow]")
+        preflight_passed = False
 
     console.print("🚀 Creating Pull Request...")
     
@@ -79,7 +78,8 @@ def pr(
     if story_id and story_id not in title:
         title = f"[{story_id}] {title}"
         
-    tpl = "### Story Link\n{story_link}\n\n### Changes\n- {summary}\n\n### Governance Checks\n✅ Preflight Passed"
+    gov_status = "✅ Preflight Passed" if preflight_passed else "⚠️ Preflight Skipped"
+    tpl = "### Story Link\n{story_link}\n\n### Changes\n- {summary}\n\n### Governance Checks\n" + gov_status
     
     story_link = "N/A"
     if story_id:
@@ -119,10 +119,12 @@ def pr(
         except Exception as e:
              console.print(f"[yellow]⚠️  AI PR summary generation failed: {e}[/yellow]")
 
+    from agent.core.utils import scrub_sensitive_data
     body = tpl.format(
         story_link=story_link,
         summary=summary
     )
+    body = scrub_sensitive_data(body)
     
     gh_args = ["gh", "pr", "create", "--title", title, "--body", body, "--base", target_branch]
     if web:
