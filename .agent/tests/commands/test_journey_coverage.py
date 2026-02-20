@@ -247,7 +247,7 @@ class TestBackfillTestsCLI:
 
         with patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent), \
              patch("agent.core.config.config.repo_root", journey_tree["root"]):
-            result = runner.invoke(app, ["journey", "backfill-tests"])
+            result = runner.invoke(app, ["journey", "backfill-tests", "--write"])
 
         assert result.exit_code == 0
         assert "Generated" in result.output
@@ -267,7 +267,7 @@ class TestBackfillTestsCLI:
             result = runner.invoke(app, ["journey", "backfill-tests", "--dry-run"])
 
         assert result.exit_code == 0
-        assert "Would" in result.output
+        assert "Stub test" in result.output or "AI-generated" in result.output
 
         stub = journey_tree["root"] / "tests" / "journeys" / "test_jrn_931.py"
         assert not stub.exists()
@@ -281,7 +281,7 @@ class TestBackfillTestsCLI:
             result = runner.invoke(app, ["journey", "backfill-tests"])
 
         assert result.exit_code == 0
-        assert "0 test stub" in result.output
+        assert "No eligible journeys" in result.output
 
     def test_backfill_skips_already_linked(self, journey_tree):
         """Backfill should skip journeys that already have tests."""
@@ -295,4 +295,4 @@ class TestBackfillTestsCLI:
             result = runner.invoke(app, ["journey", "backfill-tests"])
 
         assert result.exit_code == 0
-        assert "0 test stub" in result.output
+        assert "No eligible journeys" in result.output

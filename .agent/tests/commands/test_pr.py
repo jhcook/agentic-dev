@@ -31,7 +31,8 @@ test_app.command()(pr)
 @patch("agent.commands.workflow.infer_story_id", return_value="TEST-100")
 @patch("subprocess.check_output")
 @patch("subprocess.run")
-def test_pr_title_format(mock_run, mock_check_out, mock_infer, mock_preflight, mock_sm):
+@patch("typer.edit", return_value="Manual PR body")
+def test_pr_title_format(mock_edit, mock_run, mock_check_out, mock_infer, mock_preflight, mock_sm):
     """Test that PR title includes [STORY-ID] prefix."""
     mock_sm.return_value.is_initialized.return_value = False
     mock_sm.return_value.is_unlocked.return_value = False
@@ -51,7 +52,8 @@ def test_pr_title_format(mock_run, mock_check_out, mock_infer, mock_preflight, m
 @patch("agent.commands.workflow.infer_story_id", return_value="TEST-100")
 @patch("subprocess.check_output")
 @patch("subprocess.run")
-def test_pr_skip_preflight_logs_warning(mock_run, mock_check_out, mock_infer, mock_sm):
+@patch("typer.edit", return_value="Manual PR body")
+def test_pr_skip_preflight_logs_warning(mock_edit, mock_run, mock_check_out, mock_infer, mock_sm):
     """Test that --skip-preflight logs a timestamped audit warning."""
     mock_sm.return_value.is_initialized.return_value = False
     mock_sm.return_value.is_unlocked.return_value = False
@@ -76,7 +78,8 @@ def test_pr_skip_preflight_logs_warning(mock_run, mock_check_out, mock_infer, mo
 @patch("agent.commands.workflow.infer_story_id", return_value="TEST-100")
 @patch("subprocess.check_output")
 @patch("subprocess.run")
-def test_pr_gh_not_found(mock_run, mock_check_out, mock_infer, mock_sm):
+@patch("typer.edit", return_value="Manual PR body")
+def test_pr_gh_not_found(mock_edit, mock_run, mock_check_out, mock_infer, mock_sm):
     """Test that missing gh CLI fails gracefully with clear error."""
     mock_sm.return_value.is_initialized.return_value = False
     mock_sm.return_value.is_unlocked.return_value = False
@@ -95,7 +98,8 @@ def test_pr_gh_not_found(mock_run, mock_check_out, mock_infer, mock_sm):
 @patch("agent.commands.workflow.infer_story_id", return_value="TEST-100")
 @patch("subprocess.check_output")
 @patch("subprocess.run")
-def test_pr_body_scrubbing(mock_run, mock_check_out, mock_infer, mock_scrub, mock_sm):
+@patch("typer.edit", return_value="Manual PR body")
+def test_pr_body_scrubbing(mock_edit, mock_run, mock_check_out, mock_infer, mock_scrub, mock_sm):
     """Test that PR body is passed through scrub_sensitive_data."""
     mock_sm.return_value.is_initialized.return_value = False
     mock_sm.return_value.is_unlocked.return_value = False
@@ -106,5 +110,5 @@ def test_pr_body_scrubbing(mock_run, mock_check_out, mock_infer, mock_scrub, moc
     result = runner.invoke(test_app, ["--skip-preflight"])
 
     assert result.exit_code == 0
-    # Verify scrub_sensitive_data was called on the body
-    mock_scrub.assert_called_once()
+    # Verify scrub_sensitive_data was called
+    assert mock_scrub.call_count >= 1

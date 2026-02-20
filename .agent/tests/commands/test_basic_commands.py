@@ -62,9 +62,10 @@ def test_new_story_interactive(app, mock_fs):
     """Test new-story with interactive prompts."""
     # Mock Prompt.ask and IntPrompt.ask
     with patch("agent.commands.story.IntPrompt.ask", return_value=1), \
-         patch("agent.commands.story.Prompt.ask", return_value="My New Story"):
+         patch("agent.commands.story.Prompt.ask", return_value="My New Story"), \
+         patch("agent.commands.story.typer.edit", return_value="My New Story content"):
         
-        result = runner.invoke(app, ["new-story"])
+        result = runner.invoke(app, ["new-story", "--offline"])
         
         assert result.exit_code == 0
         # Check file exists
@@ -75,9 +76,10 @@ def test_new_story_interactive(app, mock_fs):
 def test_new_plan_manual(app, mock_fs):
     """Test new-plan manual creation."""
     with patch("agent.commands.plan.IntPrompt.ask", return_value=1), \
-         patch("agent.commands.plan.Prompt.ask", return_value="My Plan"):
+         patch("agent.commands.plan.Prompt.ask", return_value="My Plan"), \
+         patch("agent.commands.plan.typer.edit", return_value="My Plan content"):
         
-        result = runner.invoke(app, ["new-plan"])
+        result = runner.invoke(app, ["new-plan", "--offline"])
         
         assert result.exit_code == 0
         files = list((mock_fs / "plans" / "INFRA").glob("*.md"))
@@ -134,11 +136,18 @@ def test_validate_story_invalid(app, mock_fs):
 @patch("agent.commands.workflow.preflight") # Mock preflight to avoid running it
 def test_pr_command(mock_preflight, mock_check_output, mock_run, app, mock_fs):
     """Test pr command with mocked gh CLI."""
-    # Setup git log return
-    mock_check_output.return_value = b"feat: New feature"
+    # Setup git log and diff returns
+    def check_output_side_effect(cmd, **kwargs):
+        if "log" in cmd:
+            return b"feat: New feature"
+        return "some diff"
+    mock_check_output.side_effect = check_output_side_effect
     
-    # Run PR
-    result = runner.invoke(app, ["pr", "--story", "INFRA-123", "--web"])
+    with patch("agent.commands.workflow.validate_credentials"), \
+         patch("agent.commands.workflow.typer.edit", return_value="Manual PR Summary"), \
+         patch("agent.core.ai.ai_service.complete", return_value="AI PR Summary"):
+        # Run PR
+        result = runner.invoke(app, ["pr", "--story", "INFRA-123", "--web"])
     
     assert result.exit_code == 0
     
@@ -159,9 +168,16 @@ def test_pr_command(mock_preflight, mock_check_output, mock_run, app, mock_fs):
 @patch("agent.commands.workflow.preflight")
 def test_pr_command_with_provider(mock_preflight, mock_check_output, mock_run, app, mock_fs):
     """Test pr command with --provider flag."""
-    mock_check_output.return_value = b"feat: New feature"
+    def check_output_side_effect(cmd, **kwargs):
+        if "log" in cmd:
+            return b"feat: New feature"
+        return "some diff"
+    mock_check_output.side_effect = check_output_side_effect
     
-    result = runner.invoke(app, ["pr", "--story", "INFRA-123", "--provider", "openai"])
+    with patch("agent.commands.workflow.validate_credentials"), \
+         patch("agent.commands.workflow.typer.edit", return_value="Manual PR Summary"), \
+         patch("agent.core.ai.ai_service.complete", return_value="AI PR Summary"):
+        result = runner.invoke(app, ["pr", "--story", "INFRA-123", "--provider", "openai"])
     
     assert result.exit_code == 0
     # Check preflight was called with provider

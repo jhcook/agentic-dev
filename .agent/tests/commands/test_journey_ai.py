@@ -308,7 +308,7 @@ class TestBackfillTestsAICLI:
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
         ):
             result = runner.invoke(
-                app, ["journey", "backfill-tests", "--ai", "--write"]
+                app, ["journey", "backfill-tests", "--write"]
             )
 
         assert result.exit_code == 0
@@ -329,7 +329,7 @@ class TestBackfillTestsAICLI:
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
         ):
             result = runner.invoke(
-                app, ["journey", "backfill-tests", "--ai", "--dry-run"]
+                app, ["journey", "backfill-tests", "--dry-run"]
             )
 
         assert result.exit_code == 0
@@ -349,7 +349,7 @@ class TestBackfillTestsAICLI:
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
         ):
             result = runner.invoke(
-                app, ["journey", "backfill-tests", "--ai", "--write"]
+                app, ["journey", "backfill-tests", "--write"]
             )
 
         assert result.exit_code == 0
@@ -370,7 +370,7 @@ class TestBackfillTestsAICLI:
         ):
             result = runner.invoke(
                 app,
-                ["journey", "backfill-tests", "--journey", "JRN-100"],
+                ["journey", "backfill-tests", "--journey", "JRN-100", "--write"],
             )
 
         assert result.exit_code == 0

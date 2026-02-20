@@ -27,6 +27,7 @@ def get_venv_env():
     env = os.environ.copy()
     venv_bin = os.path.dirname(sys.executable)
     env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
+    env["EDITOR"] = "true"  # Prevent typer.edit from hanging
     return env
 
 @pytest.fixture
@@ -101,7 +102,7 @@ def test_new_story_interactive(agent_sandbox):
     
     # Run with input to set title
     proc = subprocess.Popen(
-        [agent_bin, "new-story", "INFRA-999"], 
+        [agent_bin, "new-story", "INFRA-999", "--offline"], 
         stdin=subprocess.PIPE, 
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
@@ -130,7 +131,7 @@ def test_new_story_auto_id(agent_sandbox):
     inputs = "1\nAuto ID Title\n"
     
     proc = subprocess.Popen(
-        [agent_bin, "new-story"], 
+        [agent_bin, "new-story", "--offline"], 
         stdin=subprocess.PIPE, 
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
@@ -154,7 +155,7 @@ def test_new_plan(agent_sandbox):
     agent_bin, cwd = agent_sandbox
     
     proc = subprocess.Popen(
-        [agent_bin, "new-plan", "WEB-123"],  # explicit ID
+        [agent_bin, "new-plan", "WEB-123", "--offline"],  # explicit ID
         stdin=subprocess.PIPE, 
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
@@ -193,7 +194,7 @@ def test_validate_story_success(agent_sandbox):
     
     # First create a valid story
     story_id = "MOBILE-777"
-    subprocess.run([agent_bin, "new-story", story_id], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True, env=get_venv_env(), timeout=30)
+    subprocess.run([agent_bin, "new-story", story_id, "--offline"], input="Valid Story\n", text=True, cwd=cwd, check=True, capture_output=True, env=get_venv_env(), timeout=30)
     
     # Run validate
     result = subprocess.run([agent_bin, "validate-story", story_id], cwd=cwd, capture_output=True, text=True, env=get_venv_env(), timeout=30)

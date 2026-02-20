@@ -56,7 +56,7 @@ def pr(
              preflight(
                  story_id=story_id, 
                  base=target_branch, 
-                 ai=False, 
+                 offline=True, 
                  provider=provider, 
                  report_file=None,
                  skip_tests=False,

@@ -142,8 +142,12 @@ def test_validate_story_fail_missing():
 @patch("subprocess.check_output")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
 def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_popen):
-    # Mock git log
-    mock_check_output.return_value = b"feat: rewrite agent"
+    # Mock git log and diff
+    def check_output_side_effect(cmd, **kwargs):
+        if "log" in cmd:
+            return b"feat: rewrite agent"
+        return "some diff"
+    mock_check_output.side_effect = check_output_side_effect
     
     # Mock preflight check to pass
     mock_run.return_value = MagicMock(stdout="some_file.py", returncode=0)
@@ -157,7 +161,10 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_pop
     
     # We also need to mock validate_story inside preflight or it will fail
     with patch("agent.commands.check.validate_story") as mock_validate, \
-         patch("agent.core.auth.decorators.validate_credentials"):
+         patch("agent.commands.check.validate_linked_journeys", return_value={"passed": True, "journey_ids": ["JRN-001"], "error": None}), \
+         patch("agent.commands.workflow.validate_credentials"), \
+         patch("agent.core.ai.ai_service.complete", return_value="AI PR Summary"), \
+         patch("agent.commands.workflow.typer.edit", return_value="Manual PR Summary"):
         result = runner.invoke(app, ["pr"])
         
     assert result.exit_code == 0
@@ -171,7 +178,9 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_pop
 
 @patch("subprocess.run")
 def test_commit_command(mock_run):
-    with patch("agent.core.auth.decorators.validate_credentials"):
+    with patch("agent.commands.workflow.validate_credentials"), \
+         patch("agent.core.ai.ai_service.complete", return_value="AI Commit Msg"), \
+         patch("agent.commands.workflow.typer.edit", return_value="Fix bug"):
         # commit requires story ID if branch inference fails (let's assume it fails here)
         with patch("agent.commands.workflow.infer_story_id", return_value=None):
             result = runner.invoke(app, ["commit"], input="Commit message\n")
@@ -199,7 +208,7 @@ def test_preflight_inference(mock_branch, mock_run, mock_popen):
     
     # Needs to mock validate_story to pass
     with patch("agent.commands.check.validate_story") as mock_validate, \
-         patch("agent.core.auth.decorators.validate_credentials"):
+         patch("agent.commands.check.validate_linked_journeys", return_value={"passed": True, "journey_ids": ["JRN-001"], "error": None}):
         result = runner.invoke(app, ["preflight"])
         
     assert result.exit_code == 0

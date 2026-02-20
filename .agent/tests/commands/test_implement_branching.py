@@ -137,6 +137,7 @@ def mock_deps(tmp_path):
 
 def test_implement_dirty_state_fails(app, mock_deps):
     mock_deps["dirty"].return_value = True
+    mock_deps["branch"].return_value = "main"
     
     result = runner.invoke(app, ["INFRA-055"])
     

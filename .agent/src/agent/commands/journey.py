@@ -669,10 +669,10 @@ def backfill_tests(
     journey_id: Optional[str] = typer.Option(
         None, "--journey", help="Target single journey (JRN-XXX)."
     ),
-    ai: bool = typer.Option(
+    offline: bool = typer.Option(
         False,
-        "--ai",
-        help="Generate tests with AI. Previews and prompts before writing.",
+        "--offline",
+        help="Disable AI test generation (local stub only).",
     ),
     write: bool = typer.Option(
         False, "--write", help="Batch-write all without prompts (CI mode)."
@@ -693,7 +693,7 @@ def backfill_tests(
 
     eligible = _iter_eligible_journeys(journeys_dir, scope, journey_id)
     if not eligible:
-        if ai:
+        if not offline:
             console.print("[yellow]No eligible journeys found.[/yellow]")
         else:
             verb = "Would generate" if dry_run else "Generated"
@@ -736,7 +736,7 @@ def backfill_tests(
             content: Optional[str] = None
             used_ai = False
 
-            if ai:
+            if not offline:
                 try:
                     content = _generate_ai_test(
                         data, jid, config.repo_root
@@ -766,7 +766,7 @@ def backfill_tests(
             # Determine output mode
             if dry_run:
                 progress.stop()
-                if ai:
+                if not offline:
                     label = "AI-generated" if used_ai else "Stub"
                     console.print(
                         f"\n[bold]{label} test for {jid}[/bold] → {stub_path}"
@@ -781,7 +781,7 @@ def backfill_tests(
                 progress.update(task, advance=1)
                 continue
 
-            if ai and not write and not write_all:
+            if not offline and not write and not write_all:
                 # Interactive confirm mode
                 progress.stop()
                 label = "AI-generated" if used_ai else "Stub (AI fallback)"
@@ -830,7 +830,7 @@ def backfill_tests(
 
     # Summary metrics
     total = len(eligible)
-    if ai:
+    if not offline:
         console.print(f"\n[bold]Summary:[/bold]")
         console.print(f"  Total processed: {total}")
         console.print(f"  Written:         {written}")

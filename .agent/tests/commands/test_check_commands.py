@@ -182,7 +182,7 @@ def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, m
         # Mock AI Response
         mock_gov_ai.complete.return_value = "Verdict: PASS\nAnalysis: Looks good."
         
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
     
         assert result.exit_code == 0
         assert "running preflight checks" in result.stdout.lower()
@@ -223,7 +223,7 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     mock_gov_ai.complete.side_effect = side_effect
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
     
         assert result.exit_code == 1
     assert "Preflight Blocked by Governance Council" in result.output
@@ -246,7 +246,7 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     
     # Run
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
     
     assert result.exit_code == 0
     
@@ -284,7 +284,7 @@ It avoids the error markdown for a BLOCK verdict.
     mock_gov_ai.complete.return_value = review_text
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
     
     assert result.exit_code == 0
     assert result.exit_code == 0
@@ -311,7 +311,7 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
     mock_gov_ai.complete.return_value = review_text
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai"])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
     
     assert result.exit_code == 0
     assert "Preflight checks passed" in result.stdout
@@ -333,7 +333,7 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
     
     # Run
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--ai", "--report-file", str(report_file)])
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--report-file", str(report_file)])
     
     assert result.exit_code == 0
     

@@ -226,6 +226,7 @@ def test_onboard_happy_path(
         "sk-anthropic", # Anthropic Key
         "2",            # Select Gemini
         "1",            # Select Model (1st in list)
+        "1",            # Select Panel Engine (native)
     ]
 
     # Ensure get_value returns None so it doesn't think provider is configured
@@ -283,7 +284,8 @@ def test_onboard_skip_keys(
     # User hits enter (empty) for all keys (3 keys)
     # Select Provider (4. gh)
     # Select Model (enter to skip)
-    mock_user_input.side_effect = ["", "", "", "4", ""]
+    # Select Panel Engine (1. native)
+    mock_user_input.side_effect = ["", "", "", "4", "", "1"]
     
     # Ensure get_value returns None
     mock_config.get_value.return_value = None
@@ -362,7 +364,7 @@ def test_check_github_auth_not_authenticated_yes(
     # Typer confirm usually uses stdin? Or uses typer.confirm?
     # We patch typer.confirm below.
     # So we just need the standard flow inputs.
-    mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1"]
+    mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1", "1"]
     
     # We also need to mock subprocess.Popen for the login attempt
     with patch("agent.commands.onboard.subprocess.Popen") as mock_popen:
@@ -489,12 +491,13 @@ def test_onboard_migration(
         # 2. Anthropic Input (Skip) -> handled by mock_user_input returning ""
         # 3. Provider Selection (1)
         # 4. Model Selection (1)
+        # 5. Panel Engine Selection (1)
         
         # Note regarding confirm: 
         # The code uses `typer.confirm`. We need to patch it to say Yes.
         
-        # Anthropic skip, Provider 1, Model 1
-        mock_user_input.side_effect = ["", "1", "1"]
+        # Anthropic skip, Provider 1, Model 1, Panel Engine 1
+        mock_user_input.side_effect = ["", "1", "1", "1"]
         
         with patch("agent.commands.onboard.typer.confirm", return_value=True):
             result = mock_runner.invoke(test_app, [])

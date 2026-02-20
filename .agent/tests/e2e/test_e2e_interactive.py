@@ -75,7 +75,7 @@ def test_interactive_preflight_typer_e2e(temp_repo):
             {
                 "title": "Fix Schema",
                 "description": "Adds missing sections",
-                "patched_content": "## Problem Statement\\nFixed\\n## User Story\\n...\\n## Acceptance Criteria\\n...\\n## Non-Functional Requirements\\n...\\n## Impact Analysis Summary\\n...\\n## Test Strategy\\n...\\n## Rollback Plan\\n..."
+                "patched_content": "## Problem Statement\\nFixed\\n## User Story\\n...\\n## Acceptance Criteria\\n...\\n## Non-Functional Requirements\\n...\\n## Impact Analysis Summary\\n...\\n## Test Strategy\\n...\\n## Rollback Plan\\n...\\n## Linked Journeys\\n- JRN-001\\n"
             }
         ]
         """
@@ -157,7 +157,7 @@ def test_interactive_preflight_voice_mode(temp_repo):
             {
                 "title": "Voice Fix",
                 "description": "Voice friendly description",
-                "patched_content": "## Problem Statement\\nFixed\\n## User Story\\n...\\n## Acceptance Criteria\\n...\\n## Non-Functional Requirements\\n...\\n## Impact Analysis Summary\\n...\\n## Test Strategy\\n...\\n## Rollback Plan\\n..."
+                "patched_content": "## Problem Statement\\nFixed\\n## User Story\\n...\\n## Acceptance Criteria\\n...\\n## Non-Functional Requirements\\n...\\n## Impact Analysis Summary\\n...\\n## Test Strategy\\n...\\n## Rollback Plan\\n...\\n## Linked Journeys\\n- JRN-001\\n"
             }
         ]
         """

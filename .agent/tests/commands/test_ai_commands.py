@@ -52,7 +52,7 @@ def clean_env(monkeypatch):
 @patch("agent.core.ai.ai_service.complete")
 @patch("agent.core.config.config.agent_dir") 
 def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
-    with patch("agent.core.auth.decorators.validate_credentials"): # bypass auth
+    with patch("agent.commands.plan.validate_credentials"): # bypass auth
         mock_agent_dir.return_value = mock_deps["root"] / ".agent" 
         
         with patch("agent.core.config.config.stories_dir", mock_deps["root"] / ".agent" / "stories"), \
@@ -63,7 +63,7 @@ def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
             
 
             # Invoke command
-            result = runner.invoke(app, ["new-plan", "STORY-123"], input="My Plan Title\n")
+            result = runner.invoke(app, ["new-plan", "STORY-123"], input="My Plan Title\nMy Context\n")
             
             # Verify
             if result.exit_code != 0:
@@ -118,7 +118,9 @@ def test_match_story_command(mock_complete, mock_deps):
         mock_complete.return_value = "STORY-123"
         
         # files is an argument, not option
-        result = runner.invoke(app, ["match-story", "file1.py file2.py"])
+        # Set NO_COLOR to suppress ansi codes for clean matching
+        import os
+        result = runner.invoke(app, ["match-story", "file1.py file2.py"], env={"NO_COLOR": "1"})
         
         if result.exit_code != 0:
             print(result.stdout)

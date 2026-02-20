@@ -1489,6 +1489,8 @@ def panel(
     """
     Convening the Governance Panel to review changes or discuss design.
     """
+    from agent.core.ai import ai_service
+
     # 0. Configure Panel Engine Override (INFRA-061)
     if panel_engine:
         config._panel_engine_override = panel_engine

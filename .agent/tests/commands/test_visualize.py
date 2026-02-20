@@ -17,9 +17,9 @@
 from unittest.mock import patch
 
 import pytest
-from click.testing import CliRunner
+from typer.testing import CliRunner
 
-from agent.commands.visualize import visualize
+from agent.commands.visualize import app as visualize
 
 runner = CliRunner()
 

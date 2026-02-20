@@ -72,12 +72,18 @@ class TestPreflightReport(unittest.TestCase):
         self.mock_convene_patch = patch('agent.commands.check.convene_council_full')
         self.mock_convene = self.mock_convene_patch.start()
 
+        self.mock_journey_patch = patch('agent.commands.check.validate_linked_journeys')
+        self.mock_journey = self.mock_journey_patch.start()
+        self.mock_journey.return_value = {"passed": True, "journey_ids": [], "error": None}
+
+
     def tearDown(self):
         self.mock_console_patch.stop()
         self.mock_run_patch.stop()
         self.mock_validate_patch.stop()
         self.mock_analyzer_patch.stop()
         self.mock_convene_patch.stop()
+        self.mock_journey_patch.stop()
         shutil.rmtree(self.test_dir)
 
     def test_report_generated_on_success(self):
@@ -87,7 +93,7 @@ class TestPreflightReport(unittest.TestCase):
         try:
             check.preflight(
                 story_id="TEST-001",
-                ai=False,
+                offline=True,
                 report_file=self.report_path,
                 skip_tests=True,
                 base=None,
@@ -109,17 +115,17 @@ class TestPreflightReport(unittest.TestCase):
         # Mock governance block
         self.mock_convene.return_value = {
             "verdict": "BLOCK",
+            "log_file": "log.md",
             "json_report": {
                 "roles": [{"name": "Security", "verdict": "BLOCK", "findings": ["Bad implementation"]}],
                 "overall_verdict": "BLOCK"
-            },
-            "log_file": "log.md"
+            }
         }
 
         try:
             check.preflight(
                 story_id="TEST-002",
-                ai=True,
+                offline=False,
                 report_file=self.report_path,
                 skip_tests=True,
                 base=None,

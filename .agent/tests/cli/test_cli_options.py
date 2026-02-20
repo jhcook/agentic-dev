@@ -53,7 +53,7 @@ def test_preflight_options():
     result = runner.invoke(app, ["preflight", "--help"])
     assert result.exit_code == 0
     assert "--story" in result.stdout
-    assert "--ai" in result.stdout
+    assert "--offline" in result.stdout
     assert "--base" in result.stdout
 
 def test_list_options():

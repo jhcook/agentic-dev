@@ -155,10 +155,7 @@ def graph(
     duration_ms = (end_time - start_time) * 1000
     node_count = len(project_graph['nodes'])
     edge_count = len(project_graph['edges'])
-    console.print(
-        f"[dim]Generated graph with {node_count} nodes and {edge_count} edges in {duration_ms:.2f}ms[/dim]",
-        stderr=True,
-    )
+    console.print(f"[dim]Generated graph with {node_count} nodes and {edge_count} edges in {duration_ms:.2f}ms[/dim]")
 
 
 @app.command()
@@ -217,7 +214,4 @@ def flow(
     duration_ms = (end_time - start_time) * 1000
     node_count = len(flow_graph['nodes'])
     edge_count = len(flow_graph['edges'])
-    console.print(
-        f"[dim]Generated flow with {node_count} nodes and {edge_count} edges in {duration_ms:.2f}ms[/dim]",
-        stderr=True,
-    )
+    console.print(f"[dim]Generated flow with {node_count} nodes and {edge_count} edges in {duration_ms:.2f}ms[/dim]")
