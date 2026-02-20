@@ -14,6 +14,8 @@
 
 from typing import Optional
 
+import re
+
 import typer
 from rich.console import Console
 
@@ -50,7 +52,6 @@ def new_runbook(
          raise typer.Exit(code=1)
 
     # 1.1 Enforce Story State
-    import re
     story_text = story_file.read_text()
     
     # Check for both formats: "State: COMMITTED" (inline) and "## State\nCOMMITTED" (multiline)

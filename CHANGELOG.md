@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Source Code Context for Runbook Generation** (INFRA-066):
+  - `agent new-runbook` now includes source file tree and code outlines in AI prompts.
+  - Produces runbooks with accurate file paths and SDK usage matching the actual codebase.
+  - Configurable character budget via `AGENT_SOURCE_CONTEXT_CHAR_LIMIT` env var (default: 8000).
+  - Graceful degradation when `src/` directory is absent.
+
 - **Vertex AI Provider Support** (INFRA-065):
   - New `provider: vertex` option in `agent.yaml` for Google Vertex AI with ADC authentication.
   - Higher rate limits and production-grade scalability vs free-tier Gemini.
