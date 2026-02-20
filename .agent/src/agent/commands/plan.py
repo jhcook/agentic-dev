@@ -28,7 +28,7 @@ console = Console()
 
 def new_plan(
     plan_id: Optional[str] = typer.Argument(None, help="The ID of the plan (e.g., INFRA-001)."),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI generation."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI and use manual input for plan."),
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Context for AI generation.")
 ):
     """
@@ -82,7 +82,11 @@ def new_plan(
         content = template_path.read_text()
         content = f"# {plan_id}: {title}\n\n" + content
         
-        if ai:
+        if offline:
+            edited_content = typer.edit(text=content)
+            if edited_content:
+                content = edited_content
+        else:
             validate_credentials(check_llm=True)
             from agent.core.ai import ai_service
             
@@ -97,7 +101,10 @@ def new_plan(
                 if generated:
                     content = generated
             except Exception as e:
-                console.print(f"[yellow]⚠️  AI generation failed: {e}[/yellow]")
+                console.print(f"[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
+                edited_content = typer.edit(text=content)
+                if edited_content:
+                    content = edited_content
     else:
         # Fallback template
         content = f"""# {plan_id}: {title}
@@ -115,6 +122,10 @@ High-level description of the change.
 ## Verification
 How we will confirm the plan was successful.
 """
+        if offline:
+            edited_content = typer.edit(text=content)
+            if edited_content:
+                content = edited_content
 
     file_path.write_text(content)
     console.print(f"[bold green]✅ Created Plan: {file_path}[/bold green]")

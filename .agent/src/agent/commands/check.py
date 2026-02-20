@@ -376,7 +376,7 @@ def _print_reference_summary(console: Console, roles_data: list, ref_metrics: di
 
 def preflight(
     story_id: Optional[str] = typer.Option(None, "--story", help="The story ID to validate against."),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI-powered governance review."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI-powered governance review."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)"),
     report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
@@ -391,7 +391,7 @@ def preflight(
 
     Args:
         story_id: The ID of the story to validate.
-        ai: Enable AI-powered governance review (requires keys or gh cli).
+        offline: Disable AI-powered governance review.
         base: Base branch for comparison (defaults to staged changes).
         provider: Force a specific AI provider (gh, gemini, vertex, openai, anthropic).
         report_file: Path to save the preflight report as JSON.
@@ -981,7 +981,7 @@ def preflight(
         full_diff = ""
         
     # --- SCRUBBING ---
-    if ai:
+    if not offline:
         console.print("[dim]🔒 Scrubbing sensitive data from diff before AI analysis...[/dim]")
         full_diff = scrub_sensitive_data(full_diff)
         story_content = scrub_sensitive_data(story_content) # Scrub story too just in case
@@ -989,15 +989,21 @@ def preflight(
         instructions_content = scrub_sensitive_data(instructions_content)
     # -----------------
 
-    if ai:
+    if not offline:
         # Validate credentials before AI governance review
         from agent.core.auth.credentials import validate_credentials
         from agent.core.auth.errors import MissingCredentialsError
         try:
             validate_credentials(check_llm=True)
         except MissingCredentialsError as e:
-            console.print(str(e))
-            raise typer.Exit(code=1)
+            console.print(f"[yellow]⚠️  AI Governance Review skipped (credentials missing): {e}[/yellow]")
+            # If AI is default, we don't hard crash here, just warn and continue offline behavior.
+            json_report["overall_verdict"] = "PASS" if tests_passed else "FAIL"
+            # Return early if credentials are missing
+            if not interactive:
+                exit_code = 0 if tests_passed else 1
+                raise typer.Exit(code=exit_code)
+            return
 
         # Interactive repair loop — re-run governance after each fix
         MAX_GOVERNANCE_RETRIES = 3
@@ -1211,7 +1217,7 @@ def preflight(
 
 def impact(
     story_id: str = typer.Argument(..., help="The ID of the story."),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI-powered impact analysis."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI-powered impact analysis."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."),
@@ -1221,8 +1227,8 @@ def impact(
     """
     Run impact analysis for a story.
     
-    Default: Static analysis (files touched).
-    --ai: AI-powered analysis (risk, breaking changes).
+    Default: AI-powered analysis (risk, breaking changes).
+    --offline: Static analysis (files touched).
     """
     logger = get_logger(__name__)
     console.print(f"[bold blue]🔍 Running impact analysis for {story_id}...[/bold blue]")
@@ -1258,9 +1264,9 @@ def impact(
         return
 
     # 3. Generate Analysis
-    analysis = ""
+    analysis = "Static Impact Analysis:\n" + "\n".join(f"- {f}" for f in files)
     
-    if ai:
+    if not offline:
         # AI Mode
         # Credentials validated by @with_creds decorator in main.py
         console.print("[dim]🤖 Generating AI impact analysis...[/dim]")
@@ -1286,7 +1292,10 @@ def impact(
             analysis = ai_service.get_completion(prompt)
         except Exception as e:
             console.print(f"[bold red]❌ AI Analysis Failed: {e}[/bold red]")
-            raise typer.Exit(code=1)
+            console.print("[dim]Opening editor for manual analysis entry...[/dim]")
+            edited = typer.edit(text=analysis)
+            if edited:
+                analysis = edited
             
     else:
         # Static Mode - Use Dependency Analyzer

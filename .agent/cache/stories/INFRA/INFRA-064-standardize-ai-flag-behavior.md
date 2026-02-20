@@ -1,24 +1,27 @@
-# INFRA-064: Standardize --ai Flag Behavior Across CLI Commands
+# INFRA-064: Standardize AI by Default and Graceful Degradation Across CLI Commands
 
 ## State
 
-DRAFT
+IN_PROGRESS
 
 ## Plan
 
 ### Problem Statement
 
-The `--ai` flag appears in 7 commands across 5 files, but each command implements it differently. Some write output directly, others preview to stdout, and there is no consistent interactive confirm UX. INFRA-063 introduced a generate → preview → confirm pattern for `backfill-tests --ai`. This story standardizes that pattern across all applicable commands.
+The CLI currently relies on an explicit `--ai` flag to leverage AI capabilities (like generating runbooks or performing preflight analysis). This requires users to constantly opt-in, increasing friction. Furthermore, when offline (e.g., on a flight), users face inconsistent UX and crashes if AI requests fail.
+
+We need to transition to an "AI by Default" paradigm where commands use AI automatically, governed by an `--offline` (or `--no-ai`) opt-out flag. Crucially, when the AI is unreachable, the system must gracefully degrade—either by falling back to standard manual workflows (like opening `$EDITOR`) or exiting cleanly with a friendly error, rather than throwing tracebacks. We must also preserve a consistent generate → preview → confirm pattern for AI-generated artifacts to prevent unexpected writes.
 
 ### User Story
 
 > As a developer using the agent CLI,
-> I want all `--ai` commands to behave consistently,
-> so that I always know what to expect: preview first, then confirm, with `--write` for CI and `--dry-run` for preview-only.
+> I want AI features to be the default behavior so I don't have to remember to add `--ai`,
+> and I want the CLI to gracefully switch to offline mode or fail cleanly when I don't have internet access,
+> so that I can seamlessly work on flights or in disconnected environments and still retain control over what gets written to disk.
 
 ### Commands In Scope
 
-| # | Command | File | Current `--ai` Behavior |
+| # | Command | File | Current Behavior |
 |---|---------|------|------------------------|
 | 1 | `pr` | `workflow.py:37` | Generates PR body summary |
 | 2 | `commit` | `workflow.py:147` | Infers story + generates commit message |
@@ -30,28 +33,25 @@ The `--ai` flag appears in 7 commands across 5 files, but each command implement
 
 ### Scope Determination
 
-Not all commands benefit from interactive confirm. The pattern is most valuable for commands that **generate files or content the user should review before persisting**:
+Not all commands degrade the same way when offline:
 
-- **Apply interactive confirm**: `new-story`, `new-runbook`, `journey new`, `pr`, `commit`
-- **Keep as-is**: `preflight`, `impact` (these are read-only analysis tools — their output IS the deliverable)
+- **AI by Default + Interactive Confirm**: `new-story`, `new-runbook`, `journey new`, `pr`, `commit`. If offline, these commands should quietly fall back to generating empty boilerplate and opening `$EDITOR`.
+- **AI by Default + Read-Only Output**: `preflight`, `impact`. These are entirely dependent on AI. If offline, they should print a clear, friendly error (e.g., "Cannot reach AI provider. Skipping AI analysis...") and exit smoothly.
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: All applicable `--ai` commands follow the same 3-mode pattern:
-  - `--ai` → generate → Rich preview → `Write? [y/N]` interactive confirm
-  - `--ai --write` → batch write, no prompts (CI/automation mode)
-  - `--ai --dry-run` → preview only, no prompts, no writes
-- [ ] **AC-2**: Shared `_ai_confirm_write(content, target_path, ...)` utility function in a common module (e.g., `agent/commands/_ai_utils.py`) to avoid duplicating the Rich preview + confirm logic.
-- [ ] **AC-3**: `preflight --ai` and `impact --ai` are explicitly excluded — their output is immediate analysis, not file generation.
-- [ ] **AC-4**: All commands emit structured logs with consistent fields: `command`, `ai_status` (success/fallback/skipped), `duration_s`.
-- [ ] **AC-5**: `--write` without `--ai` is a no-op with a helpful warning message.
-- [ ] **AC-6**: Help text for `--ai`, `--write`, and `--dry-run` is standardized across all commands.
+- [ ] **AC-1**: All applicable CLI commands drop the `--ai` flag and attempt to use AI by default.
+- [ ] **AC-2**: An `--offline` (or `--no-ai`) flag is globally introduced to bypass AI explicitly.
+- [ ] **AC-3**: Graceful Degradation is implemented. On connection timeout or error, generative workflows (`commit`, `new-story`, etc.) fall back to manual input in `$EDITOR`. Analysis commands (`preflight`, `impact`) print a user-friendly error and exit cleanly.
+- [ ] **AC-4**: File-generating commands retain the 3-mode confirm pattern: AI generation → Rich preview → `Write? [y/N]` interactive confirm. `--write` executes a batch write (CI mode), and `--dry-run` previews without writing.
+- [ ] **AC-5**: Shared `_ai_confirm_write(content, target_path, ...)` utility function is introduced in a common module (e.g., `agent/commands/_ai_utils.py`) to handle preview and confirm logic.
+- [ ] **AC-6**: Structured logs include consistent fields: `command`, `ai_status` (success/offline/fallback_editor), and `duration_s`.
+- [ ] **AC-7**: Help text for `--offline`, `--write`, and `--dry-run` is standardized across all commands.
 
 ## Non-Functional Requirements
 
-- **Backwards Compatibility**: Existing `--ai` behavior must not break. The interactive confirm is additive.
-- **Consistency**: Flag names, help text wording, and Rich panel styling must be identical across commands.
-- **Testability**: The shared utility must be independently testable with mock Rich console.
+- **Graceful Failure**: A lack of internet access should NEVER cause a Python traceback visible to the user.
+- **Consistency**: Flag names, help text wording, and Rich panel styling must be consistent.
 
 ## Impact Analysis
 
@@ -59,32 +59,42 @@ Not all commands benefit from interactive confirm. The pattern is most valuable 
 
 | File | Change |
 |------|--------|
-| `commands/_ai_utils.py` | NEW — shared `_ai_confirm_write()`, `_ai_preview_panel()` |
-| `commands/workflow.py` | Adopt shared utility for `pr` and `commit` |
-| `commands/story.py` | Adopt shared utility for `new-story` |
-| `commands/plan.py` | Adopt shared utility for `new-runbook` |
-| `commands/journey.py` | Adopt shared utility for `journey new` (and `backfill-tests` from INFRA-063) |
+| `commands/_ai_utils.py` | NEW — shared `_ai_confirm_write()`, `_ai_preview_panel()`, graceful degradation handlers |
+| `commands/workflow.py` | Adopt AI by default and graceful fallback for `pr` and `commit` |
+| `commands/story.py` | Adopt AI by default and graceful fallback for `new-story` |
+| `commands/plan.py` | Adopt AI by default and graceful fallback for `new-runbook` |
+| `commands/journey.py` | Adopt AI by default and graceful fallback for `journey new` |
+| `commands/check.py` | Adopt AI by default and graceful failure for `preflight` and `impact` |
 
 ### Risks
 
-- **Low**: Adding `--write` / `--dry-run` flags to existing commands may confuse users if not documented.
-- **Mitigation**: Update help text and `commands.md` documentation.
+- **Medium**: Many existing user journeys and CI scripts rely on the explicit `--ai` flag. Removing `--ai` might break automated scripts that check for flag validation, and changing default behavior might surprise users who are used to manual entry.
+- **Mitigation**: Update all user journeys in the codebase to remove the `--ai` flag and use `--offline` where manual testing is intended. Clearly document the change in `CHANGELOG.md` and `README.md`. Keep `--ai` as a deprecated, ignored flag temporarily if needed to avoid breaking CI.
+
+## Linked Journeys
+
+- JRN-013: Fallback and CLI Integration Tests
 
 ## Test Strategy
 
 ### Unit Tests
 
-- [ ] Test `_ai_confirm_write()` with mocked Rich console — confirm yes / no / all / skip
-- [ ] Test `--ai --write` skips prompts and writes
-- [ ] Test `--ai --dry-run` previews only
-- [ ] Test `--write` without `--ai` emits warning
-- [ ] Test help text consistency across commands
+- [ ] Test `--offline` explicitly bypasses AI generation and calls standard behavior.
+- [ ] Test network failure triggers `$EDITOR` fallback for generative commands.
+- [ ] Test network failure triggers clean exit for `preflight`/`impact`.
+- [ ] Test `_ai_confirm_write()` with yes / no / all / skip.
 
 ### Integration Tests
 
-- [ ] Run `agent new-story --ai --dry-run INFRA-TEST` → verify preview output
-- [ ] Run `agent new-runbook --ai --dry-run INFRA-TEST` → verify preview output
+- [ ] Run `agent new-story --offline INFRA-TEST` → verify it skips AI and opens editor.
+- [ ] Run `agent preflight` with network disabled → verify clean error without traceback.
 
-## Dependencies
+## Impact Analysis Summary
 
-- **INFRA-063**: Introduces the pattern in `backfill-tests`. This story extracts and generalizes it.
+- Components touched: CLI Sub-commands (`workflow.py`, `journey.py`, `plan.py`, `story.py`, `check.py`).
+- Workflows affected: PR, Commit, New Journey, New Plan, New Story, Preflight, Impact.
+- Risks identified: Automated scripts relying on `--ai` fail. Fallback to `typer.edit()` may stall headless CI if not bypassed via `--yes`.
+
+## Rollback Plan
+
+Revert the PR containing the modifications to the CLI arguments and return to the explicit `--ai` flag setup.

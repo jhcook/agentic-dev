@@ -29,7 +29,7 @@ console = Console()
 
 def new_story(
     story_id: Optional[str] = typer.Argument(None, help="The ID of the story (e.g., MOBILE-001)."),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI generation."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI and use manual input for story."),
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Context for AI generation.")
 ):
     """
@@ -85,7 +85,11 @@ def new_story(
         content = content.replace("STORY-XXX", story_id)
         content = content.replace(": Title", f": {title}")
         
-        if ai:
+        if offline:
+            edited_content = typer.edit(text=content)
+            if edited_content:
+                content = edited_content
+        else:
             validate_credentials(check_llm=True)
             from agent.core.ai import ai_service
             
@@ -100,7 +104,10 @@ def new_story(
                 if generated:
                     content = generated
             except Exception as e:
-                console.print(f"[yellow]⚠️  AI generation failed: {e}[/yellow]")
+                console.print(f"[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
+                edited_content = typer.edit(text=content)
+                if edited_content:
+                    content = edited_content
 
     else:
         # Fallback template
@@ -136,6 +143,10 @@ How will we verify correctness?
 ## Rollback Plan
 How do we revert safely?
 """
+        if offline:
+            edited_content = typer.edit(text=content)
+            if edited_content:
+                content = edited_content
 
     file_path.write_text(content)
     console.print(f"[bold green]✅ Created story: {file_path}[/bold green]")

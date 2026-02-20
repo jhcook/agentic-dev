@@ -75,8 +75,8 @@ def new_journey(
     journey_id: Optional[str] = typer.Argument(
         None, help="The ID of the journey (e.g., JRN-001). Auto-generated if omitted."
     ),
-    ai: bool = typer.Option(
-        False, "--ai", help="Use AI to generate journey content from a description."
+    offline: bool = typer.Option(
+        False, "--offline", help="Disable AI and use manual input for journey content."
     ),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
@@ -144,7 +144,13 @@ linked_adrs: []
 """
 
     # AI-assisted content generation
-    if ai:
+    if offline:
+        # Prompt for manual entry via editor
+        console.print("[dim]Opening editor for manual journey creation...[/dim]")
+        edited_content = typer.edit(text=content)
+        if edited_content:
+            content = edited_content
+    else:
         console.print("[bold blue]🤖 AI-assisted journey generation...[/bold blue]")
         description = Prompt.ask(
             "Describe the user journey in a few sentences"
@@ -203,10 +209,16 @@ Generate the journey YAML now.
                     console.print("[bold green]✅ AI generated valid journey content[/bold green]")
                 except yaml.YAMLError:
                     console.print(
-                        "[yellow]⚠️  AI output was not valid YAML. Using template instead.[/yellow]"
+                        "[yellow]⚠️  AI output was not valid YAML. Falling back to editor.[/yellow]"
                     )
+                    edited_content = typer.edit(text=ai_content)
+                    if edited_content:
+                        content = edited_content
         except Exception as e:
-            console.print(f"[yellow]⚠️  AI generation failed: {e}. Using template.[/yellow]")
+            console.print(f"[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
+            edited_content = typer.edit(text=content)
+            if edited_content:
+                content = edited_content
 
     # Write file
     file_path.write_text(content)

@@ -35,7 +35,7 @@ def pr(
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI to generate a detailed PR body summary."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI and use manual input for PR summary."),
     skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip preflight checks (audit-logged)."),
 ):
     """
@@ -94,7 +94,11 @@ def pr(
             story_link = story_id
 
     summary = commit_msg
-    if ai:
+    if offline:
+        content = typer.edit(text=f"<!-- \nManual input required. \nPlease write your PR summary below.\n-->\n{commit_msg}")
+        if content:
+            summary = content.strip()
+    else:
         validate_credentials(check_llm=True)
         console.print("[dim]🤖 AI is generating a PR summary...[/dim]")
         try:
@@ -117,7 +121,10 @@ def pr(
                  if generated:
                      summary = generated.strip()
         except Exception as e:
-             console.print(f"[yellow]⚠️  AI PR summary generation failed: {e}[/yellow]")
+             console.print(f"[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
+             content = typer.edit(text=f"<!-- \nManual input required (AI generation failed). \nPlease write your PR summary below.\n-->\n{commit_msg}")
+             if content:
+                 summary = content.strip()
 
     from agent.core.utils import scrub_sensitive_data
     body = tpl.format(
@@ -146,7 +153,7 @@ def commit(
     story_id: Optional[str] = typer.Option(None, "--story", help="Story ID."),
     runbook_id: Optional[str] = typer.Option(None, "--runbook", help="Runbook ID."),
     message: Optional[str] = typer.Option(None, "--message", "-m", help="Commit message."),
-    ai: bool = typer.Option(False, "--ai", help="Enable AI to infer story and generate commit message."),
+    offline: bool = typer.Option(False, "--offline", help="Disable AI and use manual input for commit message."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation/editing.")
 ):
@@ -154,11 +161,11 @@ def commit(
     Commit changes with a governed message.
     """
     # Configure AI if requested
-    if ai and provider:
+    if not offline and provider:
         validate_credentials(check_llm=True)
         from agent.core.ai import ai_service  # ADR-025: lazy init
         ai_service.set_provider(provider)
-    elif ai: 
+    elif not offline: 
         validate_credentials(check_llm=True)
         # Ensure ai_service init is triggered if not explicitly imported at top level
         from agent.core.ai import ai_service  # ADR-025: lazy init
@@ -167,7 +174,7 @@ def commit(
     if not story_id:
         story_id = infer_story_id()
         
-    if not story_id and ai:
+    if not story_id and not offline:
         console.print("[dim]🤖 AI is attempting to infer Story ID from changed files...[/dim]")
         # Get changed files
         try:
@@ -188,10 +195,9 @@ def commit(
          raise typer.Exit(code=1)
          
     # 2. Generate or Ask for Message
-    # 2. Generate or Ask for Message
     is_interactive = message is None
 
-    if not message and ai:
+    if not message and not offline:
         console.print("[dim]🤖 AI is generating a commit message...[/dim]")
         try:
              diff_content = subprocess.check_output(["git", "diff", "--cached"], text=True)
@@ -208,10 +214,12 @@ def commit(
                  if generated:
                      message = generated.strip().strip('"').strip("'")
         except Exception as e:
-             console.print(f"[yellow]⚠️  AI commit message generation failed: {e}[/yellow]")
+             console.print(f"[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
 
     if is_interactive and not yes:
-        message = Prompt.ask("Commit message", default=message or "")
+        message = typer.edit(text=f"<!-- \nManual input required. \nPlease enter your commit message below. Edit the AI suggestion if present.\n-->\n{message or ''}")
+        if message:
+            message = message.strip()
     
     if not message:
          console.print("[bold red]❌ Commit message is required.[/bold red]")
