@@ -92,6 +92,29 @@ Rewrite the prompt format in `governance.py` to force the agent to cite its tool
 - [ ] **AC-10** (Notion Sync Awareness): Before the Oracle preflight begins, it must trigger a lightweight validation check against the Notion sync state (or automatically run the sync protocol) to ensure the Local Vector DB/tool context is identical to the source of truth, preventing stale local data from being retrieved.
 - [ ] **AC-11** (NotebookLM Routing): When the NotebookLM Enterprise API MCP server is detected in the environment, retrieval queries must route through the MCP server first, deferring to the Local Vector DB only as a fallback.
 
+## Non-Functional Requirements
+
+- Performance: Must run faster than context stuffing approach.
+- Security: No PII pushed to vendor LLMs without explicit prompt tracking.
+- Compliance: SOC2 compliant audit trail for tool usage.
+
+## Impact Analysis Summary
+
+Components touched: `agent/commands/check.py`, `agent/core/governance.py`, `agent.sync.notion`
+Workflows affected: Preflight checks, Governance assembly
+Risks identified: Potential latency if tools are overused, but offset by caching.
+
+## Test Strategy
+
+- Run unit tests to verify tool bindings.
+- Run integration tests to ensure preflight still works.
+- Verify exit codes are correct and output contains properly cited findings.
+
+## Rollback Plan
+
+- Revert to `--legacy-context` if the new Oracle pattern has issues.
+- Git revert the commit if fundamental breakages occur.
+
 ## Tests
 
 - Run `agent preflight` on a test branch and verify trace/logs show tools `read_file` and `read_adr` being actively used.
