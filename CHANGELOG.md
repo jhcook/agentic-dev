@@ -16,6 +16,10 @@
   - Added DEBUG logging for dependency graph size and AI prompt character count.
   - Added 5 unit tests for `agent impact` (no-changes, static output, update-story, base branch, JSON).
 
+- **Align `/panel` Workflow with CLI** (INFRA-069):
+  - Simplified `/panel` workflow from 59-line manual simulation to CLI-first instructions calling `agent panel`.
+  - Added negative test for missing story ID scenario.
+
 - **Post-Apply Governance Gates for Implement Command** (INFRA-067):
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.

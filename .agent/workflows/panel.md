@@ -4,55 +4,39 @@ description: Convene the AI Governance Panel for expert consultation.
 
 # Panel Consultation
 
-You are the Governance Panel for this repository.
-This workflow mimics the behavior of the `agent panel` CLI command but executes via the Agent directly.
+## PURPOSE
 
-**PURPOSE**: 
-This is a **Consultative** session. 
-Unlike `preflight`, you are NOT acting as a gatekeeper. You are acting as a board of experts providing advice, warnings, and recommendations. 
-You offer **ADVICE** and **WARNINGS**, not blocking verdicts.
+This is a **Consultative** session — unlike `preflight`, the panel is NOT a gatekeeper. It acts as a board of experts providing advice, warnings, and recommendations. No BLOCK/PASS verdicts — only advisory framing.
 
-CONTEXT:
-- Use `git diff --cached` as your primary source of truth for code changes.
-- Read the relevant Story file from `.agent/cache/stories/` to understand the requirements.
-- Read `.agent/etc/agents.yaml` to understand your Roles.
+## PROCESS
 
-WORKFLOW:
+1. **Run** `agent panel <STORY-ID>` for consultative governance review.
+2. **Compare branches** with `agent panel <STORY-ID> --base main`.
+3. **Auto-apply** with `agent panel <STORY-ID> --apply` to inject advice into story/runbook.
+4. **Ask questions** with `agent panel "How should we approach X for INFRA-069?"`.
+5. **Override engine** with `agent panel <STORY-ID> --panel-engine adk|native`.
 
-1. **Simulate the Council**:
-   - You must adopt the persona of EVERY role defined in `.agent/etc/agents.yaml` (e.g., Architect, Security, QA, Compliance, Product, etc.).
+## FLAGS
 
-2. **Conduct Consultations**:
-   - For EACH role, analyze the changes and provide **expert commentary**.
-   - **@Architect**: Comment on patterns, scalability, and long-term implications.
-   - **@Security**: Highlight potential risks or areas that need hardening.
-   - **@QA**: Suggest testing strategies or point out edge cases.
-   - **@Compliance**: Advise on data handling nuances.
-   - **@Product**: detailed check on value alignment.
-   - *(And all other roles defined in agents.yaml)*
+| Flag | Description |
+|------|-------------|
+| `--base <branch>` | Compare against a specific branch (default: staged changes) |
+| `--provider <name>` | Force AI provider (gh, gemini, vertex, openai, anthropic) |
+| `--apply` | Auto-apply panel advice to story/runbook file |
+| `--panel-engine <engine>` | Override panel engine: `adk` or `native` |
 
-3. **Output The Report**:
-   - Provide a consolidated consultation report.
+## OUTPUT
 
-```markdown
-# Governance Panel Consultation
+The command produces a **Governance Panel Consultation** report with:
 
-**Story**: [Story ID]
+- Per-role expert commentary (@Architect, @Security, @QA, @Compliance, @Product, etc.)
+- Sentiment indicators (Positive / Neutral / Negative)
+- Actionable recommendations per role
+- Consensus summary
 
-## [Role Name] (@role)
-**Sentiment**: [Positive | Neutral | Negative]
-**Advice**:
-- [ ] Recommendation 1...
-- [ ] Observation 2...
-**Deep Dive**: [Paragraph with specific technical advice]
+## NOTES
 
-...(repeat for all roles)...
-
-## Consensus Summary
-[A synthesis of the panel's advice. What should the developer focus on?]
-```
-
-RULES:
-- Do NOT use "BLOCK" or "PASS". Use implementation advice.
-- Be helpful, constructive, and forward-looking.
-- Identify risks early, but frame them as "Things to consider" rather than "Violations".
+- Use **Advice** and **Recommendations** framing, not BLOCK/PASS
+- Panel reads story/runbook context automatically
+- If no changes are staged, the panel operates in **Design Review mode** (document context only)
+- See `agent panel --help` for all options

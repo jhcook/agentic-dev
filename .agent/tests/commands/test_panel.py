@@ -76,3 +76,20 @@ def test_panel_with_story_arg(mock_subproc, mock_read, mock_infer, mock_convene,
     assert "MY-STORY" in result.stdout
     mock_convene.assert_called()
 
+
+@patch("agent.core.auth.credentials.get_secret_manager")
+@patch("agent.commands.check.infer_story_id", return_value=None)
+@patch("subprocess.run")
+def test_panel_no_story_id_errors(mock_subproc, mock_infer, mock_sm):
+    """Test 'agent panel' with no story ID and no inference fails cleanly."""
+    mock_sm.return_value.is_initialized.return_value = False
+    mock_sm.return_value.is_unlocked.return_value = False
+
+    mock_run_return = MagicMock()
+    mock_run_return.stdout = ""
+    mock_subproc.return_value = mock_run_return
+
+    result = runner.invoke(app, ["panel"])
+
+    assert result.exit_code == 1
+    assert "Story ID is required" in result.stdout
