@@ -1,0 +1,76 @@
+# Journey: JRN-061
+# Linked Story: INFRA-072
+# Title: Voice Session Review Workflow
+
+id: JRN-061
+title: Voice Session Review Workflow
+state: DRAFT
+schema_version: 1
+priority: low
+tags:
+- infra
+- cli
+- voice
+actor: developer using agent CLI
+description: >
+  Voice session review workflow. Developer runs `agent review-voice` to
+  fetch the last voice agent session, run AI-powered UX analysis, and get
+  structured feedback on latency, accuracy, tone, and interruption handling.
+preconditions:
+- Agent CLI is installed and configured
+- Voice agent infrastructure is running or session data is available
+- AI provider is configured
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent review-voice`
+  system_response: CLI executes fetch_last_session.py and captures session history
+  assertions:
+  - Session data is fetched successfully
+  - Empty session is handled gracefully
+- id: 2
+  action: System analyzes session with AI
+  system_response: CLI sends session history to AI for UX evaluation
+  assertions:
+  - AI evaluates latency, accuracy, tone, and interruption
+  - Analysis references specific conversation turns
+- id: 3
+  action: System outputs structured feedback
+  system_response: CLI displays per-category ratings and recommendations
+  assertions:
+  - Recommendations target voice_system_prompt.txt or voice.yaml
+  - Output is actionable and specific
+error_paths:
+- trigger_step: 1
+  condition: No active session found
+  system_response: CLI reports no session found and exits with code 0
+  assertions:
+  - Clear message indicating no active session
+  severity: expected
+- trigger_step: 1
+  condition: fetch_last_session.py script not found
+  system_response: CLI reports missing script with installation guidance
+  assertions:
+  - Error is actionable
+  severity: expected
+edge_cases:
+- scenario: Very long session exceeds token limits
+  expected: Session is truncated with clear marker
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-072
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/voice.py
+  - .agent/src/agent/main.py
+  - .agent/workflows/review-voice.md
+  tests: []

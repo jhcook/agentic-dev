@@ -1,0 +1,141 @@
+# Journey: JRN-056
+# Linked Story: INFRA-067
+# Title: Full Implementation Workflow
+
+id: JRN-056
+title: Full Implementation Workflow
+state: DRAFT
+schema_version: 1
+priority: high
+tags:
+- infra
+- cli
+- governance
+actor: developer using agent CLI
+description: >
+  End-to-end implementation workflow from runbook to verified code. Covers
+  pre-validation, journey gate, AI code generation, post-apply security scan,
+  QA validation, documentation check, and structured verdict output.
+  Post-apply phases use composable functions from gates.py with externalized
+  security patterns and configurable test commands.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+- An ACCEPTED runbook exists
+- Story has linked journeys
+- .agent/etc/security_patterns.yaml exists (or defaults are used)
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent implement <RUNBOOK-ID> --apply --yes`
+  system_response: CLI validates runbook status is ACCEPTED
+  assertions:
+  - Runbook file is found and status is ACCEPTED
+  - Non-ACCEPTED runbooks are rejected with exit code 1
+- id: 2
+  action: System checks branch and git state
+  system_response: CLI creates or switches to story branch, rejects dirty working tree
+  assertions:
+  - Feature branch is created or switched to
+  - Dirty working tree is rejected with clear error
+- id: 3
+  action: System validates journey gate
+  system_response: CLI validates linked journeys exist for the story
+  assertions:
+  - Stories with valid JRN-NNN IDs pass the gate
+  - Stories with only JRN-XXX placeholder are blocked
+  - --skip-journey-check bypasses gate with audit log entry
+- id: 4
+  action: System generates code via AI
+  system_response: AI produces implementation code based on runbook and governance context
+  assertions:
+  - AI receives runbook content, governance rules, and ADRs
+  - Generated code is returned as markdown with file paths
+- id: 5
+  action: System runs post-apply security scan (gates.run_security_scan)
+  system_response: CLI scans generated code using patterns from security_patterns.yaml
+  assertions:
+  - Code containing eval(user_input) is flagged
+  - Code containing API key patterns is flagged
+  - Clean code passes without false positives
+  - --skip-security bypasses scan with audit log entry
+  - Detected PII is reported but never logged or persisted
+- id: 6
+  action: System runs QA gate (gates.run_qa_gate)
+  system_response: CLI executes test command from agent.yaml (default make test)
+  assertions:
+  - Passing tests allow implementation to continue
+  - Failing tests block implementation with clear error
+  - --skip-tests bypasses gate with audit log entry
+  - Missing test command produces warning, not failure
+- id: 7
+  action: System checks documentation (gates.run_docs_check)
+  system_response: CLI verifies modified Python files have docstrings
+  assertions:
+  - Functions with docstrings pass
+  - Functions without docstrings are flagged as warnings
+- id: 8
+  action: System outputs structured verdict
+  system_response: CLI prints per-phase summary with timing
+  assertions:
+  - Each phase shows APPROVE/BLOCK with duration (e.g. Security Scan ... PASSED 1.2s)
+  - All phases APPROVE results in overall APPROVED status
+  - Any phase BLOCK results in overall BLOCKED status
+  - User is prompted to run /preflight before committing
+  - --json flag produces machine-readable output
+error_paths:
+- trigger_step: 1
+  condition: Runbook not found or not ACCEPTED
+  system_response: CLI displays error and exits with code 1
+  assertions:
+  - Error message names the runbook ID
+  severity: expected
+- trigger_step: 3
+  condition: No linked journeys in story
+  system_response: CLI blocks with journey gate error
+  assertions:
+  - Error suggests adding journey IDs or using --skip-journey-check
+  severity: expected
+- trigger_step: 5
+  condition: Security scan detects eval() in generated code
+  system_response: CLI blocks with security finding
+  assertions:
+  - Specific pattern and location are reported
+  severity: expected
+- trigger_step: 6
+  condition: Test command not configured and make test fails
+  system_response: CLI attempts fallback test discovery
+  assertions:
+  - Warning about missing config
+  severity: warning
+edge_cases:
+- scenario: AI returns empty response
+  expected: CLI falls back to chunked processing
+  severity: warning
+- scenario: make test returns exit code 5 (no tests collected)
+  expected: Treated as warning, not failure
+  severity: warning
+- scenario: security_patterns.yaml missing or malformed
+  expected: CLI uses hardcoded defaults and logs warning
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-067
+linked_adrs:
+- ADR-025
+- ADR-028
+- ADR-030
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/gates.py
+  - .agent/etc/security_patterns.yaml
+  - .agent/workflows/implement.md
+  tests: []

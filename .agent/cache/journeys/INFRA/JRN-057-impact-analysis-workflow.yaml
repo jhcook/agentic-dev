@@ -1,0 +1,81 @@
+# Journey: JRN-057
+# Linked Story: INFRA-068
+# Title: Impact Analysis Workflow
+
+id: JRN-057
+title: Impact Analysis Workflow
+state: DRAFT
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+- governance
+actor: developer using agent CLI
+description: >
+  End-to-end impact analysis workflow. Developer runs `agent impact` to get
+  static dependency analysis combined with AI-powered risk assessment.
+  Optionally updates the story's Impact Analysis Summary section.
+preconditions:
+- Agent CLI is installed and configured
+- Developer has staged or committed changes
+- AI provider is configured
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent impact --story <STORY-ID>`
+  system_response: CLI identifies changed files from git diff
+  assertions:
+  - Changed files are correctly identified from staged changes
+  - With --base flag, comparison uses specified branch
+- id: 2
+  action: System runs static dependency analysis
+  system_response: CLI uses DependencyAnalyzer to find reverse dependencies
+  assertions:
+  - Reverse dependencies are computed for all changed files
+  - Dependency count is displayed
+- id: 3
+  action: System generates AI risk assessment
+  system_response: CLI sends diff + dependency data + story context to AI
+  assertions:
+  - AI prompt includes story content, diff, and dependency metrics
+  - Response includes components touched, risks, and breaking changes
+- id: 4
+  action: System displays combined analysis
+  system_response: CLI outputs structured impact report
+  assertions:
+  - Report includes both static metrics and AI insights
+  - Report is formatted as markdown
+- id: 5
+  action: Developer runs `agent impact --story <ID> --update-story`
+  system_response: CLI writes analysis to story file
+  assertions:
+  - Impact Analysis Summary section is updated in the story file
+  - Existing content is replaced, not duplicated
+error_paths:
+- trigger_step: 1
+  condition: No changes detected
+  system_response: CLI reports no changes and exits with code 0
+  assertions:
+  - Clear message indicating no changes found
+  severity: expected
+edge_cases:
+- scenario: Very large diff exceeds token limits
+  expected: Diff is truncated with clear marker
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-068
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/check.py
+  - .agent/workflows/impact.md
+  tests: []

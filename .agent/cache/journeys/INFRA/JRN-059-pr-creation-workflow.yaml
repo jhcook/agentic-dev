@@ -1,0 +1,76 @@
+# Journey: JRN-059
+# Linked Story: INFRA-070
+# Title: PR Creation Workflow
+
+id: JRN-059
+title: PR Creation Workflow
+state: DRAFT
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+- governance
+actor: developer using agent CLI
+description: >
+  End-to-end PR creation workflow. Developer runs `agent pr` to run preflight,
+  generate PR title and body, and invoke `gh pr create`. Encapsulates the
+  full /pr workflow in a single CLI command.
+preconditions:
+- Agent CLI is installed and configured
+- Developer is on a feature branch with commits
+- gh CLI is installed and authenticated
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent pr`
+  system_response: CLI runs `agent preflight --ai` as prerequisite
+  assertions:
+  - Preflight checks execute automatically
+  - BLOCK verdict prevents PR creation
+  - PASS verdict allows PR to proceed
+- id: 2
+  action: System generates PR metadata
+  system_response: CLI auto-generates title and body from story and commits
+  assertions:
+  - Title follows [STORY-ID] description format
+  - Body includes Story Link, Changes summary, and Governance status
+- id: 3
+  action: System creates PR via GitHub CLI
+  system_response: CLI invokes `gh pr create` with generated title and body
+  assertions:
+  - PR is created successfully
+  - PR URL is displayed to the developer
+error_paths:
+- trigger_step: 1
+  condition: Preflight returns BLOCK
+  system_response: CLI displays preflight failures and aborts PR creation
+  assertions:
+  - Error message includes specific BLOCK reasons
+  severity: expected
+- trigger_step: 3
+  condition: gh CLI not installed
+  system_response: CLI reports gh is missing with installation instructions
+  assertions:
+  - Error is actionable
+  severity: expected
+edge_cases:
+- scenario: Developer uses --skip-preflight flag
+  expected: Preflight is skipped, PR is created directly
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-070
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/workflow.py
+  - .agent/workflows/pr.md
+  tests: []
