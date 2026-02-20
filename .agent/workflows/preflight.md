@@ -24,6 +24,11 @@ CONTEXT:
 
 WORKFLOW:
 
+0. **Ensure Changes Are Staged**
+    - If coming from `agent implement --apply`, files are already staged automatically.
+    - Otherwise, stage your changes: `git add -A` (or selectively stage specific files).
+    - Preflight only reviews **staged** changes.
+
 1. **Run Preflight CLI**
     - Execute the following command to run the automated preflight checks and AI governance review:
 

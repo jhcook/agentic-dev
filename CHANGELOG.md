@@ -10,6 +10,16 @@
   - Configurable character budget via `AGENT_SOURCE_CONTEXT_CHAR_LIMIT` env var (default: 8000).
   - Graceful degradation when `src/` directory is absent.
 
+- **Post-Apply Governance Gates for Implement Command** (INFRA-067):
+  - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
+  - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.
+  - Externalized security patterns via `.agent/etc/security_patterns.yaml`.
+  - Configurable test command via `test_command` in `agent.yaml` (default: `make test`).
+  - `--skip-tests` and `--skip-security` flags with timestamped audit logging.
+  - Structured `[PHASE]` output with PASSED/BLOCKED verdict and timing.
+  - Auto-stages all modified files (implementation, story, runbook) after governance gates pass.
+  - Relaxed dirty-state check: warns on story branches instead of blocking (only blocks on `main`).
+
 - **Vertex AI Provider Support** (INFRA-065):
   - New `provider: vertex` option in `agent.yaml` for Google Vertex AI with ADC authentication.
   - Higher rate limits and production-grade scalability vs free-tier Gemini.

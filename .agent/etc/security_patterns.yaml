@@ -1,0 +1,21 @@
+# Security scan patterns for post-apply governance gates.
+# Each key is a pattern name, each value is a regex pattern.
+# Patterns are checked against AI-generated code before/after apply.
+#
+# IMPORTANT: Matches are reported by name only — matched content
+# is NEVER logged or persisted (PII-safe).
+
+# API key patterns
+api_key_openai: "sk-[a-zA-Z0-9]{20,}"
+api_key_anthropic: "sk-ant-[a-zA-Z0-9]+"
+api_key_generic: "(?i)(api[_-]?key|secret[_-]?key)\\s*=\\s*['\"][^'\"]{8,}"
+
+# Dangerous function calls
+eval_exec: "\\b(eval|exec)\\s*\\("
+
+# Hardcoded credentials
+hardcoded_password: "(?i)(password|passwd|pwd)\\s*=\\s*['\"][^'\"]{4,}"
+
+# PII indicators (detect presence, never log content)
+pii_ssn: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+pii_credit_card: "\\b\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}\\b"

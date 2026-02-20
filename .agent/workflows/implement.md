@@ -404,11 +404,22 @@ User provides a requirement. You must:
 
 ### PHASE 6: COMPLETION SYNC
 
-1. **Update Story State**
+1. **Auto-Stage**
+   - When `--apply` is used and all governance gates pass, the CLI automatically stages:
+     - All modified implementation files
+     - The story file (state updated to IN_PROGRESS)
+     - The runbook file
+   - Output: `📦 Staged N file(s) for commit.`
+
+2. **Update Story State**
    - Locate the Story file.
    - Ensure `## State` is `IN_PROGRESS`.
    - Run `agent sync` to finalize the status in Notion.
    - **Note**: The subsequent `agent commit` command will transition this to `COMMITTED`.
+
+3. **Next Steps**
+   - Run `agent preflight --ai --story <STORY-ID>` to validate staged changes.
+   - Then run `agent commit` to finalize.
 
 ## FINAL DECISION
 

@@ -36,10 +36,11 @@ steps:
   - Non-ACCEPTED runbooks are rejected with exit code 1
 - id: 2
   action: System checks branch and git state
-  system_response: CLI creates or switches to story branch, rejects dirty working tree
+  system_response: CLI creates or switches to story branch, warns about uncommitted changes on story branches
   assertions:
   - Feature branch is created or switched to
-  - Dirty working tree is rejected with clear error
+  - Dirty working tree on main is rejected with clear error
+  - Dirty working tree on story branch proceeds with warning
 - id: 3
   action: System validates journey gate
   system_response: CLI validates linked journeys exist for the story
@@ -85,6 +86,14 @@ steps:
   - Any phase BLOCK results in overall BLOCKED status
   - User is prompted to run /preflight before committing
   - --json flag produces machine-readable output
+- id: 9
+  action: System auto-stages modified files
+  system_response: CLI runs `git add` on all modified implementation files, story file, and runbook
+  assertions:
+  - All files from code blocks are staged
+  - Story file (state=IN_PROGRESS) is staged
+  - Runbook file is staged
+  - Console prints staged file count
 error_paths:
 - trigger_step: 1
   condition: Runbook not found or not ACCEPTED

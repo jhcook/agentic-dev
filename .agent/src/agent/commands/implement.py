@@ -32,6 +32,7 @@ from agent.core.utils import (
 )
 from agent.core.context import context_loader
 from agent.commands.utils import update_story_state
+from agent.commands import gates
 
 app = typer.Typer()
 console = Console()
@@ -430,6 +431,12 @@ def implement(
     model: Optional[str] = typer.Option(
         None, "--model", help="Force specific AI model deployment ID."
     ),
+    skip_tests: bool = typer.Option(
+        False, "--skip-tests", help="Skip QA test gate (audit-logged)."
+    ),
+    skip_security: bool = typer.Option(
+        False, "--skip-security", help="Skip security scan gate (audit-logged)."
+    ),
 ):
     """
     Execute an implementation runbook using AI with chunked task processing.
@@ -473,11 +480,15 @@ def implement(
 
     # 1.1.5 AUTOMATION: Branch Management (INFRA-055)
     
-    # Check Dirty State
+    # Check Dirty State — warn on story branches, block on main
     if is_git_dirty():
-        console.print("[bold red]❌ Uncommitted changes detected.[/bold red]")
-        console.print("Please stash or commit your changes before starting implementation.")
-        raise typer.Exit(code=1)
+        current_branch = get_current_branch()
+        if current_branch == "main":
+            console.print("[bold red]❌ Uncommitted changes detected on main.[/bold red]")
+            console.print("Please stash or commit your changes before starting implementation.")
+            raise typer.Exit(code=1)
+        else:
+            console.print("[yellow]⚠️  Uncommitted changes detected — proceeding on story branch.[/yellow]")
 
     current_branch = get_current_branch()
     story_id = extract_story_id(runbook_id, runbook_content_scrubbed)
@@ -729,12 +740,105 @@ ARCHITECTURAL DECISIONS (ADRs):
          for block in code_blocks:
             apply_change_to_file(block['file'], block['content'], yes)
             
-    # 1.3 AUTOMATION: Phase 6
-    # We do NOT set to DONE here. We leave it as In Progress.
-    # The 'commit' workflow will transition it to Committed.
+    # 1.3 AUTOMATION: Post-Apply Governance Gates
     if apply and implementation_success:
-        console.print("[bold green]✅ Implementation Complete (Local).[/bold green]")
-        console.print(f"[dim]Story {story_id} remains 'In Progress'. Run 'agent commit' to mark as 'Committed'.[/dim]")
+        console.print("\n[bold blue]🔒 Running Post-Apply Governance Gates...[/bold blue]")
+        gate_results: list[gates.GateResult] = []
+        modified_paths = [
+            Path(block['file'])
+            for block in parse_code_blocks(full_content)
+            if block.get('file')
+        ]
+
+        # Gate 1: Security Scan
+        if skip_security:
+            gates.log_skip_audit("Security scan")
+            console.print(f"⚠️  [AUDIT] Security gate skipped at {datetime.now().isoformat()}")
+        else:
+            sec_result = gates.run_security_scan(
+                modified_paths,
+                config.etc_dir / "security_patterns.yaml",
+            )
+            gate_results.append(sec_result)
+            status = "PASSED" if sec_result.passed else "BLOCKED"
+            color = "green" if sec_result.passed else "red"
+            console.print(
+                f"  [{color}][PHASE] {sec_result.name} ... {status}"
+                f" ({sec_result.elapsed_seconds:.2f}s)[/{color}]"
+            )
+            if sec_result.details:
+                console.print(f"    [dim]{sec_result.details}[/dim]")
+
+        # Gate 2: QA Validation
+        if skip_tests:
+            gates.log_skip_audit("QA tests")
+            console.print(f"⚠️  [AUDIT] Tests skipped at {datetime.now().isoformat()}")
+        else:
+            import yaml as _yaml
+            try:
+                agent_cfg = _yaml.safe_load(
+                    (config.etc_dir / "agent.yaml").read_text()
+                )
+                test_cmd = agent_cfg.get("agent", {}).get(
+                    "test_command", "make test"
+                )
+            except Exception:
+                test_cmd = "make test"
+            qa_result = gates.run_qa_gate(test_cmd)
+            gate_results.append(qa_result)
+            status = "PASSED" if qa_result.passed else "BLOCKED"
+            color = "green" if qa_result.passed else "red"
+            console.print(
+                f"  [{color}][PHASE] {qa_result.name} ... {status}"
+                f" ({qa_result.elapsed_seconds:.2f}s)[/{color}]"
+            )
+            if not qa_result.passed and qa_result.details:
+                console.print(f"    [dim]{qa_result.details}[/dim]")
+
+        # Gate 3: Documentation Check
+        docs_result = gates.run_docs_check(modified_paths)
+        gate_results.append(docs_result)
+        status = "PASSED" if docs_result.passed else "BLOCKED"
+        color = "green" if docs_result.passed else "red"
+        console.print(
+            f"  [{color}][PHASE] {docs_result.name} ... {status}"
+            f" ({docs_result.elapsed_seconds:.2f}s)[/{color}]"
+        )
+        if docs_result.details:
+            console.print(f"    [dim]{docs_result.details}[/dim]")
+
+        # Structured Verdict
+        all_passed = all(r.passed for r in gate_results)
+        if all_passed:
+            console.print("\n[bold green]✅ All governance gates passed.[/bold green]")
+
+            # Auto-stage modified files for commit pipeline
+            files_to_stage = [str(p) for p in modified_paths if p.exists()]
+            # Also stage story and runbook updates
+            story_file_path = find_story_file(story_id) if story_id else None
+            if story_file_path and story_file_path.exists():
+                files_to_stage.append(str(story_file_path))
+            if runbook_file and runbook_file.exists():
+                files_to_stage.append(str(runbook_file))
+            if files_to_stage:
+                try:
+                    subprocess.run(
+                        ["git", "add"] + files_to_stage,
+                        check=True,
+                        capture_output=True,
+                    )
+                    console.print(f"[bold blue]📦 Staged {len(files_to_stage)} file(s) for commit.[/bold blue]")
+                except subprocess.CalledProcessError as exc:
+                    console.print(f"[yellow]⚠️  Auto-stage failed: {exc}[/yellow]")
+
+            console.print("[bold green]✅ Implementation Complete (Local).[/bold green]")
+            console.print(f"[dim]Story {story_id} remains 'In Progress'. Run 'agent preflight' then 'agent commit'.[/dim]")
+        else:
+            blocked = [r for r in gate_results if not r.passed]
+            console.print(f"\n[bold red]❌ {len(blocked)} governance gate(s) BLOCKED.[/bold red]")
+            for r in blocked:
+                console.print(f"  [red]• {r.name}: {r.details}[/red]")
+            console.print("[dim]Fix the issues above and re-run.[/dim]")
 
 
 

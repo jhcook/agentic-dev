@@ -4,9 +4,10 @@ panel:
 agent:
   # provider: gemini | vertex | openai | anthropic | gh
   provider: gemini
+  test_command: "make test"
   models:
     gemini: models/gemini-pro-latest
-    vertex: gemini-2.0-flash
+    vertex: gemini-pro-latest
   github:
     tool: mcp
   mcp:
