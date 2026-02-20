@@ -27,6 +27,13 @@
   - Governance status in PR body reflects whether preflight was skipped.
   - Added 4 unit tests for `agent pr` (title format, skip-preflight, gh-not-found, body scrubbing).
 
+- **Add Panel Consultation to `agent new-journey`** (INFRA-071):
+  - Added `--panel` flag to `agent new-journey` that runs consultative panel review after AI generation.
+  - Panel feedback appended as YAML comment block to journey file.
+  - `--panel` without `--ai` produces clear error (panel requires AI-generated content).
+  - Simplified `/journey` workflow Step 3 from manual role adoption to `--panel` flag reference.
+  - Added 2 unit tests for panel flag (triggers consultation, errors without --ai).
+
 - **Post-Apply Governance Gates for Implement Command** (INFRA-067):
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.

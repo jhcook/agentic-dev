@@ -29,15 +29,14 @@ A journey defines **what the system does from a user's perspective** — it is a
      - `branches` — when conditional flows exist (A/B, feature flags, SSO vs password)
    - Leave `implementation` blocks empty — the agent populates these during `/implement`.
 
-3. **Panel Consultation** (Advisory):
-   - Adopt each role from `.agent/etc/agents.yaml` and review the journey:
-     - **@Product**: Are the steps complete? Do the assertions match real acceptance criteria? Is the actor well-defined?
-     - **@Architect**: Do the steps imply reasonable technical boundaries? Any scalability concerns?
-     - **@Security**: Are there auth gaps? Should `auth_context.level` be more restrictive? Any injection or PII risks in `data_state`?
-     - **@QA**: Are assertions testable and specific? Are error paths and edge cases covered? Would you add any?
-     - **@Compliance**: Any data handling or regulatory concerns implied by the steps?
-   - This is **consultative** — provide advice, not blocking verdicts.
-   - Present a brief summary of panel feedback and adjust the journey accordingly.
+3. **Panel Consultation** (Optional):
+   - Use the `--panel` flag to run an automated consultative panel review:
+
+     ```bash
+     agent new-journey <JRN-ID> --ai --panel
+     ```
+
+   - All roles from `.agent/etc/agents.yaml` will review the journey and append feedback as comments in the YAML file.
 
 4. **Finalize**:
    - Set `state: COMMITTED` once you are satisfied the journey is complete.

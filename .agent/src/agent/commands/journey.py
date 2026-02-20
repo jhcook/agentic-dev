@@ -81,10 +81,16 @@ def new_journey(
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
     ),
+    panel: bool = typer.Option(
+        False, "--panel", help="Run panel consultation after generation (requires --ai)."
+    ),
 ):
     """
     Create a new user journey YAML file.
     """
+    if panel and not ai:
+        console.print("[bold red]❌ --panel requires --ai to be set. Panel reviews AI-generated content.[/bold red]")
+        raise typer.Exit(code=1)
     # Scope selection (journeys use scope dirs for organization)
     console.print("Select Journey Scope:")
     console.print("1. WEB (Frontend)")
@@ -256,6 +262,60 @@ Generate the journey YAML now.
 
     console.print("[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
     push_safe(timeout=2, verbose=True, artifact_id=journey_id)
+
+    # Panel consultation (INFRA-071)
+    if panel:
+        console.print("[bold blue]🏛️  Running panel consultation on journey...[/bold blue]")
+        try:
+            from agent.core.governance import convene_council_full
+
+            # Load governance context
+            rules_content = ""
+            if config.rules_dir.exists():
+                for rf in config.rules_dir.glob("*.mdc"):
+                    rules_content += rf.read_text(errors="ignore") + "\n"
+
+            instructions_content = ""
+            if config.instructions_dir.exists():
+                for inf in config.instructions_dir.glob("*.md"):
+                    instructions_content += inf.read_text(errors="ignore") + "\n"
+
+            journey_content = file_path.read_text()
+
+            result = convene_council_full(
+                story_id=journey_id,
+                story_content=f"Journey: {journey_id} - {title}",
+                rules_content=rules_content[:5000],
+                instructions_content=instructions_content[:3000],
+                full_diff=journey_content,
+                mode="consultative",
+                user_question=f"Review this journey YAML for completeness, testability, and governance compliance.",
+                progress_callback=lambda msg: console.print(f"  [dim]{msg}[/dim]"),
+            )
+
+            # Append panel feedback as comment block to YAML
+            feedback_lines = []
+            for role_data in result.get("json_report", {}).get("roles", []):
+                role_name = role_data.get("name", "Unknown")
+                findings = role_data.get("findings", [])
+                if findings:
+                    feedback_lines.append(f"# @{role_name}:")
+                    for f in findings:
+                        for line in str(f).split("\n"):
+                            feedback_lines.append(f"#   {line}")
+
+            if feedback_lines:
+                feedback_block = "\n# Panel Feedback\n" + "\n".join(feedback_lines) + "\n"
+                with open(file_path, "a") as fh:
+                    fh.write(feedback_block)
+                console.print("[bold green]✅ Panel feedback appended to journey file[/bold green]")
+            else:
+                console.print("[green]✅ Panel consultation complete — no findings[/green]")
+
+            logger.info("panel_consultation_complete", extra={"journey_id": journey_id})
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Panel consultation failed: {e}[/yellow]")
+            logger.warning("panel_consultation_failed", extra={"journey_id": journey_id, "error": str(e)})
 
 
 def validate_journey(
