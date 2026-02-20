@@ -1,0 +1,69 @@
+# Journey: JRN-058
+# Linked Story: INFRA-069
+# Title: Panel Consultation Workflow
+
+id: JRN-058
+title: Panel Consultation Workflow
+state: DRAFT
+schema_version: 1
+priority: medium
+tags:
+- infra
+- cli
+- governance
+actor: developer using agent CLI
+description: >
+  Consultative governance panel session. Developer runs `agent panel` to get
+  expert advisory feedback from all governance roles. Output is advisory
+  (advice and recommendations), not blocking verdicts.
+preconditions:
+- Agent CLI is installed and configured
+- Developer has staged changes
+- AI provider is configured
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent panel --story <STORY-ID>`
+  system_response: CLI reads staged changes and story context
+  assertions:
+  - Git diff is captured
+  - Story file is loaded
+- id: 2
+  action: System runs multi-role consultation
+  system_response: CLI sends context to AI with each governance role persona
+  assertions:
+  - All roles from agents.yaml are represented
+  - Output uses advisory framing (not BLOCK/PASS)
+- id: 3
+  action: System outputs consultation report
+  system_response: CLI displays per-role advice with consensus summary
+  assertions:
+  - Each role has Sentiment, Advice, and Deep Dive sections
+  - Consensus Summary synthesizes all feedback
+error_paths:
+- trigger_step: 1
+  condition: No staged changes
+  system_response: CLI reports no changes and exits
+  assertions:
+  - Clear message indicating no changes to review
+  severity: expected
+edge_cases:
+- scenario: Very large diff exceeds token limits
+  expected: Diff is truncated with clear marker
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-069
+linked_adrs: []
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/check.py
+  - .agent/workflows/panel.md
+  tests: []

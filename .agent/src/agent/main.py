@@ -33,6 +33,7 @@ from agent.commands import (
     secret,
     story,
     visualize,
+    voice,
     workflow,
     query,
 )
@@ -109,6 +110,7 @@ app.command(name="new-story")(story.new_story)
 app.command(name="new-runbook")(with_creds(runbook.new_runbook))
 app.command(name="new-journey")(journey.new_journey)
 app.command(name="validate-journey")(journey.validate_journey)
+app.command(name="review-voice")(with_creds(voice.review_voice))
 
 app.command(name="new-adr")(adr.new_adr)
 
