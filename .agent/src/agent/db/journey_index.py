@@ -215,3 +215,22 @@ def _result(
         "rebuild_duration_ms": rebuild_duration_ms,
         "warnings": warnings,
     }
+
+class JourneyIndex:
+    """Local vector database stub for context retrieval."""
+    def __init__(self):
+        # Initialize internal lightweight vector index
+        pass
+        
+    def build(self, documentation_path: str) -> None:
+        """
+        Ingest documentation and create embeddings
+        """
+        pass
+        
+    def search(self, query: str) -> str:
+        """
+        Retrieve relevant context via embeddings.
+        """
+        # Return relevant document chunks
+        return "Local vector DB context not yet implemented. This is a placeholder."

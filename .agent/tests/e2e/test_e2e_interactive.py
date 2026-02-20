@@ -56,6 +56,7 @@ def test_interactive_preflight_typer_e2e(temp_repo):
          patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
+         patch("agent.sync.notion.NotionSync"), \
          patch("subprocess.run") as mock_run:
              
         # Configure CWD to match temp_repo
@@ -109,6 +110,7 @@ def test_interactive_preflight_empty_ai_response(temp_repo):
          patch("agent.core.config.config.stories_dir", story_file.parent.parent.parent), \
          patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
+         patch("agent.sync.notion.NotionSync"), \
          patch("agent.core.fixer.Path.cwd") as mock_cwd:
              
         mock_cwd.return_value = repo_root
@@ -143,6 +145,7 @@ def test_interactive_preflight_voice_mode(temp_repo):
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
          patch("subprocess.run") as mock_run, \
+         patch("agent.sync.notion.NotionSync"), \
          patch.dict(os.environ, {"AGENT_VOICE_MODE": "1"}):
              
         mock_cwd.return_value = repo_root

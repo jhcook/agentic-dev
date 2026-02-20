@@ -37,6 +37,7 @@ def clean_env(tmp_path):
     with patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.config.config.rules_dir", mock_rules), \
          patch("agent.core.config.config.agent_dir", mock_agent), \
+         patch("agent.sync.notion.NotionSync"), \
          patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
     
         # Create fake story
@@ -147,6 +148,7 @@ def test_preflight_journey_gate_blocks(mock_run, mock_check_ai, mock_gov_ai, tmp
     with patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.config.config.rules_dir", mock_rules), \
          patch("agent.core.config.config.agent_dir", mock_agent), \
+         patch("agent.sync.notion.NotionSync"), \
          patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
 
         result = runner.invoke(app, ["preflight", "--story", "INFRA-999"])
@@ -217,8 +219,8 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     # Note: governance.py parses with re.search(r"^VERDICT:\s*BLOCK", ..., re.IGNORECASE)
     def side_effect(sys, user):
         if "Security" in sys:
-            return "VERDICT: BLOCK\nSUMMARY:\nHardcoded password found.\nFINDINGS:\n- Hardcoded password.\nREQUIRED_CHANGES:\n- Remove hardcoded password."
-        return "VERDICT: PASS\nSUMMARY:\nLooks good.\nFINDINGS:\n- None"
+            return "VERDICT: BLOCK\nSUMMARY:\nHardcoded password found.\nFINDINGS:\n- Hardcoded password. (Source: [fake.py])\nREQUIRED_CHANGES:\n- Remove hardcoded password."
+        return "VERDICT: PASS\nSUMMARY:\nLooks good.\nFINDINGS:\n- None (Source: [none])"
         
     mock_gov_ai.complete.side_effect = side_effect
     

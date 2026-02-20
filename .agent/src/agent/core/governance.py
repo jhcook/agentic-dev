@@ -471,6 +471,15 @@ def _validate_finding_against_source(
 
     finding_lower = finding.lower()
 
+    # ── Check 0: Mandatory Citation (Oracle Pattern) ──
+    # Findings must include a citation in the format (Source: ...) or [Source: ...]
+    if not re.search(r'\(Source:\s*[^)]+\)|\[Source:\s*[^\]]+\]', finding, re.IGNORECASE):
+        logger.info(
+            "False positive filtered (missing citation): '%s'",
+            finding[:80],
+        )
+        return False
+
     # ── Check -1: Governance self-exemption (ADR-027) ──
     # When governance.py is in the diff, the AI reviews its own code and flags
     # internal helpers (_resolve_file_path, _build_file_context, _validate_finding_against_source)
@@ -1334,7 +1343,7 @@ def convene_council_full(
                         "Output format (use EXACTLY this structure):\n"
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY: <one line summary>\n"
-                        "FINDINGS:\n- <finding 1>\n- <finding 2>\n"
+                        "FINDINGS:\n- <finding 1> (Source: [Exact file path or ADR ID])\n- <finding 2> (Source: [Exact file path or ADR ID])\n"
                         "REFERENCES:\n- <ADR-NNN, JRN-NNN, or EXC-NNN that support your findings>\n"
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )

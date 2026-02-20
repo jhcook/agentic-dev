@@ -61,6 +61,19 @@ class NotionSync:
         except json.JSONDecodeError:
             return {}
 
+    def ensure_synchronized(self) -> None:
+        """
+        Validates the Notion sync state before allowing Oracle Preflight.
+        Logs warning or raises error if the sync state is missing/stale.
+        """
+        if not self.state:
+            logger.warning("Notion sync state is missing or invalid.")
+            from rich.console import Console
+            Console().print("[yellow]⚠️  Notion sync state is missing. Ensure you run 'agent sync init' to pull latest ADRs and Rules.[/yellow]")
+            return
+            
+        logger.debug("Notion sync state is present: %s", self.state)
+
     def pull(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None):
         """Pulls content from Notion to local cache."""
         # 1. Stories

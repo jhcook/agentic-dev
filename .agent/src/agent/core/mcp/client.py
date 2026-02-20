@@ -40,9 +40,9 @@ class Tool:
     inputSchema: Dict[str, Any]
 
 class MCPClient:
-    def __init__(self, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
+    def __init__(self, command: str = "notebooklm-mcp", args: List[str] = None, env: Optional[Dict[str, str]] = None):
         self.command = command
-        self.args = args
+        self.args = args or []
         self.env = env or {}
         # Merge with current env to ensure PATH is correct
         self._full_env = os.environ.copy()
@@ -81,3 +81,11 @@ class MCPClient:
                 await session.initialize()
                 result = await session.call_tool(name, arguments)
                 return result
+
+    def get_context(self, query: str) -> str:
+        """
+        Request context from the active MCP service (e.g., NotebookLM).
+        """
+        # Formulate query to MCP service for context retrieval
+        # Handle failures gracefully, throwing an exception to trigger the local fallback
+        raise NotImplementedError("MCP Client integration not yet implemented")
