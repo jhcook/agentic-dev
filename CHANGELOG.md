@@ -27,6 +27,14 @@
   - Governance status in PR body reflects whether preflight was skipped.
   - Added 4 unit tests for `agent pr` (title format, skip-preflight, gh-not-found, body scrubbing).
 
+- **Create `agent review-voice` CLI Command** (INFRA-072):
+  - New `agent review-voice` command fetches last voice session and runs AI-powered UX analysis.
+  - Analyzes sessions across latency, accuracy, tone, and interruption categories.
+  - Structured output with per-category ratings and concrete recommendations.
+  - Session data scrubbed via `scrub_sensitive_data()` before AI submission (GDPR Art. 6(1)(f)).
+  - Simplified `/review-voice` workflow from 25-line manual process to CLI-first.
+  - Added 4 unit tests for review-voice command.
+
 - **Post-Apply Governance Gates for Implement Command** (INFRA-067):
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.

@@ -1,0 +1,68 @@
+# Journey: JRN-060
+# Linked Story: INFRA-071
+# Title: Journey Creation with Panel Consultation
+
+id: JRN-060
+title: Journey Creation with Panel Consultation
+state: DRAFT
+schema_version: 1
+priority: low
+tags:
+- infra
+- cli
+actor: developer using agent CLI
+description: >
+  Journey creation workflow with optional integrated panel consultation.
+  Developer runs `agent new-journey --ai --panel` to generate a journey
+  and get governance feedback in a single invocation.
+preconditions:
+- Agent CLI is installed and configured
+- AI provider is configured
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer runs `agent new-journey <JRN-ID> --ai --panel`
+  system_response: CLI generates journey YAML using AI
+  assertions:
+  - Journey YAML is created with all required fields
+  - File is saved to .agent/cache/journeys/
+- id: 2
+  action: System runs panel consultation on generated journey
+  system_response: CLI sends journey content to each governance role for review
+  assertions:
+  - All roles from agents.yaml provide feedback
+  - Feedback is advisory (suggestions, not blocking)
+- id: 3
+  action: System presents panel feedback
+  system_response: Panel feedback is displayed and optionally appended to the journey
+  assertions:
+  - Per-role feedback is displayed
+  - Developer can accept or reject suggestions
+error_paths:
+- trigger_step: 1
+  condition: --panel used without --ai
+  system_response: CLI displays clear error explaining panel requires AI content
+  assertions:
+  - Error message is actionable
+  severity: expected
+edge_cases:
+- scenario: Journey ID already exists
+  expected: CLI warns about existing file and asks for confirmation
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-071
+linked_adrs:
+- ADR-024
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/commands/journey.py
+  - .agent/workflows/journey.md
+  tests: []
