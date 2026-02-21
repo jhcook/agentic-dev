@@ -20,7 +20,7 @@ All newly generated application source code files MUST begin with the appropriat
   Files ending in `.md`, `.mdc` MUST have their license text placed inside a `## Copyright` section at the VERY BOTTOM of the file. This prevents breaking Markdown frontmatter parsing and is considered FULLY COMPLIANT. Do not flag `.md` or `.mdc` files if they possess the `## Copyright` block at the bottom.
 
 - **Dual Licensing Policy:**
-  The use of "Copyright 2026 Justin Cook" for open-source internal tooling alongside "Copyright 2026 Inspected Holding Pty Ltd" for proprietary application code is INTENTIONAL and legally sound. Do NOT flag this inconsistency as a licensing policy violation.
+  The use of "Copyright 2026 Justin Cook" for open-source internal tooling alongside "Copyright 2026 Example Pty Ltd" for proprietary application code is INTENTIONAL and legally sound. Do NOT flag this inconsistency as a licensing policy violation.
 
 - **For `.agent/` internal tools and open-source components:**
   The project is licensed under the Apache 2.0 License by Justin Cook.
