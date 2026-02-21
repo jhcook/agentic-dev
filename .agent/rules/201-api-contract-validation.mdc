@@ -1,4 +1,11 @@
 ---
+description: API Contract Validation and backward compatibility requirements based on OpenAPI specifications.
+alwaysApply: true
+---
+
+# 201: API Contract Validation
+
+---
 alwaysApply: true
 ---
 

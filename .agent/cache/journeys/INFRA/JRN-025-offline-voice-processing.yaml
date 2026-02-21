@@ -1,7 +1,3 @@
-# Journey: JRN-025
-# Linked Story: INFRA-030
-# Title: Offline Voice Processing with Kokoro and Faster-Whisper
-
 id: JRN-025
 title: Offline Voice Processing with Kokoro and Faster-Whisper
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Set up the local environment and implement the core service layer for offline voice processing using Kokoro (TTS)
-  and Faster-Whisper (STT), enabling "zero-cost" and "air-gapped" voice capabilities.
+description: Set up the local environment and implement the core service layer for
+  offline voice processing using Kokoro (TTS) and Faster-Whisper (STT), enabling "zero-cost"
+  and "air-gapped" voice capabilities.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -62,4 +59,5 @@ implementation:
   files:
   - test_local_tts.py
   - voices.json
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_025.py

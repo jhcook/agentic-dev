@@ -46,7 +46,7 @@ def mock_secret_manager():
 @pytest.fixture
 def mock_env_openai(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
-    monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -61,7 +61,7 @@ def mock_env_gemini(monkeypatch):
 @pytest.fixture
 def mock_env_none(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

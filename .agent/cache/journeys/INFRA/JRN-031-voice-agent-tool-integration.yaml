@@ -1,7 +1,3 @@
-# Journey: JRN-031
-# Linked Story: INFRA-036
-# Title: Voice Agent Tool Integration
-
 id: JRN-031
 title: Voice Agent Tool Integration
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Enhance the VoiceOrchestrator with tool support, persistent memory, configurable prompts, latency handling, safety
-  mechanisms, and observability, enabling developers to create more sophisticated and useful voice interactions.
+description: Enhance the VoiceOrchestrator with tool support, persistent memory, configurable
+  prompts, latency handling, safety mechanisms, and observability, enabling developers
+  to create more sophisticated and useful voice interactions.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -49,4 +46,5 @@ implementation:
   routes: []
   files:
   - docs/openapi.yaml
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_031.py

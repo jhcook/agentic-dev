@@ -1,4 +1,12 @@
 ---
+description: The CommitAuditCouncil workflow for governance over staged changes and Pull Requests.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 300: Commit Workflow
+
+---
 alwaysApply: true
 ---
 

@@ -1,7 +1,3 @@
-# Journey: JRN-044
-# Linked Story: INFRA-055
-# Title: Introduce User Journeys as First-Class Artifacts
-
 id: JRN-044
 title: Introduce User Journeys as First-Class Artifacts
 state: COMMITTED
@@ -11,10 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Introduce user journeys as first-class, version-controlled YAML artifacts into the agentic workflow. Journeys
-  define behavioral contracts (who does what, what happens, what to assert) that the agent uses during runbook generation
-  and implementation to prevent regressions. A journey must exist before implementation can occur — they are prerequisites,
-  not documentation.
+description: "Introduce user journeys as first-class, version-controlled YAML artifacts\
+  \ into the agentic workflow. Journeys define behavioral contracts (who does what,\
+  \ what happens, what to assert) that the agent uses during runbook generation and\
+  \ implementation to prevent regressions. A journey must exist before implementation\
+  \ can occur \u2014 they are prerequisites, not documentation."
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -78,4 +75,5 @@ implementation:
   - runbook.py
   - story.py
   - user_journeys.md
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_044.py

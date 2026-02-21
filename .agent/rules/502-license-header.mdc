@@ -1,5 +1,13 @@
 ---
 description: Ensure all new application source code files include the required license header.
+globs: ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx", "**/*.jsx", "**/*.css", "**/*.sh", "**/*.swift", "**/*.kt"]
+alwaysApply: true
+---
+
+# 502: License Header Requirement
+
+---
+description: Ensure all new application source code files include the required license header.
 globs:
   - "**/*.py"
   - "**/*.js"

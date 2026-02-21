@@ -1,9 +1,5 @@
-# Journey: JRN-045
-# Linked Story: INFRA-056
-# Title: Governance Hardening — Exception Records & Preflight Precision
-
 id: JRN-045
-title: Governance Hardening — Exception Records & Preflight Precision
+title: "Governance Hardening \u2014 Exception Records & Preflight Precision"
 state: COMMITTED
 schema_version: 1
 priority: medium
@@ -11,9 +7,10 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Introduce a formal mechanism for persisting preflight rebuttals (Architectural Exception Records), harden governance
-  rules to eliminate recurring false positives, and fix the copy-paste bug in `the-team.mdc`. All changes are governance-layer
-  only — no application logic is modified.
+description: "Introduce a formal mechanism for persisting preflight rebuttals (Architectural\
+  \ Exception Records), harden governance rules to eliminate recurring false positives,\
+  \ and fix the copy-paste bug in `the-team.mdc`. All changes are governance-layer\
+  \ only \u2014 no application logic is modified."
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -22,13 +19,16 @@ auth_context:
   permissions: []
 steps:
 - id: 1
-  action: Developer configures prerequisites for Governance Hardening — Exception Records & Preflight Precision
+  action: "Developer configures prerequisites for Governance Hardening \u2014 Exception\
+    \ Records & Preflight Precision"
   system_response: System validates configuration
   assertions:
   - Configuration is valid
 - id: 2
-  action: Developer executes the governance hardening — exception records & preflight precision workflow
-  system_response: System performs introduce a formal mechanism for persisting preflight rebuttals (architectural e
+  action: "Developer executes the governance hardening \u2014 exception records &\
+    \ preflight precision workflow"
+  system_response: System performs introduce a formal mechanism for persisting preflight
+    rebuttals (architectural e
   assertions:
   - Operation completes successfully
   - Output matches expectations
@@ -66,4 +66,5 @@ implementation:
   - commands/utils.py
   - core/fixer.py
   - core/ai/service.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_045.py

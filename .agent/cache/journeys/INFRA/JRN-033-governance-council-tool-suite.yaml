@@ -1,7 +1,3 @@
-# Journey: JRN-033
-# Linked Story: INFRA-038
-# Title: Governance Council Tool Suite
-
 id: JRN-033
 title: Governance Council Tool Suite
 state: COMMITTED
@@ -11,11 +7,13 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: 'The Voice Agent currently lacks specific tools to perform the duties of the Governance Council roles. It effectively
-  has no "hands" to manipulate the codebase or verify compliance, forcing it to hallucinate responses or fail.
+description: 'The Voice Agent currently lacks specific tools to perform the duties
+  of the Governance Council roles. It effectively has no "hands" to manipulate the
+  codebase or verify compliance, forcing it to hallucinate responses or fail.
 
-  This Runbook defines the implementation of a **Modular Tool Suite** mapping to the 10 Governance Roles (Architect, QA, Security,
-  etc.), enabling the agent to act as a true proxy for the council.'
+  This Runbook defines the implementation of a **Modular Tool Suite** mapping to the
+  10 Governance Roles (Architect, QA, Security, etc.), enabling the agent to act as
+  a true proxy for the council.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -70,4 +68,5 @@ implementation:
   - git.py
   - meta.py
   - observability.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_033.py

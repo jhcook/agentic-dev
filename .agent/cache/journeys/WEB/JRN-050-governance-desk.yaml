@@ -1,7 +1,3 @@
-# Journey: JRN-050
-# Linked Story: WEB-005
-# Title: Governance Desk
-
 id: JRN-050
 title: Governance Desk
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - web
 - voice
 actor: developer using voice assistant
-description: Develop a "Governance Desk" in the Agent Console to visualize and manage the governance estate (Stories, Plans,
-  Runbooks, ADRs) via a filesystem-backed UI, ensuring architectural consistency and ease of use.
+description: Develop a "Governance Desk" in the Agent Console to visualize and manage
+  the governance estate (Stories, Plans, Runbooks, ADRs) via a filesystem-backed UI,
+  ensuring architectural consistency and ease of use.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -59,4 +56,5 @@ implementation:
   files:
   - admin/logger.py
   - routers/governance.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_050.py

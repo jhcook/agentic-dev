@@ -1,4 +1,12 @@
 ---
+description: The single source of truth for the platform's brand color palette and UI rules.
+globs: ["**/*.tsx", "**/*.jsx", "**/*.css", "**/tailwind.config.js"]
+alwaysApply: true
+---
+
+# 402: Colours & UI Standards
+
+---
 alwaysApply: true
 ---
 

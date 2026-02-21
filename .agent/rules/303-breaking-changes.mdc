@@ -1,4 +1,11 @@
 ---
+description: Defines what constitutes a breaking change across all managed codebases.
+alwaysApply: true
+---
+
+# 303: Breaking Change Policy
+
+---
 description: Defines what constitutes a breaking change across all managed codebases
 alwaysApply: true
 ---

@@ -1,7 +1,3 @@
-# Journey: JRN-032
-# Linked Story: INFRA-037
-# Title: Additional Voice Providers Google and Azure
-
 id: JRN-032
 title: Additional Voice Providers Google and Azure
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Implement support for Google Cloud Speech and Azure Cognitive Services as additional voice providers in the platform.
-  This includes STT and TTS implementations for both providers, factory updates for selection, configuration updates for credentials,
+description: Implement support for Google Cloud Speech and Azure Cognitive Services
+  as additional voice providers in the platform. This includes STT and TTS implementations
+  for both providers, factory updates for selection, configuration updates for credentials,
   and observability improvements.
 preconditions:
 - Agent CLI is installed and configured
@@ -61,4 +58,5 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_032.py

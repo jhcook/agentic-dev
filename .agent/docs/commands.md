@@ -124,7 +124,7 @@ Manage encrypted secrets for API keys and credentials. Secrets are stored encryp
 |---------|------|----------------------|
 | `supabase` | `service_role_key`, `anon_key` | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` |
 | `openai` | `api_key` | `OPENAI_API_KEY` |
-| `gemini` | `api_key` | `GEMINI_API_KEY`, `GOOGLE_GEMINI_API_KEY` |
+| `gemini` | `api_key` | `GEMINI_API_KEY`, `GEMINI_API_KEY` |
 | `anthropic` | `api_key` | `ANTHROPIC_API_KEY` |
 | `gh` | `api_key` | `GH_API_KEY`, `GITHUB_TOKEN` |
 

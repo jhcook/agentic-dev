@@ -1,7 +1,3 @@
-# Journey: JRN-003
-# Linked Story: INFRA-003
-# Title: Configurable Output Formats for Agent CLI
-
 id: JRN-003
 title: Configurable Output Formats for Agent CLI
 state: COMMITTED
@@ -58,4 +54,5 @@ implementation:
   - agent/core/logger.py
   - docs/commands.md
   - formatters.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_003.py

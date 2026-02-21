@@ -209,7 +209,7 @@ agent --provider gemini new-runbook WEB-001
 # Google Gemini (recommended)
 export GEMINI_API_KEY="AIza..."
 # Or
-export GOOGLE_GEMINI_API_KEY="AIza..."
+export GEMINI_API_KEY="AIza..."
 
 # OpenAI
 export OPENAI_API_KEY="sk-..."

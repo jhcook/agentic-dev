@@ -1,7 +1,3 @@
-# Journey: JRN-012
-# Linked Story: INFRA-013
-# Title: Optimize Sync for Large Datasets
-
 id: JRN-012
 title: Optimize Sync for Large Datasets
 state: COMMITTED
@@ -11,9 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: The objective is to enhance the `agent sync` command to handle large datasets (1000+ artifacts) efficiently and
-  reliably by introducing pagination, upload chunking, progress reporting, and resume capability. This will resolve memory
-  issues, improve performance, enhance usability, and maintain strict compliance with API and security requirements.
+description: The objective is to enhance the `agent sync` command to handle large
+  datasets (1000+ artifacts) efficiently and reliably by introducing pagination, upload
+  chunking, progress reporting, and resume capability. This will resolve memory issues,
+  improve performance, enhance usability, and maintain strict compliance with API
+  and security requirements.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -51,4 +49,5 @@ implementation:
   files:
   - agent/sync/pagination.py
   - agent/sync/progress.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_012.py

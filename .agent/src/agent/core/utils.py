@@ -176,9 +176,9 @@ def load_governance_context(coding_only: bool = False) -> str:
     
     # Whitelist of critical rules for coding tasks to minimize context size
     CODING_WHITELIST = {
-        "lean-code.mdc",
-        "test.mdc",
-        "main.mdc"
+        "400-lean-code.mdc",
+        "500-test.mdc",
+        "100-main.mdc"
     }
 
     if config.rules_dir.exists():

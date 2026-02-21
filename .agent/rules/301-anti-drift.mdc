@@ -1,4 +1,11 @@
 ---
+description: Anti-Drift and Scope Enforcement Rule preventing unsolicited changes.
+globs: ["**/*"]
+---
+
+# 301: Anti-Drift & Scope Enforcement
+
+---
 description: Anti-Drift and Scope Enforcement Rule
 globs: ["**/*"]
 ---

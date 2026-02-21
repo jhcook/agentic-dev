@@ -1,7 +1,3 @@
-# Journey: JRN-014
-# Linked Story: INFRA-015
-# Title: Create `agent onboard` CLI command
-
 id: JRN-014
 title: Create `agent onboard` CLI command
 state: COMMITTED
@@ -66,4 +62,5 @@ implementation:
   - README.md
   - agent/cli.py
   - agent/commands/onboard.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_014.py

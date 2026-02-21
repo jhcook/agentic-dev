@@ -1,4 +1,12 @@
 ---
+description: Prevents invalid state transitions for Plans, Stories, Runbooks, and Journeys.
+globs: ["**/*.md", "**/*.yaml"]
+alwaysApply: true
+---
+
+# 203: State Enforcement
+
+---
 trigger: always_on
 description: Enforce strict state transitions for Plans, Stories, Runbooks, and Journeys.
 globs: ["**/*.md", "**/*.yaml"]

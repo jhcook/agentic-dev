@@ -1,7 +1,3 @@
-# Journey: JRN-048
-# Linked Story: WEB-003
-# Title: Voice Web Client
-
 id: JRN-048
 title: Voice Web Client
 state: COMMITTED
@@ -11,7 +7,8 @@ tags:
 - web
 - voice
 actor: developer using voice assistant
-description: Implement the Voice Web Client to provide a rich, visual interface for voice interactions with the agent.
+description: Implement the Voice Web Client to provide a rich, visual interface for
+  voice interactions with the agent.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -53,4 +50,5 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_048.py

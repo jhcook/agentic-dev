@@ -1,7 +1,3 @@
-# Journey: JRN-041
-# Linked Story: INFRA-050
-# Title: Relational Integrity & Issue Management
-
 id: JRN-041
 title: Relational Integrity & Issue Management
 state: COMMITTED
@@ -11,9 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Implement a `NotionJanitor` to automatically maintain relational links between Stories, Plans, and ADRs in Notion,
-  ensuring data integrity and accurate project visibility. This includes detecting orphan stories, automatically linking stories
-  to ADRs based on text references, and notifying users about missing required fields.
+description: Implement a `NotionJanitor` to automatically maintain relational links
+  between Stories, Plans, and ADRs in Notion, ensuring data integrity and accurate
+  project visibility. This includes detecting orphan stories, automatically linking
+  stories to ADRs based on text references, and notifying users about missing required
+  fields.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -28,7 +26,8 @@ steps:
   - Configuration is valid
 - id: 2
   action: Developer executes the relational integrity & issue management workflow
-  system_response: System performs implement a `notionjanitor` to automatically maintain relational links between s
+  system_response: System performs implement a `notionjanitor` to automatically maintain
+    relational links between s
   assertions:
   - Operation completes successfully
   - Output matches expectations
@@ -61,4 +60,5 @@ implementation:
   routes: []
   files:
   - agent/core/notion/client.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_041.py

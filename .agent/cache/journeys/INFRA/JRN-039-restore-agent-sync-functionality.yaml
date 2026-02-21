@@ -1,7 +1,3 @@
-# Journey: JRN-039
-# Linked Story: INFRA-045
-# Title: Restore Agent Sync Functionality
-
 id: JRN-039
 title: Restore Agent Sync Functionality
 state: COMMITTED
@@ -11,9 +7,10 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Restore the functionality of the `agent sync` command and its subcommands (`pull`, `push`, `scan`, `status`)
-  by correcting the CLI entry point, removing the broken `agent.sync.main` module, and ensuring proper authentication for
-  sensitive operations.
+description: Restore the functionality of the `agent sync` command and its subcommands
+  (`pull`, `push`, `scan`, `status`) by correcting the CLI entry point, removing the
+  broken `agent.sync.main` module, and ensuring proper authentication for sensitive
+  operations.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -69,4 +66,5 @@ implementation:
   files:
   - main.py
   - sync/cli.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_039.py

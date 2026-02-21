@@ -1,4 +1,12 @@
 ---
+description: Standards for code comments, docstrings, API specs, and operational documentation.
+globs: ["**/*.py", "**/*.ts", "**/*.tsx", "**/*.md"]
+alwaysApply: true
+---
+
+# 501: Documentation
+
+---
 alwaysApply: true
 ---
 

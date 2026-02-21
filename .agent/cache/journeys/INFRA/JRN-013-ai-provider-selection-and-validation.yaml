@@ -87,4 +87,4 @@ implementation:
   - .agent/src/agent/core/auth/credentials.py
   - .agent/etc/agent.yaml
   tests:
-  - tests/journeys/test_jrn_013.py
+  - .agent/tests/journeys/test_jrn_013.py

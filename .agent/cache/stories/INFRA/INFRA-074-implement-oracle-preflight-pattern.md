@@ -129,3 +129,7 @@ Risks identified: Potential latency if tools are overused, but offset by caching
 
 - Run `env -u VIRTUAL_ENV uv run agent preflight` on a test branch and verify trace/logs show tools `read_file` and `read_adr` being actively used.
 - Verify `env -u VIRTUAL_ENV uv run agent preflight` output accurately fails on true violations and passes on unrelated changes.
+
+## Copyright
+
+Copyright 2026 Justin Cook

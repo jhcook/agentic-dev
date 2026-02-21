@@ -21,7 +21,7 @@ from agent.core.ai.service import AIService, ai_command_runs_total
 
 @pytest.fixture
 def ai_service():
-    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy", "GOOGLE_GEMINI_API_KEY": "dummy"}):
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy", "GEMINI_API_KEY": "dummy"}):
         with patch("agent.core.ai.service.AIService._check_gh_cli", return_value=True):
             with patch("openai.OpenAI"), patch("google.genai.Client"):
                 service = AIService()

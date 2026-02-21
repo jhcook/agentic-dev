@@ -1,7 +1,3 @@
-# Journey: JRN-035
-# Linked Story: INFRA-040
-# Title: Restore Silero VAD with WebRTC Fallback
-
 id: JRN-035
 title: Restore Silero VAD with WebRTC Fallback
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Implement a hybrid Voice Activity Detection (VAD) strategy, prioritizing Silero VAD for improved accuracy and
-  noise resistance, while providing a seamless fallback to WebRTC VAD in cases where Silero initialization fails due to missing
+description: Implement a hybrid Voice Activity Detection (VAD) strategy, prioritizing
+  Silero VAD for improved accuracy and noise resistance, while providing a seamless
+  fallback to WebRTC VAD in cases where Silero initialization fails due to missing
   dependencies, model integrity issues, or download failures.
 preconditions:
 - Agent CLI is installed and configured
@@ -62,4 +59,5 @@ implementation:
   routes: []
   files:
   - test/voice/test_vad.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_035.py

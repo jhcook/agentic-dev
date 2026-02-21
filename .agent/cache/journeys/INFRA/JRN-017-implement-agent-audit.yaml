@@ -1,7 +1,3 @@
-# Journey: JRN-017
-# Linked Story: INFRA-020
-# Title: Implement Agent Audit
-
 id: JRN-017
 title: Implement Agent Audit
 state: COMMITTED
@@ -51,4 +47,5 @@ implementation:
   - check.py
   - governance.py
   - lint.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_017.py

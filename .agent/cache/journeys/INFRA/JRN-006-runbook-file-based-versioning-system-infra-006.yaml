@@ -1,7 +1,3 @@
-# Journey: JRN-006
-# Linked Story: INFRA-006
-# Title: Runbook: File-Based Versioning System (INFRA-006)
-
 id: JRN-006
 title: 'Runbook: File-Based Versioning System (INFRA-006)'
 state: COMMITTED
@@ -24,12 +20,14 @@ auth_context:
   permissions: []
 steps:
 - id: 1
-  action: 'Developer configures prerequisites for Runbook: File-Based Versioning System (INFRA-006)'
+  action: 'Developer configures prerequisites for Runbook: File-Based Versioning System
+    (INFRA-006)'
   system_response: System validates configuration
   assertions:
   - Configuration is valid
 - id: 2
-  action: 'Developer executes the runbook: file-based versioning system (infra-006) workflow'
+  action: 'Developer executes the runbook: file-based versioning system (infra-006)
+    workflow'
   system_response: 'System performs #### manual verification
 
     1.  **git context**: run `agent --version` in current r'
@@ -66,4 +64,5 @@ implementation:
   files:
   - main.py
   - tests/core/test_version.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_006.py

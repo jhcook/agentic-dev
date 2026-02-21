@@ -1,7 +1,3 @@
-# Journey: JRN-027
-# Linked Story: INFRA-032
-# Title: Implement GitHub MCP Client Support
-
 id: JRN-027
 title: Implement GitHub MCP Client Support
 state: COMMITTED
@@ -11,10 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Develop a cost-effective integration for GitHub repository, issue, and pull request management by implementing
-  a GitHub MCP (Model Context Protocol) client in the `agent` software. Leverage the user's existing Personal Access Token
-  (PAT) without requiring an expensive GitHub Copilot Pro+ subscription. Ensure secure secret management, robust error handling,
-  and compatibility with the `npx` runtime.
+description: Develop a cost-effective integration for GitHub repository, issue, and
+  pull request management by implementing a GitHub MCP (Model Context Protocol) client
+  in the `agent` software. Leverage the user's existing Personal Access Token (PAT)
+  without requiring an expensive GitHub Copilot Pro+ subscription. Ensure secure secret
+  management, robust error handling, and compatibility with the `npx` runtime.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -79,4 +76,5 @@ implementation:
   - agent/commands/onboard.py
   - agent/config.py
   - agent/core/mcp/__init__.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_027.py

@@ -1,4 +1,12 @@
 ---
+description: Mobile Platform Support Policy (ADR-020) defining OS lifecycle and deprecation.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 600: Mobile Platform Support
+
+---
 alwaysApply: true
 globs: "**/*"
 ---

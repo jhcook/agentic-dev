@@ -1,4 +1,11 @@
 ---
+description: Implementation Standards forbidding the use of stubs or mocks in production code.
+globs: ["**/*.py", "**/*.ts", "**/*.md"]
+---
+
+# 401: No Stubs Policy
+
+---
 ---
 description: "Implementation Standards: No Stubs or Mocks in production code"
 globs:

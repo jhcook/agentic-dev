@@ -1,7 +1,3 @@
-# Journey: JRN-002
-# Linked Story: INFRA-002
-# Title: Workflow Token Optimization
-
 id: JRN-002
 title: Workflow Token Optimization
 state: COMMITTED
@@ -78,4 +74,5 @@ implementation:
   - config.py
   - router.yaml
   - task.md
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_002.py

@@ -1,4 +1,12 @@
 ---
+description: Architectural Standards, Layer Boundaries, and Dependency Rules.
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# 200: Architectural Standards
+
+---
 description: Architectural Standards, Layer Boundaries, and Dependency Rules
 globs: "**/*.py"
 alwaysApply: true

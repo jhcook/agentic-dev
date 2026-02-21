@@ -1,4 +1,11 @@
 ---
+description: Mandatory SOC 2 and GDPR controls including strict secrets and PII management.
+alwaysApply: true
+---
+
+# 102: Global Compliance Requirements
+
+---
 alwaysApply: true
 ---
 

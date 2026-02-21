@@ -1,7 +1,3 @@
-# Journey: JRN-030
-# Linked Story: INFRA-035
-# Title: Voice Barge-In and Interruption Handling
-
 id: JRN-030
 title: Voice Barge-In and Interruption Handling
 state: COMMITTED
@@ -11,9 +7,10 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Implement "Barge-in" capability for the Voice Agent. This requires Voice Activity Detection (VAD) to recognize
-  when the user starts speaking while the agent is talking, and an Interrupt Handler to immediately stop audio playback and
-  update the conversation context.
+description: Implement "Barge-in" capability for the Voice Agent. This requires Voice
+  Activity Detection (VAD) to recognize when the user starts speaking while the agent
+  is talking, and an Interrupt Handler to immediately stop audio playback and update
+  the conversation context.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -63,4 +60,5 @@ implementation:
   files:
   - tests/test_interrupt.py
   - tests/test_vad.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_030.py

@@ -1,4 +1,12 @@
 ---
+description: The root index and authoritative governance hierarchy for the project.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 100: Project Rules and Standards
+
+---
 alwaysApply: true
 ---
 

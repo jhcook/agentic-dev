@@ -1,4 +1,12 @@
 ---
+description: Minimum required testing frameworks and strategies across platforms.
+globs: ["**/*.py", "**/*.tsx", "**/*.ts"]
+alwaysApply: true
+---
+
+# 500: Testing Standards
+
+---
 alwaysApply: true
 ---
 

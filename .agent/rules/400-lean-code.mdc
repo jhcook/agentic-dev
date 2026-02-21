@@ -1,4 +1,12 @@
 ---
+description: General principles for writing minimal, readable, and highly maintainable lean code.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 400: Lean Code
+
+---
 alwaysApply: true
 ---
 

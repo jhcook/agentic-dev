@@ -1,7 +1,3 @@
-# Journey: JRN-011
-# Linked Story: INFRA-012
-# Title: Refactor Codebase Utilities
-
 id: JRN-011
 title: Refactor Codebase Utilities
 state: COMMITTED
@@ -11,7 +7,8 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: 2. Consolidate all utility functionality currently embedded in command files into `agent.core.utils`.
+description: 2. Consolidate all utility functionality currently embedded in command
+  files into `agent.core.utils`.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -67,4 +64,5 @@ implementation:
   - agent/core/utils/id_helpers.py
   - agent/core/utils/text_helpers.py
   - check.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_011.py

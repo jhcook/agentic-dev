@@ -1,4 +1,12 @@
 ---
+description: Environment safety rules for uv, dependency management, and test execution.
+globs: ["**/pyproject.toml"]
+alwaysApply: true
+---
+
+# 302: Environment Safety
+
+---
 description: Environment safety rules for uv, dependency management, and test execution
 globs: "**/pyproject.toml"
 alwaysApply: true

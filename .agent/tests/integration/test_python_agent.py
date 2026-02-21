@@ -28,6 +28,11 @@ from agent.main import app
 
 runner = CliRunner()
 
+import re
+def clean_out(out: str) -> str:
+    """Helper to strip ansi and normalize whitespace so text wrapping doesn't break asserts."""
+    return re.sub(r'\s+', ' ', re.sub(r'\x1b\[[0-9;]*m', '', out))
+
 # Keep a reference to the real Path.exists so targeted mocks can delegate.
 _real_path_exists = Path.exists
 
@@ -51,7 +56,7 @@ def test_app_version():
 def test_new_story_help():
     result = runner.invoke(app, ["new-story", "--help"])
     assert result.exit_code == 0
-    assert "Create a new story file" in result.stdout
+    assert "Create a new story file" in clean_out(result.stdout)
 
 @patch("agent.commands.story.get_next_id")
 @patch("pathlib.Path.write_text")
@@ -134,14 +139,17 @@ def test_validate_story_fail_missing():
     with patch.object(config, "stories_dir", mock_path):
         result = runner.invoke(app, ["validate-story", "INFRA-001"])
         assert result.exit_code == 1
-        assert "Story schema validation" in result.stdout
-        assert "failed" in result.stdout
+        out = clean_out(result.stdout)
+        assert "Story schema validation" in out
+        assert "failed" in out
 
 @patch("subprocess.Popen")
 @patch("subprocess.run")
 @patch("subprocess.check_output")
+@patch("agent.sync.notebooklm.ensure_notebooklm_sync", return_value="SUCCESS")
+@patch("agent.db.journey_index.JourneyIndex")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
-def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_popen):
+def test_pr_workflow_inferred(mock_branch, mock_journey_index, mock_sync, mock_check_output, mock_run, mock_popen):
     # Mock git log and diff
     def check_output_side_effect(cmd, **kwargs):
         if "log" in cmd:
@@ -168,9 +176,10 @@ def test_pr_workflow_inferred(mock_branch, mock_check_output, mock_run, mock_pop
         result = runner.invoke(app, ["pr"])
         
     assert result.exit_code == 0
-    assert "Inferred story ID from branch" in result.stdout
-    assert "INFRA-005" in result.stdout
-    assert "Creating Pull Request" in result.stdout
+    out = clean_out(result.stdout)
+    assert "Inferred story ID from" in out
+    assert "INFRA-005" in out
+    assert "Creating Pull Request" in out
     # Verify gh command
     # gh pr create is called directly via subprocess.run
     args, _ = mock_run.call_args
@@ -195,8 +204,10 @@ def test_commit_command(mock_run):
 
 @patch("subprocess.Popen")
 @patch("subprocess.run")
+@patch("agent.sync.notebooklm.ensure_notebooklm_sync", return_value="SUCCESS")
+@patch("agent.db.journey_index.JourneyIndex")
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
-def test_preflight_inference(mock_branch, mock_run, mock_popen):
+def test_preflight_inference(mock_branch, mock_journey_index, mock_sync, mock_run, mock_popen):
     # Mock preflight checks passing (subprocess calls)
     mock_run.return_value = MagicMock(stdout="file.py", returncode=0)
     
@@ -217,17 +228,16 @@ def test_preflight_inference(mock_branch, mock_run, mock_popen):
         
         result = runner.invoke(app, ["preflight"])
         
-    import re
     assert result.exit_code == 0
-    stdout_flat = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout).replace("\n", "").replace("\r", "")
-    assert "Inferred story ID from" in stdout_flat
-    assert "INFRA-005" in stdout_flat
-    assert "preflight checks for INFRA-005" in stdout_flat
+    out = clean_out(result.stdout)
+    assert "Inferred story ID from" in out
+    assert "INFRA-005" in out
+    assert "preflight checks for INFRA-005" in out
 
 def test_main_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "A CLI for managing and interacting" in result.stdout
+    assert "A CLI for managing and interacting" in clean_out(result.stdout)
 
 def test_preflight_help():
     result = runner.invoke(app, ["preflight", "--help"])

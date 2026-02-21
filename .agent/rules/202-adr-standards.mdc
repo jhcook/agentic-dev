@@ -1,4 +1,11 @@
 ---
+description: Standards for Architecture Decision Records (ADRs) and Exception Records.
+globs: [".agent/adrs/*.md"]
+---
+
+# 202: ADR Standards
+
+---
 description: Standards for Architecture Decision Records (ADRs)
 globs: .agent/adrs/*.md
 ---

@@ -1,7 +1,3 @@
-# Journey: JRN-026
-# Linked Story: INFRA-031
-# Title: Voice Streaming Pipeline with Prosody
-
 id: JRN-026
 title: Voice Streaming Pipeline with Prosody
 state: COMMITTED
@@ -11,9 +7,10 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Refactor the voice processing pipeline to support real-time streaming with natural prosody. This involves moving
-  from a request/response model to an asynchronous generator pipeline (`Agent -> SentenceBuffer -> TTS -> Audio Stream`) to
-  drive the local `Kokoro` TTS (and cloud providers) efficiently.
+description: Refactor the voice processing pipeline to support real-time streaming
+  with natural prosody. This involves moving from a request/response model to an asynchronous
+  generator pipeline (`Agent -> SentenceBuffer -> TTS -> Audio Stream`) to drive the
+  local `Kokoro` TTS (and cloud providers) efficiently.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -63,4 +60,5 @@ implementation:
   files:
   - tests/test_sentence_buffer.py
   - tests/test_voice_flow.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_026.py
