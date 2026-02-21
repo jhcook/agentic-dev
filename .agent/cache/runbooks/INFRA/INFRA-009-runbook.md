@@ -53,7 +53,7 @@ The objective is to enable developers to execute UI tests using the `agent` CLI 
    - Consolidate results:
      - Exit with a non-zero exit code if any flow test fails.
      - Otherwise, exit with 0.
-5. Add an optional argument to filter `.yaml` files by a substring match using `argparse.ArgumentParser` (e.g., `agent run-ui-tests --filter <keyword>`).
+5. Add an optional argument to filter `.yaml` files by a substring match using `argparse.ArgumentParser` (e.g., `env -u VIRTUAL_ENV uv run agent run-ui-tests --filter <keyword>`).
 
 ### Error Handling
 1. User-friendly error messages for:
@@ -79,7 +79,7 @@ The objective is to enable developers to execute UI tests using the `agent` CLI 
 
 ### Documentation
 #### [MODIFY] `README.md`
-1. Update the README to include usage examples for `agent run-ui-tests`.
+1. Update the README to include usage examples for `env -u VIRTUAL_ENV uv run agent run-ui-tests`.
    - Example with default behavior.
    - Example with `--filter` argument.
 2. Describe sample `.yaml` test flow format and naming conventions.

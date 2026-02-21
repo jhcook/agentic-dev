@@ -1828,12 +1828,7 @@ def run_audit(
 
 
 def check_license_headers(repo_path: Path, all_files: List[Path], ignore_patterns: List[str]) -> List[str]:
-    """Check for license headers in all source files.
-    
-    Uses path-aware dual-license logic:
-    - .agent/ files: Justin Cook / Apache License 2.0
-    - All other files: Inspected Holding Pty Ltd / Proprietary
-    """
+    """Check for license headers in all source files."""
     
     missing_license_headers = []
     
@@ -1843,11 +1838,19 @@ def check_license_headers(repo_path: Path, all_files: List[Path], ignore_pattern
         re.compile(r"Licensed under the Apache License, Version 2.0", re.IGNORECASE),
     ]
     
-    # License patterns for application code (proprietary, Inspected Holding Pty Ltd)
-    app_license_patterns = [
-        re.compile(r"Copyright.*\d{4}.*Inspected Holding Pty Ltd", re.IGNORECASE),
-        re.compile(r"[Pp]roprietary and [Cc]onfidential", re.IGNORECASE),
-    ]
+    # License patterns for application code (configurable via template)
+    app_license_patterns = []
+    app_license_template = config.get_app_license_header()
+    
+    if app_license_template:
+        first_line = app_license_template.split('\n')[0].strip()
+        if first_line:
+            app_license_patterns.append(re.compile(re.escape(first_line), re.IGNORECASE))
+    else:
+        app_license_patterns = [
+            re.compile(r"Copyright.*\d{4}.*Justin Cook", re.IGNORECASE),
+            re.compile(r"Licensed under the Apache License, Version 2.0", re.IGNORECASE),
+        ]
     
     # Extensions to check
     EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".sh", ".swift", ".kt"}

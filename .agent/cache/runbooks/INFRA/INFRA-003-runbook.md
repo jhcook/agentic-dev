@@ -3,7 +3,7 @@
 Status: IMPLEMENTED
 
 ## Goal Description
-Implement support for multiple output formats (`json`, `csv`, `yaml`, `markdown`, `plain`, `tsv`) in the `agent` CLI, providing programmatic consumability and improved export capabilities for `agent list` commands (e.g., `list stories`, `list plans`).
+Implement support for multiple output formats (`json`, `csv`, `yaml`, `markdown`, `plain`, `tsv`) in the `agent` CLI, providing programmatic consumability and improved export capabilities for `env -u VIRTUAL_ENV uv run agent list` commands (e.g., `list stories`, `list plans`).
 
 ## Panel Review Findings
 
@@ -152,7 +152,7 @@ logger.error(f"Failed to write to {output_file}: {error}")
   - [x] YAML: Validate using `yamllint` (validated via tests).
   - [x] Markdown: Render using GitHub preview (validated via tests).
 - [x] Test file output functionality:
-  - [x] `agent list stories --format json -o output/stories.json` creates directories and file.
+  - [x] `env -u VIRTUAL_ENV uv run agent list stories --format json -o output/stories.json` creates directories and file.
   - [x] Verify file contents match expected format.
   - [x] Test overwriting existing files works correctly.
   - [x] Test permission errors show clear messages.

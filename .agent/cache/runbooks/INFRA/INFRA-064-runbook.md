@@ -415,9 +415,9 @@ def cli(
 
 ### Manual Verification
 
-- [x] Run `agent new-story --offline INFRA-TEST` → verify it skips AI and opens editor.
-- [x] Run `agent preflight` with network disabled → verify clean error without traceback.
-- [ ] Run `agent pr` with `--write` and ensure the output is written to the expected file.
+- [x] Run `env -u VIRTUAL_ENV uv run agent new-story --offline INFRA-TEST` → verify it skips AI and opens editor.
+- [x] Run `env -u VIRTUAL_ENV uv run agent preflight` with network disabled → verify clean error without traceback.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent pr` with `--write` and ensure the output is written to the expected file.
 - [ ] Verify help text for `--offline`, `--write`, and `--dry-run` is standardized across all commands.
 
 ## Definition of Done

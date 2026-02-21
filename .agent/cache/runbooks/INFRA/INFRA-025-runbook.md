@@ -139,7 +139,7 @@ Run tests with: `cd .agent/src && pytest tests/test_ai_service.py -v`
 - [ ] **Unit Test - Completion**: Add test `test_anthropic_completion()` that mocks Anthropic client and verifies `_try_complete()` returns expected content
 - [ ] **Unit Test - Fallback Chain**: Extend existing `test_fallback_logic()` to include Anthropic in the fallback sequence
 - [ ] **Unit Test - Metrics**: Existing `test_metrics_increment()` pattern should be replicated for Anthropic provider
-- [ ] **Integration Test**: Run `agent impact --provider anthropic` with valid `ANTHROPIC_API_KEY` to verify end-to-end functionality
+- [ ] **Integration Test**: Run `env -u VIRTUAL_ENV uv run agent impact --provider anthropic` with valid `ANTHROPIC_API_KEY` to verify end-to-end functionality
 
 ### Manual Verification
 - [ ] Configure environment variable `ANTHROPIC_API_KEY` and manually test output from commands utilizing Anthropic Claude.

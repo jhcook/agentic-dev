@@ -7,7 +7,7 @@ COMMITTED
 We are accumulating completed stories and runbooks, but we lack a systematic way to learn from them. There is no automated feedback loop to identify which stories caused the most friction (e.g., high churn, failed checks) or to compare the planned work against the actual execution. This leads to repeated mistakes and stagnant velocity.
 
 ## User Story
-As a Product Owner or Team Lead, I want to run `agent retrospective` to generate a report on recently completed stories, identifying process bottlenecks and quality issues, so that we can improve our workflows and estimations.
+As a Product Owner or Team Lead, I want to run `env -u VIRTUAL_ENV uv run agent retrospective` to generate a report on recently completed stories, identifying process bottlenecks and quality issues, so that we can improve our workflows and estimations.
 
 ## Acceptance Criteria
 - [ ] **Data Gathering**: The command scans the `.agent/cache` for stories with state `CLOSED` or `COMPLETED`. Defaults to looking back 14 days, configurable via `--days`.

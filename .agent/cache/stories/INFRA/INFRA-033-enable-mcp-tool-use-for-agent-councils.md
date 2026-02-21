@@ -6,7 +6,7 @@ COMMITTED
 
 ## Problem Statement
 
-The `agent preflight`, `agent impact`, `agent panel`, and other council workflows currently rely purely on static git context (diffs). They are unable to dynamically query the environment, read referenced issues, or inspect files outside the immediate diff context. Although we now have an MCP Client (`agent mcp`), it is disconnected from the `AIService` used by these councils.
+The `env -u VIRTUAL_ENV uv run agent preflight`, `env -u VIRTUAL_ENV uv run agent impact`, `env -u VIRTUAL_ENV uv run agent panel`, and other council workflows currently rely purely on static git context (diffs). They are unable to dynamically query the environment, read referenced issues, or inspect files outside the immediate diff context. Although we now have an MCP Client (`env -u VIRTUAL_ENV uv run agent mcp`), it is disconnected from the `AIService` used by these councils.
 
 ## User Story
 
@@ -38,8 +38,8 @@ As a Developer, I want the Agent (Preflight Council, Governance Panel, etc.) to 
 - **Components Touched**:
   - `agent.core.engine` (New: Executor, Parser, Typedefs) - Core ReAct logic.
   - `agent.core.security` (New: SecureManager) - Output scrubbing.
-  - `agent.commands.workflow` (Fix) - Fixes `agent pr` test skipping logic.
-- **Workflows Affected**: `agent pr` (Immediate fix), `agent panel` (Future integration).
+  - `agent.commands.workflow` (Fix) - Fixes `env -u VIRTUAL_ENV uv run agent pr` test skipping logic.
+- **Workflows Affected**: `env -u VIRTUAL_ENV uv run agent pr` (Immediate fix), `env -u VIRTUAL_ENV uv run agent panel` (Future integration).
 - **Risks**:
   - **Security**: Reliability of `SecureManager` is critical for tool output safety.
   - **Stability**: `AgentExecutor` introduces complex looping logic; potential for infinite loops if guards fail.

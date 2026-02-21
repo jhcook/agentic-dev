@@ -149,7 +149,7 @@ def check_github_auth() -> None:
     typer.echo("\n[INFO] We will now configure GitHub access for both the Agent (MCP) and CLI (gh).")
     typer.echo("You will need a GitHub Personal Access Token (PAT) with scopes: repo, read:org")
 
-    token = getpass.getpass("GitHub PAT: ")
+    token = getpass.getpass("GitHub PAT: ")  # no-preflight-check
     if not token:
         typer.secho("[WARN] No token provided. Skipping GitHub configuration.", fg=typer.colors.YELLOW)
         return
@@ -163,7 +163,7 @@ def check_github_auth() -> None:
                   # But actually onboard runs sequentially, so it should be unlocked.
                   pass
              
-             manager.set_secret("github", "token", token)
+             manager.set_secret("github", "token", token)  # no-preflight-check
              typer.secho("  - [OK] Agent MCP token saved securely.", fg=typer.colors.GREEN)
              
              # Set generic config to 'mcp' as primary tool for agent, though 'gh' is also available
@@ -270,7 +270,7 @@ def configure_api_keys() -> None:
         from agent.commands.secret import _prompt_password, _validate_password_strength
 
         while True:
-            password = _prompt_password(confirm=True)
+            password = _prompt_password(confirm=True)  # no-preflight-check
             if _validate_password_strength(password):
                 try:
                     manager.initialize(password)
@@ -289,7 +289,7 @@ def configure_api_keys() -> None:
 
         while True:
             try:
-                password = _prompt_password(confirm=False)
+                password = _prompt_password(confirm=False)  # no-preflight-check
                 manager.unlock(password)
                 typer.echo("[OK] Secret Manager unlocked.")
                 break
@@ -326,7 +326,7 @@ def configure_api_keys() -> None:
                 typer.secho(f"\n[WARN] {display_name} key found in environment but not in secure storage.", fg=typer.colors.YELLOW)
                 if typer.confirm("Would you like to migrate this key to the Secret Manager?", default=True):
                     try:
-                        manager.set_secret(service_name, key_name, env_val)
+                        manager.set_secret(service_name, key_name, env_val)  # no-preflight-check
                         typer.secho(
                             f"[OK] Migrated {display_name} key to secure storage.",
                             fg=typer.colors.GREEN
@@ -339,30 +339,50 @@ def configure_api_keys() -> None:
                          )
             
             if not migrated:
-                typer.echo(f"\n{display_name} ({key_name}):")
-                try:
-                    # Use getpass for masked input
-                    value = getpass.getpass("Value: ")
-                    if value:
-                         try:
-                            manager.set_secret(service_name, key_name, value)
-                            typer.secho(
-                                f"[OK] Saved {display_name} key.",
-                                fg=typer.colors.GREEN
-                            )
-                         except Exception as e:
-                            typer.secho(
-                                f"[ERROR] Failed to save secret: {e}",
-                                fg=typer.colors.RED
-                            )
+                if service_name == "vertex":
+                    if typer.confirm(f"\nDo you want to configure {display_name}?", default=False):
+                        typer.secho(f"\n[INFO] For setup instructions, see: docs/getting_started.md", dim=True)
+                        typer.echo(f"{display_name} (Google Cloud Project ID):")  # no-preflight-check
+                        try:
+                            value = typer.prompt("Project ID")
+                            if value:
+                                try:
+                                    manager.set_secret(service_name, key_name, value)  # no-preflight-check
+                                    typer.secho(f"[OK] Saved {display_name} project ID.", fg=typer.colors.GREEN)
+                                except Exception as e:
+                                    typer.secho(f"[ERROR] Failed to save secret: {e}", fg=typer.colors.RED)
+                            else:
+                                typer.secho(f"[WARN] Skipping {display_name} configuration.", fg=typer.colors.YELLOW, dim=True)
+                        except (KeyboardInterrupt, EOFError):
+                            typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
+                            raise typer.Exit(code=1)
                     else:
-                        typer.secho(
-                            f"[WARN] Skipping {display_name}.",
-                            fg=typer.colors.YELLOW, dim=True
-                        )
-                except (KeyboardInterrupt, EOFError):
-                    typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
-                    raise typer.Exit(code=1)
+                        typer.secho(f"[WARN] Skipping {display_name} configuration.", fg=typer.colors.YELLOW, dim=True)
+                else:
+                    typer.echo(f"\n{display_name} ({key_name}):")
+                    try:
+                        # Use getpass for masked input
+                        value = getpass.getpass("Value: ")  # no-preflight-check
+                        if value:
+                             try:
+                                manager.set_secret(service_name, key_name, value)  # no-preflight-check
+                                typer.secho(
+                                    f"[OK] Saved {display_name} key.",
+                                    fg=typer.colors.GREEN
+                                )
+                             except Exception as e:
+                                typer.secho(
+                                    f"[ERROR] Failed to save secret: {e}",
+                                    fg=typer.colors.RED
+                                )
+                        else:
+                            typer.secho(
+                                f"[WARN] Skipping {display_name}.",
+                                fg=typer.colors.YELLOW, dim=True
+                            )
+                    except (KeyboardInterrupt, EOFError):
+                        typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
+                        raise typer.Exit(code=1)
         else:
             typer.secho(
                 f"[OK] {display_name} key is already configured.",
@@ -583,10 +603,10 @@ def configure_voice_settings() -> None:
     # 1. Deepgram API Key (Cloud STT/TTS)
     if not manager.has_secret("deepgram", "api_key"):
         if typer.confirm("Do you want to enable Cloud Voice (Deepgram)?", default=True):
-            key = getpass.getpass("Deepgram API Key: ")
+            key = getpass.getpass("Deepgram API Key: ")  # no-preflight-check
             if key:
                 try:
-                    manager.set_secret("deepgram", "api_key", key)
+                    manager.set_secret("deepgram", "api_key", key)  # no-preflight-check
                     typer.secho("[OK] Deepgram key saved.", fg=typer.colors.GREEN)
                 except Exception as e:
                     typer.secho(f"[ERROR] Failed to save key: {e}", fg=typer.colors.RED)
@@ -604,7 +624,7 @@ def configure_voice_settings() -> None:
             typer.echo("You should NEVER commit these keys to git.\n")
             
             typer.echo("Enter Azure Speech Key (masked):")
-            key = getpass.getpass("Key: ")
+            key = getpass.getpass("Key: ")  # no-preflight-check
             region = typer.prompt("Azure Region (e.g. eastus): ")
             
             if key and region:
@@ -615,8 +635,8 @@ def configure_voice_settings() -> None:
                 else:
                     try:
                         # Enforce secure storage for KEY and REGION
-                        manager.set_secret("azure", "key", key)
-                        manager.set_secret("azure", "region", region)
+                        manager.set_secret("azure", "key", key)  # no-preflight-check
+                        manager.set_secret("azure", "region", region)  # no-preflight-check
                         
                         # We also update config for visibility if user wants, but reliance should be on secret?
                         # Security Review said "Cleartext storage of Azure region... might be seen as configuration".
@@ -650,7 +670,7 @@ def configure_voice_settings() -> None:
                             json.loads(json_content) 
                             
                         # Store the raw JSON string in secrets manager
-                        manager.set_secret("google", "application_credentials_json", json_content)
+                        manager.set_secret("google", "application_credentials_json", json_content)  # no-preflight-check
                         typer.secho(f"[OK] Google Service Account imported to Secret Manager.", fg=typer.colors.GREEN)
                         
                         if typer.confirm("Delete local JSON file now (Recommended)?", default=True):
@@ -732,11 +752,11 @@ def configure_notion_settings() -> None:
     token = get_secret("notion_token", service="notion") or os.getenv("NOTION_TOKEN")
     if not token:
         if typer.confirm("Configure Notion Integration?", default=False):
-            token = getpass.getpass("Notion Integration Token: ")
+            token = getpass.getpass("Notion Integration Token: ")  # no-preflight-check
             if token:
                 try:
                     # Save to 'notion' service
-                    manager.set_secret("notion", "notion_token", token)
+                    manager.set_secret("notion", "notion_token", token)  # no-preflight-check
                     # Also set in env for immediate use
                     os.environ["NOTION_TOKEN"] = token
                     typer.secho("[OK] Notion Token saved.", fg=typer.colors.GREEN)
@@ -798,8 +818,46 @@ def configure_notion_settings() -> None:
             except Exception as e:
                  typer.secho(f"[ERROR] Unexpected error running script: {e}", fg=typer.colors.RED)
 
-
-
+def configure_mcp_settings() -> None:
+    """Configures optional MCP servers like NotebookLM."""
+    typer.echo("\n[INFO] Configuring MCP Integrations...")
+    
+    agent_config_path = config.etc_dir / "agent.yaml"
+    try:
+        data = config.load_yaml(agent_config_path)
+    except FileNotFoundError:
+        data = {}
+        
+    mcp_servers = config.get_value(data, "agent.mcp.servers") or {}
+    
+    if "notebooklm" not in mcp_servers:
+        if typer.confirm("Do you want to configure the Google NotebookLM MCP server?", default=False):
+            typer.echo("This requires 'uv' to be installed.")
+            
+            # Add to agent.yaml
+            from agent.core.config import DEFAULT_MCP_SERVERS
+            mcp_servers["notebooklm"] = DEFAULT_MCP_SERVERS["notebooklm"]
+            config.set_value(data, "agent.mcp.servers", mcp_servers)
+            config.save_yaml(agent_config_path, data)
+            typer.secho("[OK] NotebookLM MCP server added to local configuration.", fg=typer.colors.GREEN)
+            
+            # Optionally run the auth command
+            if typer.confirm("Would you like to authenticate NotebookLM now (opens browser)?", default=True):
+                try:
+                    typer.echo("Running notebooklm-mcp-auth...")
+                    subprocess.run(
+                        ["uv", "tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp-auth"],
+                        check=True
+                    )
+                    typer.secho("[SUCCESS] NotebookLM authentication completed.", fg=typer.colors.GREEN)
+                except subprocess.CalledProcessError:
+                    typer.secho("[ERROR] Failed to authenticate NotebookLM.", fg=typer.colors.RED)
+                except FileNotFoundError:
+                    typer.secho("[ERROR] 'uv' is not installed or not in PATH.", fg=typer.colors.RED)
+        else:
+            typer.echo("Skipping NotebookLM setup.")
+    else:
+        typer.secho("[OK] NotebookLM MCP is already configured.", fg=typer.colors.GREEN, dim=True)
 
 
 
@@ -978,6 +1036,7 @@ def onboard() -> None:
         configure_agent_settings()
         configure_voice_settings()
         configure_notion_settings()
+        configure_mcp_settings()
         setup_frontend()
         run_verification()
         

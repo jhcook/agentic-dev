@@ -40,9 +40,9 @@ This results in:
 
 ### CLI Commands
 
-- [ ] `agent new-journey [JRN-XXX]` creates a journey from the template with auto-ID generation
-- [ ] `agent list-journeys` scans and displays all journeys with ID, title, state, and actor
-- [ ] `agent validate-journey` validates YAML against Pydantic schema — malformed journeys fail fast with clear errors
+- [ ] `env -u VIRTUAL_ENV uv run agent new-journey [JRN-XXX]` creates a journey from the template with auto-ID generation
+- [ ] `env -u VIRTUAL_ENV uv run agent list-journeys` scans and displays all journeys with ID, title, state, and actor
+- [ ] `env -u VIRTUAL_ENV uv run agent validate-journey` validates YAML against Pydantic schema — malformed journeys fail fast with clear errors
 - [ ] All commands registered in `main.py`
 - [ ] All YAML loading uses `yaml.safe_load()` — never `yaml.load()`
 
@@ -53,8 +53,8 @@ This results in:
 
 ### Agent Context Integration
 
-- [ ] `agent new-runbook` injects existing journey context into the AI prompt (sanitized to prevent prompt injection)
-- [ ] `agent implement` loads journey implementation mappings to detect file overlap and prevent regressions
+- [ ] `env -u VIRTUAL_ENV uv run agent new-runbook` injects existing journey context into the AI prompt (sanitized to prevent prompt injection)
+- [ ] `env -u VIRTUAL_ENV uv run agent implement` loads journey implementation mappings to detect file overlap and prevent regressions
 - [ ] **Negative test**: Modifying a file that backs a journey step triggers a warning during preflight
 - [ ] Overlap warnings surface in preflight output and PR description
 
@@ -67,7 +67,7 @@ This results in:
 - **Performance**: Journey loading should not add >200ms to CLI commands
 - **Security**: No secrets or PII in journey YAML files; `yaml.safe_load()` enforced; journey content sanitized before LLM prompt injection
 - **Compliance**: Journeys follow the same Apache 2.0 license header convention as other artifacts; `data_classification` field prevents accidental PII in examples
-- **Observability**: Journey count and coverage metrics available via `agent list-journeys`; structured logging for `journey_loaded`, `journey_validation_failed`, `journey_overlap_detected` events
+- **Observability**: Journey count and coverage metrics available via `env -u VIRTUAL_ENV uv run agent list-journeys`; structured logging for `journey_loaded`, `journey_validation_failed`, `journey_overlap_detected` events
 
 ## Linked ADRs
 
@@ -89,7 +89,7 @@ This results in:
 - **Unit tests** for `list-journeys` command (scan, display, empty state)
 - **Unit tests** for sync integration (write-to-disk mapping, scan inclusion, flush cleanup)
 - **Integration test** for journey context injection in `new-runbook` and `implement`
-- **Full regression suite** via `agent preflight` to confirm no existing tests break
+- **Full regression suite** via `env -u VIRTUAL_ENV uv run agent preflight` to confirm no existing tests break
 
 ## Rollback Plan
 

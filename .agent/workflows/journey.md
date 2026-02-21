@@ -11,33 +11,30 @@ A journey defines **what the system does from a user's perspective** — it is a
 ## Steps
 
 1. **Scaffold**: Run `agent new-journey <JRN-ID>` (or omit the ID for auto-generation).
-   - Add `--ai` to have the AI generate a populated journey from a brief description.
-   - Add `--provider <provider>` to force a specific AI provider (gh, gemini, openai).
+   - By default, the AI generates a fully populated journey from a brief description.
+   - Add `--offline` to disable the AI and use manual input.
+   - Add `--provider <provider>` to force a specific AI provider (gh, gemini, vertex, openai, anthropic).
 
-2. **Populate the Journey YAML**:
-   - **With `--ai`**: The AI generates a fully populated YAML journey. Review and refine the output — pay particular attention to assertions (are they specific and verifiable?) and error paths (are the obvious failure modes covered?).
-   - **Without `--ai`** (manual): Read `.agent/docs/journey_yaml_spec.md` — this is the canonical field reference.
-   - Fill in the **required fields** from the current conversation context:
-     - `id`, `title`, `actor`, `description`, `steps`
-   - For each step, write a concrete `action`, `system_response`, and at least one `assertion`.
-   - Add optional fields only when they add value:
-     - `error_paths` — when the happy path has known failure modes
-     - `edge_cases` — for race conditions, idempotency, or security boundaries
-     - `preconditions` — when external state must exist
-     - `auth_context` — when permissions are required
-     - `data_state` — when you need to track data mutations
-     - `branches` — when conditional flows exist (A/B, feature flags, SSO vs password)
-   - Leave `implementation` blocks empty — the agent populates these during `/implement`.
+2. **Review and Refine the Journey YAML**:
+   - **AI-generated**: Review and refine the output — pay particular attention to assertions (are they specific and verifiable?) and error paths (are the obvious failure modes covered?).
+   - **Manual (`--offline`)**: Read `.agent/docs/journey_yaml_spec.md` — this is the canonical field reference.
+     - Fill in the **required fields** from the current conversation context:
+       - `id`, `title`, `actor`, `description`, `steps`
+     - For each step, write a concrete `action`, `system_response`, and at least one `assertion`.
+     - Add optional fields only when they add value:
+       - `error_paths` — when the happy path has known failure modes
+       - `edge_cases` — for race conditions, idempotency, or security boundaries
+       - `preconditions` — when external state must exist
+       - `auth_context` — when permissions are required
+       - `data_state` — when you need to track data mutations
+       - `branches` — when conditional flows exist (A/B, feature flags, SSO vs password)
+     - Leave `implementation` blocks empty — the agent populates these during `/implement`.
 
 3. **Panel Consultation** (Advisory):
-   - Adopt each role from `.agent/etc/agents.yaml` and review the journey:
-     - **@Product**: Are the steps complete? Do the assertions match real acceptance criteria? Is the actor well-defined?
-     - **@Architect**: Do the steps imply reasonable technical boundaries? Any scalability concerns?
-     - **@Security**: Are there auth gaps? Should `auth_context.level` be more restrictive? Any injection or PII risks in `data_state`?
-     - **@QA**: Are assertions testable and specific? Are error paths and edge cases covered? Would you add any?
-     - **@Compliance**: Any data handling or regulatory concerns implied by the steps?
-   - This is **consultative** — provide advice, not blocking verdicts.
-   - Present a brief summary of panel feedback and adjust the journey accordingly.
+   - Run `agent panel <JRN-ID>` to invoke the AI Governance Panel for a consultative review of the journey.
+   - The panel (@Product, @Architect, @Security, @QA, @Compliance) will analyze the journey steps, assertions, and edge cases.
+   - This is **consultative** — the panel provides advice, not blocking verdicts.
+   - Review the panel's feedback and adjust the journey file accordingly.
 
 4. **Finalize**:
    - Set `state: COMMITTED` once you are satisfied the journey is complete.

@@ -4,7 +4,7 @@
 ACCEPTED
 
 ## Goal Description
-To create a new CLI command, `agent query "text"`, that allows developers to ask natural language questions about the codebase. The command will use a Retrieval-Augmented Generation (RAG) pattern, finding relevant code and documentation snippets from the local repository, scrubbing them for PII, and using an LLM to synthesize an answer with citations. This will improve developer productivity by providing a fast, self-service way to find information.
+To create a new CLI command, `env -u VIRTUAL_ENV uv run agent query "text"`, that allows developers to ask natural language questions about the codebase. The command will use a Retrieval-Augmented Generation (RAG) pattern, finding relevant code and documentation snippets from the local repository, scrubbing them for PII, and using an LLM to synthesize an answer with citations. This will improve developer productivity by providing a fast, self-service way to find information.
 
 ## Panel Review Findings
 
@@ -23,7 +23,7 @@ To create a new CLI command, `agent query "text"`, that allows developers to ask
 
 - **@Docs**: This is a significant new feature for developers and requires clear documentation.
     1.  **CLI Help**: The command must have a comprehensive `--help` message explaining its function, arguments, and options like `--chat`.
-    2.  **README**: The main `README.md` or a `CONTRIBUTING.md` guide must be updated with a section on how to use `agent query`. This should include setup instructions for API keys in `.agent/secrets/llm_api_key` and provider config in `.agent/etc/query.yaml`.
+    2.  **README**: The main `README.md` or a `CONTRIBUTING.md` guide must be updated with a section on how to use `env -u VIRTUAL_ENV uv run agent query`. This should include setup instructions for API keys in `.agent/secrets/llm_api_key` and provider config in `.agent/etc/query.yaml`.
     3.  **Code Documentation**: All new modules (`rag.py`, `context_builder.py`) and public functions must have clear docstrings explaining their purpose, parameters, and return values.
     4.  **CHANGELOG**: A new entry under a "Features" section must be added to `CHANGELOG.md`.
 
@@ -400,16 +400,16 @@ async def run_query(text: str):
 
 ### Manual Verification
 - [ ] **Setup**: Configure a valid `LLM_API_KEY` in a local `.agent/secrets` file if it doesn't already exist.
-- [ ] **Known Question**: Run `agent query "how do I create a new workflow?"`. Verify the answer is coherent, accurate, and includes citations like `[Source: .agent/workflows/pr.md]`.
-- [ ] **Code Question**: Run `agent query "where is the RAGService defined?"`. Verify it correctly cites `agent/core/ai/rag.py`.
+- [ ] **Known Question**: Run `env -u VIRTUAL_ENV uv run agent query "how do I create a new workflow?"`. Verify the answer is coherent, accurate, and includes citations like `[Source: .agent/workflows/pr.md]`.
+- [ ] **Code Question**: Run `env -u VIRTUAL_ENV uv run agent query "where is the RAGService defined?"`. Verify it correctly cites `agent/core/ai/rag.py`.
 - [ ] **Offline Mode**: Remove the `.agent/secrets/llm_api_key` file. Run the command again and verify it prints the graceful failure message and shows grep results.
-- [ ] **Hallucination Test**: Run `agent query "what is the launch date for the Mars colony project?"`. Verify the model responds that it cannot answer based on the provided context.
-- [ ] **`.gitignore` Test**: Create a file named `secrets.log` containing the word "workflow". Add `secrets.log` to `.gitignore`. Run `agent query "workflow"`. Verify the answer does not cite `secrets.log`.
+- [ ] **Hallucination Test**: Run `env -u VIRTUAL_ENV uv run agent query "what is the launch date for the Mars colony project?"`. Verify the model responds that it cannot answer based on the provided context.
+- [ ] **`.gitignore` Test**: Create a file named `secrets.log` containing the word "workflow". Add `secrets.log` to `.gitignore`. Run `env -u VIRTUAL_ENV uv run agent query "workflow"`. Verify the answer does not cite `secrets.log`.
 
 ## Definition of Done
 ### Documentation
-- [ ] `CHANGELOG.md` updated with an entry for the new `agent query` feature.
-- [ ] `README.md` (or contributing guide) updated to explain how to set up and use the `agent query` command.
+- [ ] `CHANGELOG.md` updated with an entry for the new `env -u VIRTUAL_ENV uv run agent query` feature.
+- [ ] `README.md` (or contributing guide) updated to explain how to set up and use the `env -u VIRTUAL_ENV uv run agent query` command.
 - [ ] CLI command includes a useful `--help` message.
 
 ### Observability

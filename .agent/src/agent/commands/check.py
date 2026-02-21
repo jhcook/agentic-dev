@@ -419,6 +419,13 @@ def preflight(
         except Exception as e:
             logger.debug(f"Could not verify Notion sync state: {e}")
             console.print("[yellow]⚠️  Could not verify Notion sync state. Ensure 'agent sync init' was run.[/yellow]")
+            
+        try:
+            from agent.sync.notebooklm import ensure_notebooklm_sync
+            ensure_notebooklm_sync()
+        except Exception as e:
+            logger.debug(f"Could not sync with NotebookLM: {e}")
+            console.print(f"[yellow]⚠️  NotebookLM sync degraded: {e}[/yellow]")
 
     # Check for unstaged changes (Security Maintenance)
     # Check for unstaged changes (Security Maintenance)
@@ -478,6 +485,32 @@ def preflight(
             console.print("[green]✅ Notion sync ready (Oracle Pattern context active).[/green]")
         except Exception as e:
             console.print(f"[yellow]⚠️  Notion sync unreachable: {e}. Oracle Pattern may have stale context.[/yellow]")
+            
+        notebooklm_ready = False
+        console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
+        try:
+            from agent.sync.notebooklm import ensure_notebooklm_sync
+            sync_status = ensure_notebooklm_sync()
+            if sync_status == "SUCCESS":
+                console.print("[green]✅ NotebookLM sync ready.[/green]")
+                notebooklm_ready = True
+            elif sync_status == "NOT_CONFIGURED":
+                # Inform the user that it's just not set up
+                console.print("[yellow]ℹ️  NotebookLM sync not configured.[/yellow]")
+            else:
+                console.print("[yellow]⚠️  NotebookLM sync unavailable or degraded.[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️  NotebookLM sync unreachable: {e}.[/yellow]")
+
+        if not notebooklm_ready:
+            console.print("\n[bold blue]🔄 Rebuilding Local Vector DB (Oracle Pattern Fallback)...[/bold blue]")
+            try:
+                from agent.db.journey_index import JourneyIndex
+                idx = JourneyIndex()
+                idx.build()
+                console.print("[green]✅ Local Vector DB ready.[/green]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Local Vector DB build failed: {e}.[/yellow]")
 
     # 1.2 Journey Gate (INFRA-055)
     console.print("\n[bold blue]🗺️  Checking Journey Gate...[/bold blue]")

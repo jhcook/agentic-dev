@@ -72,11 +72,20 @@ Rewrite the prompt format in `governance.py` to force the agent to cite its tool
 
   If a finding cannot be traced to a specific tool observation, you must discard it.
 
-### Phase 4: NotebookLM MCP Integration & Local Vector Database Fallback
+### Phase 4: NotebookLM MCP Integration, Automated Sync, & Local Vector Database Fallback
 
-- **NotebookLM MCP Primary Route**: When the NotebookLM Enterprise API MCP server is detected in the environment, the agent routes its retrieval queries through the MCP server first for optimal enterprise document retrieval.
+- **NotebookLM Automated Sync (Notebook Management)**: Before retrieval begins, the preflight orchestrator automatically calls the MCP server to ensure a NotebookLM notebook exists for the current repository. The orchestrator actively synchronized any local `docs/adrs/` and `.mdc` rules into it using the MCP commands (such as `notebook_add_text`), maintaining an up-to-date managed NotebookLM.
+- **NotebookLM MCP Primary Route**: When the NotebookLM Enterprise API MCP server is detected in the environment and synchronized, the agent routes its retrieval queries through the MCP server first for optimal enterprise document retrieval.
 - **Local Vector DB Fallback (Offline Mobile Support)**: When the MCP server or external endpoints are unavailable, gracefully fall back to an embedded, zero-server vector database (like `sqlite-vec` or `LanceDB`) to index `docs/adrs/` and `.mdc` rules. These run purely in-process and can be easily bundled into a compiled binary for cross-platform, entirely offline use (e.g., compiled, protected mobile add-ons) without requiring a heavy Python server.
 - **Legacy Mode**: Introduce a `--legacy-context` flag (or similar mechanism in `agent.yaml`) that completely bypasses the Oracle Pattern and reverts to the original Context Stuffing behavior.
+
+### Lawful Basis for Processing (GDPR)
+
+The lawful basis for processing internal project data (ADRs, runbooks, rules, and code snippets) using the Google NotebookLM MCP service is **Legitimate Interest** (GDPR Article 6(1)(f)).
+
+- **Purpose**: To significantly accelerate and improve the accuracy of automated governance and preflight checks during the software development lifecycle.
+- **Necessity**: NotebookLM provides superior RAG-like retrieval for large document sets, avoiding the hallucinations caused by context-stuffing.
+- **Balancing**: The data transmitted is strictly limited to internal project documentation and code (scrubbed of PII/secrets via `scrub_sensitive_data` before transmission). The legitimate interest in maintaining high-quality code and architecture outweighs any minimal risk to the non-personal internal data processed.
 
 ## Acceptance Criteria
 
@@ -91,6 +100,7 @@ Rewrite the prompt format in `governance.py` to force the agent to cite its tool
 - [ ] **AC-9**: The Oracle Pattern functions correctly and efficiently across all supported providers (e.g., `--provider anthropic`, `--provider vertex`, `--provider gemini`).
 - [ ] **AC-10** (Notion Sync Awareness): Before the Oracle preflight begins, it must trigger a lightweight validation check against the Notion sync state (or automatically run the sync protocol) to ensure the Local Vector DB/tool context is identical to the source of truth, preventing stale local data from being retrieved.
 - [ ] **AC-11** (NotebookLM Routing): When the NotebookLM Enterprise API MCP server is detected in the environment, retrieval queries must route through the MCP server first, deferring to the Local Vector DB only as a fallback.
+- [ ] **AC-12** (NotebookLM Automated Sync): The framework actively pushes (synchronizes) the repository's rules and ADRs into a managed NotebookLM structure prior to agent retrieval.
 
 ## Non-Functional Requirements
 
@@ -117,5 +127,5 @@ Risks identified: Potential latency if tools are overused, but offset by caching
 
 ## Tests
 
-- Run `agent preflight` on a test branch and verify trace/logs show tools `read_file` and `read_adr` being actively used.
-- Verify `agent preflight` output accurately fails on true violations and passes on unrelated changes.
+- Run `env -u VIRTUAL_ENV uv run agent preflight` on a test branch and verify trace/logs show tools `read_file` and `read_adr` being actively used.
+- Verify `env -u VIRTUAL_ENV uv run agent preflight` output accurately fails on true violations and passes on unrelated changes.

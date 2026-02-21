@@ -10,11 +10,11 @@ The "Agent Console" proposed in WEB-001 needs a foundation. We need to initializ
 
 ## User Story
 
-As a Developer, I want to run `agent admin start` to launch the Management Console servers (Frontend + Backend), so I can instantly access the visual dashboard without manually running multiple terminal commands.
+As a Developer, I want to run `env -u VIRTUAL_ENV uv run agent admin start` to launch the Management Console servers (Frontend + Backend), so I can instantly access the visual dashboard without manually running multiple terminal commands.
 
 ## Acceptance Criteria
 
-- [ ] **CLI**: Implement `agent admin start` command:
+- [ ] **CLI**: Implement `env -u VIRTUAL_ENV uv run agent admin start` command:
   - Use `asyncio.create_subprocess_exec` to manage Uvicorn and Vite processes concurrently.
   - Propagate `SIGINT` (Ctrl+C) to terminate both child processes cleanly (avoid zombies).
   - Check port availability (8000/5173) before starting.
@@ -22,7 +22,7 @@ As a Developer, I want to run `agent admin start` to launch the Management Conso
   - `-v`: INFO (High-level agent logs).
   - `-vv`: DEBUG (Detailed agent logs, libraries silenced).
   - `-vvv`: TRACE (Full logs including third-party libraries).
-- [x] **Preflight**: Verify `agent pr` and preflight checks correctly display blocking reasons to the console on failure.
+- [x] **Preflight**: Verify `env -u VIRTUAL_ENV uv run agent pr` and preflight checks correctly display blocking reasons to the console on failure.
 - [ ] **Frontend Init**: Initialize `web/` directory with `vite` (React + TypeScript + TailwindCSS).
   - Configure `vite.config.ts` to proxy `/api` -> `http://127.0.0.1:8000` (avoids CORS complexity).
 - [ ] **Shell UI**: Create a basic Layout with Sidebar navigation (Voice, Config, Logs).
@@ -31,7 +31,7 @@ As a Developer, I want to run `agent admin start` to launch the Management Conso
 ## Non-Functional Requirements
 
 - **Security**: Admin services (Uvicorn & Vite) MUST bind explicitly to `127.0.0.1`. Do NOT bind to `0.0.0.0`.
-- **Developer Experience**: `agent admin start` should support hot-reloading for both frontend and backend.
+- **Developer Experience**: `env -u VIRTUAL_ENV uv run agent admin start` should support hot-reloading for both frontend and backend.
 
 ## Linked ADRs
 
@@ -45,10 +45,10 @@ Risks: Port conflicts, zombie processes if signal handling is poor.
 
 ## Test Strategy
 
-- Manual: Run `agent admin start`, verify browser opens, backend responds, and hitting Ctrl+C stops everything.
+- Manual: Run `env -u VIRTUAL_ENV uv run agent admin start`, verify browser opens, backend responds, and hitting Ctrl+C stops everything.
 - Automated: Test CLI process manager logic (mocking subprocess).
 
 ## Rollback Plan
 
 - Delete `web/` folder.
-- Remove `agent admin` command group.
+- Remove `env -u VIRTUAL_ENV uv run agent admin` command group.

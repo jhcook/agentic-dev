@@ -17,9 +17,22 @@ import os
 import subprocess
 import time
 from typing import List, Optional
+import warnings
 
 from prometheus_client import Counter
 from rich.console import Console
+
+# --- Suppress verbose AI / Embedding Library Logging ---
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+warnings.filterwarnings("ignore", module="huggingface_hub.*")
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("backoff").setLevel(logging.ERROR)
 
 from agent.core.config import get_valid_providers
 from agent.core.router import router
@@ -62,7 +75,7 @@ PROVIDERS = {
     "vertex": {
         "name": "Google Vertex AI",
         "service": "vertex",
-        "secret_key": None,
+        "secret_key": "api_key",
         "env_var": "GOOGLE_CLOUD_PROJECT",
     },
 }
@@ -177,6 +190,7 @@ class AIService:
         if gemini_key:
             try:
                 self.clients['gemini'] = self._build_genai_client("gemini")
+                logging.debug("Gemini provider initialized from secrets.")
             except ImportError:
                 console.print(
                     "[dim]ℹ️  Gemini key found but google-genai package not installed. "
@@ -184,14 +198,19 @@ class AIService:
                 )
             except Exception as e:
                 console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
+        else:
+            logging.debug("Skipping Gemini: GEMINI_API_KEY not found in environment or secrets.")
 
-        # 2. Check Vertex AI (ADC-based — no API key needed)
-        if os.getenv("GOOGLE_CLOUD_PROJECT"):
+        # 2. Check Vertex AI
+        vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT") or get_secret("api_key", service="vertex")
+        if vertex_proj:
+            # Set the env var so _build_genai_client finds it natively
+            os.environ["GOOGLE_CLOUD_PROJECT"] = vertex_proj
             try:
                 self.clients['vertex'] = self._build_genai_client("vertex")
-                logging.info(
+                logging.debug(
                     "Vertex AI provider initialized (project=%s)",
-                    os.getenv("GOOGLE_CLOUD_PROJECT"),
+                    vertex_proj,
                 )
             except ImportError:
                 console.print(
@@ -199,7 +218,14 @@ class AIService:
                     "Install with: pip install google-genai[/dim]"
                 )
             except Exception as e:
-                console.print(f"[yellow]⚠️  Vertex AI initialization failed: {e}[/yellow]")
+                # Provide a helpful hint if it's an ADC auth issue
+                if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
+                    console.print("[yellow]⚠️  Vertex AI authentication missing (DefaultCredentialsError).[/yellow]")
+                    console.print("[yellow]   Please run: gcloud auth application-default login[/yellow]")
+                else:
+                    console.print(f"[yellow]⚠️  Vertex AI initialization failed: {e}[/yellow]")
+        else:
+            logging.debug("Skipping Vertex AI: GOOGLE_CLOUD_PROJECT not found in environment or secrets.")
 
         # 3. Check OpenAI
         openai_key = get_secret("api_key", service="openai")
@@ -208,6 +234,7 @@ class AIService:
                 from openai import OpenAI
                 # Set 120s timeout
                 self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
+                logging.debug("OpenAI provider initialized from secrets.")
             except ImportError:
                 console.print(
                     "[dim]ℹ️  OpenAI key found but openai package not installed. "
@@ -215,10 +242,15 @@ class AIService:
                 )
             except Exception as e:
                 console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
+        else:
+            logging.debug("Skipping OpenAI: OPENAI_API_KEY not found in environment or secrets.")
 
         # 4. Check GH CLI
         if self._check_gh_cli():
              self.clients['gh'] = "gh-cli" # Marker
+             logging.debug("GH provider initialized via local CLI installation.")
+        else:
+             logging.debug("Skipping GH provider: Local CLI not installed or missing models extension.")
 
         # 5. Check Anthropic
         anthropic_key = get_secret("api_key", service="anthropic")
@@ -230,6 +262,7 @@ class AIService:
                     api_key=anthropic_key,
                     timeout=120.0
                 )
+                logging.debug("Anthropic provider initialized from secrets.")
             except ImportError:
                 console.print(
                     "[dim]ℹ️  Anthropic key found but anthropic package not installed. "
@@ -239,6 +272,8 @@ class AIService:
                 console.print(
                     f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]"
                 )
+        else:
+            logging.debug("Skipping Anthropic: ANTHROPIC_API_KEY not found in environment or secrets.")
 
         # Default Priority: GH -> Gemini -> Vertex -> OpenAI
         self._set_default_provider()
@@ -801,5 +836,13 @@ class AIService:
                     raise e
             
         return ""
+
+def get_embeddings_model() -> "HuggingFaceEmbeddings":
+    """
+    Returns a configured document embedding model for vector search.
+    Defaults to all-MiniLM-L6-v2 via sentence-transformers for local fast embedding.
+    """
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 ai_service = AIService()

@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Develop an interactive "fix" mode for the `agent preflight` command to help developers resolve errors more efficiently. When preflight checks fail, the tool will identify blockers, propose specific AI-generated fixes, allow developers to apply and verify fixes in real-time, and ensure human oversight before any automated changes are finalized.
+Develop an interactive "fix" mode for the `env -u VIRTUAL_ENV uv run agent preflight` command to help developers resolve errors more efficiently. When preflight checks fail, the tool will identify blockers, propose specific AI-generated fixes, allow developers to apply and verify fixes in real-time, and ensure human oversight before any automated changes are finalized.
 
 ## Panel Review Findings
 
@@ -85,7 +85,7 @@ Develop an interactive "fix" mode for the `agent preflight` command to help deve
 
 ### docs/command_reference.md
 
-#### [MODIFY] Document new `agent preflight --interactive` flag
+#### [MODIFY] Document new `env -u VIRTUAL_ENV uv run agent preflight --interactive` flag
 
 - Provide detailed usage examples, including a walkthrough of an interactive repair scenario.
 
@@ -112,7 +112,7 @@ Develop an interactive "fix" mode for the `agent preflight` command to help deve
 
 ### Manual Verification
 
-- [ ] Corrupt a story file, use `agent preflight --interactive`, and verify both the fix proposal and final result.
+- [ ] Corrupt a story file, use `env -u VIRTUAL_ENV uv run agent preflight --interactive`, and verify both the fix proposal and final result.
 - [ ] Test linter and unit test errors and validate fixes.
 - [ ] Confirm rollback integrity after failed fixes.
 

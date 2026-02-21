@@ -13,6 +13,11 @@ steps:
       - "The diff context is reduced to -U3."
       - "The agent system instructions strictly forbid out-of-domain evaluation."
 
+  - action: "System creates/syncs a NotebookLM notebook."
+    system_response: "System ensures NotebookLM has an up-to-date 'agentic-dev' notebook containing ADRs and MDC files."
+    assertions:
+      - "The framework actively executes notebooklm-mcp tools (like notebook_add_text) to push local rules."
+
   - action: "Agent needs architectural context for a changed file."
     system_response: "Agent utilizes the `read_adr`, `read_file`, or `search_codebase` tools to retrieve context."
     assertions:
@@ -38,6 +43,7 @@ acceptance_criteria:
   - "AC-9: Oracle pattern functions across Anthropic, Vertex, Gemini."
   - "AC-10: Notion Sync Awareness check before Oracle preflight."
   - "AC-11: NotebookLM Routing priority."
+  - "AC-12: NotebookLM Automated Sync adds ADRs/Rules/Caches."
 
 error_paths:
   - trigger: "Tool-retrieved finding is missing a citation."
@@ -57,9 +63,24 @@ data_state:
   postconditions: []
 
 implementation:
-  routes: []
-  files: []
-  tests: []
+  routes:
+    - "agent preflight"
+  files:
+    - ".agent/src/agent/commands/check.py"
+    - ".agent/src/agent/core/adk/agents.py"
+    - ".agent/src/agent/core/context.py"
+    - ".agent/src/agent/core/governance.py"
+    - ".agent/src/agent/core/mcp/client.py"
+    - ".agent/src/agent/db/journey_index.py"
+    - ".agent/src/agent/sync/notion.py"
+    - ".agent/src/agent/sync/notebooklm.py"
+  tests:
+    - ".agent/tests/commands/test_check_commands.py"
+    - ".agent/tests/db/test_journey_index.py"
+    - ".agent/tests/e2e/test_e2e_governance.py"
+    - ".agent/tests/e2e/test_e2e_interactive.py"
+    - ".agent/tests/integration/test_notebooklm_sync.py"
+    - ".agent/tests/integration/test_python_agent.py"
 
 linked_stories: 
   - "INFRA-074"

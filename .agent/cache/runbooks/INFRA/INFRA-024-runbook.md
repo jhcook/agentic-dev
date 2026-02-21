@@ -4,7 +4,7 @@
 ACCEPTED
 
 ## Goal Description
-To implement a command `agent list-models` in the CLI tool, which queries and displays available AI models for a specified provider. These models should be filtered based on the user's active API key, provider configuration, and the availability status of the models. The goal is to enhance developer productivity by providing real-time visibility into available models and avoiding runtime API call errors (e.g., "404 Model Not Found").
+To implement a command `env -u VIRTUAL_ENV uv run agent list-models` in the CLI tool, which queries and displays available AI models for a specified provider. These models should be filtered based on the user's active API key, provider configuration, and the availability status of the models. The goal is to enhance developer productivity by providing real-time visibility into available models and avoiding runtime API call errors (e.g., "404 Model Not Found").
 
 ## Panel Review Findings
 
@@ -80,13 +80,13 @@ Observability planning is needed:
 ## Verification Plan
 
 ### Automated Tests
-- [ ] Test `agent list-models` with valid providers; verify output for each provider matches the mocked API responses.
+- [ ] Test `env -u VIRTUAL_ENV uv run agent list-models` with valid providers; verify output for each provider matches the mocked API responses.
 - [ ] Test with invalid providers to ensure errors are handled gracefully.
 - [ ] Test scenario where API keys are missing or invalid (negative test case).
 - [ ] Check command response time for acceptable performance under network latency simulations.
 
 ### Manual Verification
-- [ ] Run `agent list-models` locally with all provider options (`gemini`, `openai`, `gh`, no args/default) and compare outputs against real-world API/CLI responses.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent list-models` locally with all provider options (`gemini`, `openai`, `gh`, no args/default) and compare outputs against real-world API/CLI responses.
 - [ ] Test logging behavior to ensure sensitive information is not leaked.
 - [ ] Verify error messages are informative and actionable for the end user.
 
@@ -96,7 +96,7 @@ Observability planning is needed:
 
 ### Documentation
 - [ ] CHANGELOG.md updated to describe the feature addition.
-- [ ] README.md updated to include instructions for `agent list-models`.  
+- [ ] README.md updated to include instructions for `env -u VIRTUAL_ENV uv run agent list-models`.  
 - [ ] CLI usage examples added to the documentation with provider-specific use cases.
 
 ### Observability

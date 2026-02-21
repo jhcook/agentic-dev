@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Create a local web-based admin dashboard within the `agent admin` console to display project status, including active stories, pending PRs, total ADRs, and a Kanban board for story management. This will provide developers with an at-a-glance view of project activity without relying on external tools or manual data synchronization.
+Create a local web-based admin dashboard within the `env -u VIRTUAL_ENV uv run agent admin` console to display project status, including active stories, pending PRs, total ADRs, and a Kanban board for story management. This will provide developers with an at-a-glance view of project activity without relying on external tools or manual data synchronization.
 
 ## Panel Review Findings
 
@@ -277,7 +277,7 @@ async def get_stats():
 - `pytest tests/test_dashboard_api.py` (New test for API endpoints).
 
 ### Manual Verification
-1. Run `agent admin start`.
+1. Run `env -u VIRTUAL_ENV uv run agent admin start`.
 2. Open `http://127.0.0.1:8080`.
 3. Verify Dashboard shows non-zero stats (if stories exist).
 4. Click "Kanban" tab.
@@ -288,7 +288,7 @@ st for the `/api/stories` endpoint to verify it returns a list of stories from t
 
 ### Manual Verification
 
-- [x] Run `agent admin start`.
+- [x] Run `env -u VIRTUAL_ENV uv run agent admin start`.
 - [x] Go to `localhost:8080` (or configured port).
 - [x] Verify that the navigation bar includes "Dashboard" and "Kanban" links.
 - [x] Verify that the Dashboard loads and shows the correct counts matching the local `all_stories.json` file.
@@ -300,7 +300,7 @@ st for the `/api/stories` endpoint to verify it returns a list of stories from t
 ### Documentation
 
 - [x] CHANGELOG.md updated
-- [x] README.md updated to include instructions on how to access the dashboard via `agent admin start`.
+- [x] README.md updated to include instructions on how to access the dashboard via `env -u VIRTUAL_ENV uv run agent admin start`.
 - [ ] API Documentation updated (using FastAPI's automatic documentation, verify endpoints are documented).
 
 ### Observability

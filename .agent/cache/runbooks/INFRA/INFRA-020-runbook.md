@@ -4,7 +4,7 @@
 ACCEPTED
 
 ## Goal Description
-Implement a comprehensive `agent audit` command that enables compliance officers and lead developers to execute a governance audit of the repository. The audit will assess traceability, identify stagnant code, and flag orphaned governance artifacts to generate actionable compliance reports. This feature ensures better oversight, transparency, and management of "Governance as Code."
+Implement a comprehensive `env -u VIRTUAL_ENV uv run agent audit` command that enables compliance officers and lead developers to execute a governance audit of the repository. The audit will assess traceability, identify stagnant code, and flag orphaned governance artifacts to generate actionable compliance reports. This feature ensures better oversight, transparency, and management of "Governance as Code."
 
 ---
 
@@ -179,7 +179,7 @@ app.command("audit")(audit.audit)
 
 #### [MODIFY] [README.md](file:///Users/jcook/repo/agentic-dev/.agent/README.md)
 
-Add `agent audit` CLI usage section. Highlight the purpose of the audit command, the types of issues it detects (traceability, stagnant code, orphaned artifacts), and links to more detailed documentation.
+Add `env -u VIRTUAL_ENV uv run agent audit` CLI usage section. Highlight the purpose of the audit command, the types of issues it detects (traceability, stagnant code, orphaned artifacts), and links to more detailed documentation.
 
 #### [NEW] .auditignore (example)
 
@@ -238,7 +238,7 @@ PYTHONPATH=.agent/src pytest .agent/tests/integration/test_audit_integration.py 
 
 ### Manual Verification
 
-- [ ] Run `agent audit` on this repo and verify:
+- [ ] Run `env -u VIRTUAL_ENV uv run agent audit` on this repo and verify:
   - Report generates at `AUDIT-<Date>.md`
   - Health scores are reasonable. Add more explicit guidance on what qualifies as “reasonable” health scores.
   - Report is readable by non-technical stakeholders
@@ -268,4 +268,4 @@ PYTHONPATH=.agent/src pytest .agent/tests/integration/test_audit_integration.py 
 - [ ] All existing tests continue to pass
 - [ ] Add clear criteria for code maintainability in the Definition of Done.
 
-Following these architectural guidelines will help ensure that the `agent audit` command is robust, scalable, maintainable, and compliant with governance requirements.
+Following these architectural guidelines will help ensure that the `env -u VIRTUAL_ENV uv run agent audit` command is robust, scalable, maintainable, and compliant with governance requirements.

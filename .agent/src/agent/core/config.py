@@ -51,6 +51,8 @@ class Config:
         self.runbooks_dir = self.cache_dir / "runbooks"
         self.journeys_dir = self.cache_dir / "journeys"
 
+        self.app_license_template_path = self.templates_dir / "license_header.txt"
+
         # Initialize repo info
         self.repo_owner = "unknown"
         self.repo_name = "unknown"
@@ -58,6 +60,36 @@ class Config:
 
         # Enabled Providers logic (INFRA-044)
         self.enabled_providers: List[str] = self._get_enabled_providers()
+
+        # Auto-load Environment Variables from agent.yaml
+        self._load_agent_env_vars()
+
+    def _load_agent_env_vars(self):
+        """Loads 'env' block from agent.yaml and injects into os.environ."""
+        yaml_path = self.etc_dir / "agent.yaml"
+        if yaml_path.exists():
+            try:
+                data = self.load_yaml(yaml_path)
+                env_vars = data.get("env", {})
+                if isinstance(env_vars, dict):
+                    for key, val in env_vars.items():
+                        # Append if it's NO_PROXY and already exists. Support httpx lowercase `no_proxy`.
+                        if key.upper() == "NO_PROXY":
+                            # Upper
+                            if os.getenv("NO_PROXY"):
+                                os.environ["NO_PROXY"] = f"{os.getenv('NO_PROXY')},{str(val)}"
+                            else:
+                                os.environ["NO_PROXY"] = str(val)
+                            
+                            # Lower
+                            if os.getenv("no_proxy"):
+                                os.environ["no_proxy"] = f"{os.getenv('no_proxy')},{str(val)}"
+                            else:
+                                os.environ["no_proxy"] = str(val)
+                        else:
+                            os.environ[key] = str(val)
+            except Exception as e:
+                logger.warning(f"Failed to load env vars from agent.yaml: {e}")
 
     def _find_repo_root(self) -> Path:
         """
@@ -150,6 +182,17 @@ class Config:
         if os.getenv("GOOGLE_CLOUD_PROJECT"):
             providers.append("vertex")
         return providers
+
+    def get_app_license_header(self) -> Optional[str]:
+        """Read the application license header template, returning None if not found."""
+        if self.app_license_template_path.exists():
+            try:
+                content = self.app_license_template_path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+            except Exception as e:
+                logger.warning(f"Failed to read license template: {e}")
+        return None
 
     def load_yaml(self, path: Path) -> Dict[str, Any]:
         """Load a YAML file safely."""
@@ -303,6 +346,21 @@ class Config:
         # For now, use the global default constants
         return DEFAULT_COUNCIL_TOOLS.get(council_name, DEFAULT_COUNCIL_TOOLS["default"])
 
+    def get_model(self, provider: str) -> Optional[str]:
+        """Retrieve the configured model name for a specific provider.
+        
+        Reads from agent.yaml under 'agent.models.<provider>'.
+        Returns None if not explicitly configured.
+        """
+        try:
+            data = self.load_yaml(self.etc_dir / "agent.yaml")
+            models = self.get_value(data, "agent.models")
+            if isinstance(models, dict):
+                return models.get(provider)
+        except Exception as e:
+            logger.debug(f"Failed to read model config for {provider}: {e}")
+        return None
+
         
 config = Config()
 
@@ -401,6 +459,11 @@ DEFAULT_MCP_SERVERS = {
     "github": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {}
+    },
+    "notebooklm": {
+        "command": "uv",
+        "args": ["tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp"],
         "env": {}
     }
 }

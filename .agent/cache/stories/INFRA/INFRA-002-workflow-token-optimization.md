@@ -18,11 +18,11 @@ So that I can **execute complex logic efficiently, cheaply, and consistently** w
 
 ## Acceptance Criteria
 - [ ] **Workflow Parity**:
-    - `workflows/pr.md` executes `agent pr --draft --web`
-    - `workflows/commit.md` executes `agent commit --ai`
-    - `workflows/preflight.md` executes `agent preflight --ai --base main`
-    - `workflows/runbook.md` executes `agent new-runbook`
-    - `workflows/implement.md` executes `agent implement` (immediately)
+    - `workflows/pr.md` executes `env -u VIRTUAL_ENV uv run agent pr --draft --web`
+    - `workflows/commit.md` executes `env -u VIRTUAL_ENV uv run agent commit --ai`
+    - `workflows/preflight.md` executes `env -u VIRTUAL_ENV uv run agent preflight --ai --base main`
+    - `workflows/runbook.md` executes `env -u VIRTUAL_ENV uv run agent new-runbook`
+    - `workflows/implement.md` executes `env -u VIRTUAL_ENV uv run agent implement` (immediately)
 - [ ] **Config Relocation**:
     - `.agent/agents.yaml` moved to `.agent/etc/agents.yaml`
     - `.agent/router.yaml` moved to `.agent/etc/router.yaml`
@@ -41,7 +41,7 @@ So that I can **execute complex logic efficiently, cheaply, and consistently** w
 
 ## Test Strategy
 - Manual verification of each workflow command.
-- Verification that `agent new-runbook` produces the expected output using the new template.
+- Verification that `env -u VIRTUAL_ENV uv run agent new-runbook` produces the expected output using the new template.
 
 ## Implementation Plan
 

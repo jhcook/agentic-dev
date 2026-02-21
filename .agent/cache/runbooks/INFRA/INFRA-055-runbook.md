@@ -24,13 +24,13 @@ PASS with conditions. Three mandatory controls:
 No secrets are stored in journey files. No new network calls introduced. Dependency surface is unchanged (`pyyaml` already in the project).
 
 **@QA:**
-PASS. Test strategy is comprehensive: unit tests for CLI commands (new-journey, list-journeys, validate-journey), unit tests for sync integration, and integration testing via `agent preflight`. The Pydantic model provides schema validation — malformed YAML fails fast. Negative test for overlap detection (modifying a file that backs a journey step triggers a warning) is explicitly called out in the story's AC. The `CRITICAL_FLOWS.mdc` should be updated to reference journey-backed flows once journeys are populated.
+PASS. Test strategy is comprehensive: unit tests for CLI commands (new-journey, list-journeys, validate-journey), unit tests for sync integration, and integration testing via `env -u VIRTUAL_ENV uv run agent preflight`. The Pydantic model provides schema validation — malformed YAML fails fast. Negative test for overlap detection (modifying a file that backs a journey step triggers a warning) is explicitly called out in the story's AC. The `CRITICAL_FLOWS.mdc` should be updated to reference journey-backed flows once journeys are populated.
 
 **@Product:**
 PASS. Acceptance criteria are clear and testable. The user story covers three personas (developer, QA, PM). The workflow order — Journey → Story → Runbook → Implement — enforces that behavioral intent is defined before code is written. Impact analysis identifies all touched components. The `linked_journeys` field on stories creates bidirectional traceability.
 
 **@Observability:**
-PASS with additions. Structured logging events should be emitted for: `journey_created`, `journey_loaded`, `journey_validation_failed`, `journey_overlap_detected`. These should use the existing `console.print` pattern (no external logging framework required at this stage). The `agent list-journeys` command provides runtime visibility into journey count and coverage. Future: metrics for journey-to-test coverage ratio.
+PASS with additions. Structured logging events should be emitted for: `journey_created`, `journey_loaded`, `journey_validation_failed`, `journey_overlap_detected`. These should use the existing `console.print` pattern (no external logging framework required at this stage). The `env -u VIRTUAL_ENV uv run agent list-journeys` command provides runtime visibility into journey count and coverage. Future: metrics for journey-to-test coverage ratio.
 
 **@Docs:**
 PASS. `user_journeys.md` already created in `.agent/docs/` with full lifecycle documentation. CHANGELOG.md must be updated. The `journey-template.yaml` serves as inline documentation for the YAML schema. ADR-024 documents the architectural decision. No OpenAPI changes required (CLI-only feature).
@@ -44,7 +44,7 @@ PASS. Apache 2.0 license headers required on all new `.py` files (`journey.py`, 
 - **PII Prevention**: All journey content injected into AI prompts is scrubbed via `scrub_sensitive_data()`. Template placeholders use generic personas, not real user data.
 - **Lawful Basis**: Not applicable — journeys describe system behavior, not data subject information. No GDPR processing activity is introduced.
 - **Retention**: Journey YAML files persist as version-controlled repository artifacts for the lifetime of the project.
-- **Deletion**: Journeys can be removed via `git rm`, `agent sync flush`, or by archiving the containing repository.
+- **Deletion**: Journeys can be removed via `git rm`, `env -u VIRTUAL_ENV uv run agent sync flush`, or by archiving the containing repository.
 
 ## Targeted Refactors & Cleanups (INFRA-043)
 
@@ -269,11 +269,11 @@ cd /Users/jcook/repo/agentic-dev/.agent && python3 -m pytest tests/ -v --tb=shor
 
 ### Manual Verification
 
-- [ ] Run `agent new-journey` → verify YAML file appears in `.agent/cache/journeys/`
-- [ ] Run `agent list-journeys` → verify output shows the journey with correct fields
-- [ ] Run `agent validate-journey JRN-001` → verify pass
+- [ ] Run `env -u VIRTUAL_ENV uv run agent new-journey` → verify YAML file appears in `.agent/cache/journeys/`
+- [ ] Run `env -u VIRTUAL_ENV uv run agent list-journeys` → verify output shows the journey with correct fields
+- [ ] Run `env -u VIRTUAL_ENV uv run agent validate-journey JRN-001` → verify pass
 - [ ] Create a malformed YAML journey manually → run `validate-journey` → verify fail with clear error
-- [ ] Run `agent new-runbook` for a new story → verify journey context appears in the generated runbook
+- [ ] Run `env -u VIRTUAL_ENV uv run agent new-runbook` for a new story → verify journey context appears in the generated runbook
 - [ ] Inspect runbook output for journey overlap warnings (if applicable)
 
 ## Definition of Done
@@ -292,4 +292,4 @@ cd /Users/jcook/repo/agentic-dev/.agent && python3 -m pytest tests/ -v --tb=shor
 ### Testing
 
 - [ ] Unit tests passed
-- [ ] Regression suite passed (`agent preflight` or `pytest tests/`)
+- [ ] Regression suite passed (`env -u VIRTUAL_ENV uv run agent preflight` or `pytest tests/`)

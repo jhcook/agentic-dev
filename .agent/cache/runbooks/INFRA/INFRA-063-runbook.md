@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Implement an `--ai` flag for the `agent journey backfill-tests` command to automatically generate test implementations using the AI service, significantly reducing the manual effort required to create regression tests for user journeys.
+Implement an `--ai` flag for the `env -u VIRTUAL_ENV uv run agent journey backfill-tests` command to automatically generate test implementations using the AI service, significantly reducing the manual effort required to create regression tests for user journeys.
 
 ## Linked Journeys
 
@@ -79,7 +79,7 @@ Implement an `--ai` flag for the `agent journey backfill-tests` command to autom
 
 ### Phase 0: Pre-Validation
 
-1. Verify INFRA-058 `backfill_tests` command works (`agent journey backfill-tests --dry-run`)
+1. Verify INFRA-058 `backfill_tests` command works (`env -u VIRTUAL_ENV uv run agent journey backfill-tests --dry-run`)
 2. Verify `scrub_sensitive_data()` import path: `from agent.core.security import scrub_sensitive_data`
 3. Verify AI service lazy import pattern: `from agent.core.ai.service import AIService`
 
@@ -346,8 +346,8 @@ pytest .agent/src/agent/tests/commands/ -k journey -v
 
 ### Manual Verification
 
-1. `agent journey backfill-tests --ai` → verify dry-run output to stdout
-2. `agent journey backfill-tests --ai --write --journey JRN-053` → verify file created
+1. `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` → verify dry-run output to stdout
+2. `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai --write --journey JRN-053` → verify file created
 3. `python -c "import ast; ast.parse(open('tests/journeys/test_jrn_053.py').read())"` → syntax ok
 4. Verify progress bar renders correctly with 5+ journeys
 5. Verify structured log output contains expected fields

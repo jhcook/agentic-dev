@@ -1,6 +1,6 @@
 # Agent Release & Upgrade Guide
 
-This guide explains how to release new versions of the Agent CLI and how to configure target repositories (like `inspected-app`) to use the latest version in GitHub Actions.
+This guide explains how to release new versions of the Agent CLI and how to configure target repositories to use the latest version in GitHub Actions.
 
 ## 1. Upgrading the Agent
 
@@ -15,7 +15,7 @@ To deploy the latest version of the Agent from `agentic-dev` to a target reposit
 ### Example
 
 ```bash
-./release.sh /Users/jcook/repo/inspected/inspected-app
+./release.sh /Users/jcook/repo/agent/agent
 ```
 
 ### What `release.sh` Does

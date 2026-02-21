@@ -65,6 +65,9 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
     "notion": {
         "notion_token": ["NOTION_TOKEN"],
     },
+    "huggingface": {
+        "token": ["HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
+    },
 }
 
 

@@ -7,11 +7,11 @@ COMMITTED
 The "Impact Analysis Summary" section in stories is critical for governance but often difficult to populate accurately manually. Developers may miss subtle dependencies or downstream effects of their changes. Automated analysis is needed to ensure this section is meaningful and accurate.
 
 ## User Story
-As a Developer, I want to run `agent impact <story-id>` so that I can get an AI-generated analysis of how my changes affect the rest of the system, identifying potential risks, breaking changes, and affected workflows.
+As a Developer, I want to run `env -u VIRTUAL_ENV uv run agent impact <story-id>` so that I can get an AI-generated analysis of how my changes affect the rest of the system, identifying potential risks, breaking changes, and affected workflows.
 
 ## Acceptance Criteria
-- [ ] **Scenario 1**: Can run `agent impact <story-id>` with staged changes and receive a text analysis of the impact.
-- [ ] **Scenario 2**: Can run `agent impact <story-id> --base main` to compare against a specific branch.
+- [ ] **Scenario 1**: Can run `env -u VIRTUAL_ENV uv run agent impact <story-id>` with staged changes and receive a text analysis of the impact.
+- [ ] **Scenario 2**: Can run `env -u VIRTUAL_ENV uv run agent impact <story-id> --base main` to compare against a specific branch.
 - [ ] **Scenario 3**: Can run with `--update-story` flag to automatically populate the "Impact Analysis Summary" section of the story markdown file.
 - [ ] **Scenario 4**: The analysis correctly identifies basic risks (e.g., modifying a shared utility, changing a public CLI signature).
 - [ ] **Scenario 5**: Fails gracefully if no changes are detected.
@@ -42,7 +42,7 @@ The proposed code changes introduce a new `impact` command to assist developers 
 
 **Workflows affected**:
 - **Governance workflows**: Automates the "Impact Analysis Summary" section of Story files, improving compliance and reducing manual effort for developers.
-- **Development workflows**: Adds a new tool (`agent impact`) for analyzing and reviewing changes, especially for identifying risks and downstream dependencies.
+- **Development workflows**: Adds a new tool (`env -u VIRTUAL_ENV uv run agent impact`) for analyzing and reviewing changes, especially for identifying risks and downstream dependencies.
 
 **Risks identified**:
 1. **Security Risks**:

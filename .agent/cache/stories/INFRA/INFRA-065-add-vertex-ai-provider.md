@@ -57,7 +57,7 @@ Risks identified: ADC misconfiguration (expired tokens, missing `gcloud auth`); 
 - **Edge case**: `provider: vertex` with `GOOGLE_CLOUD_PROJECT` unset — verify clear error, not obscure SDK failure.
 - **Edge case**: ADC credentials expired — verify actionable error message.
 - **Edge case**: ADC token refresh under `asyncio.gather()` (3-slot semaphore) — verify thread safety.
-- **Integration**: `agent panel --panel-engine adk` with Vertex AI completes without 429 errors.
+- **Integration**: `env -u VIRTUAL_ENV uv run agent panel --panel-engine adk` with Vertex AI completes without 429 errors.
 
 ## Rollback Plan
 

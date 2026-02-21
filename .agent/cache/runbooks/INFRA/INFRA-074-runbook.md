@@ -109,8 +109,12 @@ def check():
     # Notion sync check (AC-10)
     if not use_legacy_context:
         from agent.sync.notion import NotionSync
-        notion_sync = NotionSync() # Assuming instantiation doesn't require external setup
-        notion_sync.ensure_synchronized() # Placeholder, implement in NotionSync class.
+        notion_sync = NotionSync()
+        notion_sync.ensure_synchronized()
+        
+        # NotebookLM Automated Sync (AC-12)
+        from agent.sync.notebooklm import ensure_notebooklm_sync
+        ensure_notebooklm_sync()
 
     # ... existing code for diff generation ...
     diff_process = subprocess.Popen(
@@ -251,6 +255,10 @@ class NotionSync:
 
 - Implement MCP Client based on ADR-010.
 
+### NEW `agent/sync/notebooklm.py`
+
+- Create a module to ensure a NotebookLM notebook exists for the current repository and to iterate over `docs/adrs/` and `.agent/rules/`, calling MCP tools (`notebook_add_text` or `notebook_add_drive`) to synchronize local architectural context to Google NotebookLM.
+
 ### NEW `agent/db/journey_index.py`
 
 - Create a new class to index the journeys into local vectorDB.
@@ -270,14 +278,15 @@ class NotionSync:
 - [x] Test AC-9: `test_provider_compatibility` - Checks that the Oracle Pattern functions correctly and efficiently across all supported providers (e.g., `--provider anthropic`, `--provider vertex`, `--provider gemini`).
 - [x] Test AC-10: `test_notion_sync_awareness` - Checks that before the Oracle preflight begins, it triggers a lightweight validation check against the Notion sync state.
 - [x] Test AC-11: `test_notebooklm_routing` - Checks that when the NotebookLM Enterprise API MCP server is detected in the environment, retrieval queries route through the MCP server first, deferring to the Local Vector DB only as a fallback.
+- [x] Test AC-12: `test_notebooklm_sync` - Checks that the framework actively manages a NotebookLM instance by creating it if missing and pushing local rules/ADRs.
 
 ### Manual Verification
 
-- [ ] Step 1: Run `agent preflight` on a test branch with a known architectural violation and verify that the agent correctly identifies the violation and cites the relevant ADR.
-- [ ] Step 2: Run `agent preflight --legacy-context` on the same test branch and verify that the agent identifies the same violation using the original context stuffing approach.
-- [ ] Step 3: Disable the NotebookLM MCP server and run `agent preflight` on the same test branch and verify that the agent correctly identifies the violation using the local vector database.
+- [ ] Step 1: Run `env -u VIRTUAL_ENV uv run agent preflight` on a test branch with a known architectural violation and verify that the agent correctly identifies the violation and cites the relevant ADR.
+- [ ] Step 2: Run `env -u VIRTUAL_ENV uv run agent preflight --legacy-context` on the same test branch and verify that the agent identifies the same violation using the original context stuffing approach.
+- [ ] Step 3: Disable the NotebookLM MCP server and run `env -u VIRTUAL_ENV uv run agent preflight` on the same test branch and verify that the agent correctly identifies the violation using the local vector database.
 - [ ] Step 4: Test on different providers `--provider anthropic`, `--provider vertex`, `--provider gemini`.
-- [ ] Step 5: Introduce a new ADR and run `agent preflight` on a branch with code that violates it. Verify that the agent picks up the new ADR.
+- [ ] Step 5: Introduce a new ADR and run `env -u VIRTUAL_ENV uv run agent preflight` on a branch with code that violates it. Verify that the agent picks up the new ADR.
 
 ## Definition of Done
 

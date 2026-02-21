@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Restore the functionality of the `agent sync` command and its subcommands (`pull`, `push`, `scan`, `status`) by correcting the CLI entry point, removing the broken `agent.sync.main` module, and ensuring proper authentication for sensitive operations.
+Restore the functionality of the `env -u VIRTUAL_ENV uv run agent sync` command and its subcommands (`pull`, `push`, `scan`, `status`) by correcting the CLI entry point, removing the broken `agent.sync.main` module, and ensuring proper authentication for sensitive operations.
 
 ## Panel Review Findings
 
@@ -127,17 +127,17 @@ echo "Global sync smoke test passed."
 
 ### Manual Verification
 
-1. **Help**: `agent sync --help` shows subcommands.
-2. **Status**: `agent sync status` shows output.
+1. **Help**: `env -u VIRTUAL_ENV uv run agent sync --help` shows subcommands.
+2. **Status**: `env -u VIRTUAL_ENV uv run agent sync status` shows output.
 3. **Auth**:
    - Rename `~/.agent/credentials` momentarily.
-   - Run `agent sync pull`.
+   - Run `env -u VIRTUAL_ENV uv run agent sync pull`.
    - Expect error: "Missing Credentials..."
    - Restore credentials.
-4. **Success**: `agent sync pull` works (or attempts connection).
+4. **Success**: `env -u VIRTUAL_ENV uv run agent sync pull` works (or attempts connection).
 
 ## Definition of Done
 
-- `agent sync` subcommands are wired correctly.
+- `env -u VIRTUAL_ENV uv run agent sync` subcommands are wired correctly.
 - `pull`/`push` are protected by `with_creds`.
 - Broken file deleted.

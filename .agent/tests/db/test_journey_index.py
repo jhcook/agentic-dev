@@ -231,3 +231,38 @@ class TestGetAffectedJourneys:
             db, ["README.md"], repo
         )
         assert affected == []
+
+
+class TestJourneyIndexVectorDB:
+    @patch("agent.core.config.config")
+    @patch("agent.core.ai.service.get_embeddings_model")
+    def test_build_and_search(self, mock_get_embeddings, mock_config, tmp_path: Path):
+        """Test that the local vector DB can ingest rules/ADRs and retrieve them via semantic search."""
+        from langchain_core.embeddings import FakeEmbeddings
+        mock_get_embeddings.return_value = FakeEmbeddings(size=384)
+        mock_config.repo_root = tmp_path
+        
+        # Setup fake rules and adrs
+        rules_dir = tmp_path / ".agent" / "rules"
+        rules_dir.mkdir(parents=True)
+        mock_config.rules_dir = rules_dir
+        (rules_dir / "001-test.mdc").write_text("Rule 1: Always check for stubs.")
+        
+        adrs_dir = tmp_path / "docs" / "adrs"
+        adrs_dir.mkdir(parents=True)
+        (adrs_dir / "ADR-001-vector.md").write_text("# Title\nADR on vector fallback.")
+        
+        from agent.db.journey_index import JourneyIndex
+        
+        # Initialize against temp path
+        idx = JourneyIndex(persist_directory=tmp_path / "index")
+        
+        # Build
+        idx.build()
+        
+        # Test Search (requires sentence-transformers or mock)
+        results_str = idx.search("stub", k=2)
+        
+        assert results_str != "", "Expected search to return at least one result."
+        assert "stubs" in results_str, "Expected result to contain context about stubs"
+        assert "001-test.mdc" in results_str

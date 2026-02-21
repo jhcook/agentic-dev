@@ -7,10 +7,12 @@ description: Create a new user story.
 Run the following command:
 `agent new-story <STORY-ID>`
 
-Or, to generate a draft using AI:
-`agent new-story <STORY-ID> --ai --prompt "Context for the story"`
+- By default, the AI will prompt for context and generate a populated story draft.
+- You can provide the context inline: `agent new-story <STORY-ID> --prompt "Context for the story"`
+- Alternatively, you can disable AI generation and manually populate the file:
+`agent new-story <STORY-ID> --offline`
 
-Then, populate the generated file with details from the current conversation including:
+If you used `--offline`, you must manually populate the generated file with details from the current conversation including:
 
 - Problem Statement
 - User Story

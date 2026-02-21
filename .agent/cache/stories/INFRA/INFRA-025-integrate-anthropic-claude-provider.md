@@ -35,7 +35,7 @@ As a **developer using the agent CLI**, I want **to configure Anthropic Claude a
 
 ## Test Strategy
 - **Unit Tests**: Mock Anthropic client and verify `_try_complete()` handler returns expected content.
-- **Integration Tests**: With valid API key, verify end-to-end completion via `agent impact` command.
+- **Integration Tests**: With valid API key, verify end-to-end completion via `env -u VIRTUAL_ENV uv run agent impact` command.
 - **Negative Tests**: Verify graceful handling when API key is missing or invalid.
 - **Fallback Tests**: Verify provider chain switches from failing provider to Anthropic (and vice versa).
 

@@ -17,7 +17,7 @@ As a Developer, I want the Voice Agent to be able to use tools and remember our 
 - [ ] **Tool support**: Configure `VoiceOrchestrator` to accept a list of tools (e.g., `LangGraph` tools).
 - [ ] **Example Tool**: Implement a basic tool (e.g., `lookup_documentation`) and wire it up.
 - [ ] **Persistence**: Replace `MemorySaver` with `SqliteSaver` (stored in `.agent/storage/`) for durable context.
-- [ ] **Configurable Prompt**: Allow the System Prompt to be updated via `agent config`.
+- [ ] **Configurable Prompt**: Allow the System Prompt to be updated via `env -u VIRTUAL_ENV uv run agent config`.
 - [ ] **Transcript Sync**: Emit JSON events (User Text, Agent Text, Tool Result) over WebSocket to enable frontend chat history.
 - [ ] **Latency Handling**: If tool execution > 1s, play "Thinking..." filler audio/sound.
 - [ ] **Safety**: Sensitive tools must require verbal confirmation ("Are you sure?").

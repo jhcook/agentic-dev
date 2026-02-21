@@ -375,7 +375,7 @@ The Voice Client provides a visual interface for voice interactions.
 - Safari 14.1+
 
 ### Running Locally
-1. Start backend: `agent admin start`
+1. Start backend: `env -u VIRTUAL_ENV uv run agent admin start`
 2. Navigate to `http://localhost:8080`
 3. Click "Enable Microphone" and grant permissions
 ```
@@ -424,7 +424,7 @@ The Voice Client provides a visual interface for voice interactions.
    - Verify audio playback stops immediately
 
 4. **Reconnection**:
-   - Stop backend (`agent admin stop`)
+   - Stop backend (`env -u VIRTUAL_ENV uv run agent admin stop`)
    - Verify UI shows "connecting" state
    - Restart backend
    - Verify automatic reconnection

@@ -7,7 +7,7 @@ INFRA-021-021-021-021-021-021-021-021-021-021-021-021-021-021-021-021-021-021
 Refactoring code across multiple files (e.g., renaming a utility function used everywhere, or creating value objects) is tedious and error-prone. While IDEs handle simple renames, complex logical refactors (like "Extract this logic into a Strategy pattern") require understanding the semantic meaning of the code, which standard regex/tools cannot do.
 
 ## User Story
-As a Developer, I want to run `agent refactor <file_or_dir> --goal "Goal"` to apply complex, AI-driven refactoring across a set of files, so that I can improve code quality and architecture without spending hours on manual edits.
+As a Developer, I want to run `env -u VIRTUAL_ENV uv run agent refactor <file_or_dir> --goal "Goal"` to apply complex, AI-driven refactoring across a set of files, so that I can improve code quality and architecture without spending hours on manual edits.
 
 ## Acceptance Criteria
 - [ ] **Target Selection**: The command accepts a file or directory path. For directories, it uses smart heuristics (grep/imports) to limit context, rather than dumping all files.

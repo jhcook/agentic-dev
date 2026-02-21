@@ -1,10 +1,10 @@
-# INFRA-015: Create `agent onboard` CLI command
+# INFRA-015: Create `env -u VIRTUAL_ENV uv run agent onboard` CLI command
 
 ## State
 ACCEPTED
 
 ## Goal Description
-To create a new CLI command, `agent onboard`, that automates the initial setup for developers. This command will verify system dependencies, interactively and securely configure necessary API keys, initialize the required workspace directory structure, and perform a final health check to ensure the agent is ready for immediate use.
+To create a new CLI command, `env -u VIRTUAL_ENV uv run agent onboard`, that automates the initial setup for developers. This command will verify system dependencies, interactively and securely configure necessary API keys, initialize the required workspace directory structure, and perform a final health check to ensure the agent is ready for immediate use.
 
 ## Panel Review Findings
 - **@Architect**: The proposed implementation using `pathlib` for file system operations is robust and aligns with modern Python practices. The choice to make the command idempotent is critical for a good user experience, preventing accidental overwrites of existing configurations. The architecture should ensure that dependency-checking logic is decoupled and potentially reusable by other commands (e.g., in `agent.core.utils`). The command should be self-contained and not introduce complex dependencies to the core agent logic. The plan to target macOS/Linux first and fail fast on Windows is a sensible approach for initial delivery.
@@ -18,7 +18,7 @@ To create a new CLI command, `agent onboard`, that automates the initial setup f
     - Test the exact error message when `.agent` exists as a file.
     - The manual verification plan must be executed in a clean, containerized environment (e.g., using a fresh `python:3.11-slim` Docker image) to accurately simulate a new developer's machine.
 
-- **@Docs**: The user story correctly identifies the need to update `README.md` and `CONTRIBUTING.md`. The "Quick Start" section of the `README.md` must be rewritten to prioritize `agent onboard` as the primary setup method. The old manual steps should be moved to an "Advanced" or "Manual Setup" section. The CLI's built-in help text (`agent onboard --help`) must also be comprehensive, explaining what the command does and any options it might have.
+- **@Docs**: The user story correctly identifies the need to update `README.md` and `CONTRIBUTING.md`. The "Quick Start" section of the `README.md` must be rewritten to prioritize `env -u VIRTUAL_ENV uv run agent onboard` as the primary setup method. The old manual steps should be moved to an "Advanced" or "Manual Setup" section. The CLI's built-in help text (`env -u VIRTUAL_ENV uv run agent onboard --help`) must also be comprehensive, explaining what the command does and any options it might have.
 
 - **@Compliance**: The user story does not involve changes to any API contracts or architecture governed by an existing ADR, so no direct violations of `api-contract-validation.mdc` or `adr-standards.mdc` are found. However, the team must remain vigilant. If any part of this implementation were to require, for instance, a new configuration service endpoint, it would immediately fall under the purview of the API contract rules. The work does not require a new ADR at this time.
 
@@ -190,8 +190,8 @@ if __name__ == "__main__":
 
 ## Definition of Done
 ### Documentation
-- [ ] `CHANGELOG.md` updated with a summary of the new `agent onboard` feature.
-- [ ] `README.md` updated in the "Quick Start" section to recommend `agent onboard` as the primary setup method.
+- [ ] `CHANGELOG.md` updated with a summary of the new `env -u VIRTUAL_ENV uv run agent onboard` feature.
+- [ ] `README.md` updated in the "Quick Start" section to recommend `env -u VIRTUAL_ENV uv run agent onboard` as the primary setup method.
 - [ ] `CONTRIBUTING.md` updated to reflect the new onboarding process for developers.
 
 ### Observability

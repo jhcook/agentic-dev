@@ -151,13 +151,13 @@ Create `tests/core/test_utils.py`:
 
 Verify all commands still work:
 
-- `agent preflight --story INFRA-012` - Uses `find_story_file`
-- `agent runbook INFRA-012` - Uses `find_story_file`, `find_runbook_file`
-- `agent implement INFRA-012` - Uses `find_runbook_file`
-- `agent panel INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
-- `agent impact INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
-- `agent new-story` - Uses `get_next_id`, `sanitize_title`
-- `agent commit --ai` - Uses `infer_story_id`, `scrub_sensitive_data`
+- `env -u VIRTUAL_ENV uv run agent preflight --story INFRA-012` - Uses `find_story_file`
+- `env -u VIRTUAL_ENV uv run agent runbook INFRA-012` - Uses `find_story_file`, `find_runbook_file`
+- `env -u VIRTUAL_ENV uv run agent implement INFRA-012` - Uses `find_runbook_file`
+- `env -u VIRTUAL_ENV uv run agent panel INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
+- `env -u VIRTUAL_ENV uv run agent impact INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
+- `env -u VIRTUAL_ENV uv run agent new-story` - Uses `get_next_id`, `sanitize_title`
+- `env -u VIRTUAL_ENV uv run agent commit --ai` - Uses `infer_story_id`, `scrub_sensitive_data`
 
 ### Regression Tests
 

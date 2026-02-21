@@ -1,4 +1,4 @@
-# INFRA-067: Enhance `agent implement` with Post-Apply Governance Gates
+# INFRA-067: Enhance `env -u VIRTUAL_ENV uv run agent implement` with Post-Apply Governance Gates
 
 ## State
 
@@ -6,13 +6,13 @@ IN_PROGRESS
 
 ## Problem Statement
 
-The `agent implement` CLI command handles pre-validation (runbook status, branch management, journey gate) and AI code generation, but does not programmatically enforce the post-apply governance phases defined in the `/implement` workflow. Phases 3 (Security Scan), 4 (QA Validation), 5 (Documentation Check), and 6 (Completion Sync with structured verdict) are entirely left to the AI agent reading the workflow markdown. This means governance is advisory, not enforced.
+The `env -u VIRTUAL_ENV uv run agent implement` CLI command handles pre-validation (runbook status, branch management, journey gate) and AI code generation, but does not programmatically enforce the post-apply governance phases defined in the `/implement` workflow. Phases 3 (Security Scan), 4 (QA Validation), 5 (Documentation Check), and 6 (Completion Sync with structured verdict) are entirely left to the AI agent reading the workflow markdown. This means governance is advisory, not enforced.
 
 Core philosophy violation: logic that should be encapsulated in Python CLI commands is instead embedded in workflow instructions for the agent.
 
 ## User Story
 
-As a developer using `agent implement`, I want the CLI to automatically run security scans, execute tests, and verify documentation after applying code changes, so that governance gates are enforced programmatically rather than relying on the AI agent's interpretation of workflow instructions.
+As a developer using `env -u VIRTUAL_ENV uv run agent implement`, I want the CLI to automatically run security scans, execute tests, and verify documentation after applying code changes, so that governance gates are enforced programmatically rather than relying on the AI agent's interpretation of workflow instructions.
 
 ## Acceptance Criteria
 
@@ -22,7 +22,7 @@ As a developer using `agent implement`, I want the CLI to automatically run secu
 - [ ] **AC4: Docs Check**: Given `--apply` is used, when Python files are modified, then the CLI verifies that new/modified top-level functions have docstrings.
 - [ ] **AC5: Structured Verdict**: After all phases complete, the CLI outputs a per-phase summary with APPROVE/BLOCK verdict and timing (e.g., `[PHASE] Security Scan ... PASSED (1.2s)`).
 - [ ] **AC6: Skip Flags with Audit Logging**: `--skip-journey-check`, `--skip-tests`, and `--skip-security` flags exist. Each logs a timestamped warning to stdout: `⚠️ [AUDIT] Security gate skipped at 2026-02-19T23:44:45`.
-- [ ] **AC7: Workflow Alignment**: After enhancement, the `/implement` workflow can be reduced to primarily calling `agent implement` with appropriate flags.
+- [ ] **AC7: Workflow Alignment**: After enhancement, the `/implement` workflow can be reduced to primarily calling `env -u VIRTUAL_ENV uv run agent implement` with appropriate flags.
 - [ ] **Negative Test**: Security scan blocks when `eval(user_input)` is detected in AI output.
 
 ## Non-Functional Requirements

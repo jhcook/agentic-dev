@@ -10,14 +10,14 @@ Current research workflows are fragmented; NotebookLM offers superior synthesis 
 
 ## User Story
 
-As a Developer, I want to integrate the NotebookLM MCP server into the Agent's toolchain using `agent secret` for authentication and `agent.yaml` for configuration, so that the agent can autonomously perform deep research and context retrieval without manual browser interaction.
+As a Developer, I want to integrate the NotebookLM MCP server into the Agent's toolchain using `env -u VIRTUAL_ENV uv run agent secret` for authentication and `agent.yaml` for configuration, so that the agent can autonomously perform deep research and context retrieval without manual browser interaction.
 
 ## Acceptance Criteria
 
 - [ ] **Config Logic**: `agent.core.config` merged `agent.yaml` MCP server definitions with defaults.
 - [ ] **Secret Injection**: The MCP Client automatically injects `NOTEBOOKLM_COOKIES` from the secret manager into the server environment.
 - [ ] **NotebookLM Server**: The `notebooklm-mcp-server` is configured in `agent.yaml` and callable by the agent.
-- [ ] **Verification**: `agent mcp list-tools notebooklm` returns valid tools (e.g. `create_note`) when authenticated via secrets.
+- [ ] **Verification**: `env -u VIRTUAL_ENV uv run agent mcp list-tools notebooklm` returns valid tools (e.g. `create_note`) when authenticated via secrets.
 
 ## Non-Functional Requirements
 
@@ -40,7 +40,7 @@ Risks identified: Cookie expiration requires manual secret rotation.
 ## Test Strategy
 
 - **Unit**: Verify `config.get_mcp_servers()` correctly merges defaults and YAML, and handles missing config gracefully.
-- **Manual**: Configure `agent secret set notebooklm.cookies`, run `agent mcp list-tools notebooklm`, and verify tool list.
+- **Manual**: Configure `env -u VIRTUAL_ENV uv run agent secret set notebooklm.cookies`, run `env -u VIRTUAL_ENV uv run agent mcp list-tools notebooklm`, and verify tool list.
 
 ## Rollback Plan
 

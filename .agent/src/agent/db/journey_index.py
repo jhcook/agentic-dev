@@ -217,20 +217,112 @@ def _result(
     }
 
 class JourneyIndex:
-    """Local vector database stub for context retrieval."""
-    def __init__(self):
-        # Initialize internal lightweight vector index
-        pass
+    """Local vector database fallback for context retrieval using ChromaDB."""
+    def __init__(self, persist_directory: Path | None = None):
+        from agent.core.config import config
+        self.persist_directory = persist_directory or (config.storage_dir / "vector_db")
+        self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.collection_name = "agentic_context"
         
-    def build(self, documentation_path: str) -> None:
-        """
-        Ingest documentation and create embeddings
-        """
-        pass
+        # We lazy-import these to avoid strict ai dependencies for core CLI users
+        import chromadb
+        from langchain_chroma import Chroma
+        from agent.core.ai.service import get_embeddings_model
         
-    def search(self, query: str) -> str:
+        self.chroma_client = chromadb.PersistentClient(path=str(self.persist_directory))
+        self.embeddings = get_embeddings_model()
+        
+        self.vectorstore = Chroma(
+            client=self.chroma_client,
+            collection_name=self.collection_name,
+            embedding_function=self.embeddings,
+        )
+
+    def build(self) -> None:
+        """
+        Ingest documentation and create embeddings from local rules and ADRs.
+        """
+        import logging
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_chroma import Chroma
+        from agent.core.config import config
+        from opentelemetry import trace
+        
+        logger = logging.getLogger(__name__)
+        tracer = trace.get_tracer(__name__)
+
+        with tracer.start_as_current_span("vector_db.build_index"):
+            # Delete existing collection to rebuild
+            try:
+                self.chroma_client.delete_collection(self.collection_name)
+            except ValueError:
+                pass # Collection doesn't exist
+                
+            self.vectorstore = Chroma(
+                client=self.chroma_client,
+                collection_name=self.collection_name,
+                embedding_function=self.embeddings,
+            )
+
+            documents = []
+            metadatas = []
+            ids = []
+            
+            # Ingest ADRs
+            adrs_dir = config.repo_root / "docs" / "adrs"
+            if adrs_dir.exists():
+                for adr_file in adrs_dir.glob("*.md"):
+                    content = adr_file.read_text(errors="ignore")
+                    documents.append(content)
+                    metadatas.append({"source": adr_file.name, "type": "adr"})
+                    ids.append(adr_file.name)
+                    
+            # Ingest Global Rules
+            rules_dir = config.rules_dir
+            if rules_dir.exists():
+                for rule_file in rules_dir.glob("*.mdc"):
+                    content = rule_file.read_text(errors="ignore")
+                    documents.append(content)
+                    metadatas.append({"source": rule_file.name, "type": "rule"})
+                    ids.append(rule_file.name)
+
+            if not documents:
+                logger.debug("No documents found for vector DB ingestion.")
+                return
+
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+            chunks = splitter.create_documents(documents, metadatas=metadatas)
+            
+            # Extract raw text and metadata
+            texts = [chunk.page_content for chunk in chunks]
+            metas = [chunk.metadata for chunk in chunks]
+            
+            logger.debug(f"Ingesting {len(texts)} chunks into local vector DB.")
+            self.vectorstore.add_texts(texts=texts, metadatas=metas)
+
+    def search(self, query: str, k: int = 4) -> str:
         """
         Retrieve relevant context via embeddings.
         """
-        # Return relevant document chunks
-        return "Local vector DB context not yet implemented. This is a placeholder."
+        import logging
+        from opentelemetry import trace
+        
+        logger = logging.getLogger(__name__)
+        tracer = trace.get_tracer(__name__)
+        
+        with tracer.start_as_current_span("vector_db.similarity_search") as span:
+            span.set_attribute("query", query)
+            try:
+                results = self.vectorstore.similarity_search(query, k=k)
+                if not results:
+                    return ""
+                    
+                formatted_chunks = []
+                for res in results:
+                    src = res.metadata.get("source", "Unknown")
+                    formatted_chunks.append(f"--- Source: {src} ---\n{res.page_content}")
+                    
+                return "\n\n".join(formatted_chunks)
+            except Exception as e:
+                logger.debug(f"Error searching vector db: {e}")
+                return "Local vector DB context search failed."

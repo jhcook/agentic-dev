@@ -4,10 +4,10 @@
 COMMITTED
 
 ## Problem Statement
-While `agent check` provides quick pre-flight verification, we lack a tool for deep-dive governance audits. We cannot easily answer questions like "Is every line of code traceable to a Story?" or "Do we have 'Stagnant Code' that hasn't been touched in forever?" or "Are there files not owned by any governance artifact?". This makes it hard to maintain strict "Governance as Code" over the long term.
+While `env -u VIRTUAL_ENV uv run agent check` provides quick pre-flight verification, we lack a tool for deep-dive governance audits. We cannot easily answer questions like "Is every line of code traceable to a Story?" or "Do we have 'Stagnant Code' that hasn't been touched in forever?" or "Are there files not owned by any governance artifact?". This makes it hard to maintain strict "Governance as Code" over the long term.
 
 ## User Story
-As a Compliance Officer or Lead Dev, I want to run `agent audit` to perform an exhaustive scan of the repository, verifying traceability and identifying substantial governance gaps, so that I can generate a compliance report for stakeholders.
+As a Compliance Officer or Lead Dev, I want to run `env -u VIRTUAL_ENV uv run agent audit` to perform an exhaustive scan of the repository, verifying traceability and identifying substantial governance gaps, so that I can generate a compliance report for stakeholders.
 
 ## Acceptance Criteria
 - [ ] **Traceability Scan**: The command scans all source files and attempts to match them to a Story or Runbook (via `agent_state` or file headers). Reports % of "Ungoverned Files".

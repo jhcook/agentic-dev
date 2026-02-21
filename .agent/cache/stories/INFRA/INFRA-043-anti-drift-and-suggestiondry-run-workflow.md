@@ -18,7 +18,7 @@ So that I can maintain control over the codebase while benefitting from AI insig
 
 - [x] **Anti-Drift Rule**: A new rule (`.agent/rules/anti-drift.mdc`) explicitly forbids unsolicited changes ("Ask, Don't Touch").
 - [x] **Suggestion Workflow**: The Runbook template includes a "Proposed Improvements (Opt-In)" section.
-- [x] **Dry Run Support**: `agent implement <ID>` (without --apply) serves as a preview/dry-run.
+- [x] **Dry Run Support**: `env -u VIRTUAL_ENV uv run agent implement <ID>` (without --apply) serves as a preview/dry-run.
 - [x] **ADR-016**: Architecture Decision Record establishes `print()` as valid for CLI output.
 - [x] **Linter Config**: `ruff` is configured to ignore rule T201 (print found) in CLI directories to reduce confusion.
 
@@ -30,8 +30,8 @@ So that I can maintain control over the codebase while benefitting from AI insig
 
 ## Test Strategy
 
-- Manual: Create a Runbook with a suggestion, leave it unchecked, verify `agent implement` does not apply it.
-- Manual: Check it, verify `agent implement` applies it.
+- Manual: Create a Runbook with a suggestion, leave it unchecked, verify `env -u VIRTUAL_ENV uv run agent implement` does not apply it.
+- Manual: Check it, verify `env -u VIRTUAL_ENV uv run agent implement` applies it.
 
 ## Non-Functional Requirements
 

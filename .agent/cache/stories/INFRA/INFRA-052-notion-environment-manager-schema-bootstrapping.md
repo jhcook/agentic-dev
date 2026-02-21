@@ -17,7 +17,7 @@ As a Product Owner, I want the agent to automatically create and maintain the re
 - [ ] **MCP Configuration**: The agent is configured to use the `notion-mcp-server` (via generic `mcp` command) with necessary secrets.
 - [ ] **Schema Definition**: A "Desired State" schema is defined in `.agent/etc/notion_schema.json` (defining "Stories", "Plans", "ADRs" databases and their properties).
 - [ ] **Schema Validation**: An automated check validates `notion_schema.json` syntax before execution.
-- [ ] **Onboarding Integration**: The `agent onboard` command prompts to configure Notion and runs the bootstrapping logic if enabled.
+- [ ] **Onboarding Integration**: The `env -u VIRTUAL_ENV uv run agent onboard` command prompts to configure Notion and runs the bootstrapping logic if enabled.
 - [ ] **Self-Healing (Property Restoration)**: If a required property (e.g., "Status" in Stories) is missing, the agent adds it (Diff Engine).
 - [ ] **Integration Test**: A manual test where we delete a database or property and verify the agent restores it.
 

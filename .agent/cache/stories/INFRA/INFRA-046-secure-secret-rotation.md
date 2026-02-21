@@ -17,9 +17,9 @@ As a Developer using the Agent CLI, I want to be able to safely rotate my master
 
 ## Acceptance Criteria
 
-- [ ] **Init Safety**: `agent secret init` MUST fail if valid secret files (`*.json`) exist but `config.json` is missing (or if user tries to re-init), improving robustness against accidental resets.
+- [ ] **Init Safety**: `env -u VIRTUAL_ENV uv run agent secret init` MUST fail if valid secret files (`*.json`) exist but `config.json` is missing (or if user tries to re-init), improving robustness against accidental resets.
   - Error message must guide user to either use `--force` or checking status.
-- [ ] **Key Rotation**: `agent secret rotate-key` command is implemented.
+- [ ] **Key Rotation**: `env -u VIRTUAL_ENV uv run agent secret rotate-key` command is implemented.
   - Prompts for CURRENT password (validation required).
   - Prompts for NEW password (with strength check).
   - Re-encrypts ALL stored secrets with the new key.

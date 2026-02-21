@@ -60,7 +60,7 @@ The `agent` CLI currently relies on `git describe` for versioning. This fails wh
 ### 3. Verification Plan
 
 #### Manual Verification
-1.  **Git Context**: Run `agent --version` in current repo -> Verify output matches `git describe`.
+1.  **Git Context**: Run `env -u VIRTUAL_ENV uv run agent --version` in current repo -> Verify output matches `git describe`.
 2.  **No-Git Context**:
     -   Run `./package.sh`.
     -   Move `dist/agent-release.tar.gz` to `/tmp/`.

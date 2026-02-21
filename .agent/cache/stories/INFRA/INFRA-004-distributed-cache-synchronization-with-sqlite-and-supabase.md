@@ -18,9 +18,9 @@ As a **remote developer**, I want a **git-like distributed synchronization syste
 ### Core Synchronization
 - [ ] **Local SQLite Database**: `.agent/cache/` artifacts (Plans, Stories, Runbooks) are stored in a local SQLite database with full CRUD operations
 - [ ] **Supabase Integration**: System can connect to a Supabase (PostgreSQL) database as the "origin" remote
-- [ ] **Push Operation**: `agent sync push` command uploads local changes to Supabase, resolving conflicts automatically or prompting for manual resolution
-- [ ] **Pull Operation**: `agent sync pull` command downloads remote changes from Supabase and merges them into the local SQLite database
-- [ ] **Sync Status**: `agent sync status` command shows which artifacts have local changes, remote changes, or conflicts
+- [ ] **Push Operation**: `env -u VIRTUAL_ENV uv run agent sync push` command uploads local changes to Supabase, resolving conflicts automatically or prompting for manual resolution
+- [ ] **Pull Operation**: `env -u VIRTUAL_ENV uv run agent sync pull` command downloads remote changes from Supabase and merges them into the local SQLite database
+- [ ] **Sync Status**: `env -u VIRTUAL_ENV uv run agent sync status` command shows which artifacts have local changes, remote changes, or conflicts
 - [ ] **Conflict Resolution**: When conflicts occur (same artifact modified both locally and remotely), system provides clear conflict markers and resolution workflow
 
 ### Data Model
@@ -30,17 +30,17 @@ As a **remote developer**, I want a **git-like distributed synchronization syste
 - [ ] **State Preservation**: Current state fields (`Status: APPROVED`, `State: COMMITTED`, etc.) are preserved and synchronized
 
 ### Git Integration
-- [ ] **Markdown Export**: `agent sync export` command generates markdown files from SQLite to `.agent/cache/` for Git commits (existing functionality preserved)
-- [ ] **Markdown Import**: `agent sync import` command read markdown files from STDIN or ARGV comma-delimited string of paths, validates them, and populate SQLite database. 
-- [ ] **Create New Artifacts**: `agent new-plan`, `agent new-story`, `agent new-runbook` commands create new artifacts in SQLite. SQLite syncs to remote before it issues an artifact id.
-- [ ] **Git as Source of Truth**: On fresh clone, `agent sync import` initializes the local database from markdown files
+- [ ] **Markdown Export**: `env -u VIRTUAL_ENV uv run agent sync export` command generates markdown files from SQLite to `.agent/cache/` for Git commits (existing functionality preserved)
+- [ ] **Markdown Import**: `env -u VIRTUAL_ENV uv run agent sync import` command read markdown files from STDIN or ARGV comma-delimited string of paths, validates them, and populate SQLite database. 
+- [ ] **Create New Artifacts**: `env -u VIRTUAL_ENV uv run agent new-plan`, `env -u VIRTUAL_ENV uv run agent new-story`, `env -u VIRTUAL_ENV uv run agent new-runbook` commands create new artifacts in SQLite. SQLite syncs to remote before it issues an artifact id.
+- [ ] **Git as Source of Truth**: On fresh clone, `env -u VIRTUAL_ENV uv run agent sync import` initializes the local database from markdown files
 - [ ] **Bidirectional Sync**: Changes can flow: SQLite ↔ Markdown ↔ Git ↔ Supabase
 
 ### Developer Experience
 - [ ] **Offline Mode**: Developers can work offline; `push`/`pull` operations queue until connectivity is restored
 - [ ] **Configuration**: `.agent/etc/sync.yaml` defines Supabase connection details (URL, anon key, table schema)
-- [ ] **First-Time Setup**: `agent sync init` command initializes local database and configures remote connection
-- [ ] **Dry Run**: `agent sync push --dry-run` and `agent sync pull --dry-run` show what would change without applying changes
+- [ ] **First-Time Setup**: `env -u VIRTUAL_ENV uv run agent sync init` command initializes local database and configures remote connection
+- [ ] **Dry Run**: `env -u VIRTUAL_ENV uv run agent sync push --dry-run` and `env -u VIRTUAL_ENV uv run agent sync pull --dry-run` show what would change without applying changes
 
 ### Non-Functional Requirements
 - **Performance**: Local SQLite operations complete in <100ms; sync operations handle 1000+ artifacts efficiently
@@ -71,10 +71,10 @@ As a **remote developer**, I want a **git-like distributed synchronization syste
 - New: Database schema in `.agent/cache/agent.db`
 
 **Workflows Affected:**
-- Story creation: `agent new-story` writes to SQLite and auto-pushes to remote
-- Plan creation: `agent new-plan` writes to SQLite and auto-pushes to remote
-- Runbook generation: `agent new-runbook` writes to SQLite and auto-pushes to remote
-- CI/CD: Add `agent sync pull` before preflight checks to ensure latest state
+- Story creation: `env -u VIRTUAL_ENV uv run agent new-story` writes to SQLite and auto-pushes to remote
+- Plan creation: `env -u VIRTUAL_ENV uv run agent new-plan` writes to SQLite and auto-pushes to remote
+- Runbook generation: `env -u VIRTUAL_ENV uv run agent new-runbook` writes to SQLite and auto-pushes to remote
+- CI/CD: Add `env -u VIRTUAL_ENV uv run agent sync pull` before preflight checks to ensure latest state
 
 **Risks Identified:**
 - **Data Loss**: Improper conflict resolution could overwrite changes
@@ -112,4 +112,4 @@ As a **remote developer**, I want a **git-like distributed synchronization syste
    - Rollback: Disable remote sync in config, operate in local-only mode
 4. **Emergency**: Restore from Git (source of truth)
    - `git checkout main -- .agent/cache/`
-   - `agent sync import` to rebuild database
+   - `env -u VIRTUAL_ENV uv run agent sync import` to rebuild database

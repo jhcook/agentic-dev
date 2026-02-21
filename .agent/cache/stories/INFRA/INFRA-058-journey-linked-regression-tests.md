@@ -15,11 +15,11 @@ As a **developer governed by the agent framework**, I want each user journey to 
 ## Acceptance Criteria
 
 - [ ] **AC-1**: Journey YAML schema enforces `implementation.tests` as a required non-empty list for journeys in `COMMITTED` or `ACCEPTED` state. `DRAFT` journeys are exempt. Enforcement is state-aware: extend `validate_journey` (line 228 in `journey.py`) using the existing errors/warnings pattern.
-- [ ] **AC-2**: `agent validate-journey` verifies that all files listed in `implementation.tests` exist on disk. Path resolution is relative to `config.project_root`. Validation is extension-agnostic (pytest `.py`, Maestro `.yaml`, Playwright `.spec.ts` all valid). Path traversal and absolute paths outside project root are rejected.
-- [ ] **AC-3**: `agent preflight` includes a journey coverage check. **Phase 1**: coverage failures are a **warning** (not a block) because all 50+ existing journeys have `tests: []`. Flip to blocking after a target coverage threshold (e.g., 80% of COMMITTED journeys linked). A standalone `check_journey_coverage()` function in `check.py` returns structured results.
-- [ ] **AC-4**: A new `agent journey coverage` command registered on the existing `journey.py` Typer app reports journey → test mapping with a rich table: Journey ID | Title | State | Tests Linked | Status (✅/❌/⚠️). Supports `--json` flag for CI integration. Tracks coverage percentage persistently for `agent audit`.
+- [ ] **AC-2**: `env -u VIRTUAL_ENV uv run agent validate-journey` verifies that all files listed in `implementation.tests` exist on disk. Path resolution is relative to `config.project_root`. Validation is extension-agnostic (pytest `.py`, Maestro `.yaml`, Playwright `.spec.ts` all valid). Path traversal and absolute paths outside project root are rejected.
+- [ ] **AC-3**: `env -u VIRTUAL_ENV uv run agent preflight` includes a journey coverage check. **Phase 1**: coverage failures are a **warning** (not a block) because all 50+ existing journeys have `tests: []`. Flip to blocking after a target coverage threshold (e.g., 80% of COMMITTED journeys linked). A standalone `check_journey_coverage()` function in `check.py` returns structured results.
+- [ ] **AC-4**: A new `env -u VIRTUAL_ENV uv run agent journey coverage` command registered on the existing `journey.py` Typer app reports journey → test mapping with a rich table: Journey ID | Title | State | Tests Linked | Status (✅/❌/⚠️). Supports `--json` flag for CI integration. Tracks coverage percentage persistently for `env -u VIRTUAL_ENV uv run agent audit`.
 - [ ] **AC-5**: The journey creation workflow (`/journey`, `new_journey` function) prompts "Link test files? [paths or press Enter to generate stubs]". Default action generates test stubs, not skip.
-- [ ] **AC-6**: `agent journey backfill-tests` command auto-generates pytest test stubs from journey assertions for all COMMITTED journeys with empty `implementation.tests`. Stubs use `@pytest.mark.journey("JRN-XXX")` marker for targeted execution (`pytest -m 'journey("JRN-044")'`). Stubs contain `pytest.skip("Not yet implemented")` so they pass CI but are clearly incomplete. Stubs never overwrite existing files.
+- [ ] **AC-6**: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` command auto-generates pytest test stubs from journey assertions for all COMMITTED journeys with empty `implementation.tests`. Stubs use `@pytest.mark.journey("JRN-XXX")` marker for targeted execution (`pytest -m 'journey("JRN-044")'`). Stubs contain `pytest.skip("Not yet implemented")` so they pass CI but are clearly incomplete. Stubs never overwrite existing files.
 - [ ] **AC-7**: Per-file test status: a journey with `tests` containing both existing and missing files reports per-file status, not a blanket pass/fail.
 - [ ] **AC-8**: Journey template (`journey-template.yaml`) updated with comment: `# Required for COMMITTED journeys. List paths to test files relative to project root.`
 - [ ] **Negative Test**: A journey in `DRAFT` state is exempt from the test linkage requirement.
@@ -28,7 +28,7 @@ As a **developer governed by the agent framework**, I want each user journey to 
 
 ## Non-Functional Requirements
 
-- Compliance: Journey-test traceability satisfies SOC 2 CC7.1 evidence requirements for regression prevention. Coverage reports persistable for `agent audit`.
+- Compliance: Journey-test traceability satisfies SOC 2 CC7.1 evidence requirements for regression prevention. Coverage reports persistable for `env -u VIRTUAL_ENV uv run agent audit`.
 - Developer Experience: Clear error messages when tests are missing, with convention-based suggested paths (e.g., `"Consider creating: tests/journeys/test_jrn_044.py"`).
 - Observability: Journey coverage metrics tracked over time via structured logging. OpenTelemetry span for coverage check in preflight.
 - Performance: Coverage check scans only COMMITTED/ACCEPTED journeys; no full-repo test execution.
@@ -78,7 +78,7 @@ Risks identified:
 - **Unit — validate_journey**: Rejects COMMITTED journey with empty `implementation.tests`. Accepts DRAFT journey with empty tests. Rejects COMMITTED journey with nonexistent test file (distinct error). Reports per-file status for mixed existing/missing files.
 - **Unit — path validation**: Path traversal (`../../etc/passwd`) rejected. Absolute paths rejected. Extension-agnostic (`.py`, `.yaml`, `.spec.ts` all valid).
 - **Unit — stub generation**: `backfill-tests` generates valid pytest file with `@pytest.mark.journey` marker. No overwrite of existing files.
-- **Integration — coverage command**: `agent journey coverage` produces expected table output for fixture journeys with mixed coverage states.
+- **Integration — coverage command**: `env -u VIRTUAL_ENV uv run agent journey coverage` produces expected table output for fixture journeys with mixed coverage states.
 - **Integration — preflight**: Preflight warns (Phase 1) on COMMITTED journey with missing tests. Journey coverage gate runs as separate section.
 
 ## Rollback Plan

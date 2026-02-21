@@ -18,15 +18,15 @@ As a **developer using the Agent CLI**, I want **a secure command to manage secr
 
 ## Acceptance Criteria
 - [x] **AC1: Secret Storage**: Secrets are encrypted using AES-256-GCM and stored in `.agent/secrets/` directory
-- [x] **AC2: CLI Commands**: Implement `agent secret` with subcommands: `init`, `set`, `get`, `list`, `delete`, `import`, `export`
+- [x] **AC2: CLI Commands**: Implement `env -u VIRTUAL_ENV uv run agent secret` with subcommands: `init`, `set`, `get`, `list`, `delete`, `import`, `export`
 - [x] **AC3: Supabase Integration**: Support storing Supabase API keys (`service_role_key`, `anon_key`)
 - [x] **AC4: LLM Provider Integration**: Support storing API keys for OpenAI, Gemini, Anthropic, GitHub
 - [x] **AC5: Fallback Mechanism**: Gracefully fall back to environment variables if secrets not configured
-- [x] **AC6: Import from Environment**: `agent secret import <service>` imports existing env vars
+- [x] **AC6: Import from Environment**: `env -u VIRTUAL_ENV uv run agent secret import <service>` imports existing env vars
 - [x] **AC7: Security**: `.agent/secrets/` is gitignored and files have 600 permissions
 - [x] **AC8: Master Password**: Secrets encrypted with master password using PBKDF2 key derivation
 - [x] **AC9: Integration**: Update `config.py` and `service.py` to use secret manager
-- [x] **AC10: Masked Display**: `agent secret list` shows masked values by default, `--show` flag reveals
+- [x] **AC10: Masked Display**: `env -u VIRTUAL_ENV uv run agent secret list` shows masked values by default, `--show` flag reveals
 
 ## Non-Functional Requirements
 
@@ -66,9 +66,9 @@ As a **developer using the Agent CLI**, I want **a secure command to manage secr
 - **New**: `.agent/secrets/` - Secret storage directory
 
 ### Workflows Affected
-- **Developer Onboarding**: New developers use `agent secret import` instead of manual `.env` setup
-- **CI/CD**: Use `agent secret export` for environment variable generation
-- **Secret Rotation**: Use `agent secret set` to update credentials
+- **Developer Onboarding**: New developers use `env -u VIRTUAL_ENV uv run agent secret import` instead of manual `.env` setup
+- **CI/CD**: Use `env -u VIRTUAL_ENV uv run agent secret export` for environment variable generation
+- **Secret Rotation**: Use `env -u VIRTUAL_ENV uv run agent secret set` to update credentials
 
 ### Risks Identified
 - **Migration Risk**: Existing `.env` files need migration path
@@ -100,15 +100,15 @@ As a **developer using the Agent CLI**, I want **a secure command to manage secr
 - Verify audit logging
 
 ### Manual Verification
-1. Initialize: `agent secret init`
-2. Import: `agent secret import supabase` (imports SUPABASE_SERVICE_ROLE_KEY)
-3. List: `agent secret list`
-4. Get: `agent secret get supabase service_role_key --show`
-5. Integration: `agent query "test"` (verify uses secret manager)
-6. Preflight: `agent preflight` (verify compliance)
+1. Initialize: `env -u VIRTUAL_ENV uv run agent secret init`
+2. Import: `env -u VIRTUAL_ENV uv run agent secret import supabase` (imports SUPABASE_SERVICE_ROLE_KEY)
+3. List: `env -u VIRTUAL_ENV uv run agent secret list`
+4. Get: `env -u VIRTUAL_ENV uv run agent secret get supabase service_role_key --show`
+5. Integration: `env -u VIRTUAL_ENV uv run agent query "test"` (verify uses secret manager)
+6. Preflight: `env -u VIRTUAL_ENV uv run agent preflight` (verify compliance)
 
 ## Rollback Plan
 1. **Immediate Rollback**: Revert code changes, secrets remain encrypted (no data loss)
 2. **Fallback Mechanism**: Environment variables continue to work during transition
-3. **Export Secrets**: Use `agent secret export <service>` to recover to `.env` format
+3. **Export Secrets**: Use `env -u VIRTUAL_ENV uv run agent secret export <service>` to recover to `.env` format
 4. **Database Backup**: `.agent/backups/` contains timestamped config backups

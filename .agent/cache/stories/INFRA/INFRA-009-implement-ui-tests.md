@@ -7,13 +7,13 @@ INFRA-008
 COMMITTED
 
 ## Problem Statement
-The `agent run-ui-tests` command is currently a stub. We have decided to standardize on **Maestro** for UI testing because its YAML flows are agent-friendly and support both mobile and web. We need the CLI to support executing these flows.
+The `env -u VIRTUAL_ENV uv run agent run-ui-tests` command is currently a stub. We have decided to standardize on **Maestro** for UI testing because its YAML flows are agent-friendly and support both mobile and web. We need the CLI to support executing these flows.
 
 ## User Story
-As a developer, I want to run `agent run-ui-tests [story-id]` so that I can automatically execute the Maestro flows (`.yaml`) associated with my feature.
+As a developer, I want to run `env -u VIRTUAL_ENV uv run agent run-ui-tests [story-id]` so that I can automatically execute the Maestro flows (`.yaml`) associated with my feature.
 
 ## Acceptance Criteria
-- [ ] Command `agent run-ui-tests` checks for the presence of the `maestro` CLI.
+- [ ] Command `env -u VIRTUAL_ENV uv run agent run-ui-tests` checks for the presence of the `maestro` CLI.
 - [ ] It looks for Maestro flows (`.yaml` files) in `tests/ui/` or `.maestro/`.
 - [ ] It executes the flows using `maestro test <flow.yaml>`.
 - [ ] It supports filtering checks found in the files (if applicable).
@@ -36,5 +36,5 @@ Breaking Changes: None.
 
 ## Test Strategy
 - Create a dummy `login_flow.yaml` in `tests/ui`.
-- Run `agent run-ui-tests`.
+- Run `env -u VIRTUAL_ENV uv run agent run-ui-tests`.
 - Verify `maestro` is invoked and reports status.

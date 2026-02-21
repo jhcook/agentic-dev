@@ -21,7 +21,7 @@ Develop a cost-effective integration for GitHub repository, issue, and pull requ
 
 - Emphasis on securely storing the GitHub PAT is appropriate and consistent with security practices. However:
   - Detailed validation of the PAT's format is required to minimize client misuse or misconfiguration.
-  - Ensure that all logs redact sensitive token information using `agent secret`.
+  - Ensure that all logs redact sensitive token information using `env -u VIRTUAL_ENV uv run agent secret`.
   - No formal plan is outlined to secure or isolate the `npx` execution environment. Node.js package manager environments may pose security risks if not controlled (e.g., malicious/compromised server components).
 - Consider TLS/SSL validation for all MCP-related requests if applicable.
 
@@ -32,7 +32,7 @@ Develop a cost-effective integration for GitHub repository, issue, and pull requ
 
 ### **@Docs**
 
-- User perspective is missing regarding how to properly use the new CLI commands. Examples for `agent mcp start` and `agent mcp run` commands should be included in `README.md`.
+- User perspective is missing regarding how to properly use the new CLI commands. Examples for `env -u VIRTUAL_ENV uv run agent mcp start` and `env -u VIRTUAL_ENV uv run agent mcp run` commands should be included in `README.md`.
 - New onboarding scenarios (choosing between `mcp` and `gh`) should be clearly highlighted in documentation.
 - Update documentation to clarify that `agent` now supports an alternative to `gh`.
 - Guidelines should be given for setting up Node.js and `npx` if the user does not have them installed.
@@ -130,7 +130,7 @@ DEFAULT_CONFIG = {
 #### MODIFY `agent/commands/onboard.py`
 
 - Add onboarding step to configure `mcp` vs `gh`.
-  - If `mcp` is selected, prompt for GitHub PAT and store it using `agent secret`.
+  - If `mcp` is selected, prompt for GitHub PAT and store it using `env -u VIRTUAL_ENV uv run agent secret`.
 
 ### Documentation
 
@@ -138,7 +138,7 @@ DEFAULT_CONFIG = {
 
 - Document:
   - Example GitHub MCP use cases.
-  - CLI command examples and outputs for `agent mcp start` and `agent mcp run`.
+  - CLI command examples and outputs for `env -u VIRTUAL_ENV uv run agent mcp start` and `env -u VIRTUAL_ENV uv run agent mcp run`.
   - Setting up secrets and integration (PAT guidance).
 
 #### MODIFY `README.md`
@@ -154,8 +154,8 @@ DEFAULT_CONFIG = {
 
 ### Manual Verification
 
-- [ ] Run `agent mcp start github` to establish an interactive MCP session.
-- [ ] Run `agent mcp run github list_repositories` with valid/invalid tokens.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent mcp start github` to establish an interactive MCP session.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent mcp run github list_repositories` with valid/invalid tokens.
 - [ ] Verify onboarding prompts and saved configuration for `mcp` settings.
 - [ ] Verify E2E flow with `npx` server.
 

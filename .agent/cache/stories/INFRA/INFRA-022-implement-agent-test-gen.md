@@ -7,7 +7,7 @@ COMMITTED
 We have legacy code or new prototypes that lack unit test coverage. Writing boilerplate tests (setup, mocks, assertions) is tedious and often skipped. "Zero coverage" areas become "Fear Zones" that developers avoid refactoring.
 
 ## User Story
-As a Developer, I want to run `agent test-gen <source_file>` to automatically generate a comprehensive `pytest` file with mocked dependencies, so that I can quickly establish a safety net for my code.
+As a Developer, I want to run `env -u VIRTUAL_ENV uv run agent test-gen <source_file>` to automatically generate a comprehensive `pytest` file with mocked dependencies, so that I can quickly establish a safety net for my code.
 
 ## Acceptance Criteria
 - [ ] **Targeting**: Accepts a python source file path.

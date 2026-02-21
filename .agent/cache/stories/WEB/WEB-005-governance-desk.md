@@ -19,7 +19,7 @@ As a User, I want a visual Governance Desk to manage Stories, Plans, Runbooks, a
 - [ ] **Estate Graph**: Visual graph using `React Flow` showing links between Stories, Plans, and ADRs.
 - [ ] **Artifact Editor**: Markdown editor (`MDXEditor` or similar) with preview for editing artifacts.
 - [ ] **Kanban Board**: Drag-and-drop interface (`dnd-kit`) to move Stories between states, enforcing ADR-004 transitions.
-- [ ] **Visual Preflight**: UI to run `agent preflight` and stream results via WebSocket.
+- [ ] **Visual Preflight**: UI to run `env -u VIRTUAL_ENV uv run agent preflight` and stream results via WebSocket.
 
 ## Governance Consensus
 

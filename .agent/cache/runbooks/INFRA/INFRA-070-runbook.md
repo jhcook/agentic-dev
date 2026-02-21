@@ -1,4 +1,4 @@
-# INFRA-070: Align `/pr` Workflow with `agent pr` CLI
+# INFRA-070: Align `/pr` Workflow with `env -u VIRTUAL_ENV uv run agent pr` CLI
 
 ## State
 
@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Simplify the `/pr` workflow to call `agent pr` instead of duplicating preflight/body/gh logic. The CLI already handles preflight integration, auto-generated body/title, `gh pr create`, AI summary, and `gh` not-found error. Remaining work: add `--skip-preflight` flag, scrub body in non-AI mode, and simplify the workflow.
+Simplify the `/pr` workflow to call `env -u VIRTUAL_ENV uv run agent pr` instead of duplicating preflight/body/gh logic. The CLI already handles preflight integration, auto-generated body/title, `gh pr create`, AI summary, and `gh` not-found error. Remaining work: add `--skip-preflight` flag, scrub body in non-AI mode, and simplify the workflow.
 
 ## Linked Journeys
 
@@ -15,11 +15,11 @@ Simplify the `/pr` workflow to call `agent pr` instead of duplicating preflight/
 ## Panel Review Findings
 
 - **@Architect**: The `pr()` function already exists in `workflow.py:30-140` with most ACs complete. This follows the ADR-030 Workflow-Calls-CLI pattern established in INFRA-068/069.
-- **@QA**: No existing tests for `agent pr`. Add unit tests for title formatting, body generation, skip-preflight flag, and gh-not-found error.
+- **@QA**: No existing tests for `env -u VIRTUAL_ENV uv run agent pr`. Add unit tests for title formatting, body generation, skip-preflight flag, and gh-not-found error.
 - **@Security**: AC5 (body scrubbing) only applies in AI mode currently. Must also scrub the base body template to prevent leaking story content that might contain sensitive data. The `--skip-preflight` flag must be audit-logged per AC6.
 - **@Product**: AC1-AC5 mostly satisfied. AC6 (`--skip-preflight`) and AC7 (workflow simplification) are the primary deliverables.
 - **@Observability**: Add timestamped audit logging for `--skip-preflight` usage per AC6.
-- **@Docs**: Update `/pr` workflow. Ensure `agent pr --help` is accurate.
+- **@Docs**: Update `/pr` workflow. Ensure `env -u VIRTUAL_ENV uv run agent pr --help` is accurate.
 - **@Compliance**: `--skip-preflight` must log timestamp and user intent for SOC2 audit trail.
 
 ## Targeted Refactors & Cleanups
@@ -27,7 +27,7 @@ Simplify the `/pr` workflow to call `agent pr` instead of duplicating preflight/
 - [ ] Add `--skip-preflight` flag with audit logging (AC6)
 - [ ] Scrub body in non-AI mode too (AC5 gap)
 - [ ] Simplify `/pr` workflow to CLI-first instructions (AC7)
-- [ ] Add unit tests for `agent pr`
+- [ ] Add unit tests for `env -u VIRTUAL_ENV uv run agent pr`
 - [ ] Update CHANGELOG
 
 ## Implementation Steps
@@ -61,11 +61,11 @@ Simplify the `/pr` workflow to call `agent pr` instead of duplicating preflight/
 Replace the 73-line manual process with:
 
 ```markdown
-1. Run `agent pr --story <STORY-ID>` to create a PR with preflight checks.
-2. Run `agent pr --story <STORY-ID> --ai` for AI-generated PR summary.
-3. Run `agent pr --story <STORY-ID> --web` to open in browser.
-4. Run `agent pr --story <STORY-ID> --draft` for draft PR.
-5. Run `agent pr --story <STORY-ID> --skip-preflight` to skip preflight (audit-logged).
+1. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID>` to create a PR with preflight checks.
+2. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --ai` for AI-generated PR summary.
+3. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --web` to open in browser.
+4. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --draft` for draft PR.
+5. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --skip-preflight` to skip preflight (audit-logged).
 ```
 
 ### 4. Add Unit Tests
@@ -83,7 +83,7 @@ Replace the 73-line manual process with:
 |------|--------|-------------|
 | `.agent/src/agent/commands/workflow.py` | MODIFY | `--skip-preflight` flag + body scrubbing |
 | `.agent/workflows/pr.md` | MODIFY | Replace manual process with CLI calls |
-| `.agent/tests/commands/test_pr.py` | NEW | Unit tests for `agent pr` |
+| `.agent/tests/commands/test_pr.py` | NEW | Unit tests for `env -u VIRTUAL_ENV uv run agent pr` |
 | `CHANGELOG.md` | MODIFY | Add INFRA-070 entry |
 
 ## Verification Plan
@@ -97,7 +97,7 @@ Replace the 73-line manual process with:
 
 ### Manual Verification
 
-- [ ] Run `agent pr --story INFRA-070 --skip-preflight` and check audit warning
+- [ ] Run `env -u VIRTUAL_ENV uv run agent pr --story INFRA-070 --skip-preflight` and check audit warning
 - [ ] Verify `/pr` workflow calls CLI correctly
 
 ## Definition of Done

@@ -4,7 +4,7 @@
 ACCEPTED
 
 ## Goal Description
-To create a new command `agent visualize` that generates diagrammatic views of the project's governance artifacts (Plans, Stories, Runbooks) and code structure. This command will produce Mermaid syntax to visualize dependencies, helping developers and stakeholders better understand the project's architecture and task relationships.
+To create a new command `env -u VIRTUAL_ENV uv run agent visualize` that generates diagrammatic views of the project's governance artifacts (Plans, Stories, Runbooks) and code structure. This command will produce Mermaid syntax to visualize dependencies, helping developers and stakeholders better understand the project's architecture and task relationships.
 
 ## Panel Review Findings
 - **@Architect**: The proposal to separate graph-building logic (`agent/core/graph.py`) from presentation/CLI logic (`agent/commands/visualize.py`) is sound and promotes good separation of concerns. The "Experimental" scope for the `architecture` view, which avoids complex AST parsing initially, is a pragmatic approach to delivering value incrementally without over-engineering. The core challenge will be designing a robust file discovery and metadata parsing mechanism that can scale without becoming a performance bottleneck, as specified in the NFR (<5s for 1000 nodes). The data model should be flexible enough to accommodate future node and edge types.
@@ -51,7 +51,7 @@ To create a new command `agent visualize` that generates diagrammatic views of t
 ### [NEW] `agent/commands/visualize.py`
 - Create a new file for the CLI command.
 - Use the `click` library to define the command structure.
-- **Main Command Group**: `@click.group()` for `agent visualize`.
+- **Main Command Group**: `@click.group()` for `env -u VIRTUAL_ENV uv run agent visualize`.
 - **`graph` Subcommand**:
     - `@visualize.command()` for `graph`.
     - It should call `ProjectGraph.build_from_repo()`.
@@ -113,26 +113,26 @@ To create a new command `agent visualize` that generates diagrammatic views of t
     - [ ] Test `sanitize_mermaid_label` with a string containing double quotes.
     - [ ] Test `sanitize_mermaid_label` with a string containing other special characters like parentheses and brackets.
 - [ ] **Integration Test (`test_cli_visualize.py`):**
-    - [ ] Test `agent visualize --help` and verify the output contains `graph` and `flow`.
-    - [ ] Run `agent visualize graph` against the fixture directory and assert that stdout contains expected Mermaid syntax (e.g., `graph TD`, `STORY-001 --> RUNBOOK-001`).
-    - [ ] Run `agent visualize flow STORY-001` and verify the output is a valid, smaller Mermaid graph.
-    - [ ] Run `agent visualize flow NONEXISTENT-STORY` and assert the command exits with a non-zero status code and prints an error message to stderr.
+    - [ ] Test `env -u VIRTUAL_ENV uv run agent visualize --help` and verify the output contains `graph` and `flow`.
+    - [ ] Run `env -u VIRTUAL_ENV uv run agent visualize graph` against the fixture directory and assert that stdout contains expected Mermaid syntax (e.g., `graph TD`, `STORY-001 --> RUNBOOK-001`).
+    - [ ] Run `env -u VIRTUAL_ENV uv run agent visualize flow STORY-001` and verify the output is a valid, smaller Mermaid graph.
+    - [ ] Run `env -u VIRTUAL_ENV uv run agent visualize flow NONEXISTENT-STORY` and assert the command exits with a non-zero status code and prints an error message to stderr.
 
 ### Manual Verification
 - [ ] Pull the branch and install the agent with the new command.
-- [ ] Run `agent visualize graph` on the actual project repository.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent visualize graph` on the actual project repository.
 - [ ] Copy the stdout and paste it into a new GitHub issue/comment or a VS Code Markdown preview to confirm the diagram renders correctly.
 - [ ] Verify that clicking on a node in the rendered diagram navigates to the correct file on GitHub.
-- [ ] Run `agent visualize flow <an-existing-story-id>`. Paste the output and verify the subgraph is correct and renders properly.
-- [ ] Run `agent visualize graph --serve`.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent visualize flow <an-existing-story-id>`. Paste the output and verify the subgraph is correct and renders properly.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent visualize graph --serve`.
     - [ ] Verify a browser tab opens to a `localhost` or `127.0.0.1` address.
     - [ ] Verify the diagram renders correctly in the browser.
     - [ ] Use a tool like `netstat` or `lsof` to confirm the Python process is listening on `127.0.0.1` and NOT `0.0.0.0`.
 
 ## Definition of Done
 ### Documentation
-- [ ] `CHANGELOG.md` updated with an entry for the new `agent visualize` feature.
-- [ ] `README.md` updated with a new section explaining how to use `agent visualize` with examples.
+- [ ] `CHANGELOG.md` updated with an entry for the new `env -u VIRTUAL_ENV uv run agent visualize` feature.
+- [ ] `README.md` updated with a new section explaining how to use `env -u VIRTUAL_ENV uv run agent visualize` with examples.
 - [ ] API Documentation updated (if applicable) - N/A for this CLI tool.
 
 ### Observability

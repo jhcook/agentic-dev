@@ -95,7 +95,7 @@ def pr(
 
     summary = commit_msg
     if offline:
-        content = typer.edit(text=f"<!-- \nManual input required. \nPlease write your PR summary below.\n-->\n{commit_msg}")
+        content = typer.edit(text=commit_msg)
         if content:
             summary = content.strip()
     else:
@@ -122,7 +122,7 @@ def pr(
                      summary = generated.strip()
         except Exception as e:
              console.print(f"[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
-             content = typer.edit(text=f"<!-- \nManual input required (AI generation failed). \nPlease write your PR summary below.\n-->\n{commit_msg}")
+             content = typer.edit(text=commit_msg)
              if content:
                  summary = content.strip()
 
@@ -217,7 +217,7 @@ def commit(
              console.print(f"[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
 
     if is_interactive and not yes:
-        message = typer.edit(text=f"<!-- \nManual input required. \nPlease enter your commit message below. Edit the AI suggestion if present.\n-->\n{message or ''}")
+        message = typer.edit(text=message or "")
         if message:
             message = message.strip()
     

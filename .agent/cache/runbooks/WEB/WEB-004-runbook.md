@@ -24,7 +24,7 @@ Implement "Advanced Management" for the Agent Console, moving static YAML/Prompt
 **Sentiment**: Positive
 **Advice**:
 
-- Use `agent secret` integration for any sensitive fields in the config editor; never save raw secrets to `agent.yaml`.
+- Use `env -u VIRTUAL_ENV uv run agent secret` integration for any sensitive fields in the config editor; never save raw secrets to `agent.yaml`.
 - Sanitize prompt inputs in the React UI (check for illegal characters or forbidden tokens).
 - Ensure WebSocket logs are redacted before transit.
 

@@ -12,7 +12,7 @@ The user needs a local "Admin Console" dashboard to visualize work while working
 
 ## User Story
 
-As a Developer, I want to view a "Project Dashboard" in my local `agent admin` console (web UI), so that I can see active stories, backlog, and system health without context switching to a browser-based Notion instance that requires manual sync.
+As a Developer, I want to view a "Project Dashboard" in my local `env -u VIRTUAL_ENV uv run agent admin` console (web UI), so that I can see active stories, backlog, and system health without context switching to a browser-based Notion instance that requires manual sync.
 
 ## Acceptance Criteria
 
@@ -51,7 +51,7 @@ As a Developer, I want to view a "Project Dashboard" in my local `agent admin` c
 ## Test Strategy
 
 - **Manual**:
-  - Run `agent admin start`.
+  - Run `env -u VIRTUAL_ENV uv run agent admin start`.
   - Go to `localhost:8080` (or configured port).
   - Verify Dashboard loads and shows correct counts matching local files.
 

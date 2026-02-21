@@ -7,7 +7,7 @@ INFRA-008
 COMMITTED
 
 ## Problem Statement
-The `agent impact` command's static analysis is very limited (only lists files). It prints "TBD" for workflows and risks. We can do better by parsing imports to identify reverse dependencies.
+The `env -u VIRTUAL_ENV uv run agent impact` command's static analysis is very limited (only lists files). It prints "TBD" for workflows and risks. We can do better by parsing imports to identify reverse dependencies.
 
 **Current Limitations:**
 - No dependency graph analysis
@@ -22,7 +22,7 @@ The `agent impact` command's static analysis is very limited (only lists files).
 - Fast performance even on large repositories
 
 ## User Story
-As a reviewer, I want `agent impact` to tell me which other files depend on the changed files, so I can assess risk even without AI.
+As a reviewer, I want `env -u VIRTUAL_ENV uv run agent impact` to tell me which other files depend on the changed files, so I can assess risk even without AI.
 
 ## Acceptance Criteria
 - [ ] Static analysis parses Python `import` statements using AST (not regex)
@@ -82,7 +82,7 @@ Risks identified: Parsing might be slow on large repos (mitigated with caching).
 - **Integration Tests:**
   - Create file A and file B (where B imports A)
   - Modify A
-  - Run `agent impact`
+  - Run `env -u VIRTUAL_ENV uv run agent impact`
   - Verify B is listed as impacted
   
 - **Performance Tests:**

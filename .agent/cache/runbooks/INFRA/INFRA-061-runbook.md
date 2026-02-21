@@ -913,11 +913,11 @@ def preflight(
 ### Manual Verification
 
 - [ ] Step 1: Configure `panel.engine: adk` in `agent.yaml`.
-- [ ] Step 2: Run `agent preflight` and verify ADK panel is used.
-- [ ] Step 3: Run `agent preflight --panel-engine legacy` to verify CLI override.
+- [ ] Step 2: Run `env -u VIRTUAL_ENV uv run agent preflight` and verify ADK panel is used.
+- [ ] Step 3: Run `env -u VIRTUAL_ENV uv run agent preflight --panel-engine legacy` to verify CLI override.
 - [ ] Step 4: Inspect audit log to confirm format parity with legacy.
 - [ ] Step 5: Uninstall `google-adk`, set `panel.engine: adk`, verify fallback + install suggestion.
-- [ ] Step 6: Run `agent panel` in consultative mode with ADK engine.
+- [ ] Step 6: Run `env -u VIRTUAL_ENV uv run agent panel` in consultative mode with ADK engine.
 - [ ] Step 7: Verify existing tests pass with no regressions.
 
 ## Definition of Done

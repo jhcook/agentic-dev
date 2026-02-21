@@ -32,7 +32,7 @@ The objective of this story is to implement a git-like distributed cache synchro
 ### **@Docs**
 1. Documentation Updates:
    - Add detailed configuration guidelines to `README.md` for `.agent/etc/sync.yaml`.
-   - Update usage documentation to include new commands such as `agent sync push/pull/status/init`.
+   - Update usage documentation to include new commands such as `env -u VIRTUAL_ENV uv run agent sync push/pull/status/init`.
    - Provide an example of the conflict resolution process in documentation.
 2. API Contract: All changes to the REST API with Supabase must be documented in the OpenAPI spec, per governance rules.
 

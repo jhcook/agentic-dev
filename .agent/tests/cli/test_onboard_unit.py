@@ -93,10 +93,11 @@ def test_ensure_gitignore_does_not_duplicate(tmp_path: Path):
     ensure_gitignore(tmp_path)
     assert gitignore_path.read_text() == initial_content
 
+@patch("agent.commands.onboard.typer.confirm", return_value=False)
 @patch("os.chmod")
 @patch("getpass.getpass")
 @patch("agent.commands.secret._validate_password_strength", return_value=True)
-def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod, tmp_path: Path, monkeypatch):
+def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod, mock_confirm, tmp_path: Path, monkeypatch):
     """Tests creating a new secret store with user input."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(os, "environ", {})
@@ -116,6 +117,7 @@ def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod,
     assert secrets_dir.is_dir()
     mock_chmod.assert_called()
 
+@patch("agent.commands.onboard.configure_mcp_settings")
 @patch("agent.commands.onboard.run_verification")
 @patch("agent.commands.onboard.setup_frontend")
 @patch("agent.commands.onboard.configure_voice_settings")
@@ -128,7 +130,7 @@ def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod,
 @patch("agent.commands.onboard.check_dependencies")
 def test_onboard_command_success_flow(
     mock_check_deps, mock_ensure_dir, mock_ensure_git, mock_api, mock_gh, 
-    mock_agent, mock_notion, mock_voice, mock_frontend, mock_verify
+    mock_agent, mock_notion, mock_voice, mock_frontend, mock_verify, mock_mcp
 ):
     """Tests the full `onboard` command orchestration."""
     result = runner.invoke(onboard_app, catch_exceptions=False)

@@ -29,7 +29,7 @@ To design, implement, and document a secure and flexible secret management syste
 
 ### **@Docs**:
 - The CLI commands and their usage should be fully documented in `.agent/docs/`. Examples for each subcommand (`init`, `set`, `get`, etc.) will improve usability.
-- A detailed migration guide should explain how to import pre-existing environment variables into the secret manager (e.g., instructions for `agent secret import`).
+- A detailed migration guide should explain how to import pre-existing environment variables into the secret manager (e.g., instructions for `env -u VIRTUAL_ENV uv run agent secret import`).
 - Update the Developer Onboarding guide to reflect these changes and remove outdated instructions for `.env` setup.
 - Define the structure and fields stored in `.agent/secrets/` in documentation to help engineers and users understand the design.
 - Include a glossary of terms, such as "PBKDF2", "AES-256-GCM", "master password", etc., for less experienced developers.
@@ -400,7 +400,7 @@ def test_import_command():
 - [ ] Failed decryption attempts trigger alert notifications.
 
 ### Deployment Readiness
-- [ ] Compliance preflight check incorporated in `agent preflight`.
+- [ ] Compliance preflight check incorporated in `env -u VIRTUAL_ENV uv run agent preflight`.
 - [ ] CI pipeline validates the absence of plaintext secrets or configuration.
 - [ ] Backward compatibility verified.
 
