@@ -10,18 +10,18 @@ COMMITTED
 
 ## Problem Statement
 
-INFRA-058 introduced `env -u VIRTUAL_ENV uv run agent journey backfill-tests` to generate test stubs for COMMITTED journeys, but the stubs are empty scaffolds with `pytest.skip("Not yet implemented")`. Developers must manually write every test body, which is labor-intensive across 50+ journeys. We need an `--ai` flag that leverages the AI service to generate real, working test code from journey steps, assertions, and relevant source files.
+INFRA-058 introduced `env -u VIRTUAL_ENV uv run agent journey backfill-tests` to generate test stubs for COMMITTED journeys, but the stubs are empty scaffolds with `pytest.skip("Not yet implemented")`. Developers must manually write every test body, which is labor-intensive across 50+ journeys. We need an `--offline` flag that leverages the AI service to generate real, working test code from journey steps, assertions, and relevant source files.
 
 ## User Story
 
-As a developer, I want `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` to generate real test implementations (not just stubs) by reading each journey's steps and assertions alongside the relevant source code, so that I get meaningful regression coverage without writing every test by hand.
+As a developer, I want `env -u VIRTUAL_ENV uv run agent journey backfill-tests` to generate real test implementations (not just stubs) by reading each journey's steps and assertions alongside the relevant source code, so that I get meaningful regression coverage without writing every test by hand.
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` sends each journey's steps, assertions, and linked source files to the AI service and generates pytest test bodies with real assertions (not `pytest.skip`).
+- [ ] **AC-1**: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` sends each journey's steps, assertions, and linked source files to the AI service and generates pytest test bodies with real assertions (not `pytest.skip`).
 - [ ] **AC-2**: Phase 1 generates `pytest` tests for all scopes. Framework-specific generation (Playwright for WEB, Maestro for MOBILE) is deferred to a follow-up story and inferred from `implementation.framework` field when implemented.
 - [ ] **AC-3**: Generated tests include `@pytest.mark.journey("JRN-XXX")` markers for targeted execution.
-- [ ] **AC-4**: `--ai` generates tests and previews each in a Rich syntax panel, then prompts `Write? [y/N/all/skip]` for interactive confirmation. `--ai --write` batch-writes without prompts (CI mode). `--ai --dry-run` previews only (no prompts, no writes).
+- [ ] **AC-4**: `--offline` generates tests and previews each in a Rich syntax panel, then prompts `Write? [y/N/all/skip]` for interactive confirmation. `--offline --write` batch-writes without prompts (CI mode). `--offline --dry-run` previews only (no prompts, no writes).
 - [ ] **AC-5**: AI prompt includes relevant source code context — resolves file paths from `implementation.files` in the journey YAML, scrubs via `scrub_sensitive_data()`, and includes contents (truncated to token budget) in the prompt.
 - [ ] **AC-6**: Existing test files are never overwritten. If a test file already exists, skip with a warning.
 - [ ] **AC-7**: `--scope` flag filters by scope (INFRA, MOBILE, WEB, BACKEND) — same as existing stub command. `--journey JRN-XXX` targets a single journey.
@@ -36,7 +36,7 @@ As a developer, I want `env -u VIRTUAL_ENV uv run agent journey backfill-tests -
 
 - **Performance**: Token budget per journey capped at configurable limit (default: 8k tokens source context).
 - **Security**: No secrets, PII, or credentials included in AI prompts. Source files are scrubbed using `scrub_sensitive_data()` from `security.py`. Source paths are validated to remain within the repository root.
-- **Compliance**: SOC 2 CC7.1 — generated test code must be reviewed before merging. Enforced by `--ai` defaulting to dry-run mode (AC-4).
+- **Compliance**: SOC 2 CC7.1 — generated test code must be reviewed before merging. Enforced by `--offline` defaulting to dry-run mode (AC-4).
 - **Observability**: Structured logging for each AI generation call with fields: `journey_id`, `scope`, `token_count`, `duration_s`, `status` (success/fallback/error). Summary metric emitted at end: total processed, AI successes, fallbacks, skips, errors.
 
 ## Linked ADRs
@@ -71,7 +71,7 @@ Source: [Panel Consultation INFRA-063](../../../../.gemini/antigravity/brain/291
 ## Impact Analysis Summary
 
 Components touched: `journey.py` (refactor `backfill_tests` into `_iter_eligible_journeys()`, `_generate_stub()`, `_generate_ai_test()` helpers), `prompts.py` (new `generate_test_prompt()`)
-Workflows affected: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` gains `--ai` and `--write` flags
+Workflows affected: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` gains `--offline` and `--write` flags
 Risks identified: AI-generated code quality varies; mitigated by `ast.parse()` gate and dry-run default
 
 ## Test Strategy
@@ -80,7 +80,7 @@ Risks identified: AI-generated code quality varies; mitigated by `ast.parse()` g
 
 - Mock AI service to return known test code, verify file write
 - Mock AI service to return malformed code, verify `ast.parse()` catches it and falls back to stub
-- Verify `--ai` defaults to dry-run (no file writes without `--write`)
+- Verify `--offline` defaults to dry-run (no file writes without `--write`)
 - Verify `--scope` and `--journey` filtering
 - Verify token budget truncation of source context
 - Verify `scrub_sensitive_data()` is applied to source context before prompt
@@ -90,9 +90,9 @@ Risks identified: AI-generated code quality varies; mitigated by `ast.parse()` g
 
 ### Integration Tests
 
-- End-to-end: `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` with a real journey file (dry-run default)
+- End-to-end: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` with a real journey file (dry-run default)
 - Verify generated test is syntactically valid Python (`ast.parse`)
 
 ## Rollback Plan
 
-Remove `--ai` and `--write` flag handling from `backfill_tests` command. Existing stub behavior is the default and remains unchanged.
+Remove `--offline` and `--write` flag handling from `backfill_tests` command. Existing stub behavior is the default and remains unchanged.

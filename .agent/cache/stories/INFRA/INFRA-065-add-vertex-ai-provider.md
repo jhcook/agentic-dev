@@ -47,7 +47,7 @@ As a Google Cloud Platform user, I want to configure the Agent CLI to use Vertex
 ## Impact Analysis Summary
 
 Components touched: `service.py`, `config.py`, `credentials.py`, `agent.yaml`, `getting_started.md`
-Workflows affected: All CLI workflows using AI providers (`panel`, `preflight --ai`, `implement`, `commit --ai`, `query`).
+Workflows affected: All CLI workflows using AI providers (`panel`, `preflight`, `implement`, `commit`, `query`).
 Risks identified: ADC misconfiguration (expired tokens, missing `gcloud auth`); project ID not set; Vertex AI API not enabled in GCP project.
 
 ## Test Strategy

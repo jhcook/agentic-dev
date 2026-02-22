@@ -420,7 +420,7 @@ description: Conduct thorough code review
 1. **Run local preflight**
 
    ```bash
-   agent preflight --story <STORY_ID> --ai
+   agent preflight --story <STORY_ID>
    ```
 
 2. **Review code changes**
@@ -498,9 +498,9 @@ jobs:
           STORY_ID=$(echo ${{ github.head_ref }} | grep -oE '[A-Z]+-[0-9]+')
           
           if [ -n "$STORY_ID" ]; then
-            .agent/bin/agent preflight --story $STORY_ID --ai
+            .agent/bin/agent preflight --story $STORY_ID
           else
-            .agent/bin/agent preflight --ai
+            .agent/bin/agent preflight
           fi
       
       - name: Upload logs
@@ -526,7 +526,7 @@ preflight:
     # pip install -e ".agent/[voice]" # Conversational Agent
     # pip install -e ".agent/[admin]" # Admin Console
     - export STORY_ID=$(echo $CI_COMMIT_REF_NAME | grep -oE '[A-Z]+-[0-9]+')
-    - .agent/bin/agent preflight --story $STORY_ID --ai
+    - .agent/bin/agent preflight --story $STORY_ID
   artifacts:
     when: always
     paths:

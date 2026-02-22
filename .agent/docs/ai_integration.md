@@ -169,7 +169,7 @@ Force a specific provider:
 ```bash
 # Use Gemini for everything
 agent --provider gemini new-runbook WEB-001
-agent --provider gemini preflight --story WEB-001 --ai
+agent --provider gemini preflight --story WEB-001
 
 # Use OpenAI
 agent --provider openai new-runbook WEB-001
@@ -303,7 +303,7 @@ export AGENT_CHUNK_SIZE=6000  # characters per chunk
 4. **Use GitHub CLI when possible:**
 
    ```bash
-   agent --provider gh commit --ai
+   agent --provider gh commit
    ```
 
 ## AI Commands
@@ -342,7 +342,7 @@ Generate a detailed runbook in markdown format.
 ### 2. Governance Panel Review
 
 ```bash
-agent preflight --story WEB-001 --ai
+agent preflight --story WEB-001
 ```
 
 **Process:**
@@ -373,7 +373,7 @@ agent match-story --files "src/auth/login.py src/auth/middleware.py"
 ### 4. Commit Message Generation
 
 ```bash
-agent commit --story WEB-001 --ai
+agent commit --story WEB-001
 ```
 
 **Process:**
@@ -448,7 +448,7 @@ This ensures **something works** even with limited context.
 For complex tasks, the Agent may make multiple AI calls:
 
 ```bash
-agent preflight --story WEB-001 --ai
+agent preflight --story WEB-001
 ```
 
 1. **Turn 1**: "Review this diff" → Get initial feedback

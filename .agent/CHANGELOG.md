@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **Thorough AI Review**: New `--thorough` flag for `agent preflight --ai` enables full-file context augmentation (AST-based signature extraction) and post-processing validation to filter false positives. Uses more tokens but significantly reduces incorrect BLOCK verdicts.
+- **Thorough AI Review**: New `--thorough` flag for `agent preflight` enables full-file context augmentation (AST-based signature extraction) and post-processing validation to filter false positives. Uses more tokens but significantly reduces incorrect BLOCK verdicts.
 - **User Journeys**: First-class journey artifacts with `new-journey`, `validate-journey`, `list-journeys` CLI commands (INFRA-055, ADR-024).
 
 ### Changed

@@ -47,7 +47,7 @@ team:
 
 ### 1. Preflight Checks
 
-When you run `agent preflight --ai`, here's what happens:
+When you run `agent preflight`, here's what happens:
 
 ```mermaid
 graph TD
@@ -267,7 +267,7 @@ Defined in `.agent/rules/203-state-enforcement.mdc`:
 States are validated during preflight:
 
 ```bash
-agent preflight --story WEB-001 --ai
+agent preflight --story WEB-001
 ```
 
 If story is not `COMMITTED`, preflight will fail:
@@ -416,7 +416,7 @@ EOF
 1. Test the rule:
 
 ```bash
-agent preflight --story BACKEND-001 --ai
+agent preflight --story BACKEND-001
 ```
 
 ### Adding a New Role
@@ -475,10 +475,10 @@ The AI will categorize issues based on these markers.
 agent preflight --story WEB-001
 
 # After making changes
-agent preflight --story WEB-001 --ai
+agent preflight --story WEB-001
 
 # Before committing (thorough mode for highest accuracy)
-agent preflight --story WEB-001 --ai --thorough
+agent preflight --story WEB-001 --thorough
 ```
 
 ### 2. Use `--thorough` for Critical Changes
@@ -489,7 +489,7 @@ validation (cross-references findings against actual source code). Uses more tok
 is recommended for production-bound changes:
 
 ```bash
-agent preflight --ai --thorough
+agent preflight --thorough
 ```
 
 **What `--thorough` does (in addition to the always-on protections):**

@@ -333,7 +333,7 @@ ______________________________________________________________________
 
 1. **Preflight**
 
-   - Run `agent preflight --ai --story <STORY-ID>` to validate staged changes
+   - Run `agent preflight --story <STORY-ID>` to validate staged changes
      against the Governance Council, then commit.
 
 ## RULES

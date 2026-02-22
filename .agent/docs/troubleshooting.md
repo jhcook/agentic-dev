@@ -194,7 +194,7 @@ agent implement WEB-001
 
    ```bash
    export AGENT_CHUNK_SIZE=3000
-   agent preflight --story WEB-001 --ai
+   agent preflight --story WEB-001
    ```
 
 3. **Simplify story:**
@@ -539,7 +539,7 @@ git commit -m "Merge story changes"
 3. **Use faster model:**
 
    ```bash
-   agent --provider gemini preflight --story WEB-001 --ai
+   agent --provider gemini preflight --story WEB-001
    ```
 
 ### "Runbook generation is slow"

@@ -10,17 +10,19 @@ The Agent CLI is designed to be installed locally within your project repository
 ## Installation
 
 1. Copy the `.agent` directory into the root of your repository.
-2. Create a virtual environment and install the CLI:
+2. Ensure you have `uv` installed, then install dependencies:
 
 ```bash
-cd /path/to/your/repo
+cd /path/to/your/repo/.agent
 
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Install core dependencies and the agent CLI
+uv sync
 
-# Install the agent CLI
-pip install -e .agent/
+# (Optional) Install voice dependencies for Voice Agent mode
+uv sync --extra voice
+
+# You can now run the CLI using `uv run agent`
+uv run agent --help
 ```
 
 ## Credentials

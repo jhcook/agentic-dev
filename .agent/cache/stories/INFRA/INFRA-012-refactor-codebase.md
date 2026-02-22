@@ -157,7 +157,7 @@ Verify all commands still work:
 - `env -u VIRTUAL_ENV uv run agent panel INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
 - `env -u VIRTUAL_ENV uv run agent impact INFRA-012` - Uses `find_story_file`, `scrub_sensitive_data`
 - `env -u VIRTUAL_ENV uv run agent new-story` - Uses `get_next_id`, `sanitize_title`
-- `env -u VIRTUAL_ENV uv run agent commit --ai` - Uses `infer_story_id`, `scrub_sensitive_data`
+- `env -u VIRTUAL_ENV uv run agent commit` - Uses `infer_story_id`, `scrub_sensitive_data`
 
 ### Regression Tests
 

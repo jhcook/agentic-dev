@@ -2,6 +2,10 @@
 
 An AI-powered governance and workflow CLI for software development teams. Agent automates story creation, implementation planning, code review, and compliance enforcement — all from the command line.
 
+## Introduction
+
+Read our philosophy on why we built `agentic-dev`: [Engineering Discipline in the Age of AI: The End of "Vibe Coding"](docs/engineering-discipline.md)
+
 ## What It Does
 
 - **Story & Runbook Management** — Create, track, and implement user stories with structured workflows and state transitions.

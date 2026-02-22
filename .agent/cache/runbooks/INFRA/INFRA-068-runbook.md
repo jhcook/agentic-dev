@@ -41,8 +41,8 @@ Replace the entire manual process (steps 1–7: git diff, DependencyAnalyzer, AI
 
 ```markdown
 1. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID>` for static dependency analysis.
-2. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID> --ai` for AI-powered risk assessment.
-3. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID> --ai --update-story` to inject analysis into the story file.
+2. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID>` for AI-powered risk assessment.
+3. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID> --update-story` to inject analysis into the story file.
 4. Run `env -u VIRTUAL_ENV uv run agent impact <STORY-ID> --base main` to compare against a specific branch.
 ```
 
@@ -86,7 +86,7 @@ Replace the entire manual process (steps 1–7: git diff, DependencyAnalyzer, AI
 ### Manual Verification
 
 - [ ] Run `env -u VIRTUAL_ENV uv run agent impact INFRA-068` and verify output
-- [ ] Run `env -u VIRTUAL_ENV uv run agent impact INFRA-068 --ai --update-story` and check story file
+- [ ] Run `env -u VIRTUAL_ENV uv run agent impact INFRA-068 --update-story` and check story file
 - [ ] Verify `/impact` workflow calls CLI correctly
 
 ## Definition of Done

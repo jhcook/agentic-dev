@@ -6,7 +6,7 @@ COMMITTED
 
 ## Problem Statement
 
-The `env -u VIRTUAL_ENV uv run agent preflight` command fails in CI environments (e.g., GitHub Actions) with a `MissingCredentialsError` for `GOOGLE_API_KEY` even when AI features are not requested (`--ai` not passed). This regression was caused by two issues: (1) preflight being unconditionally wrapped with `with_creds` in `main.py`, and (2) an incomplete rename of the Gemini API key environment variable from `GOOGLE_API_KEY` to `GEMINI_API_KEY`.
+The `env -u VIRTUAL_ENV uv run agent preflight` command fails in CI environments (e.g., GitHub Actions) with a `MissingCredentialsError` for `GOOGLE_API_KEY` even when AI features are not requested (`--offline` not passed). This regression was caused by two issues: (1) preflight being unconditionally wrapped with `with_creds` in `main.py`, and (2) an incomplete rename of the Gemini API key environment variable from `GOOGLE_API_KEY` to `GEMINI_API_KEY`.
 
 ## User Story
 
@@ -14,8 +14,8 @@ As a developer running `env -u VIRTUAL_ENV uv run agent preflight` in CI, I want
 
 ## Acceptance Criteria
 
-- [x] **Scenario 1**: Given a CI environment with no LLM API keys, When `env -u VIRTUAL_ENV uv run agent preflight` is run without `--ai`, Then it completes successfully without credential errors.
-- [x] **Scenario 2**: Given a CI environment with no LLM API keys, When `env -u VIRTUAL_ENV uv run agent preflight --ai` is run, Then it fails gracefully with a clear "Missing Credentials" message referencing `GEMINI_API_KEY`.
+- [x] **Scenario 1**: Given a CI environment with no LLM API keys, When `env -u VIRTUAL_ENV uv run agent preflight` is run without `--offline`, Then it completes successfully without credential errors.
+- [x] **Scenario 2**: Given a CI environment with no LLM API keys, When `env -u VIRTUAL_ENV uv run agent preflight` is run, Then it fails gracefully with a clear "Missing Credentials" message referencing `GEMINI_API_KEY`.
 - [x] **Scenario 3**: Given `GEMINI_API_KEY` is set (the canonical name), When any credential validation occurs for the `gemini` provider, Then it is accepted without requiring the legacy `GOOGLE_API_KEY`.
 - [x] **Negative Test**: System handles locked Secret Manager, missing env vars, and uninitialized secret stores gracefully without crashing.
 
@@ -37,7 +37,7 @@ As a developer running `env -u VIRTUAL_ENV uv run agent preflight` in CI, I want
 ## Impact Analysis Summary
 
 Components touched: `main.py`, `check.py`, `credentials.py`, `config.py`
-Workflows affected: `env -u VIRTUAL_ENV uv run agent preflight`, `env -u VIRTUAL_ENV uv run agent preflight --ai`, `_get_enabled_providers`, `is_ai_configured`
+Workflows affected: `env -u VIRTUAL_ENV uv run agent preflight`, `env -u VIRTUAL_ENV uv run agent preflight`, `_get_enabled_providers`, `is_ai_configured`
 Risks identified: Backward compatibility with `GOOGLE_API_KEY` — mitigated by keeping it as a fallback in all checked locations
 
 ## Test Strategy

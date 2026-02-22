@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that automatically runs a consultative panel review of the generated journey YAML. This replaces the manual Step 3 in the `/journey` workflow. The panel flag requires `--ai` (panel reviews AI-generated content).
+Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that automatically runs a consultative panel review of the generated journey YAML. This replaces the manual Step 3 in the `/journey` workflow. The panel flag requires `--offline` (panel reviews AI-generated content).
 
 ## Linked Journeys
 
@@ -15,7 +15,7 @@ Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that autom
 ## Panel Review Findings
 
 - **@Architect**: The `new_journey()` function already handles AI generation and file writing. The `--panel` flag should be added after the file write, calling `convene_council_full()` in consultative mode with the journey content as context. Reuses existing panel infrastructure from `check.py`.
-- **@QA**: Add tests for: (1) `--panel` triggers consultation, (2) `--panel` without `--ai` errors, (3) panel feedback is appended to journey file.
+- **@QA**: Add tests for: (1) `--panel` triggers consultation, (2) `--panel` without `--offline` errors, (3) panel feedback is appended to journey file.
 - **@Security**: Panel consultation uses `scrub_sensitive_data()` on journey content before AI analysis. No new security surface.
 - **@Product**: AC1-AC4 deliver real value — integrating governance feedback into journey creation removes a manual orchestration step.
 - **@Observability**: Log panel consultation result with journey ID.
@@ -27,9 +27,9 @@ Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that autom
 
 #### [MODIFY] .agent/src/agent/commands/journey.py
 
-- Add `panel: bool = typer.Option(False, "--panel", help="Run panel consultation after generation (requires --ai).")`
+- Add `panel: bool = typer.Option(False, "--panel", help="Run panel consultation after generation (requires).")`
 - After file write (line ~240), if `--panel` is set:
-  - Validate `--ai` was also set; if not, error with clear message
+  - Validate `--offline` was also set; if not, error with clear message
   - Load the generated journey content
   - Call `convene_council_full()` in consultative mode with journey content
   - Append panel feedback summary as a `# Panel Feedback` comment block at end of YAML file
@@ -42,14 +42,14 @@ Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that autom
 - Replace Step 3 (manual panel consultation, ~8 lines) with:
 
   ```
-  3. **Panel Consultation**: Use `--panel` flag: `env -u VIRTUAL_ENV uv run agent new-journey <JRN-ID> --ai --panel`
+  3. **Panel Consultation**: Use `--panel` flag: `env -u VIRTUAL_ENV uv run agent new-journey <JRN-ID> --panel`
   ```
 
 ### 3. Add Unit Tests
 
 #### [NEW] .agent/tests/commands/test_journey_panel.py
 
-- `test_panel_triggers_consultation` — `--ai --panel` calls `convene_council_full` in consultative mode
+- `test_panel_triggers_consultation` — `--offline --panel` calls `convene_council_full` in consultative mode
 - `test_panel_without_ai_errors` — `--panel` alone → error with clear message
 
 ## Files
@@ -71,8 +71,8 @@ Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that autom
 
 ### Manual Verification
 
-- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --ai --panel` produces journey + panel feedback
-- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --panel` (no --ai) errors cleanly
+- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --panel` produces journey + panel feedback
+- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --panel` (no) errors cleanly
 
 ## Definition of Done
 

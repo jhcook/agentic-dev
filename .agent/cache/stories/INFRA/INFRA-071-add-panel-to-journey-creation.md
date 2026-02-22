@@ -14,11 +14,11 @@ As a developer using `/journey`, I want `env -u VIRTUAL_ENV uv run agent new-jou
 
 ## Acceptance Criteria
 
-- [ ] **AC1: Panel Flag**: `env -u VIRTUAL_ENV uv run agent new-journey <ID> --ai --panel` generates a journey AND runs a panel consultation.
+- [ ] **AC1: Panel Flag**: `env -u VIRTUAL_ENV uv run agent new-journey <ID> --panel` generates a journey AND runs a panel consultation.
 - [ ] **AC2: Inline Feedback**: Panel feedback is appended to the journey YAML as comments or a separate `panel_feedback` field.
 - [ ] **AC3: Role Coverage**: All roles from `agents.yaml` are represented in the consultation.
 - [ ] **AC4: Workflow Simplification**: `/journey` workflow Step 3 is replaced with a note to use `--panel`.
-- [ ] **Negative Test**: `--panel` without `--ai` produces a clear error (panel requires AI-generated content to review).
+- [ ] **Negative Test**: `--panel` without `--offline` produces a clear error (panel requires AI-generated content to review).
 
 ## Non-Functional Requirements
 
@@ -42,7 +42,7 @@ Risks identified: Token budget for panel consultation with full journey content.
 ## Test Strategy
 
 - **Unit test**: Verify `--panel` triggers AI consultation.
-- **Unit test**: Verify `--panel` without `--ai` fails with clear error.
+- **Unit test**: Verify `--panel` without `--offline` fails with clear error.
 
 ## Rollback Plan
 

@@ -45,13 +45,13 @@ Run `agent new-journey` to scaffold a journey file:
 agent new-journey JRN-001
 ```
 
-Or use `--ai` to have the AI generate a populated journey from a brief description:
+Or use `--offline` to have the AI generate a populated journey from a brief description:
 
 ```bash
-agent new-journey JRN-001 --ai
+agent new-journey JRN-001
 ```
 
-This creates a YAML file in `.agent/cache/journeys/`. Fill in (or review, if `--ai` was used) the required fields:
+This creates a YAML file in `.agent/cache/journeys/`. Fill in (or review, if `--offline` was used) the required fields:
 
 ```yaml
 id: JRN-001
@@ -177,7 +177,7 @@ During `agent preflight`, overlap warnings appear:
 | Command | What It Does |
 | --- | --- |
 | `agent new-journey [ID]` | Create a new journey from template |
-| `agent new-journey [ID] --ai` | Create a journey with AI-generated content |
+| `agent new-journey [ID]` | Create a journey with AI-generated content |
 | `agent list-journeys` | Show all journeys with ID, title, state |
 | `agent validate-journey` | Check YAML is valid against schema |
 

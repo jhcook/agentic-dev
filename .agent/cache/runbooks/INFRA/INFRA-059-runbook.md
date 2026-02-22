@@ -41,7 +41,7 @@ Implement automatic mapping of code changes to user journeys, enabling targeted 
 **@Security**:
 
 - PASS (with conditions). All path operations validated with `Path.resolve()` + `is_relative_to(repo_root)` at index build time — symlink traversal caught. `yaml.safe_load()` prevents arbitrary code execution. SQLite queries use `?` parameterization.
-- Condition: Journey YAML content is never sent to external services during index build. AI mode (`--ai`) scrubs data via existing `scrub_sensitive_data()` before prompt inclusion.
+- Condition: Journey YAML content is never sent to external services during index build. AI mode (`--offline`) scrubs data via existing `scrub_sensitive_data()` before prompt inclusion.
 
 **@Observability**:
 
@@ -294,7 +294,7 @@ Insert journey impact mapping after the existing `DependencyAnalyzer.find_revers
    - Render copy-pasteable `pytest -m "journey(...)"` command
    - Render "Ungoverned files" warnings with `backfill-tests` suggestion
 3. If `--json` flag, output full report as JSON including `affected_journeys` array and `rebuild_timestamp`.
-4. If `--ai` flag, include affected journey context in the AI prompt.
+4. If `--offline` flag, include affected journey context in the AI prompt.
 
 ### Step 4: Modify `agent/commands/check.py` — `preflight()` function [MODIFY]
 

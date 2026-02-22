@@ -132,13 +132,13 @@ Follow the exact pattern of `story.py`:
 - `new_journey(journey_id, ai, provider)`:
   - **Arguments**:
     - `journey_id` (optional) — auto-generate via `get_next_id()` with `JRN-` prefix if omitted
-    - `--ai` (bool, default False) — when set, uses AI service to generate populated journey content
+    - `--offline` (bool, default False) — when set, uses AI service to generate populated journey content
     - `--provider` (optional) — force AI provider (gh, gemini, openai), same pattern as `runbook.py`
-  - **Without `--ai`** (default):
+  - **Without `--offline`** (default):
     - Prompt for title
     - Read `journey-template.yaml`, replace `JRN-XXX` with actual ID and `<Title>` with actual title
     - Write scaffold to `config.journeys_dir / f"{journey_id}-{safe_title}.yaml"`
-  - **With `--ai`**:
+  - **With `--offline`**:
     - Prompt for title and a brief description (one-liner of the user goal)
     - Load context via `context_loader.load_context()` (existing journeys, rules, ADRs)
     - Load journey schema spec from `.agent/docs/journey_yaml_spec.md`

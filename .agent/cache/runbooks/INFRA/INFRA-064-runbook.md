@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Transition the CLI to an "AI by Default" paradigm, removing the need for explicit `--ai` flags. Implement graceful degradation when AI services are unavailable, either by falling back to manual workflows or exiting cleanly with informative messages.
+Transition the CLI to an "AI by Default" paradigm, removing the need for explicit `--offline` flags. Implement graceful degradation when AI services are unavailable, either by falling back to manual workflows or exiting cleanly with informative messages.
 
 ## Linked Journeys
 
@@ -50,7 +50,7 @@ Transition the CLI to an "AI by Default" paradigm, removing the need for explici
 
 **@Docs**:
 
-- The documentation must be updated to reflect the removal of the `--ai` flag and the introduction of the `--offline` flag.
+- The documentation must be updated to reflect the removal of the `--offline` flag and the introduction of the `--offline` flag.
 - The help text for each command needs to be updated to accurately describe the new behavior.
 - Provide examples of how to use the `--offline`, `--write`, and `--dry-run` flags in different scenarios.
 
@@ -157,7 +157,7 @@ def _handle_ai_error(command_name: str, e: Exception):
 
 #### MODIFY src/agent/commands/workflow.py
 
-- Remove the `--ai` flag from the `pr` and `commit` commands.
+- Remove the `--offline` flag from the `pr` and `commit` commands.
 - Add an `--offline` flag to the `pr` and `commit` commands.
 - Modify the command logic to use AI by default.
 - Implement graceful degradation: if the AI service is unreachable, fall back to manual input using `$EDITOR`.
@@ -219,7 +219,7 @@ def commit(
 
 #### MODIFY src/agent/commands/story.py
 
-- Remove the `--ai` flag from the `new-story` command.
+- Remove the `--offline` flag from the `new-story` command.
 - Add an `--offline` flag to the `new-story` command.
 - Modify the command logic to use AI by default.
 - Implement graceful degradation: if the AI service is unreachable, fall back to manual input using `$EDITOR`.
@@ -256,7 +256,7 @@ def new_story(
 
 #### MODIFY src/agent/commands/plan.py
 
-- Remove the `--ai` flag from the `new-runbook` command.
+- Remove the `--offline` flag from the `new-runbook` command.
 - Add an `--offline` flag to the `new-runbook` command.
 - Modify the command logic to use AI by default.
 - Implement graceful degradation: if the AI service is unreachable, fall back to manual input using `$EDITOR`.
@@ -293,7 +293,7 @@ def new_runbook(
 
 #### MODIFY src/agent/commands/journey.py
 
-- Remove the `--ai` flag from the `journey new` command.
+- Remove the `--offline` flag from the `journey new` command.
 - Add an `--offline` flag to the `journey new` command.
 - Modify the command logic to use AI by default.
 - Implement graceful degradation: if the AI service is unreachable, fall back to manual input using `$EDITOR`.
@@ -330,7 +330,7 @@ def new(
 
 #### MODIFY src/agent/commands/check.py
 
-- Remove the `--ai` flag from the `preflight` and `impact` commands.
+- Remove the `--offline` flag from the `preflight` and `impact` commands.
 - Add an `--offline` flag to the `preflight` and `impact` commands.
 - Modify the command logic to use AI by default.
 - Implement graceful degradation: if the AI service is unreachable, print a user-friendly error message and exit cleanly.

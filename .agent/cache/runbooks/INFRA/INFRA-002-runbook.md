@@ -31,7 +31,7 @@ Refactor Agent workflows to act as thin wrappers around Python CLI commands to r
 - Completed.
 
 #### [MODIFY] [agent.py]
-- All commands should support --ai and --provider  options
+- All commands should support --provider  options
 where it adds value, e.g., new-runbook et al.
 - If provider is not provided it defaults to the default provider.
 - If the default provider does not work, e.g., 429, it should fallback to the next provider if available.

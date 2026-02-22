@@ -422,7 +422,7 @@ implementation:
 
 - [ ] `env -u VIRTUAL_ENV uv run agent journey coverage` displays rich table with correct status icons
 - [ ] `env -u VIRTUAL_ENV uv run agent journey backfill-tests --dry-run` previews without writing
-- [ ] `env -u VIRTUAL_ENV uv run agent preflight --ai` shows journey coverage warning section
+- [ ] `env -u VIRTUAL_ENV uv run agent preflight` shows journey coverage warning section
 - [ ] New journey creation prompts for test file linking
 
 ## Definition of Done

@@ -104,7 +104,7 @@ Risks identified:
 - Unit: `test_consultative_mode_reference_extraction()` — raw AI output (not parsed by `_parse_findings`) still yields references via `_extract_references()`.
 - Unit: `test_superseded_adr_reference()` — citing SUPERSEDED ADR produces info note.
 - Unit: `test_no_references_section_backward_compat()` — `_parse_findings()` without REFERENCES section returns default empty references.
-- Integration: `env -u VIRTUAL_ENV uv run agent panel INFRA-060 --ai` includes per-role references and Reference Summary Table.
+- Integration: `env -u VIRTUAL_ENV uv run agent panel INFRA-060` includes per-role references and Reference Summary Table.
 - Integration: preflight with ADR-governed changeset emits warning if panel omits citation.
 - Negative: changeset touching no ADR-governed files — no citation warnings.
 - Negative: missing/invalid reference → WARNING, never BLOCK.
