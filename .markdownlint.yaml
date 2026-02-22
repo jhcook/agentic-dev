@@ -1,0 +1,16 @@
+# markdownlint configuration
+# https://github.com/DavidAnson/markdownlint/blob/main/schema/.markdownlint.yaml
+
+# Allow long lines (very common with URLs and code snippets in tech docs)
+MD013: false
+
+# Allow duplicate headings as long as they aren't siblings
+# (This allows "Usage" and "Options" under each command's section)
+MD024:
+  siblings_only: true
+
+# Other stylistic preferences that are hard to auto-fix and commonly ignored
+MD036: false # Allow emphasis used instead of a heading
+MD040: false # Allow fenced code blocks without a specified language
+MD022: false # Allow headings that aren't surrounded by blank lines
+MD032: false # Allow lists that aren't surrounded by blank lines

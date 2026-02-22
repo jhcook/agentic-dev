@@ -16,7 +16,7 @@ As a **developer governed by the agent framework**, I want the impact analysis t
 
 - [ ] **AC-1**: `env -u VIRTUAL_ENV uv run agent impact` reads `implementation.files[]` and `implementation.tests[]` from all journey YAMLs (via `yaml.safe_load()`) and builds a reverse index: `file_pattern → [journey IDs]`. Patterns may be globs (`**/check.py`) or bare filenames (`check.py`).
 - [ ] **AC-2**: `env -u VIRTUAL_ENV uv run agent impact --story STORY-ID` outputs an "Affected Journeys" Rich table (columns: Journey ID, Title, Matched Files, Test File) listing journeys whose `implementation.files` entries match the changeset.
-- [ ] **AC-3**: `env -u VIRTUAL_ENV uv run agent impact --ai` includes affected journey context in the AI prompt for richer risk analysis.
+- [ ] **AC-3**: `env -u VIRTUAL_ENV uv run agent impact` includes affected journey context in the AI prompt for richer risk analysis.
 - [ ] **AC-4**: `env -u VIRTUAL_ENV uv run agent preflight` uses the impact-to-journey map to identify which journey tests are *required* for the current changeset and outputs a copy-pasteable `pytest -m "journey(...)"` command.
 - [ ] **AC-5**: The journey reverse index is cached in a `journey_file_index` SQLite table and rebuilt lazily when any journey YAML's mtime exceeds the stored `updated_at`.
 - [ ] **AC-6**: `env -u VIRTUAL_ENV uv run agent impact --rebuild-index` forces a full index rebuild regardless of staleness.

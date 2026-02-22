@@ -33,19 +33,19 @@ WORKFLOW:
     - Execute the following command to run the automated preflight checks and AI governance review:
 
     ```bash
-    agent preflight --ai
+    agent preflight
     ```
 
     - If you are running this for a specific story, use:
 
     ```bash
-    agent preflight --ai --story <STORY_ID>
+    agent preflight --story <STORY_ID>
     ```
 
     - For the highest accuracy (fewer false positives), use `--thorough`:
 
     ```bash
-    agent preflight --ai --thorough
+    agent preflight --thorough
     ```
 
     > **Note**: `--thorough` adds full-file context and post-processing validation.

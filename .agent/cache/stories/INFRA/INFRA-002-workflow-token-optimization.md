@@ -19,8 +19,8 @@ So that I can **execute complex logic efficiently, cheaply, and consistently** w
 ## Acceptance Criteria
 - [ ] **Workflow Parity**:
     - `workflows/pr.md` executes `env -u VIRTUAL_ENV uv run agent pr --draft --web`
-    - `workflows/commit.md` executes `env -u VIRTUAL_ENV uv run agent commit --ai`
-    - `workflows/preflight.md` executes `env -u VIRTUAL_ENV uv run agent preflight --ai --base main`
+    - `workflows/commit.md` executes `env -u VIRTUAL_ENV uv run agent commit`
+    - `workflows/preflight.md` executes `env -u VIRTUAL_ENV uv run agent preflight --base main`
     - `workflows/runbook.md` executes `env -u VIRTUAL_ENV uv run agent new-runbook`
     - `workflows/implement.md` executes `env -u VIRTUAL_ENV uv run agent implement` (immediately)
 - [ ] **Config Relocation**:
@@ -63,4 +63,4 @@ Remove external AI calls from CLI commands. The Agent (Antigravity) will generat
 
 #### [MODIFY] [commit.md](file:///Users/jcook/repo/agentic-dev/.agent/workflows/commit.md)
 - Step 1: "Generate a Conventional Commit message based on staged changes."
-- Step 2: `Run: agent commit -m "<MESSAGE>"` (Remove `--ai` default).
+- Step 2: `Run: agent commit -m "<MESSAGE>"` (Remove `--offline` default).

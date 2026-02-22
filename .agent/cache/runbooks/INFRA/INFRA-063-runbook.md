@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Implement an `--ai` flag for the `env -u VIRTUAL_ENV uv run agent journey backfill-tests` command to automatically generate test implementations using the AI service, significantly reducing the manual effort required to create regression tests for user journeys.
+Implement an `--offline` flag for the `env -u VIRTUAL_ENV uv run agent journey backfill-tests` command to automatically generate test implementations using the AI service, significantly reducing the manual effort required to create regression tests for user journeys.
 
 ## Linked Journeys
 
@@ -25,7 +25,7 @@ Implement an `--ai` flag for the `env -u VIRTUAL_ENV uv run agent journey backfi
 
 - Test Strategy is comprehensive with 12 automated tests covering normal, edge, and failure paths.
 - Edge cases: missing `implementation.files`, 0-step journeys, AI returning valid Python with no assertions.
-- Test idempotency: running `--ai` twice should skip existing files (AC-6).
+- Test idempotency: running `--offline` twice should skip existing files (AC-6).
 
 **@Security**:
 
@@ -48,7 +48,7 @@ Implement an `--ai` flag for the `env -u VIRTUAL_ENV uv run agent journey backfi
 
 **@Docs**:
 
-- Update `commands.md` with `--ai`, `--write`, `--journey` flags.
+- Update `commands.md` with `--offline`, `--write`, `--journey` flags.
 - Update CHANGELOG.
 - Differentiate AI-generated docstrings from stubs.
 
@@ -169,7 +169,7 @@ def _generate_stub(data: dict, jid: str) -> str:
 def backfill_tests(
     scope: Optional[str] = typer.Option(None, "--scope", help="Filter by scope."),
     journey_id: Optional[str] = typer.Option(None, "--journey", help="Target single journey (JRN-XXX)."),
-    ai: bool = typer.Option(False, "--ai", help="Generate tests with AI. Previews and prompts before writing."),
+    ai: bool = typer.Option(False, "--offline", help="Generate tests with AI. Previews and prompts before writing."),
     write: bool = typer.Option(False, "--write", help="Batch-write all without prompts (CI mode)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview only, no prompts, no writes."),
 ) -> None:
@@ -260,12 +260,12 @@ def _generate_ai_test(
 
 **2c. Update `backfill_tests` main loop:**
 
-- If `--ai` is set, call `_generate_ai_test()` first
+- If `--offline` is set, call `_generate_ai_test()` first
 - On success, use AI-generated code; on `None`, fall back to `_generate_stub()`
-- If `--ai` (default): preview in Rich `Syntax` panel, prompt `Write to {path}? [y/N/all/skip]`
+- If `--offline` (default): preview in Rich `Syntax` panel, prompt `Write to {path}? [y/N/all/skip]`
   - `y` → write this file, `N` → skip, `all` → write remaining without prompting, `skip` → stop processing
-- If `--ai --write`: batch-write all generated files without prompts (CI mode)
-- If `--ai --dry-run`: preview all to stdout, no prompts, no writes
+- If `--offline --write`: batch-write all generated files without prompts (CI mode)
+- If `--offline --dry-run`: preview all to stdout, no prompts, no writes
 - Add Rich progress bar wrapping the journey iteration loop
 - Emit summary metrics at end
 
@@ -321,7 +321,7 @@ Tests organized by AC:
 |---|------|----|
 | 1 | AI returns valid code → file written when `--write` | AC-1 |
 | 2 | AI returns `SyntaxError` code → fallback to stub | AC-9, Neg |
-| 3 | `--ai` without `--write` → stdout only, no file | AC-4 |
+| 3 | `--offline` without `--write` → stdout only, no file | AC-4 |
 | 4 | `--scope INFRA` filters correctly | AC-7 |
 | 5 | `--journey JRN-053` targets single journey | AC-7 |
 | 6 | Source context truncated at budget | AC-5 |
@@ -346,8 +346,8 @@ pytest .agent/src/agent/tests/commands/ -k journey -v
 
 ### Manual Verification
 
-1. `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` → verify dry-run output to stdout
-2. `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai --write --journey JRN-053` → verify file created
+1. `env -u VIRTUAL_ENV uv run agent journey backfill-tests` → verify dry-run output to stdout
+2. `env -u VIRTUAL_ENV uv run agent journey backfill-tests --write --journey JRN-053` → verify file created
 3. `python -c "import ast; ast.parse(open('tests/journeys/test_jrn_053.py').read())"` → syntax ok
 4. Verify progress bar renders correctly with 5+ journeys
 5. Verify structured log output contains expected fields
@@ -356,7 +356,7 @@ pytest .agent/src/agent/tests/commands/ -k journey -v
 
 ### Documentation
 
-- [ ] `commands.md` updated with `--ai`, `--write`, `--journey` flags
+- [ ] `commands.md` updated with `--offline`, `--write`, `--journey` flags
 - [ ] CHANGELOG.md entry added
 - [ ] AI-generated test docstrings differentiate from stubs
 
@@ -369,5 +369,5 @@ pytest .agent/src/agent/tests/commands/ -k journey -v
 ### Testing
 
 - [ ] Unit tests passed (12 tests)
-- [ ] Integration test: `--ai --dry-run` with real journey
+- [ ] Integration test: `--offline --dry-run` with real journey
 - [ ] No regressions in existing `backfill-tests` behavior

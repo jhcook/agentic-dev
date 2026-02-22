@@ -62,7 +62,7 @@ Replace the 73-line manual process with:
 
 ```markdown
 1. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID>` to create a PR with preflight checks.
-2. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --ai` for AI-generated PR summary.
+2. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID>` for AI-generated PR summary.
 3. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --web` to open in browser.
 4. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --draft` for draft PR.
 5. Run `env -u VIRTUAL_ENV uv run agent pr --story <STORY-ID> --skip-preflight` to skip preflight (audit-logged).

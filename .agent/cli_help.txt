@@ -1,0 +1,387 @@
+                        
+ Usage: agent [OPTIONS] 
+ COMMAND [ARGS]...      
+                        
+ A CLI for managing and 
+ interacting with the   
+ AI agent.              
+                        
+╭─ Options ────────────╮
+│ --…  -v      IN  In… │
+│              TE  ve… │
+│              GE  le… │
+│              R   [d… │
+│                  0]  │
+│ --…              Sh… │
+│                  ve… │
+│                  and │
+│                  ex… │
+│ --…          TE  Fo… │
+│              XT  AI  │
+│                  pr… │
+│                  (g… │
+│                  ge… │
+│                  ve… │
+│                  op… │
+│                  an… │
+│ --…              In… │
+│                  co… │
+│                  for │
+│                  the │
+│                  cu… │
+│                  sh… │
+│ --…              Sh… │
+│                  co… │
+│                  for │
+│                  the │
+│                  cu… │
+│                  sh… │
+│                  to  │
+│                  co… │
+│                  it  │
+│                  or  │
+│                  cu… │
+│                  the │
+│                  in… │
+│ --…              Sh… │
+│                  th… │
+│                  me… │
+│                  and │
+│                  ex… │
+╰──────────────────────╯
+╭─ Commands ───────────╮
+│ help              S… │
+│                   h… │
+│                   f… │
+│                   t… │
+│                   C… │
+│ lint              L… │
+│                   t… │
+│                   c… │
+│                   u… │
+│                   r… │
+│                   (… │
+│                   s… │
+│                   (… │
+│                   e… │
+│                   (… │
+│                   a… │
+│                   A… │
+│                   e… │
+│ preflight         R… │
+│                   p… │
+│                   c… │
+│                   (… │
+│                   t… │
+│                   a… │
+│                   o… │
+│                   AI │
+│                   g… │
+│                   r… │
+│ impact            R… │
+│                   i… │
+│                   a… │
+│                   f… │
+│                   a  │
+│                   s… │
+│ panel             C… │
+│                   t… │
+│                   G… │
+│                   P… │
+│                   to │
+│                   r… │
+│                   c… │
+│                   or │
+│                   d… │
+│                   d… │
+│ run-ui-tests      R… │
+│                   UI │
+│                   j… │
+│                   t… │
+│                   u… │
+│                   M… │
+│ audit             R… │
+│                   a  │
+│                   g… │
+│                   a… │
+│                   of │
+│                   t… │
+│                   r… │
+│ commit            C… │
+│                   c… │
+│                   w… │
+│                   a  │
+│                   g… │
+│                   m… │
+│ pr                O… │
+│                   a  │
+│                   G… │
+│                   P… │
+│                   R… │
+│                   f… │
+│                   t… │
+│                   c… │
+│                   b… │
+│ implement         E… │
+│                   an │
+│                   i… │
+│                   r… │
+│                   u… │
+│                   AI │
+│                   w… │
+│                   c… │
+│                   t… │
+│                   p… │
+│ new-story         C… │
+│                   a  │
+│                   n… │
+│                   s… │
+│                   f… │
+│ new-runbook       G… │
+│                   an │
+│                   i… │
+│                   r… │
+│                   u… │
+│                   AI │
+│                   G… │
+│                   P… │
+│ new-journey       C… │
+│                   a  │
+│                   n… │
+│                   u… │
+│                   j… │
+│                   Y… │
+│                   f… │
+│ validate-journey  V… │
+│                   a  │
+│                   j… │
+│                   Y… │
+│                   f… │
+│                   a… │
+│                   t… │
+│                   s… │
+│ review-voice      R… │
+│                   t… │
+│                   m… │
+│                   r… │
+│                   v… │
+│                   a… │
+│                   s… │
+│                   w… │
+│                   A… │
+│                   UX │
+│                   a… │
+│ new-adr           C… │
+│                   a  │
+│                   n… │
+│                   A… │
+│                   D… │
+│                   R… │
+│                   (… │
+│ onboard           G… │
+│                   a  │
+│                   d… │
+│                   t… │
+│                   i… │
+│                   a… │
+│                   s… │
+│                   a… │
+│                   c… │
+│ query             A… │
+│                   a  │
+│                   n… │
+│                   l… │
+│                   q… │
+│                   a… │
+│                   t… │
+│                   c… │
+│ list-stories      L… │
+│                   a… │
+│                   s… │
+│                   in │
+│                   .… │
+│ list-plans        L… │
+│                   a… │
+│                   i… │
+│                   p… │
+│                   in │
+│                   .… │
+│ list-runbooks     L… │
+│                   a… │
+│                   r… │
+│                   in │
+│                   .… │
+│ list-models       L… │
+│                   a… │
+│                   AI │
+│                   m… │
+│                   f… │
+│                   a  │
+│                   p… │
+│ list-journeys     L… │
+│                   a… │
+│                   u… │
+│                   j… │
+│                   in │
+│                   .… │
+│ match-story       A… │
+│                   s… │
+│                   s… │
+│                   b… │
+│                   on │
+│                   c… │
+│ validate-story    V… │
+│                   t… │
+│                   s… │
+│                   a… │
+│                   r… │
+│                   s… │
+│                   of │
+│                   a  │
+│                   s… │
+│                   f… │
+│ new-plan          C… │
+│                   a  │
+│                   n… │
+│                   i… │
+│                   p… │
+│                   m… │
+│                   f… │
+│                   a  │
+│                   t… │
+│ sync              D… │
+│                   s… │
+│                   (… │
+│                   p… │
+│                   s… │
+│                   s… │
+│ admin             M… │
+│                   t… │
+│                   A… │
+│                   M… │
+│                   C… │
+│ config            M… │
+│                   a… │
+│                   c… │
+│ import            I… │
+│                   a… │
+│                   (… │
+│                   d… │
+│                   e… │
+│                   i… │
+│                   t… │
+│                   a… │
+│                   s… │
+│ mcp               M… │
+│                   a… │
+│                   i… │
+│                   w… │
+│                   M… │
+│                   s… │
+│ secret            M… │
+│                   e… │
+│                   s… │
+│                   f… │
+│                   A… │
+│                   k… │
+│                   a… │
+│                   c… │
+│ journey           U… │
+│                   j… │
+│                   m… │
+│ visualize         G… │
+│                   d… │
+│                   v… │
+│                   of │
+│                   p… │
+│                   a… │
+╰──────────────────────╯
+
+                        
+ Usage: agent admin     
+ [OPTIONS] COMMAND      
+ [ARGS]...              
+                        
+ Manage the Agent       
+ Management Console.    
+                        
+╭─ Options ────────────╮
+│ --he…          Show  │
+│                this  │
+│                mess… │
+│                and   │
+│                exit. │
+╰──────────────────────╯
+╭─ Commands ───────────╮
+│ start   Start the    │
+│         Agent        │
+│         Management   │
+│         Console      │
+│         (Detached by │
+│         default).    │
+│ stop    Stop the     │
+│         Agent        │
+│         Management   │
+│         Console.     │
+│ status  Check the    │
+│         status of    │
+│         the Agent    │
+│         Management   │
+│         Console.     │
+╰──────────────────────╯
+
+                        
+ Usage: agent sync      
+ [OPTIONS] COMMAND      
+ [ARGS]...              
+                        
+ Distributed            
+ synchronization (push, 
+ pull, status, scan).   
+                        
+╭─ Options ────────────╮
+│ --he…          Show  │
+│                this  │
+│                mess… │
+│                and   │
+│                exit. │
+╰──────────────────────╯
+╭─ Commands ───────────╮
+│ pull     Pull        │
+│          artifacts   │
+│          from        │
+│          remote.     │
+│ push     Push        │
+│          artifacts   │
+│          to remote.  │
+│ status   Check sync  │
+│          status.     │
+│ delete   Delete      │
+│          artifact    │
+│          from local  │
+│          cache.      │
+│ scan     Scan local  │
+│          file system │
+│          and update  │
+│          cache.      │
+│ janitor  Run the     │
+│          Janitor to  │
+│          maintain    │
+│          relational  │
+│          integrity.  │
+│ init     Initialize… │
+│          sync        │
+│          backends    │
+│          (create     │
+│          databases,  │
+│          etc).       │
+│ flush    Delete      │
+│          local sync  │
+│          state so    │
+│          the next    │
+│          pull        │
+│          refreshes   │
+│          from        │
+│          remote.     │
+╰──────────────────────╯
+

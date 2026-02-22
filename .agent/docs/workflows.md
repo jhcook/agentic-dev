@@ -11,6 +11,7 @@ Plan → Story → Runbook → Implementation → Testing → Impact Analysis �
 ```
 
 **Key Quality Gates:**
+
 1. **Story Commitment** - Requirements locked before implementation
 2. **Runbook Acceptance** - Implementation plan approved
 3. **Impact Analysis** - Dependency tracking and risk assessment
@@ -28,11 +29,13 @@ agent new-plan
 ```
 
 **When to create a plan:**
+
 - Multi-story feature (epic)
 - Cross-team coordination needed
 - Architectural changes
 
 **Plan states:**
+
 - `PROPOSED` → Under discussion
 - `APPROVED` → Ready for story creation
 
@@ -43,16 +46,19 @@ agent new-story
 ```
 
 **Interactive prompts:**
+
 1. Select scope (INFRA/WEB/MOBILE/BACKEND)
 2. Enter title
 3. Get auto-assigned ID (e.g., WEB-042)
 
 **Edit the story:**
+
 ```bash
 vim .agent/cache/stories/WEB/WEB-042-feature-name.md
 ```
 
 **Required sections:**
+
 - Problem Statement
 - User Story  
 - Acceptance Criteria (testable!)
@@ -60,11 +66,13 @@ vim .agent/cache/stories/WEB/WEB-042-feature-name.md
 - Rollback Plan
 
 **Story states:**
+
 - `DRAFT` → Being written
 - `OPEN` → Ready for review
 - `COMMITTED` → Locked, ready for runbook
 
 **Change state when ready:**
+
 ```markdown
 ## State
 COMMITTED
@@ -77,20 +85,24 @@ agent new-runbook WEB-042
 ```
 
 **Prerequisites:**
+
 - Story must be `COMMITTED`
 
 **AI generates:**
+
 - Implementation steps
 - Files to create/modify
 - Compliance checklist
 - Verification plan
 
 **Review & accept:**
+
 ```bash
 vim .agent/cache/runbooks/WEB/WEB-042-runbook.md
 ```
 
 Change status to:
+
 ```markdown
 Status: ACCEPTED
 ```
@@ -111,10 +123,13 @@ agent implement WEB-042
 ```
 
 AI will:
-- Read runbook
+
+- Enforce the Journey Gate (checks for linked `.agent/cache/journeys/` YAML files)
+- Read runbook & context
 - Generate code
 - Create/modify files
-- Run verification
+- Apply auto-linting and formatting
+- Run validation checks
 
 **Always review AI-generated code!**
 
@@ -129,6 +144,7 @@ agent preflight --story WEB-042
 ```
 
 Basic preflight checks:
+
 - Linting
 - Tests pass
 - No uncommitted changes
@@ -146,30 +162,35 @@ agent impact WEB-042
 ```
 
 **Static Analysis (Default):**
+
 - Uses AST parsing for Python imports
 - Uses regex for JavaScript imports
 - Shows reverse dependencies (which files depend on your changes)
 - Identifies blast radius
 
 **AI-Enhanced Analysis:**
+
 ```bash
-agent impact WEB-042 --ai
+agent impact WEB-042
 ```
 
 Adds:
+
 - Security risk assessment
 - Performance implications
 - Breaking change detection
 - Workflow impact analysis
 
 **Update Story with Analysis:**
+
 ```bash
-agent impact WEB-042 --ai --update-story
+agent impact WEB-042 --update-story
 ```
 
 Automatically updates the story's "Impact Analysis Summary" section.
 
 **Example Output:**
+
 ```
 📊 Dependency Analysis:
 
@@ -192,17 +213,18 @@ Risks identified: 12 files depend on changed code
 ### 7. Governance Review
 
 ```bash
-agent preflight --story WEB-042 --ai
+agent preflight --story WEB-042
 ```
 
 Full AI governance panel:
+
 - @Architect - Design patterns
 - @Security - Vulnerabilities
 - @QA - Test coverage
 - @Product - Acceptance criteria
 - @Docs - Documentation
 - @Compliance - SOC2/GDPR
-- + scope-specific (Mobile/Web/Backend)
+- - scope-specific (Mobile/Web/Backend)
 
 **Fix any blockers before committing!**
 
@@ -216,10 +238,11 @@ git add .
 agent commit --story WEB-042
 
 # Or AI-generated message
-agent commit --story WEB-042 --ai
+agent commit --story WEB-042
 ```
 
 Commit format:
+
 ```
 feat(web): add user profile page [WEB-042]
 
@@ -235,12 +258,14 @@ agent pr --story WEB-042
 ```
 
 Creates PR with:
+
 - Story summary
 - Acceptance criteria checklist
 - Governance report
 - Test verification
 
 **Options:**
+
 ```bash
 # Draft PR
 agent pr --story WEB-042 --draft
@@ -252,6 +277,7 @@ agent pr --story WEB-042 --web
 ### 10. Review & Merge
 
 Team reviews PR:
+
 - Code quality
 - Test coverage
 - Documentation
@@ -397,7 +423,7 @@ git commit -m "refactor(payment): migrate to service [BACKEND-080]"
 pytest tests/payment/
 
 # 5. Full governance review
-agent preflight --story BACKEND-080 --ai
+agent preflight --story BACKEND-080
 
 # 6. PR
 agent pr --story BACKEND-080
@@ -440,6 +466,7 @@ agent panel WEB-042
 ### Git Hooks
 
 **.git/hooks/pre-commit:**
+
 ```bash
 #!/bin/bash
 # Auto-run preflight before commit
@@ -456,17 +483,19 @@ fi
 ### Aliases
 
 **~/.zshrc:**
+
 ```bash
 # Story workflow shortcuts
 alias story='agent new-story'
 alias runbook='agent new-runbook'
 alias implement='agent implement'
-alias prefly='agent preflight --ai'
-alias acommit='agent commit --ai'
+alias prefly='agent preflight'
+alias acommit='agent commit'
 alias apr='agent pr --web'
 ```
 
 Usage:
+
 ```bash
 story          # Create new story
 runbook WEB-42 # Generate runbook
@@ -476,16 +505,26 @@ acommit --story WEB-42
 apr --story WEB-42
 ```
 
+### Voice Interaction Review Workflow
+
+```bash
+agent review-voice
+```
+
+Fetch the most recent voice agent session and provide structured UX feedback (latency, interruptions, tone) generated by the AI Panel. This requires the Voice Agent mode (`--extra voice`) to have been used previously.
+
 ## Best Practices
 
 ### 1. Write Testable Acceptance Criteria
 
 **❌ Bad:**
+
 ```markdown
 - [ ] User can edit profile
 ```
 
 **✅ Good:**
+
 ```markdown
 - [ ] Given logged-in user, When clicks "Edit Profile", Then sees editable form
 - [ ] Given edited profile, When clicks "Save", Then changes persist
@@ -506,6 +545,7 @@ apr --story WEB-42
 **One story = One PR**
 
 If story balloons, split it:
+
 ```bash
 # Original
 WEB-042: User profile page
@@ -519,6 +559,7 @@ WEB-044: User profile - Avatar upload
 ### 4. Use Conventional Commits
 
 **Types:**
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation
@@ -527,12 +568,14 @@ WEB-044: User profile - Avatar upload
 - `chore:` Maintenance
 
 **Scopes:**
+
 - `web`, `mobile`, `backend`, `infra`
 - Or component: `auth`, `payment`, `api`
 
 ### 5. Run Preflight Often
 
 Don't wait until the end:
+
 ```bash
 # After major change
 git add .
@@ -542,7 +585,7 @@ agent preflight --story WEB-042
 agent preflight --story WEB-042
 
 # Before creating PR
-agent preflight --story WEB-042 --ai
+agent preflight --story WEB-042
 ```
 
 ---

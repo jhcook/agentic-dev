@@ -138,7 +138,7 @@ EOF
 vim src/api/users.py
 
 # Run preflight to see if rule is enforced
-agent preflight --story BACKEND-001 --ai
+agent preflight --story BACKEND-001
 ```
 
 The AI agents will now check your code against the new performance rules.
@@ -544,10 +544,10 @@ Before merging rule changes:
 
 ```bash
 # Test against existing code
-agent preflight --story INFRA-001 --ai
+agent preflight --story INFRA-001
 
 # Test against new development
-agent preflight --story WEB-042 --ai
+agent preflight --story WEB-042
 ```
 
 ## Advanced: Dynamic Rules

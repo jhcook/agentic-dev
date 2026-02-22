@@ -179,17 +179,17 @@ Run impact analysis for a story to identify risks and affected components.
 agent impact STORY-001
 
 # AI-powered analysis (risk assessment, breaking changes)
-agent impact STORY-001 --ai
+agent impact STORY-001
 
 # Update the story file with the analysis
-agent impact STORY-001 --ai --update-story
+agent impact STORY-001 --update-story
 ```
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--ai` | Enable AI-powered analysis (requires API key) |
+| `[AI Default]` | Enable AI-powered analysis (requires API key) |
 | `--update-story` | Write the analysis to the "Impact Analysis Summary" section of the story file |
 | `--base <branch>` | Compare against a specific branch (default: staged changes) |
 | `--provider <name>` | Force AI provider (gh, gemini, openai) |
@@ -281,7 +281,7 @@ The CLI provides commands to drive the Agentic Workflow (Stories -> Plans -> Run
 | `agent new-runbook <STORY_ID>` | Generate an implementation runbook for a committed story. |
 | `agent implement <RUNBOOK_ID>` | Implement a feature from an accepted runbook. |
 | `agent pr` | Create a Pull Request with automated preflight checks (displays blocking reasons on failure). |
-| `agent commit` | Commit changes using conventional commits (optionally with `--ai`). |
+| `agent commit` | Commit changes using conventional commits (optionally with `--offline`). |
 
 ### Usage Examples
 
@@ -341,7 +341,7 @@ Create, validate, and list user journeys that define behavioral contracts.
 | Command | Description |
 | --- | --- |
 | `agent new-journey [ID]` | Create a new journey from template |
-| `agent new-journey [ID] --ai` | Create a journey with AI-generated content |
+| `agent new-journey [ID]` | Create a journey with AI-generated content |
 | `agent validate-journey` | Validate journey YAML against schema |
 | `agent list-journeys` | List all journeys with ID, title, state |
 
@@ -420,7 +420,7 @@ agent preflight [OPTIONS]
 
 - `--story [ID]`: Link the preflight check to a specific Story ID (e.g., `WEB-001`).
 - `--interactive`: Enable interactive repair mode. The agent will propose fixes for failures.
-- `--ai`: Enable AI-powered governance review (requires API key).
+- `[AI Default]`: Enable AI-powered governance review (requires API key).
 - `--base [BRANCH]`: Verify changes against a specific base branch (default: staged vs HEAD).
 - `--skip-tests`: Skip automated tests.
 - `--panel-engine [ENGINE]`: Override panel engine: `adk` or `native`.
@@ -445,7 +445,7 @@ When running in Voice Mode (triggered by `AGENT_VOICE_MODE=1` or via the Voice A
 
 The Agentic Development Tool utilizes AI for code analysis and repair. To ensure compliance with data protection standards (GDPR/SOC2):
 
-- **Lawful Basis**: Processing is based on **Legitimate Interest** (development efficiency) and **User Consent** (explicit invocation of `--ai` flag).
+- **Lawful Basis**: Processing is based on **Legitimate Interest** (development efficiency) and **User Consent** (explicit invocation of `--offline` flag).
 - **Data Retention**: All AI context (lines of code, story content) is **ephemeral**. It is sent to the provider for inference and discarded immediately after the session. No code is stored by the AI provider for model training (via Enterprise agreements).
 - **Human-in-the-Loop**: All AI-generated fixes must be explicitly reviewed and confirmed by the user before being applied to the filesystem. The agent **never** auto-commits changes without user verified approval.
 - **Monitoring**: Logs are kept locally in `.agent/logs/` for security auditing but are not stripped of PII unless explicitly tagged. Users are responsible for not committing PII.
@@ -460,3 +460,33 @@ Example Voice Flow:
 2. Agent: "Running checks... I found a schema error. Should I fix it?"
 3. User: "Yes, please."
 4. Agent: "Fix applied. Verifying... All checks passed."
+
+---
+
+## Additional Tooling Commands
+
+### Initialization and Settings
+
+- **`agent onboard`**: Interactive guide to initialize the repository for the Agentic workflow. Bootstraps schemas, directories, and provider selection.
+- **`agent config`**: Manage `.agent/etc/*.yaml` configurations directly from the terminal (e.g. `agent config list`, `agent config get router.llm`).
+
+### Validation and Quality
+
+- **`agent lint`**: Runs the linter and type checker across the configured paths.
+- **`agent review-voice`**: Fetch the most recent voice interaction log and summarize UX/latency/accuracy feedback using the AI Panel.
+- **`agent validate-story`**: Verify the structure and rules of a story file.
+- **`agent validate-journey`**: Validate a journey YAML file against its schema.
+
+### Discovery and Utilities
+
+- **`agent import`**: Import custom tools into the voice agent registry (`agent import tool ./custom/`).
+- **`agent mcp`**: Manage MCP (Model Context Protocol) servers connected to the agent (`agent mcp list`).
+- **`agent visualize`**: Generate diagrams for projects (`agent visualize graph`, `agent visualize flow`).
+- **`agent match-story`**: Associate files or PRs to a story based on context.
+
+### List Commands
+
+- `agent list-stories`
+- `agent list-plans`
+- `agent list-runbooks`
+- `agent list-journeys`

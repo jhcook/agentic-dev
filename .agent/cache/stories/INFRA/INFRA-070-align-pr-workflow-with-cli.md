@@ -14,7 +14,7 @@ As a developer using `/pr`, I want the workflow to call `env -u VIRTUAL_ENV uv r
 
 ## Acceptance Criteria
 
-- [ ] **AC1: Preflight Integration**: `env -u VIRTUAL_ENV uv run agent pr` runs `env -u VIRTUAL_ENV uv run agent preflight --ai` as a prerequisite step, failing if preflight returns BLOCK.
+- [ ] **AC1: Preflight Integration**: `env -u VIRTUAL_ENV uv run agent pr` runs `env -u VIRTUAL_ENV uv run agent preflight` as a prerequisite step, failing if preflight returns BLOCK.
 - [ ] **AC2: Auto-Generated Body**: `env -u VIRTUAL_ENV uv run agent pr` generates the PR body from the template (Story Link, Changes summary, Governance status).
 - [ ] **AC3: Title Format**: `env -u VIRTUAL_ENV uv run agent pr` auto-generates the title as `[STORY-ID] <description>`.
 - [ ] **AC4: GitHub Invocation**: `env -u VIRTUAL_ENV uv run agent pr` calls `gh pr create` with the generated title and body.

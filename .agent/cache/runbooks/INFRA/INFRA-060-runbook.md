@@ -364,8 +364,8 @@ Unit tests covering:
 
 ### Manual Verification
 
-- [ ] `env -u VIRTUAL_ENV uv run agent panel INFRA-060 --ai` outputs per-role references and Reference Summary Table
-- [ ] `env -u VIRTUAL_ENV uv run agent preflight --ai --story INFRA-060` emits reference validation warnings
+- [ ] `env -u VIRTUAL_ENV uv run agent panel INFRA-060` outputs per-role references and Reference Summary Table
+- [ ] `env -u VIRTUAL_ENV uv run agent preflight --story INFRA-060` emits reference validation warnings
 - [ ] Panel in consultative mode still extracts references from raw output
 - [ ] Citing non-existent ADR-999 produces WARNING, not BLOCK
 - [ ] Changeset touching no ADR-governed files — no citation warnings emitted

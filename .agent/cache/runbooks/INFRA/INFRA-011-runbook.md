@@ -259,7 +259,7 @@ import subprocess
 # Replace existing impact() function
 def impact(
     story_id: str = typer.Argument(..., help="The ID of the story to analyze."),
-    ai: bool = typer.Option(False, "--ai", help="Use AI for deeper analysis."),
+    ai: bool = typer.Option(False, "--offline", help="Use AI for deeper analysis."),
     update_story: bool = typer.Option(
         False, "--update-story", help="Update story with analysis."
     ),
@@ -268,7 +268,7 @@ def impact(
     Perform impact analysis for a story.
     
     Static analysis identifies reverse dependencies.
-    With --ai, performs deeper analysis using AI.
+    With, performs deeper analysis using AI.
     """
     console.print(f"[bold blue]🔍 Analyzing impact for {story_id}...[/bold blue]")
     

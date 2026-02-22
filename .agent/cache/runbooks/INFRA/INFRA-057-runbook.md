@@ -377,7 +377,7 @@ ADR-025 **already contains** the canonical enforcement block at lines 41–51. N
 - [ ] Test 7: **Integration — ADR-025**: Create temp file at `agent/commands/test_bad.py` with `from agent.core.ai import ai_service` at module scope → assert violation reported. Remove → assert clean.
 - [ ] Test 8: **Integration — Status filtering**: DRAFT ADR enforcement block produces zero violations.
 - [ ] Test 9: **Integration — `--adr-only` flag**: `env -u VIRTUAL_ENV uv run agent check lint --adr-only` runs only ADR enforcement, not ruff/eslint.
-- [ ] Test 10: **Integration — Preflight**: `env -u VIRTUAL_ENV uv run agent preflight --skip-tests --ai=false` shows "ADR Enforcement" section.
+- [ ] Test 10: **Integration — Preflight**: `env -u VIRTUAL_ENV uv run agent preflight --skip-tests=false` shows "ADR Enforcement" section.
 
 ### Manual Verification
 

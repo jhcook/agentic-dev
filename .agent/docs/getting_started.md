@@ -152,7 +152,7 @@ agent new-runbook WEB-001                # 2. Generate runbook
 # Review, set Status: ACCEPTED
 agent implement WEB-001                  # 3. AI-assisted implementation
 agent preflight --story WEB-001          # 4. Run checks
-agent commit --story WEB-001 --ai        # 5. Commit
+agent commit --story WEB-001        # 5. Commit
 agent pr --story WEB-001                 # 6. Create PR
 ```
 
@@ -169,7 +169,7 @@ Journeys describe **what your system does from a user's perspective**. They act 
 agent new-journey JRN-001
 
 # AI-generated from a brief description
-agent new-journey JRN-001 --ai
+agent new-journey JRN-001
 ```
 
 This creates a YAML file in `.agent/cache/journeys/`:
@@ -324,13 +324,13 @@ Preflight validates your changes against governance rules before commit.
 agent preflight --story WEB-001
 
 # Full AI governance review
-agent preflight --story WEB-001 --ai
+agent preflight --story WEB-001
 
 # Interactive repair mode — auto-fix schema violations
-agent preflight --story WEB-001 --ai --interactive
+agent preflight --story WEB-001 --interactive
 
 # Use ADK multi-agent panel engine
-agent preflight --story WEB-001 --ai --panel-engine adk
+agent preflight --story WEB-001 --panel-engine adk
 ```
 
 **What preflight checks:**
@@ -394,10 +394,10 @@ git add .
 agent impact WEB-001
 
 # AI-enhanced (risk assessment, breaking change detection)
-agent impact WEB-001 --ai
+agent impact WEB-001
 
 # Write analysis back into the story
-agent impact WEB-001 --ai --update-story
+agent impact WEB-001 --update-story
 ```
 
 ---
@@ -409,7 +409,7 @@ agent impact WEB-001 --ai --update-story
 agent commit --story WEB-001
 
 # AI-generated commit message
-agent commit --story WEB-001 --ai
+agent commit --story WEB-001
 ```
 
 Commit format: `feat(web): add user profile page [WEB-001]`

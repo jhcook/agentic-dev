@@ -104,7 +104,7 @@ agent pr
 | `agent new-plan <ID>` | Create a new implementation plan |
 | `agent new-adr <ID>` | Create a new ADR |
 | `agent implement <ID>` | Implement from a runbook |
-| `agent preflight --story <ID> --ai` | Run governance checks |
+| `agent preflight --story <ID>` | Run governance checks |
 | `agent commit -m "<message>"` | Commit with story tracking |
 | `agent pr` | Create a pull request |
 
@@ -113,7 +113,7 @@ agent pr
 | Command | Description |
 |---------|-------------|
 | `agent panel <ID>` | Convene the AI governance panel |
-| `agent impact <ID> --ai` | Run impact analysis |
+| `agent impact <ID>` | Run impact analysis |
 | `agent review-voice` | Analyze a completed voice session and generate UX feedback |
 | `agent audit` | Generate audit report |
 | `agent lint` | Run linters (ruff, shellcheck, eslint) |

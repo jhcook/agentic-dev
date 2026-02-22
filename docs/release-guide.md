@@ -78,7 +78,7 @@ jobs:
           # 1. Capture output to both log and file
           # 2. Use set +e to allow post-processing even on failure
           set +e 
-          .agent/bin/agent preflight --story ${{ steps.story.outputs.story_id }} --ai --provider gemini --base ${{ github.base_ref }} --skip-tests --report-file preflight_results.json 2>&1 | tee governance_report.md
+          .agent/bin/agent preflight --story ${{ steps.story.outputs.story_id }} --provider gemini --base ${{ github.base_ref }} --skip-tests --report-file preflight_results.json 2>&1 | tee governance_report.md
           EXIT_CODE=${PIPESTATUS[0]}
           echo "exit_code=$EXIT_CODE" >> $GITHUB_ENV
           exit $EXIT_CODE

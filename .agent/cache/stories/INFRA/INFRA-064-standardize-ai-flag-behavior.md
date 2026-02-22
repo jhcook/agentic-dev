@@ -8,14 +8,14 @@ COMMITTED
 
 ### Problem Statement
 
-The CLI currently relies on an explicit `--ai` flag to leverage AI capabilities (like generating runbooks or performing preflight analysis). This requires users to constantly opt-in, increasing friction. Furthermore, when offline (e.g., on a flight), users face inconsistent UX and crashes if AI requests fail.
+The CLI currently relies on an explicit `--offline` flag to leverage AI capabilities (like generating runbooks or performing preflight analysis). This requires users to constantly opt-in, increasing friction. Furthermore, when offline (e.g., on a flight), users face inconsistent UX and crashes if AI requests fail.
 
 We need to transition to an "AI by Default" paradigm where commands use AI automatically, governed by an `--offline` (or `--no-ai`) opt-out flag. Crucially, when the AI is unreachable, the system must gracefully degrade—either by falling back to standard manual workflows (like opening `$EDITOR`) or exiting cleanly with a friendly error, rather than throwing tracebacks. We must also preserve a consistent generate → preview → confirm pattern for AI-generated artifacts to prevent unexpected writes.
 
 ### User Story
 
 > As a developer using the agent CLI,
-> I want AI features to be the default behavior so I don't have to remember to add `--ai`,
+> I want AI features to be the default behavior so I don't have to remember to add `--offline`,
 > and I want the CLI to gracefully switch to offline mode or fail cleanly when I don't have internet access,
 > so that I can seamlessly work on flights or in disconnected environments and still retain control over what gets written to disk.
 
@@ -40,7 +40,7 @@ Not all commands degrade the same way when offline:
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: All applicable CLI commands drop the `--ai` flag and attempt to use AI by default.
+- [ ] **AC-1**: All applicable CLI commands drop the `--offline` flag and attempt to use AI by default.
 - [ ] **AC-2**: An `--offline` (or `--no-ai`) flag is globally introduced to bypass AI explicitly.
 - [ ] **AC-3**: Graceful Degradation is implemented. On connection timeout or error, generative workflows (`commit`, `new-story`, etc.) fall back to manual input in `$EDITOR`. Analysis commands (`preflight`, `impact`) print a user-friendly error and exit cleanly.
 - [ ] **AC-4**: File-generating commands retain the 3-mode confirm pattern: AI generation → Rich preview → `Write? [y/N]` interactive confirm. `--write` executes a batch write (CI mode), and `--dry-run` previews without writing.
@@ -68,8 +68,8 @@ Not all commands degrade the same way when offline:
 
 ### Risks
 
-- **Medium**: Many existing user journeys and CI scripts rely on the explicit `--ai` flag. Removing `--ai` might break automated scripts that check for flag validation, and changing default behavior might surprise users who are used to manual entry.
-- **Mitigation**: Update all user journeys in the codebase to remove the `--ai` flag and use `--offline` where manual testing is intended. Clearly document the change in `CHANGELOG.md` and `README.md`. Keep `--ai` as a deprecated, ignored flag temporarily if needed to avoid breaking CI.
+- **Medium**: Many existing user journeys and CI scripts rely on the explicit `--offline` flag. Removing `--offline` might break automated scripts that check for flag validation, and changing default behavior might surprise users who are used to manual entry.
+- **Mitigation**: Update all user journeys in the codebase to remove the `--offline` flag and use `--offline` where manual testing is intended. Clearly document the change in `CHANGELOG.md` and `README.md`. Keep `--offline` as a deprecated, ignored flag temporarily if needed to avoid breaking CI.
 
 ## Linked Journeys
 
@@ -93,8 +93,8 @@ Not all commands degrade the same way when offline:
 
 - Components touched: CLI Sub-commands (`workflow.py`, `journey.py`, `plan.py`, `story.py`, `check.py`).
 - Workflows affected: PR, Commit, New Journey, New Plan, New Story, Preflight, Impact.
-- Risks identified: Automated scripts relying on `--ai` fail. Fallback to `typer.edit()` may stall headless CI if not bypassed via `--yes`.
+- Risks identified: Automated scripts relying on `--offline` fail. Fallback to `typer.edit()` may stall headless CI if not bypassed via `--yes`.
 
 ## Rollback Plan
 
-Revert the PR containing the modifications to the CLI arguments and return to the explicit `--ai` flag setup.
+Revert the PR containing the modifications to the CLI arguments and return to the explicit `--offline` flag setup.
