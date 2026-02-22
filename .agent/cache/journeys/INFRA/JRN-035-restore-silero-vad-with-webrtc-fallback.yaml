@@ -58,6 +58,31 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - test/voice/test_vad.py
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/admin.py
+  - .agent/src/agent/commands/importer.py
+  - .agent/src/agent/main.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/speech/interfaces.py
+  - .agent/src/backend/voice/buffer.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/tools/create_tool.py
+  - .agent/src/backend/voice/tools/custom/add_license.py
+  - .agent/src/backend/voice/tools/git.py
+  - .agent/src/backend/voice/tools/project.py
+  - .agent/src/backend/voice/tools/qa.py
+  - .agent/src/backend/voice/tools/registry.py
+  - .agent/src/backend/voice/tools/security.py
+  - .agent/src/backend/voice/vad.py
+  - .agent/src/web/package-lock.json
+  - .agent/src/web/package.json
   tests:
+  - .agent/tests/commands/test_create_tool.py
+  - .agent/tests/integration/test_tools.py
   - .agent/tests/journeys/test_jrn_035.py
+  - .agent/tests/voice/test_git_tools.py
+  - .agent/tests/voice/test_orchestrator.py
+  - .agent/tests/voice/test_vad.py
+  - .agent/tests/voice/test_voice_tools.py

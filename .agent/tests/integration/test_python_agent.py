@@ -209,7 +209,10 @@ def test_commit_command(mock_run):
 @patch("agent.core.utils.get_current_branch", return_value="INFRA-005-python-rewrite")
 def test_preflight_inference(mock_branch, mock_journey_index, mock_sync, mock_run, mock_popen):
     # Mock preflight checks passing (subprocess calls)
-    mock_run.return_value = MagicMock(stdout="file.py", returncode=0)
+    mock_run_res = MagicMock()
+    mock_run_res.stdout = "file.py"
+    mock_run_res.returncode = 0
+    mock_run.return_value = mock_run_res
     
     # Mock standard input reading (if the council asks for confirmation and read_console is used)
     process_mock = MagicMock()

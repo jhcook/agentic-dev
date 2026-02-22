@@ -35,10 +35,6 @@ dependencies = [
     "langchain-community>=0.4.1",
     "langchain-huggingface>=1.2.0",
     "sentence-transformers>=2.2.0",
-]
-
-[project.optional-dependencies]
-ai = [
     "openai>=1.0.0",
     "anthropic>=0.3.0",
     "google-genai>=0.1.0",
@@ -48,10 +44,9 @@ ai = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
     "langchain-openai>=0.2.0",
-    "chromadb>=0.4.0",
-    "langchain-chroma>=0.1.0",
-    "sentence-transformers>=2.2.0",
 ]
+
+[project.optional-dependencies]
 
 voice = [
     "deepgram-sdk>=3.0",
@@ -80,22 +75,9 @@ adk = [
 
 [dependency-groups]
 # uv dev-dependencies are ALWAYS installed by default with `uv sync`/`uv run`.
-# This prevents accidental stripping of AI and admin packages.
-# Mirrors [project.optional-dependencies] ai + admin groups.
+# This prevents accidental stripping of admin packages.
+# Mirrors [project.optional-dependencies] admin group.
 dev = [
-    # AI providers + frameworks (from [ai] extra)
-    "openai>=1.0.0",
-    "anthropic>=0.3.0",
-    "google-genai>=0.1.0",
-    "langgraph>=0.2.0",
-    "langgraph-checkpoint-sqlite>=1.0.0",
-    "langchain>=0.3.0",
-    "langchain-anthropic>=0.3.0",
-    "langchain-google-genai>=0.2.0",
-    "langchain-openai>=0.2.0",
-    "chromadb>=0.4.0",
-    "langchain-chroma>=0.1.0",
-    "sentence-transformers>=2.2.0",
     # Admin CLI deps (from [admin] extra)
     "rich>=13.0.0",
     "PyYAML>=6.0",
@@ -114,7 +96,7 @@ build-backend = "poetry.core.masonry.api"
 # 'dev' dependency-group is installed by default — no config needed.
 # To also include voice: uv sync --extra voice
 
-[tool.ruff]
+[tool.ruff.lint]
 # ADR-016: Allow prints in CLI tools
 per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
 
@@ -134,4 +116,5 @@ filterwarnings = [
 markers = [
     "requires_ai: requires AI optional deps (langchain, openai, anthropic, google-genai)",
     "requires_voice: requires voice optional deps (deepgram, numpy, onnxruntime)",
+    "journey: marks test as a user journey test",
 ]

@@ -1,7 +1,3 @@
-# Journey: JRN-052
-# Linked Story: INFRA-057
-# Title: ADR Lint Enforcement
-
 id: JRN-052
 title: ADR Lint Enforcement
 state: DRAFT
@@ -12,10 +8,10 @@ tags:
 - governance
 - adr
 actor: developer running preflight checks
-description: >
-  Enforce architectural constraints defined in ADRs through deterministic lint rules.
-  ADRs declare enforcement blocks (type, pattern, scope) that generate automated checks
-  run during preflight, catching violations without relying on AI interpretation.
+description: 'Enforce architectural constraints defined in ADRs through deterministic
+  lint rules. ADRs declare enforcement blocks (type, pattern, scope) that generate
+  automated checks run during preflight, catching violations without relying on AI
+  interpretation.'
 preconditions:
 - Agent CLI is installed and configured
 - At least one ADR with an `enforcement` block exists
@@ -31,26 +27,28 @@ steps:
   - Enforcement block contains type, pattern, scope, and violation_message fields
 - id: 2
   action: Developer runs `agent check lint`
-  system_response: CLI reads enforcement blocks from all active ADRs and runs patterns against matching files
+  system_response: CLI reads enforcement blocks from all active ADRs and runs patterns
+    against matching files
   assertions:
   - Command exits with status 0 if no violations
   - Violations produce structured output with ADR reference, file, line, and message
 - id: 3
   action: Developer introduces a violation (e.g., eager singleton in commands/)
-  system_response: `agent check lint` detects the violation
+  system_response: '`agent check lint` detects the violation'
   assertions:
   - Command exits with non-zero status
   - Output references the specific ADR, file path, and line number
 - id: 4
   action: Developer runs `agent preflight`
-  system_response: Preflight runs ADR lint checks as a deterministic gate before the AI panel
+  system_response: Preflight runs ADR lint checks as a deterministic gate before the
+    AI panel
   assertions:
   - ADR lint runs before panel review
   - A lint violation blocks preflight regardless of panel verdict
 error_paths:
 - trigger_step: 2
   condition: ADR has status SUPERSEDED
-  system_response: Superseded ADRs are skipped — no lint checks generated
+  system_response: "Superseded ADRs are skipped \u2014 no lint checks generated"
   assertions:
   - No enforcement from superseded ADRs
   severity: expected
@@ -72,7 +70,8 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - commands/check.py
-  - commands/lint.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/lint.py
   tests:
-  - tests/commands/test_lint.py
+  - .agent/tests/commands/test_adr_enforcement.py
+  - .agent/tests/commands/test_lint.py

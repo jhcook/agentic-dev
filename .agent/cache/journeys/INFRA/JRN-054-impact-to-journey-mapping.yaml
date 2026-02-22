@@ -1,7 +1,3 @@
-# Journey: JRN-054
-# Linked Story: INFRA-059
-# Title: Impact-to-Journey Mapping
-
 id: JRN-054
 title: Impact-to-Journey Mapping
 state: DRAFT
@@ -12,10 +8,9 @@ tags:
 - governance
 - impact
 actor: developer assessing change impact
-description: >
-  Map code changes to affected user journeys by building a reverse index from
-  journey implementation.files to changed files. The impact command identifies
-  which journeys are affected and preflight ensures their tests are run.
+description: 'Map code changes to affected user journeys by building a reverse index
+  from journey implementation.files to changed files. The impact command identifies
+  which journeys are affected and preflight ensures their tests are run.'
 preconditions:
 - Agent CLI is installed and configured
 - Journeys exist with populated `implementation.files` fields
@@ -72,8 +67,10 @@ depends_on:
 implementation:
   routes: []
   files:
-  - commands/check.py
-  - core/governance.py
-  - db/client.py
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/db/journey_index.py
   tests:
-  - tests/core/test_impact_journey.py
+  - .agent/tests/commands/test_impact_journeys.py
+  - .agent/tests/db/__init__.py
+  - .agent/tests/db/test_journey_index.py

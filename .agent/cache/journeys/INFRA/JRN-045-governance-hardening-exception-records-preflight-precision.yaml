@@ -62,9 +62,38 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - commands/check.py
-  - commands/utils.py
-  - core/fixer.py
-  - core/ai/service.py
+  - .agent/etc/agents.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/plan.py
+  - .agent/src/agent/commands/story.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/ai/prompts.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/auth/credentials.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/context.py
+  - .agent/src/agent/core/fixer.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/secrets.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/main.py
   tests:
+  - .agent/src/agent/core/ai/tests/test_service.py
+  - .agent/src/agent/core/auth/tests/test_validate_credentials.py
+  - .agent/src/agent/core/tests/test_fixer.py
+  - .agent/tests/admin/test_cli.py
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_panel.py
+  - .agent/tests/commands/test_query_command.py
+  - .agent/tests/core/test_ai.py
+  - .agent/tests/core/test_ai_service.py
+  - .agent/tests/core/test_anthropic_provider.py
+  - .agent/tests/e2e/test_e2e_governance.py
+  - .agent/tests/integration/test_agent_integration.py
+  - .agent/tests/integration/test_python_agent.py
   - .agent/tests/journeys/test_jrn_045.py
+  - .agent/tests/unit/test_commands_utils.py
+  - .agent/tests/unit/test_fixer_unit.py
+  - .agent/tests/voice/test_local_tts.py
+  - .agent/tests/voice/test_vad.py

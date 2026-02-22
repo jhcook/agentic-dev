@@ -47,10 +47,28 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - notion.py
-  - src/agent/cli.py
-  - src/agent/sync/bootstrap.py
-  - src/agent/sync/cli.py
-  - src/agent/sync/notion.py
+  - .agent/scripts/notion_schema_manager.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/lint.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/story.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/notion/client.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/sync/bootstrap.py
+  - .agent/src/agent/sync/cli.py
+  - .agent/src/agent/sync/notion.py
+  - .agent/src/agent/sync/sync.py
+  - .agent/src/agent/sync/test_spacing.py
   tests:
+  - .agent/tests/commands/test_runbook_prompt.py
+  - .agent/tests/commands/test_sync.py
+  - .agent/tests/core/test_status_preservation.py
+  - .agent/tests/core/test_sync_fix.py
+  - .agent/tests/integration/test_agent_integration.py
   - .agent/tests/journeys/test_jrn_043.py
+  - .agent/tests/test_sync_notion.py
+  - .agent/tests/unit/test_janitor.py

@@ -60,10 +60,17 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - architect.py
-  - backend/voice/orchestrator.py
-  - backend/voice/tools/architect.py
-  - backend/voice/tools/create_tool.py
-  - backend/voice/tools/get_installed_packages.py
+  - .agent/etc/voice.yaml
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/tools/architect.py
+  - .agent/src/backend/voice/tools/create_tool.py
+  - .agent/src/backend/voice/tools/get_installed_packages.py
+  - .agent/src/backend/voice/tools/git.py
+  - .agent/src/backend/voice/tools/list_capabilities.py
+  - .agent/src/backend/voice/tools/project.py
+  - .agent/src/backend/voice/tools/qa.py
+  - .agent/src/backend/voice/tools/read_tool_source.py
+  - .agent/src/backend/voice/tools/registry.py
+  - .agent/src/backend/voice/tools/security.py
   tests:
   - .agent/tests/journeys/test_jrn_034.py

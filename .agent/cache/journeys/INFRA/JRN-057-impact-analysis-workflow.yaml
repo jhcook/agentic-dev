@@ -1,7 +1,3 @@
-# Journey: JRN-057
-# Linked Story: INFRA-068
-# Title: Impact Analysis Workflow
-
 id: JRN-057
 title: Impact Analysis Workflow
 state: DRAFT
@@ -12,10 +8,9 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: >
-  End-to-end impact analysis workflow. Developer runs `agent impact` to get
-  static dependency analysis combined with AI-powered risk assessment.
-  Optionally updates the story's Impact Analysis Summary section.
+description: 'End-to-end impact analysis workflow. Developer runs `agent impact` to
+  get static dependency analysis combined with AI-powered risk assessment. Optionally
+  updates the story''s Impact Analysis Summary section.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer has staged or committed changes
@@ -78,4 +73,5 @@ implementation:
   files:
   - .agent/src/agent/commands/check.py
   - .agent/workflows/impact.md
-  tests: []
+  tests:
+  - .agent/tests/commands/test_impact.py

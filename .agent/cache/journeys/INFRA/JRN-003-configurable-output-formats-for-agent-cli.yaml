@@ -7,9 +7,7 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: '```python
-
-  # Example: Adding --format and --output support
+description: '# Example: Adding --format and --output support
 
   from pathlib import Path
 
@@ -49,10 +47,23 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/commands/list.py
-  - agent/core/formatters.py
-  - agent/core/logger.py
-  - docs/commands.md
-  - formatters.py
+  - .agent/etc/agents.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/lint.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/sync.py
+  - .agent/src/backend/scripts/generate_openapi.py
+  - .agent/src/agent/commands/list.py
+  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/logger.py
+  - .agent/docs/commands.md
+  - .agent/src/agent/core/formatters.py
   tests:
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_lint.py
+  - .agent/tests/commands/test_runbook.py
+  - .agent/tests/commands/test_sync.py
   - .agent/tests/journeys/test_jrn_003.py

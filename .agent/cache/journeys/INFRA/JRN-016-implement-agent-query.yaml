@@ -47,10 +47,15 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - CONTRIBUTING.md
-  - README.md
-  - agent/core/ai/rag.py
-  - agent/core/context_builder.py
+  - .agent/etc/query.yaml
+  - .agent/etc/router.yaml
+  - .agent/src/agent/commands/query.py
+  - .agent/src/agent/core/ai/llm_service.py
+  - .agent/src/agent/core/ai/rag.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/context_builder.py
+  - .agent/src/agent/main.py
   tests:
+  - .agent/tests/commands/test_query_command.py
+  - .agent/tests/core/test_context_builder.py
   - .agent/tests/journeys/test_jrn_016.py

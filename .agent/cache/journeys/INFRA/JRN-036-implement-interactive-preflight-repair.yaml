@@ -55,9 +55,58 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/commands/check.py
-  - agent/core/fixer.py
-  - agent/tests/integration/test_preflight_interactive.py
-  - agent/tests/unit/test_fixer.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/match.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/fixer.py
+  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/main.py
+  - .agent/src/backend/__init__.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/voice/__init__.py
+  - .agent/src/backend/voice/events.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/tools/fix_story.py
+  - .agent/src/backend/voice/tools/git.py
+  - .agent/src/backend/voice/tools/project.py
+  - .agent/src/backend/voice/tools/qa.py
+  - .agent/src/backend/voice/tools/registry.py
   tests:
+  - .agent/src/agent/core/ai/tests/test_service.py
+  - .agent/src/agent/core/tests/test_fixer.py
+  - .agent/src/agent/core/tests/test_security.py
+  - .agent/src/agent/core/tests/test_utils_json.py
+  - .agent/tests/admin/test_cli.py
+  - .agent/tests/backend/voice/test_fix_story.py
+  - .agent/tests/backend/voice/test_git_integration.py
+  - .agent/tests/backend/voice/test_mute_behavior.py
+  - .agent/tests/cli/test_onboard_e2e.py
+  - .agent/tests/cli/test_onboard_unit.py
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_create_tool.py
+  - .agent/tests/commands/test_implement_pathing.py
+  - .agent/tests/commands/test_list.py
+  - .agent/tests/commands/test_mcp.py
+  - .agent/tests/commands/test_panel.py
+  - .agent/tests/commands/test_query_command.py
+  - .agent/tests/core/test_ai.py
+  - .agent/tests/core/test_formatters.py
+  - .agent/tests/core/test_governance_tools.py
+  - .agent/tests/core/test_version.py
+  - .agent/tests/e2e/test_e2e_interactive.py
+  - .agent/tests/integration/test_agent_integration.py
+  - .agent/tests/integration/test_check_integration.py
+  - .agent/tests/integration/test_preflight_interactive.py
+  - .agent/tests/integration/test_preflight_report.py
+  - .agent/tests/integration/test_tools.py
+  - .agent/tests/integration/test_voice_flow_integration.py
   - .agent/tests/journeys/test_jrn_036.py
+  - .agent/tests/unit/test_fixer_unit.py
+  - .agent/tests/voice/test_git_tools.py
+  - .agent/tests/voice/test_orchestrator.py
+  - .agent/tests/voice/test_tools_cwd.py
+  - .agent/tests/voice/test_vad.py
+  - .agent/tests/voice/test_voice_flow_streaming.py

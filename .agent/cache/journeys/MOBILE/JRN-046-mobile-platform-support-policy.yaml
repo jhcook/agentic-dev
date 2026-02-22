@@ -56,6 +56,8 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/core/utils.py
   tests:
   - .agent/tests/journeys/test_jrn_046.py

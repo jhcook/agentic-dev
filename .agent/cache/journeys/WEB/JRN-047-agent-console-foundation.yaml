@@ -43,6 +43,16 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/admin.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/lint.py
+  - .agent/src/agent/core/logger.py
+  - .agent/src/agent/main.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/admin.py
+  - .agent/src/backend/scripts/generate_openapi.py
   - agent/cli.py
   - backend/main.py
   - routers/admin.py

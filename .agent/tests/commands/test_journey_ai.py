@@ -306,6 +306,7 @@ class TestBackfillTestsAICLI:
         with (
             patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent),
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
+            patch("agent.core.config.config.agent_dir", journey_tree["root"]),
         ):
             result = runner.invoke(
                 app, ["journey", "backfill-tests", "--write"]
@@ -327,6 +328,7 @@ class TestBackfillTestsAICLI:
         with (
             patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent),
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
+            patch("agent.core.config.config.agent_dir", journey_tree["root"]),
         ):
             result = runner.invoke(
                 app, ["journey", "backfill-tests", "--dry-run"]
@@ -347,6 +349,7 @@ class TestBackfillTestsAICLI:
         with (
             patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent),
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
+            patch("agent.core.config.config.agent_dir", journey_tree["root"]),
         ):
             result = runner.invoke(
                 app, ["journey", "backfill-tests", "--write"]
@@ -367,6 +370,7 @@ class TestBackfillTestsAICLI:
         with (
             patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent),
             patch("agent.core.config.config.repo_root", journey_tree["root"]),
+            patch("agent.core.config.config.agent_dir", journey_tree["root"]),
         ):
             result = runner.invoke(
                 app,

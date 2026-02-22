@@ -59,6 +59,12 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/core/notion/client.py
+  - .agent/etc/notion_schema.json
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/notion/__init__.py
+  - .agent/src/agent/core/notion/client.py
+  - .agent/src/agent/sync/cli.py
+  - .agent/src/agent/sync/janitor.py
   tests:
   - .agent/tests/journeys/test_jrn_041.py

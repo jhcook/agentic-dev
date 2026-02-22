@@ -46,10 +46,25 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - README.md
-  - agent/commands/check.py
-  - agent/core/ai/prompts.py
-  - agent/core/logging/impact.py
+  - .agent/src/agent/cli.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/core/ai/__init__.py
+  - .agent/src/agent/core/ai/prompts.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/core/ai/prompts.py
+  - .agent/src/agent/core/logging/impact.py
   tests:
+  - .agent/tests/cli/test_onboard_unit.py
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_implement_pathing.py
+  - .agent/tests/commands/test_sync.py
+  - .agent/tests/conftest.py
+  - .agent/tests/core/test_ai.py
+  - .agent/tests/core/test_version.py
   - .agent/tests/journeys/test_jrn_007.py

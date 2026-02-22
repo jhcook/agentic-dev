@@ -58,6 +58,8 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/pyproject.toml
+  - .agent/src/agent/core/fixer.py
   tests:
   - .agent/tests/journeys/test_jrn_037.py

@@ -49,10 +49,29 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent.yaml
-  - agent/core/config.py
-  - agent/core/engine.py
-  - agent/core/governance.py
-  - tests/core/test_governance.py
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/secret.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/engine/parser.py
+  - .agent/src/agent/core/engine/typedefs.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/secrets.py
+  - .agent/src/agent/core/security.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/speech/factory.py
+  - .agent/src/backend/speech/interfaces.py
+  - .agent/src/backend/speech/providers/__init__.py
+  - .agent/src/backend/speech/providers/deepgram.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/etc/agent.yaml
   tests:
+  - .agent/tests/core/engine/test_executor.py
+  - .agent/tests/core/engine/test_parser.py
+  - .agent/tests/core/test_governance_tools.py
+  - .agent/tests/core/test_security.py
   - .agent/tests/journeys/test_jrn_028.py

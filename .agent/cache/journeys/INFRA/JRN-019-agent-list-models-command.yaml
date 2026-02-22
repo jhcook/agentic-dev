@@ -48,10 +48,9 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/commands/list.py
-  - agent/commands/models.py
-  - agent/core/ai/service.py
-  - agent/utils/logging.py
-  - tests/test_ai_service.py
+  - .agent/src/agent/commands/list.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/main.py
   tests:
+  - .agent/tests/core/test_ai_service.py
   - .agent/tests/journeys/test_jrn_019.py

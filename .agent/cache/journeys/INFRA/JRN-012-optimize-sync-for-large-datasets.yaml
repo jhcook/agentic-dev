@@ -47,7 +47,27 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/sync/pagination.py
-  - agent/sync/progress.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/auth/credentials.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/logger.py
+  - .agent/src/agent/core/secrets.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/sync/__init__.py
+  - .agent/src/agent/sync/cli.py
+  - .agent/src/agent/sync/client.py
+  - .agent/src/agent/sync/pagination.py
+  - .agent/src/agent/sync/progress.py
+  - .agent/src/agent/sync/sync.py
   tests:
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_implement_pathing.py
+  - .agent/tests/commands/test_lint.py
+  - .agent/tests/commands/test_panel.py
+  - .agent/tests/commands/test_run_ui_tests.py
+  - .agent/tests/commands/test_runbook.py
+  - .agent/tests/commands/test_sync.py
   - .agent/tests/journeys/test_jrn_012.py

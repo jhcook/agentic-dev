@@ -66,7 +66,37 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/etc/agents.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/adr.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/list.py
+  - .agent/src/agent/commands/match.py
+  - .agent/src/agent/commands/plan.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/story.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/context.py
+  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/logger.py
+  - .agent/src/agent/core/router.py
+  - .agent/src/agent/core/tokens.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/db/init.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/cli.py
+  - .agent/src/agent/sync/sync.py
   - README.md
   - sync.yaml
   tests:
+  - .agent/tests/cli/test_onboard_unit.py
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_list.py
+  - .agent/tests/commands/test_runbook_prompt.py
+  - .agent/tests/commands/test_sync.py
+  - .agent/tests/core/test_ai.py
+  - .agent/tests/core/test_formatters.py
   - .agent/tests/journeys/test_jrn_004.py

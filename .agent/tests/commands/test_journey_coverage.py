@@ -246,7 +246,8 @@ class TestBackfillTestsCLI:
         _write_journey(journey_tree["journeys"], "JRN-930", "COMMITTED", tests=[])
 
         with patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent), \
-             patch("agent.core.config.config.repo_root", journey_tree["root"]):
+             patch("agent.core.config.config.repo_root", journey_tree["root"]), \
+             patch("agent.core.config.config.agent_dir", journey_tree["root"]):
             result = runner.invoke(app, ["journey", "backfill-tests", "--write"])
 
         assert result.exit_code == 0
@@ -263,7 +264,8 @@ class TestBackfillTestsCLI:
         _write_journey(journey_tree["journeys"], "JRN-931", "COMMITTED", tests=[])
 
         with patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent), \
-             patch("agent.core.config.config.repo_root", journey_tree["root"]):
+             patch("agent.core.config.config.repo_root", journey_tree["root"]), \
+             patch("agent.core.config.config.agent_dir", journey_tree["root"]):
             result = runner.invoke(app, ["journey", "backfill-tests", "--dry-run"])
 
         assert result.exit_code == 0
@@ -277,7 +279,8 @@ class TestBackfillTestsCLI:
         _write_journey(journey_tree["journeys"], "JRN-932", "DRAFT", tests=[])
 
         with patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent), \
-             patch("agent.core.config.config.repo_root", journey_tree["root"]):
+             patch("agent.core.config.config.repo_root", journey_tree["root"]), \
+             patch("agent.core.config.config.agent_dir", journey_tree["root"]):
             result = runner.invoke(app, ["journey", "backfill-tests"])
 
         assert result.exit_code == 0
@@ -291,7 +294,8 @@ class TestBackfillTestsCLI:
         _write_journey(journey_tree["journeys"], "JRN-933", "COMMITTED", tests=[rel])
 
         with patch("agent.core.config.config.journeys_dir", journey_tree["journeys"].parent), \
-             patch("agent.core.config.config.repo_root", journey_tree["root"]):
+             patch("agent.core.config.config.repo_root", journey_tree["root"]), \
+             patch("agent.core.config.config.agent_dir", journey_tree["root"]):
             result = runner.invoke(app, ["journey", "backfill-tests"])
 
         assert result.exit_code == 0

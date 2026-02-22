@@ -53,6 +53,12 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/backend/admin/config_updater.py
+  - .agent/src/backend/admin/logger.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/admin.py
+  - .agent/src/backend/voice/orchestrator.py
   - agent.yaml
   - backend/main.py
   tests:

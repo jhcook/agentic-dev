@@ -51,6 +51,56 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/etc/agents.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/__init__.py
+  - .agent/src/agent/commands/adr.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/lint.py
+  - .agent/src/agent/commands/list.py
+  - .agent/src/agent/commands/match.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/commands/plan.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/story.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/ai/prompts.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/context.py
+  - .agent/src/agent/core/fixer.py
+  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/router.py
+  - .agent/src/agent/core/tokens.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/db/init.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/sync.py
+  - .agent/src/backend/__init__.py
+  - .agent/src/backend/voice/__init__.py
   - package.json
   tests:
+  - .agent/src/agent/core/tests/test_utils_json.py
+  - .agent/tests/__init__.py
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_basic_commands.py
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_lint.py
+  - .agent/tests/commands/test_list.py
+  - .agent/tests/commands/test_runbook.py
+  - .agent/tests/commands/test_runbook_prompt.py
+  - .agent/tests/commands/test_sync.py
+  - .agent/tests/conftest.py
+  - .agent/tests/core/test_ai.py
+  - .agent/tests/core/test_formatters.py
+  - .agent/tests/core/test_router.py
+  - .agent/tests/core/test_scrubber.py
+  - .agent/tests/core/test_utils.py
+  - .agent/tests/integration/test_preflight_report.py
   - .agent/tests/journeys/test_jrn_005.py
+  - .agent/tests/test_lint.py
+  - .agent/tests/test_secret_rotation.py
+  - .agent/tests/unit/test_audit.py

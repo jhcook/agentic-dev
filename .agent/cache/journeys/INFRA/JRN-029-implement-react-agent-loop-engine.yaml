@@ -57,10 +57,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/core/ai/service.py
-  - agent/core/engine/executor.py
-  - agent/core/engine/parser.py
-  - agent/core/engine/typedefs.py
-  - scripts/test_agent_loop.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/engine/parser.py
+  - .agent/src/agent/core/engine/typedefs.py
   tests:
+  - .agent/tests/core/engine/test_executor.py
   - .agent/tests/journeys/test_jrn_029.py

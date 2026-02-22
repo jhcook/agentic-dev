@@ -57,6 +57,46 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/speech/factory.py
+  - .agent/src/backend/speech/providers/azure.py
+  - .agent/src/backend/speech/providers/google.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/vad.py
+  - .agent/src/web/package-lock.json
+  - .agent/src/web/package.json
+  - .agent/src/web/tsconfig.app.json
+  - .agent/src/web/tsconfig.json
+  - .agent/src/web/tsconfig.node.json
   tests:
+  - .agent/tests/admin/test_admin_config.py
+  - .agent/tests/admin/test_admin_governance.py
+  - .agent/tests/admin/test_cli.py
+  - .agent/tests/cli/test_cli_options.py
+  - .agent/tests/cli/test_onboard_e2e.py
+  - .agent/tests/cli/test_onboard_unit.py
+  - .agent/tests/commands/test_config_command.py
+  - .agent/tests/core/test_ai_provider.py
+  - .agent/tests/core/test_ai_service.py
+  - .agent/tests/core/test_anthropic_provider.py
+  - .agent/tests/core/test_count_tokens.py
+  - .agent/tests/core/test_governance_core.py
+  - .agent/tests/core/test_list_models.py
+  - .agent/tests/core/test_mcp_client.py
+  - .agent/tests/integration/test_agent_integration.py
+  - .agent/tests/integration/test_python_agent.py
   - .agent/tests/journeys/test_jrn_032.py
+  - .agent/tests/sync/test_sync_behaviors.py
+  - .agent/tests/sync/test_sync_db.py
+  - .agent/tests/sync/test_sync_ops.py
+  - .agent/tests/voice/test_interrupt.py
+  - .agent/tests/voice/test_local_tts.py
+  - .agent/tests/voice/test_sentence_buffer.py
+  - .agent/tests/voice/test_vad.py
+  - .agent/tests/voice/test_voice_flow.py
+  - .agent/tests/voice/test_voice_flow_streaming.py
+  - .agent/tests/voice/test_voice_tools.py

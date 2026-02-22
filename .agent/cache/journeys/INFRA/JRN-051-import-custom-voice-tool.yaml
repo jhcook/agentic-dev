@@ -10,9 +10,7 @@ tags:
 actor: developer using agent CLI
 description: 'Import a custom Python tool into the Voice Agent''s tool registry using
   the `agent import tool` command. The command copies the tool file into the voice
-  tools directory and the Voice Agent hot-reloads it automatically.
-
-  '
+  tools directory and the Voice Agent hot-reloads it automatically.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer has a custom Python tool file ready to import
@@ -88,7 +86,7 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/commands/importer.py
-  - agent/main.py
+  - .agent/src/agent/commands/importer.py
+  - .agent/src/agent/main.py
   tests:
   - .agent/tests/journeys/test_jrn_051.py

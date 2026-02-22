@@ -49,6 +49,34 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/cli.py
+  - .agent/src/agent/commands/mcp.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/commands/visualize.py
+  - .agent/src/agent/core/ai/llm_service.py
+  - .agent/src/agent/core/ai/rag.py
+  - .agent/src/agent/core/mcp/__init__.py
+  - .agent/src/agent/core/mcp/client.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/scripts/debug_langgraph.py
+  - .agent/src/backend/scripts/download_models.py
+  - .agent/src/backend/speech/audio_utils.py
+  - .agent/src/backend/speech/factory.py
+  - .agent/src/backend/speech/interfaces.py
+  - .agent/src/backend/speech/providers/__init__.py
+  - .agent/src/backend/speech/providers/deepgram.py
+  - .agent/src/backend/speech/providers/deepgram_streaming.py
+  - .agent/src/backend/speech/providers/local.py
+  - .agent/src/backend/speech/providers/whisper.py
+  - .agent/src/backend/voice/buffer.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/vad.py
   tests:
+  - .agent/tests/cli/test_onboard_unit.py
+  - .agent/tests/commands/test_mcp.py
+  - .agent/tests/conftest.py
+  - .agent/tests/core/test_version.py
   - .agent/tests/journeys/test_jrn_048.py

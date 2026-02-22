@@ -1,7 +1,3 @@
-# Journey: JRN-020
-# Linked Story: INFRA-025
-# Title: Integrate Anthropic Claude Provider
-
 id: JRN-020
 title: Integrate Anthropic Claude Provider
 state: COMMITTED
@@ -11,11 +7,10 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: >
-  A developer configures and uses the Anthropic Claude provider with the
-  Agent CLI. Claude is one of five supported AI providers and can be
-  selected globally in agent.yaml or per-command via --provider anthropic.
-  Requires ANTHROPIC_API_KEY environment variable.
+description: 'A developer configures and uses the Anthropic Claude provider with the
+  Agent CLI. Claude is one of five supported AI providers and can be selected globally
+  in agent.yaml or per-command via --provider anthropic. Requires ANTHROPIC_API_KEY
+  environment variable.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -31,7 +26,7 @@ steps:
   - Command exits with status 0
   - Output indicates Anthropic provider is active
 - id: 2
-  action: Developer sets `provider: anthropic` in `.agent/etc/agent.yaml`
+  action: 'Developer sets `provider: anthropic` in `.agent/etc/agent.yaml`'
   system_response: Configuration persisted; all subsequent AI commands use Anthropic
   assertions:
   - agent.yaml contains `provider: anthropic`
@@ -44,7 +39,8 @@ steps:
 error_paths:
 - trigger_step: 1
   condition: ANTHROPIC_API_KEY is not set
-  system_response: CLI raises MissingCredentialsError with actionable message to set ANTHROPIC_API_KEY
+  system_response: CLI raises MissingCredentialsError with actionable message to set
+    ANTHROPIC_API_KEY
   assertions:
   - Error message names ANTHROPIC_API_KEY
   severity: expected
@@ -69,8 +65,11 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/etc/agent.yaml
+  - .agent/etc/router.yaml
+  - .agent/pyproject.toml
   - .agent/src/agent/core/ai/service.py
   - .agent/src/agent/core/auth/credentials.py
-  - .agent/etc/agent.yaml
+  - .agent/src/agent/core/config.py
   tests:
   - .agent/tests/journeys/test_jrn_020.py

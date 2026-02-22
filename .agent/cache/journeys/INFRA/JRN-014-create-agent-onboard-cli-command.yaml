@@ -57,10 +57,7 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - CONTRIBUTING.md
-  - README.md
-  - agent/cli.py
-  - agent/commands/onboard.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/core/ai/service.py
   tests:
   - .agent/tests/journeys/test_jrn_014.py

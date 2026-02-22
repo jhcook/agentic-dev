@@ -46,10 +46,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - README.md
-  - agent/cli.py
-  - agent/core/ai.py
-  - agent/core/smart_router.py
-  - docs/openapi.yaml
+  - .agent/src/agent/core/router.py
+  - .agent/src/agent/cli.py
+  - .agent/src/agent/core/ai.py
+  - .agent/src/agent/core/smart_router.py
+  - .agent/docs/openapi.yaml
   tests:
   - .agent/tests/journeys/test_jrn_001.py
