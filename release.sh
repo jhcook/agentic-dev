@@ -16,12 +16,18 @@
 set -e
 
 # Configuration
-TARGET_DIR="${1:?Usage: ./release.sh <target_dir>}"
+TARGET_DIR="${1:?Usage: ./release.sh <target_dir> [license_file]}"
+LICENSE_FILE="$2"
 WORKFLOW_FILE="$TARGET_DIR/.github/workflows/global-governance-preflight.yml"
 
 # Ensure we are in the root
 if [ ! -f "package.sh" ]; then
     echo "❌ Error: package.sh not found. Please run this script from the repository root."
+    exit 1
+fi
+
+if [ -n "$LICENSE_FILE" ] && [ ! -f "$LICENSE_FILE" ]; then
+    echo "❌ Error: License file $LICENSE_FILE not found."
     exit 1
 fi
 
@@ -47,6 +53,13 @@ fi
 echo "   Extracting payload to temporary directory..."
 TEMP_DIR=$(mktemp -d)
 tar -xzf dist/agent-release.tar.gz -C "$TEMP_DIR"
+
+# Move the binary from its bundled location (dist/bin) to the target location (.agent/bin) inside the temp dir
+if [ -f "$TEMP_DIR/dist/bin/agent" ]; then
+    mkdir -p "$TEMP_DIR/.agent/bin"
+    mv "$TEMP_DIR/dist/bin/agent" "$TEMP_DIR/.agent/bin/agent"
+    rm -rf "$TEMP_DIR/dist"
+fi
 
 # Sync to target
 echo "   Syncing to $TARGET_DIR..."
@@ -77,6 +90,11 @@ CONFIGURED_SCOPES="{plans,stories,runbooks}/{INFRA,WEB,MOBILE,BACKEND}"
 mkdir -p "$TARGET_DIR/.agent/cache/"{plans,stories,runbooks,journeys}/{INFRA,WEB,MOBILE,BACKEND}
 mkdir -p "$TARGET_DIR/.agent/adrs"
 
+if [ -n "$LICENSE_FILE" ]; then
+    echo "📄 Copying custom license file..."
+    cp "$LICENSE_FILE" "$TARGET_DIR/.agent/templates/license_header.txt"
+fi
+
 echo "✅ Agent files deployed."
 
 # Update Workflow
@@ -85,61 +103,55 @@ if [ -f "$WORKFLOW_FILE" ]; then
     # We use python for robust text replacement instead of complex sed
     python3 -c "
 import sys
+import re
 from pathlib import Path
 
 p = Path('$WORKFLOW_FILE')
 try:
     content = p.read_text()
     
-    # Define replacements
-    # We want to replace the long pip install list with the simpler local install
-    # Current (as seen in file):
-    # pip install typer rich pydantic google-genai PyYAML tiktoken openai ruff supabase prometheus_client pytest
-    
+    # 1. Replace the pip install step with chmod
     old_cmd_snippets = [
         'pip install typer rich pydantic google-genai PyYAML tiktoken openai ruff supabase prometheus_client pytest',
-        'pip install typer rich pydantic' # partial match fallback if user changed it slightly?
+        'pip install .agent/[ai]',
+        'pip install .agent/'
     ]
     
-    new_cmd = 'pip install .agent/[ai]'
+    new_cmd = 'chmod +x .agent/bin/agent'
     
-    updated = False
-    
-    # 1. Try exact match
-    if 'pip install .agent' in content:
-        print('ℹ️  Workflow already seems to be updated.')
-        sys.exit(0)
-        
+    updated_deps = False
     for snip in old_cmd_snippets:
         if snip in content:
-            # We need to be careful. The snippet might be just part of a line.
-            # Let's try to replace the whole line if possible, or just the command.
-            # But the file might have 'run: |' then the command on next line.
-            pass
+            content = content.replace(snip, new_cmd)
+            print('✅ Updated pip install command to chmod +x.')
+            updated_deps = True
+            break
+            
+    if not updated_deps and new_cmd in content:
+        print('ℹ️  Workflow pip install command already updated.')
+    elif not updated_deps:
+        print('⚠️  Could not find pip install string to replace.')
 
-    # Let's try a regex for the specific block to be safe
-    import re
+    # 2. Replace the python execution step with binary execution
+    old_exec = 'python .agent/src/agent/main.py'
+    new_exec = './.agent/bin/agent'
     
-    # Regex to find the pip install line under 'Install Python dependencies'
-    # strict match for the specific line we saw
-    target_line = 'pip install typer rich pydantic google-genai PyYAML tiktoken openai ruff supabase prometheus_client pytest'
-    
-    if target_line in content:
-        new_content = content.replace(target_line, new_cmd)
-        p.write_text(new_content)
-        print('✅ Updated pip install command (Exact Match).')
-        updated = True
+    if old_exec in content:
+        content = content.replace(old_exec, new_exec)
+        print('✅ Updated agent execution command to use binary.')
+    elif new_exec in content:
+        print('ℹ️  Workflow execution command already updated.')
     else:
-        print('⚠️  Could not find exact pip install string to replace.')
-        print('   Expected: ' + target_line)
-        sys.exit(1)
+        print('⚠️  Could not find agent execution string to replace.')
+
+    p.write_text(content)
 
 except Exception as e:
     print(f'❌ Error processing workflow file: {e}')
     sys.exit(1)
 "
 else
-    echo "❌ Workflow file not found at $WORKFLOW_FILE"
+    echo "⚠️ Workflow file not found at $WORKFLOW_FILE"
 fi
 
 echo "✨ Release Process Complete!"

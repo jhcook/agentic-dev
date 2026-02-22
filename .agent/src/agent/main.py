@@ -72,8 +72,16 @@ def cli(
 
     if version:
         try:
+            import sys
+            import os
             from pathlib import Path
-            version_file = Path(__file__).parent.parent / "VERSION"
+
+            if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+                base_path = Path(sys._MEIPASS)
+            else:
+                base_path = Path(__file__).parent.parent
+
+            version_file = base_path / "VERSION"
             ver = version_file.read_text().strip() if version_file.exists() else "unknown"
         except Exception:
             ver = "unknown"
