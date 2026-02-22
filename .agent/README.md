@@ -17,13 +17,15 @@ agent/
 
 ### Key Components
 
-- **Multi-Provider AI Service** — Supports Gemini, Vertex AI, OpenAI, Anthropic, and GitHub Copilot with automatic fallback on rate limits.
+- **Multi-Provider AI Service** — Works with Gemini, Vertex AI, OpenAI, Anthropic, and GitHub Copilot with automatic fallback on rate limits.
+- **Parallel ADK Engine** — Blazing fast multi-role governance evaluation leveraging the Google Agent Development Kit and a semaphore-bounded queue.
+- **Oracle Preflight Pattern** — Advanced context retrieval fusing Notion, NotebookLM via MCP, and an embedded zero-server Vector database for high fidelity AI decisions.
+- **Smart Test Selection** — Performs real-time Python impact analysis to intelligently group and selectively execute necessary tests.
 - **Smart AI Router** — Selects model based on task complexity and cost.
-- **Governance Engine** — Multi-role preflight checks (Security, Architect, QA, Compliance, Observability).
-- **ADK Multi-Agent Panel** — Optional Google ADK-powered parallel governance ([ADR-029](adrs/ADR-029-adk-multi-agent-integration.md)).
 - **User Journeys** — Behavioural contracts as YAML with test coverage tracking ([ADR-024](adrs/ADR-024-introduce-user-journeys.md)).
 - **Interactive Repair** — AI-driven auto-fix for governance failures ([ADR-015](adrs/ADR-015-interactive-preflight-repair.md)).
-- **Voice Integration** — Hands-free development via voice commands ([ADR-007](adrs/ADR-007-voice-service-abstraction-layer.md)).
+- **Voice UX Integration** — Hands-free development and UX review capabilities ([ADR-007](adrs/ADR-007-voice-service-abstraction-layer.md)).
+- **Automated License Headers** — Enforces and automatically generates required copyright headers across specific file types in the project.
 
 ## Installation
 
@@ -52,17 +54,44 @@ Credentials are provided via environment variables or the built-in secret store:
 | OpenAI | `OPENAI_API_KEY` |
 | Anthropic | `ANTHROPIC_API_KEY` |
 | GitHub | `GITHUB_TOKEN` |
+| HuggingFace | `HF_TOKEN` |
 
 ```bash
 # Option A: Environment variable
 export GEMINI_API_KEY="AIza..."
 
-# Option B: Secret store
-agent onboard
+# Option B: Secure Secret Store
+agent secret set gemini api_key
+agent secret set huggingface token
 ```
 
 See [Getting Started](../docs/getting_started.md) for provider comparison and Vertex AI setup.
 Secrets are managed via the system keyring ([ADR-006](adrs/ADR-006-encrypted-secret-management.md)).
+
+## Quick Start: The Agentic Workflow
+
+The `agent` enforces a strict requirements-to-code pipeline. A complete feature lifecycle looks like this:
+
+```bash
+# 1. Create a tracking story
+agent new-story INFRA-001
+
+# 2. Automatically generate an implementation plan (Runbook)
+agent new-runbook INFRA-001
+
+# 3. Have the AI implement the approved Runbook
+agent implement INFRA-001
+
+# 4. Run the Parallel Governance Council checks
+#    (Architect, Security, QA, Compliance, etc.)
+agent preflight --story INFRA-001
+
+# 5. Commit with story tracking and automated message
+agent commit
+
+# 6. Open a Pull Request
+agent pr
+```
 
 ## Commands
 
@@ -85,6 +114,7 @@ Secrets are managed via the system keyring ([ADR-006](adrs/ADR-006-encrypted-sec
 |---------|-------------|
 | `agent panel <ID>` | Convene the AI governance panel |
 | `agent impact <ID> --ai` | Run impact analysis |
+| `agent review-voice` | Analyze a completed voice session and generate UX feedback |
 | `agent audit` | Generate audit report |
 | `agent lint` | Run linters (ruff, shellcheck, eslint) |
 | `agent validate-story <ID>` | Validate story schema |

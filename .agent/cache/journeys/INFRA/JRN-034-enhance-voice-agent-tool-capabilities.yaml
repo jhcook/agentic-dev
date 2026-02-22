@@ -1,7 +1,3 @@
-# Journey: JRN-034
-# Linked Story: INFRA-039
-# Title: Enhance Voice Agent Tool Capabilities
-
 id: JRN-034
 title: Enhance Voice Agent Tool Capabilities
 state: COMMITTED
@@ -11,10 +7,12 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Enhance the Voice Agent's capabilities by providing it with deeper understanding of its tools and the underlying
-  codebase, enabling it to answer technical questions, explain functionality, and assist with operational activities more
-  effectively. This involves improving the agent's system prompt, enhancing existing tools with new features (hot reloading,
-  syntax validation, etc.), refactoring tools for clarity, and adding observability measures.
+description: Enhance the Voice Agent's capabilities by providing it with deeper understanding
+  of its tools and the underlying codebase, enabling it to answer technical questions,
+  explain functionality, and assist with operational activities more effectively.
+  This involves improving the agent's system prompt, enhancing existing tools with
+  new features (hot reloading, syntax validation, etc.), refactoring tools for clarity,
+  and adding observability measures.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -67,4 +65,5 @@ implementation:
   - backend/voice/tools/architect.py
   - backend/voice/tools/create_tool.py
   - backend/voice/tools/get_installed_packages.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_034.py

@@ -25,3 +25,9 @@ The architectural decision.
 ## Supersedes
 
 (Optional) Previous ADR.
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
+

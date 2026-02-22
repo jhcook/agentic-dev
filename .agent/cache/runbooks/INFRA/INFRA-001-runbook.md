@@ -17,7 +17,7 @@ Key changes also include updating legacy tests to align with the improved implem
 - The decoupling provided by the SmartRouter design must ensure scalability and future extensibility and adhere to microservice or modular design principles.
 
 ### **@Qa**
-- The story lists unit tests for SmartRouter, integration tests for `agent preflight`, and verification of the legacy test suite. However:
+- The story lists unit tests for SmartRouter, integration tests for `env -u VIRTUAL_ENV uv run agent preflight`, and verification of the legacy test suite. However:
   - There is no mention of creating performance tests to verify the 10ms decision time.
   - Specific test cases for failure scenarios and fallbacks (e.g., when an AI provider fails) must be added for robust validation.
   - Legacy test coverage may need enhancements for new APIs or business logic changes.
@@ -42,7 +42,7 @@ Key changes also include updating legacy tests to align with the improved implem
 ### **@Docs**
 - A new ADR needs to be written and linked for SmartRouter design, including the rationale for adopting `google-genai` and `tiktoken`.
 - Update `README.md` with explanations about the SmartRouter, its configuration, and new dependencies (`google-genai` and `tiktoken`).
-- CLI help text for `agent preflight` and other relevant commands must be updated to explain how the router operates.
+- CLI help text for `env -u VIRTUAL_ENV uv run agent preflight` and other relevant commands must be updated to explain how the router operates.
 - Add a section to the CHANGELOG to document this change.
 
 ### **@Compliance**
@@ -90,7 +90,7 @@ Key changes also include updating legacy tests to align with the improved implem
 
 ### CLI
 #### MODIFY `agent/cli.py`
-- Update CLI help text for `agent preflight` to document changes.
+- Update CLI help text for `env -u VIRTUAL_ENV uv run agent preflight` to document changes.
 
 ### OpenAPI
 #### REGENERATE
@@ -100,12 +100,12 @@ Key changes also include updating legacy tests to align with the improved implem
 
 ### Automated Tests
 - [ ] Unit tests for `SmartRouter` pass with at least 90% coverage.
-- [ ] Integration tests for `agent preflight` with SmartRouter functionality.
+- [ ] Integration tests for `env -u VIRTUAL_ENV uv run agent preflight` with SmartRouter functionality.
 - [ ] Legacy tests updated and verified.
 - [ ] Performance tests to validate <10ms decision latency.
 
 ### Manual Verification
-- [ ] Manually test CLI to verify correct behavior of `agent preflight`.
+- [ ] Manually test CLI to verify correct behavior of `env -u VIRTUAL_ENV uv run agent preflight`.
 - [ ] Manually verify fallback behavior with alternative AI providers.
 
 ## Definition of Done

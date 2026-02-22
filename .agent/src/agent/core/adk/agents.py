@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS = 3
 
 
-def create_role_agent(role: Dict, tools: List, model) -> LlmAgent:
+def create_role_agent(role: Dict, tools: List, model, other_domains: str = "") -> LlmAgent:
     """Creates an ADK LlmAgent from a role definition in agents.yaml.
 
     Args:
@@ -39,6 +39,7 @@ def create_role_agent(role: Dict, tools: List, model) -> LlmAgent:
               responsibilities, governance_checks, instruction).
         tools: List of bound tool functions.
         model: The BaseLlm adapter instance.
+        other_domains: Comma-separated list of other domains to ignore.
 
     Returns:
         An LlmAgent configured for this governance role.
@@ -54,18 +55,21 @@ def create_role_agent(role: Dict, tools: List, model) -> LlmAgent:
         else str(checks)
     )
 
+    domain_restriction = f"You are strictly forbidden from evaluating these other domains: {other_domains}.\n" if other_domains else ""
+
     system_instruction = (
         f"You are the {role.get('name', agent_name)} on the AI Governance Council.\n"
         f"Description: {description}\n\n"
         f"Governance Checks:\n{checks_text}\n\n"
         f"Additional Context: {instruction}\n\n"
+        f"{domain_restriction}"
         f"You have access to tools for reading files, searching code, reading ADRs, "
         f"and reading user journeys. Use these tools to validate your findings against "
         f"the actual codebase before issuing a verdict.\n\n"
         f"Output your analysis in this EXACT format:\n"
         f"VERDICT: PASS or BLOCK\n"
         f"SUMMARY: One-line summary\n"
-        f"FINDINGS:\n- finding 1\n- finding 2\n"
+        f"FINDINGS:\n- finding 1 (Source: [Exact file path or ADR ID])\n- finding 2 (Source: [Exact file path or ADR ID])\n"
         f"REQUIRED_CHANGES:\n- change 1 (if BLOCK)\n"
         f"REFERENCES:\n- ADR-XXX, JRN-XXX (cite what you consulted)"
     )
@@ -94,7 +98,11 @@ def create_role_agents(
     agents = []
     for role in roles:
         try:
-            agent = create_role_agent(role, tools, model)
+            agent_title = role.get("name", role.get("role", "unknown"))
+            other_domains = ", ".join(
+                [r.get("name", r.get("role", "")) for r in roles if r.get("name", r.get("role", "")) != agent_title]
+            )
+            agent = create_role_agent(role, tools, model, other_domains)
             agents.append(agent)
             logger.debug("Created ADK agent for role: %s", role.get("name"))
         except Exception as e:

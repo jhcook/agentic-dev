@@ -7,7 +7,7 @@ INFRA-008
 COMMITTED
 
 ## Problem Statement
-The `agent sync` command loads all artifacts into memory and does not handle pagination. This will fail with large datasets (1000+ artifacts), causing:
+The `env -u VIRTUAL_ENV uv run agent sync` command loads all artifacts into memory and does not handle pagination. This will fail with large datasets (1000+ artifacts), causing:
 - Out of memory errors
 - Slow sync times
 - Poor user experience with no progress feedback
@@ -30,7 +30,7 @@ The `agent sync` command loads all artifacts into memory and does not handle pag
 
 ## User Story
 As a user with a large repository (1000+ artifacts), I want:
-- `agent sync` to complete successfully without running out of memory
+- `env -u VIRTUAL_ENV uv run agent sync` to complete successfully without running out of memory
 - Clear progress indicators showing sync status (e.g., "Syncing 500/1000 artifacts...")
 - Ability to resume if sync is interrupted
 - Reasonable sync time (<5 minutes for 1K artifacts)
@@ -43,8 +43,8 @@ So that I can:
 ## Acceptance Criteria
 
 ### Core Functionality
-- [ ] `agent sync pull` uses cursor-based pagination when fetching from Supabase
-- [ ] `agent sync push` chunks uploads into batches
+- [ ] `env -u VIRTUAL_ENV uv run agent sync pull` uses cursor-based pagination when fetching from Supabase
+- [ ] `env -u VIRTUAL_ENV uv run agent sync push` chunks uploads into batches
 - [ ] Page size: 100 artifacts (configurable via environment variable)
 - [ ] Maximum page size: 1000 (hard limit enforced)
 - [ ] Stream results instead of loading all into memory
@@ -107,8 +107,8 @@ So that I can:
 - Tests for sync functionality
 
 **Workflows Affected:**
-- `agent sync pull` - Now paginated
-- `agent sync push` - Now chunked
+- `env -u VIRTUAL_ENV uv run agent sync pull` - Now paginated
+- `env -u VIRTUAL_ENV uv run agent sync push` - Now chunked
 - All sync operations
 
 **Risks Identified:**

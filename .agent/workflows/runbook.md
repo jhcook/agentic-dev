@@ -5,17 +5,12 @@ description: Create a new implementation plan (Runbook) for a committed Story.
 # Workflow: Create Implementation Runbook
 
 1. **Run**: `agent new-runbook <STORY-ID>`
-   - This attempts to generate a runbook using the CLI's internal AI Governance Panel.
+   - This invokes the CLI's internal AI Governance Panel, which automatically reads context, adopts panel roles, and generates a fully populated runbook for the given story.
 
-2. **Populate the Runbook**:
-   - You (the Agent) must now populate the content of the generated runbook.
-   - **CRITICAL**: You must REFER TO (read) the following sources to ensure compliance and correctness. Do not hallucinate rules.
-     - `Context: .agent/rules/` (Global Governance Rules)
-     - `Context: .agent/etc/agents.yaml` (Role Definitions)
-     - `Context: .agent/instructions/` (Detailed Role Instructions)
-   - Adopt each role in the panel and fill out the "Panel Review Findings".
-   - Create a detailed "Implementation Steps" plan.
-   - Define a "Verification Plan".
+2. **Review the Runbook**:
+   - The generated runbook will be saved to `.agent/cache/runbooks/<SCOPE>/<STORY-ID>-runbook.md`.
+   - Review the "Panel Review Findings", "Implementation Steps", and "Verification Plan".
+   - Make any necessary manual adjustments or refinements.
 
 3. **Status**:
-   - Once populated, change `Status: PROPOSED` to `Status: ACCEPTED` if you (acting as the Architect) are satisfied.
+   - Once reviewed and finalized, change `## State\nPROPOSED` to `## State\nACCEPTED` if you (acting as the Architect) are satisfied.

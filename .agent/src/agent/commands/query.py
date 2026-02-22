@@ -120,10 +120,17 @@ def query(
     """
     # Check if AI is available
     from agent.core.ai import ai_service  # ADR-025: lazy init
+    
+    if not offline:
+        try:
+            ai_service._ensure_initialized()
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Failed to initialize AI service: {e}[/yellow]")
+            
     if offline or ai_service.provider is None:
         if not offline:
             console.print("[yellow]⚠️  No AI provider configured.[/yellow]")
-            console.print("[dim]Set GOOGLE_GEMINI_API_KEY or OPENAI_API_KEY, or use --offline for grep.[/dim]\n")
+            console.print("[dim]Set GEMINI_API_KEY or OPENAI_API_KEY, or use --offline for grep.[/dim]\n")
         grep_fallback(text)
         return
     

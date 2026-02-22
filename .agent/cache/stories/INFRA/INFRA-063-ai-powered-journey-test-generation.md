@@ -10,15 +10,15 @@ COMMITTED
 
 ## Problem Statement
 
-INFRA-058 introduced `agent journey backfill-tests` to generate test stubs for COMMITTED journeys, but the stubs are empty scaffolds with `pytest.skip("Not yet implemented")`. Developers must manually write every test body, which is labor-intensive across 50+ journeys. We need an `--ai` flag that leverages the AI service to generate real, working test code from journey steps, assertions, and relevant source files.
+INFRA-058 introduced `env -u VIRTUAL_ENV uv run agent journey backfill-tests` to generate test stubs for COMMITTED journeys, but the stubs are empty scaffolds with `pytest.skip("Not yet implemented")`. Developers must manually write every test body, which is labor-intensive across 50+ journeys. We need an `--ai` flag that leverages the AI service to generate real, working test code from journey steps, assertions, and relevant source files.
 
 ## User Story
 
-As a developer, I want `agent journey backfill-tests --ai` to generate real test implementations (not just stubs) by reading each journey's steps and assertions alongside the relevant source code, so that I get meaningful regression coverage without writing every test by hand.
+As a developer, I want `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` to generate real test implementations (not just stubs) by reading each journey's steps and assertions alongside the relevant source code, so that I get meaningful regression coverage without writing every test by hand.
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `agent journey backfill-tests --ai` sends each journey's steps, assertions, and linked source files to the AI service and generates pytest test bodies with real assertions (not `pytest.skip`).
+- [ ] **AC-1**: `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` sends each journey's steps, assertions, and linked source files to the AI service and generates pytest test bodies with real assertions (not `pytest.skip`).
 - [ ] **AC-2**: Phase 1 generates `pytest` tests for all scopes. Framework-specific generation (Playwright for WEB, Maestro for MOBILE) is deferred to a follow-up story and inferred from `implementation.framework` field when implemented.
 - [ ] **AC-3**: Generated tests include `@pytest.mark.journey("JRN-XXX")` markers for targeted execution.
 - [ ] **AC-4**: `--ai` generates tests and previews each in a Rich syntax panel, then prompts `Write? [y/N/all/skip]` for interactive confirmation. `--ai --write` batch-writes without prompts (CI mode). `--ai --dry-run` previews only (no prompts, no writes).
@@ -71,7 +71,7 @@ Source: [Panel Consultation INFRA-063](../../../../.gemini/antigravity/brain/291
 ## Impact Analysis Summary
 
 Components touched: `journey.py` (refactor `backfill_tests` into `_iter_eligible_journeys()`, `_generate_stub()`, `_generate_ai_test()` helpers), `prompts.py` (new `generate_test_prompt()`)
-Workflows affected: `agent journey backfill-tests` gains `--ai` and `--write` flags
+Workflows affected: `env -u VIRTUAL_ENV uv run agent journey backfill-tests` gains `--ai` and `--write` flags
 Risks identified: AI-generated code quality varies; mitigated by `ast.parse()` gate and dry-run default
 
 ## Test Strategy
@@ -90,7 +90,7 @@ Risks identified: AI-generated code quality varies; mitigated by `ast.parse()` g
 
 ### Integration Tests
 
-- End-to-end: `agent journey backfill-tests --ai` with a real journey file (dry-run default)
+- End-to-end: `env -u VIRTUAL_ENV uv run agent journey backfill-tests --ai` with a real journey file (dry-run default)
 - Verify generated test is syntactically valid Python (`ast.parse`)
 
 ## Rollback Plan

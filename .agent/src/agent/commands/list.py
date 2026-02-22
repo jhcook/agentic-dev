@@ -379,10 +379,11 @@ def list_models(
     
     try:
         # Get the target provider (uses default if none specified)
+        ai_service._ensure_initialized()
         target_provider = provider or ai_service.provider
         
         if not target_provider:
-            console.print("[red]❌ No AI provider available. Configure at least one provider (set GOOGLE_GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY).[/red]")
+            console.print("[red]❌ No AI provider available. Configure at least one provider via environment variables (GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_CLOUD_PROJECT) or via `agent secret set`.[/red]")
             raise typer.Exit(code=1)
             
         console.print(f"[dim]🔍 Querying models for provider: {target_provider}...[/dim]")

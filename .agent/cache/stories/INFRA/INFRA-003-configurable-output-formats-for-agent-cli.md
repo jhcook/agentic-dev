@@ -11,19 +11,19 @@ Currently, the `agent` CLI outputs data in a "pretty print" format using Rich ta
 - **Documentation**: Generating reports or embedding output in markdown documentation
 
 ## User Story
-As a **developer or automation engineer**, I want to **specify the output format for agent commands** (e.g., `agent list stories --format json --output stories.json`), so that I can **programmatically process, export, and integrate agent data into my workflows and tools**.
+As a **developer or automation engineer**, I want to **specify the output format for agent commands** (e.g., `env -u VIRTUAL_ENV uv run agent list stories --format json --output stories.json`), so that I can **programmatically process, export, and integrate agent data into my workflows and tools**.
 
 ## Acceptance Criteria
-- [ ] **AC1**: Given I run `agent list stories --format json`, When the command executes, Then output is valid JSON with all story data (ID, Title, State, Path).
-- [ ] **AC2**: Given I run `agent list plans --format csv`, When the command executes, Then output is valid CSV with headers and proper escaping.
-- [ ] **AC3**: Given I run `agent list runbooks --format yaml`, When the command executes, Then output is valid YAML with proper structure.
-- [ ] **AC4**: Given I run `agent list stories --format markdown`, When the command executes, Then output is a properly formatted Markdown table.
-- [ ] **AC5**: Given I run `agent list stories --format plain`, When the command executes, Then output is plain text with tab-separated or space-aligned columns.
-- [ ] **AC6**: Given I run `agent list stories` without `--format`, When the command executes, Then output defaults to the current Rich pretty-print format (backward compatibility).
+- [ ] **AC1**: Given I run `env -u VIRTUAL_ENV uv run agent list stories --format json`, When the command executes, Then output is valid JSON with all story data (ID, Title, State, Path).
+- [ ] **AC2**: Given I run `env -u VIRTUAL_ENV uv run agent list plans --format csv`, When the command executes, Then output is valid CSV with headers and proper escaping.
+- [ ] **AC3**: Given I run `env -u VIRTUAL_ENV uv run agent list runbooks --format yaml`, When the command executes, Then output is valid YAML with proper structure.
+- [ ] **AC4**: Given I run `env -u VIRTUAL_ENV uv run agent list stories --format markdown`, When the command executes, Then output is a properly formatted Markdown table.
+- [ ] **AC5**: Given I run `env -u VIRTUAL_ENV uv run agent list stories --format plain`, When the command executes, Then output is plain text with tab-separated or space-aligned columns.
+- [ ] **AC6**: Given I run `env -u VIRTUAL_ENV uv run agent list stories` without `--format`, When the command executes, Then output defaults to the current Rich pretty-print format (backward compatibility).
 - [ ] **AC7**: Given I specify an invalid format, When the command runs, Then it shows a clear error message listing valid formats.
 - [ ] **AC8**: The `--format` flag is consistently available across all relevant commands (`list stories`, `list plans`, `list runbooks`, `check`, `preflight`).
-- [ ] **AC9**: Given I run `agent list stories --format json --output stories.json`, When the command executes, Then the output is written to `stories.json` instead of stdout.
-- [ ] **AC10**: Given I run `agent list stories --format csv -o results.csv`, When the command executes, Then the output is written to `results.csv` (short flag works).
+- [ ] **AC9**: Given I run `env -u VIRTUAL_ENV uv run agent list stories --format json --output stories.json`, When the command executes, Then the output is written to `stories.json` instead of stdout.
+- [ ] **AC10**: Given I run `env -u VIRTUAL_ENV uv run agent list stories --format csv -o results.csv`, When the command executes, Then the output is written to `results.csv` (short flag works).
 - [ ] **AC11**: Given I specify `--output path/to/file.json` with a non-existent directory, When the command runs, Then it creates the parent directories automatically.
 - [ ] **AC12**: Given I specify `--output existing-file.json` and the file exists, When the command runs, Then it overwrites the file without prompting (standard Unix behavior).
 - [ ] **AC13**: Given I run `--output` without `--format`, When the command executes, Then it uses the default format (pretty) but writes to file.
@@ -58,7 +58,7 @@ As a **developer or automation engineer**, I want to **specify the output format
 **Workflows affected:**
 - CI/CD pipelines that parse `agent` output
 - Documentation generation scripts
-- Developer workflows using `agent list` for validation
+- Developer workflows using `env -u VIRTUAL_ENV uv run agent list` for validation
 
 **Risks identified:**
 - **Breaking change risk**: Low (adding optional flag, default behavior unchanged)
@@ -72,7 +72,7 @@ As a **developer or automation engineer**, I want to **specify the output format
 - Test special characters and escaping (CSV injection, markdown characters)
 
 **Integration Tests:**
-- Test `agent list stories --format <each-format>` end-to-end
+- Test `env -u VIRTUAL_ENV uv run agent list stories --format <each-format>` end-to-end
 - Verify output can be parsed by standard tools (`jq` for JSON, spreadsheet import for CSV)
 - Test filtering combined with formatting (e.g., `--format json --plan PLAN-001`)
 

@@ -1,7 +1,3 @@
-# Journey: JRN-022
-# Linked Story: INFRA-027
-# Title: Core Voice Abstractions & Deepgram
-
 id: JRN-022
 title: Core Voice Abstractions & Deepgram
 state: COMMITTED
@@ -11,9 +7,10 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: To establish a provider-agnostic voice architecture by defining `STTProvider` and `TTSProvider` interfaces. This
-  change introduces a concrete implementation for Deepgram, loaded via a factory, ensuring that the core application logic
-  is decoupled from specific vendor SDKs.
+description: To establish a provider-agnostic voice architecture by defining `STTProvider`
+  and `TTSProvider` interfaces. This change introduces a concrete implementation for
+  Deepgram, loaded via a factory, ensuring that the core application logic is decoupled
+  from specific vendor SDKs.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -66,4 +63,5 @@ implementation:
   - __init__.py
   - backend/speech/README.md
   - backend/speech/factory.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_022.py

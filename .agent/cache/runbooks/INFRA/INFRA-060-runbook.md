@@ -350,7 +350,7 @@ Unit tests covering:
 
 #### [NEW] [test_panel_references.py](file:///Users/jcook/repo/agentic-dev/.agent/tests/commands/test_panel_references.py)
 
-- `test_panel_includes_references()` — `agent panel` output includes per-role references
+- `test_panel_includes_references()` — `env -u VIRTUAL_ENV uv run agent panel` output includes per-role references
 - `test_preflight_reference_summary_table()` — preflight outputs Reference Summary Table
 - `test_invalid_reference_warning()` — invalid ref emits WARNING, not BLOCK
 
@@ -364,8 +364,8 @@ Unit tests covering:
 
 ### Manual Verification
 
-- [ ] `agent panel INFRA-060 --ai` outputs per-role references and Reference Summary Table
-- [ ] `agent preflight --ai --story INFRA-060` emits reference validation warnings
+- [ ] `env -u VIRTUAL_ENV uv run agent panel INFRA-060 --ai` outputs per-role references and Reference Summary Table
+- [ ] `env -u VIRTUAL_ENV uv run agent preflight --ai --story INFRA-060` emits reference validation warnings
 - [ ] Panel in consultative mode still extracts references from raw output
 - [ ] Citing non-existent ADR-999 produces WARNING, not BLOCK
 - [ ] Changeset touching no ADR-governed files — no citation warnings emitted

@@ -78,6 +78,13 @@ def configure_logging(verbosity: int = 0):
             logging.getLogger("agent").addHandler(file_handler)
             _file_handler_added = True
 
+    # Suppress verbose third-party loggers globally
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("transformers").setLevel(logging.ERROR)
+    logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+    logging.getLogger("backoff").setLevel(logging.ERROR)
+
 # Create a custom logger (no file handler at import time)
 logger = logging.getLogger("agent")
 

@@ -227,10 +227,10 @@ def rotate_key():
 
 ### Manual Verification
 
-- [x] Verify that `agent secret init` fails without `--force` if secret files exist.
-- [x] Verify that `agent secret rotate-key` prompts for passwords and successfully rotates the key.
+- [x] Verify that `env -u VIRTUAL_ENV uv run agent secret init` fails without `--force` if secret files exist.
+- [x] Verify that `env -u VIRTUAL_ENV uv run agent secret rotate-key` prompts for passwords and successfully rotates the key.
 - [x] Verify that the old password no longer works after rotation, and the new password unlocks secrets.
-- [x] **Chaos Testing**: Interrupt the `agent secret rotate-key` process using `Ctrl+C` at various stages (e.g., during re-encryption, before atomic rename) and verify that the original secrets are preserved. Simulate disk full scenario and ensure graceful handling.
+- [x] **Chaos Testing**: Interrupt the `env -u VIRTUAL_ENV uv run agent secret rotate-key` process using `Ctrl+C` at various stages (e.g., during re-encryption, before atomic rename) and verify that the original secrets are preserved. Simulate disk full scenario and ensure graceful handling.
 
 ## Definition of Done
 

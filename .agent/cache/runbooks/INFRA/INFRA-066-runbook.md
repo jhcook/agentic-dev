@@ -6,7 +6,7 @@ COMMITTED
 
 ## Goal Description
 
-Enhance `context_loader.load_context()` to include source code context (file tree + targeted snippets) so that `agent new-runbook` produces runbooks with accurate file paths, correct SDK usage, and implementation steps that follow existing codebase patterns.
+Enhance `context_loader.load_context()` to include source code context (file tree + targeted snippets) so that `env -u VIRTUAL_ENV uv run agent new-runbook` produces runbooks with accurate file paths, correct SDK usage, and implementation steps that follow existing codebase patterns.
 
 ## Linked Journeys
 
@@ -16,7 +16,7 @@ Enhance `context_loader.load_context()` to include source code context (file tre
 
 **@Architect**: Changes are confined to the Core layer (`context.py`) and the Commands layer (`runbook.py`). No upward dependencies introduced. The `ContextLoader` class already follows the correct pattern — new methods will be private instance methods consistent with `_load_global_rules()`, `_load_agents()`, etc. No new ADR needed; ADR-025 (lazy init) is not violated since `ContextLoader` is eagerly instantiated at module level as `context_loader = ContextLoader()`. Verdict: **PASS**.
 
-**@QA**: Four unit tests covering tree generation, snippet extraction, context dict keys, and truncation logic. Integration test via `agent new-runbook` on a committed story. Tests should use `tmp_path` fixtures to create mock directory structures. Coverage target: 100% of new methods. Verdict: **PASS**.
+**@QA**: Four unit tests covering tree generation, snippet extraction, context dict keys, and truncation logic. Integration test via `env -u VIRTUAL_ENV uv run agent new-runbook` on a committed story. Tests should use `tmp_path` fixtures to create mock directory structures. Coverage target: 100% of new methods. Verdict: **PASS**.
 
 **@Security**: Source content passes through `scrub_sensitive_data()` before prompt inclusion (compliance with `global-compliance-requirements.mdc` §1.1: no secrets in logs/prompts). The `.agent/src/` directory is developer tooling, not user data — PII risk is minimal but the scrub is still applied. `__pycache__` and `.pyc` files are excluded from tree output. Verdict: **PASS**.
 
@@ -379,7 +379,7 @@ class TestLoadContextIncludesSource:
 
 ```markdown
 ### Added
-- Source code context (file tree + code outlines) now included in `agent new-runbook` prompts for codebase-accurate implementation steps (INFRA-066).
+- Source code context (file tree + code outlines) now included in `env -u VIRTUAL_ENV uv run agent new-runbook` prompts for codebase-accurate implementation steps (INFRA-066).
 ```
 
 ## Verification Plan
@@ -394,7 +394,7 @@ class TestLoadContextIncludesSource:
 
 ### Manual Verification
 
-- [ ] Step 1: Run `agent new-runbook` on a committed story and verify file paths reference actual repo paths (e.g., `.agent/src/agent/core/context.py` not `src/context.py`)
+- [ ] Step 1: Run `env -u VIRTUAL_ENV uv run agent new-runbook` on a committed story and verify file paths reference actual repo paths (e.g., `.agent/src/agent/core/context.py` not `src/context.py`)
 - [ ] Step 2: Verify runbook generation still succeeds when `src/` directory is deleted (graceful degradation)
 
 ## Definition of Done

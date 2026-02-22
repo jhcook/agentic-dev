@@ -234,7 +234,7 @@ Generate the journey YAML now.
         linked_paths = [p.strip() for p in test_paths_input.split(",")]
     else:
         slug = journey_id.lower().replace("-", "_")
-        stub_dir = config.repo_root / "tests" / "journeys"
+        stub_dir = config.agent_dir / "tests" / "journeys"
         stub_dir.mkdir(parents=True, exist_ok=True)
         stub_path = stub_dir / f"test_{slug}.py"
         if not stub_path.exists():
@@ -581,11 +581,35 @@ def _generate_ai_test(
     source_context = ""
     for rel_path in impl_files:
         fpath = repo_root / rel_path
+        
+        # Fuzzy fallback if exact path not found
+        if not fpath.is_file():
+            # Try to find a file matching the name
+            name_to_find = Path(rel_path).name
+            candidates = list(repo_root.rglob(name_to_find))
+            
+            # Filter out ignored/hidden directories if possible, but keep simple for now
+            candidates = [c for c in candidates if ".venv" not in c.parts and "node_modules" not in c.parts and ".git" not in c.parts]
+            
+            best_match = None
+            for candidate in candidates:
+                # If the rel_path string is fully contained in the candidate path, it's a very strong match
+                if rel_path in str(candidate):
+                    best_match = candidate
+                    break
+            
+            if best_match:
+                fpath = best_match
+            elif candidates:
+                # Fallback to the first candidate if no substring match found
+                fpath = candidates[0]
+
         if not fpath.is_file():
             logger.warning(
                 "journey=%s | Source file not found: %s", jid, rel_path
             )
             continue
+            
         # Path containment check
         try:
             fpath.resolve().relative_to(repo_root.resolve())
@@ -597,7 +621,9 @@ def _generate_ai_test(
         try:
             raw = fpath.read_text(errors="replace")[:20_000]
             scrubbed = scrub_sensitive_data(raw)
-            source_context += f"\n--- {rel_path} ---\n{scrubbed}"
+            # Use relative path for prompt context
+            context_path = fpath.relative_to(repo_root) if repo_root in fpath.parents else fpath.name
+            source_context += f"\n--- {context_path} ---\n{scrubbed}"
         except Exception:
             logger.warning(
                 "journey=%s | Error reading %s", jid, rel_path, exc_info=True
@@ -686,7 +712,7 @@ def backfill_tests(
     from rich.syntax import Syntax
 
     journeys_dir = config.journeys_dir
-    tests_dir = config.repo_root / "tests" / "journeys"
+    tests_dir = config.agent_dir / "tests" / "journeys"
 
     if not dry_run:
         tests_dir.mkdir(parents=True, exist_ok=True)

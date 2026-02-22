@@ -62,3 +62,9 @@ PROPOSED
 
 - [ ] Unit tests passed
 - [ ] Integration tests passed
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
+

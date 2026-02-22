@@ -1,4 +1,4 @@
-# INFRA-071: Add Panel Consultation to `agent new-journey`
+# INFRA-071: Add Panel Consultation to `env -u VIRTUAL_ENV uv run agent new-journey`
 
 ## State
 
@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Add a `--panel` flag to `agent new-journey` that automatically runs a consultative panel review of the generated journey YAML. This replaces the manual Step 3 in the `/journey` workflow. The panel flag requires `--ai` (panel reviews AI-generated content).
+Add a `--panel` flag to `env -u VIRTUAL_ENV uv run agent new-journey` that automatically runs a consultative panel review of the generated journey YAML. This replaces the manual Step 3 in the `/journey` workflow. The panel flag requires `--ai` (panel reviews AI-generated content).
 
 ## Linked Journeys
 
@@ -42,7 +42,7 @@ Add a `--panel` flag to `agent new-journey` that automatically runs a consultati
 - Replace Step 3 (manual panel consultation, ~8 lines) with:
 
   ```
-  3. **Panel Consultation**: Use `--panel` flag: `agent new-journey <JRN-ID> --ai --panel`
+  3. **Panel Consultation**: Use `--panel` flag: `env -u VIRTUAL_ENV uv run agent new-journey <JRN-ID> --ai --panel`
   ```
 
 ### 3. Add Unit Tests
@@ -71,8 +71,8 @@ Add a `--panel` flag to `agent new-journey` that automatically runs a consultati
 
 ### Manual Verification
 
-- [ ] `agent new-journey JRN-TEST --ai --panel` produces journey + panel feedback
-- [ ] `agent new-journey JRN-TEST --panel` (no --ai) errors cleanly
+- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --ai --panel` produces journey + panel feedback
+- [ ] `env -u VIRTUAL_ENV uv run agent new-journey JRN-TEST --panel` (no --ai) errors cleanly
 
 ## Definition of Done
 

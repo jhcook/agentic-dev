@@ -1,7 +1,3 @@
-# Journey: JRN-010
-# Linked Story: INFRA-011
-# Title: Improve Impact Analysis
-
 id: JRN-010
 title: Improve Impact Analysis
 state: COMMITTED
@@ -47,4 +43,5 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_010.py

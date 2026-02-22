@@ -51,7 +51,7 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
         "api_key": ["OPENAI_API_KEY"],
     },
     "gemini": {
-        "api_key": ["GEMINI_API_KEY", "GOOGLE_GEMINI_API_KEY"],
+        "api_key": ["GEMINI_API_KEY", "GEMINI_API_KEY"],
     },
     "anthropic": {
         "api_key": ["ANTHROPIC_API_KEY"],
@@ -64,6 +64,9 @@ SERVICE_ENV_MAPPINGS: Dict[str, Dict[str, List[str]]] = {
     },
     "notion": {
         "notion_token": ["NOTION_TOKEN"],
+    },
+    "huggingface": {
+        "token": ["HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
     },
 }
 

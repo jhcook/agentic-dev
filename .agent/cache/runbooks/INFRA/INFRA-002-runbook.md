@@ -13,11 +13,11 @@ Refactor Agent workflows to act as thin wrappers around Python CLI commands to r
 
 - **@Security**:
   - Reducing reliance on external AI for basic operations (like creating a file scaffold) is a security win (less data egress).
-  - Ensure `agent commit` with `-m` flags allows bypassing AI for sensitive commits if needed.
+  - Ensure `env -u VIRTUAL_ENV uv run agent commit` with `-m` flags allows bypassing AI for sensitive commits if needed.
   
 - **@QA**:
-  - Verify that `agent new-runbook` can fail gracefully if AI is unavailable (or properly handled by Agent intervention).
-  - Test `agent commit -m` to ensure it skips the interactive prompt.
+  - Verify that `env -u VIRTUAL_ENV uv run agent new-runbook` can fail gracefully if AI is unavailable (or properly handled by Agent intervention).
+  - Test `env -u VIRTUAL_ENV uv run agent commit -m` to ensure it skips the interactive prompt.
   
 - **@Docs**:
   - `GEMINI.md` and `copilot-instructions.md` are critical for ensuring future Agents understand this new structure.
@@ -57,8 +57,8 @@ where it adds value, e.g., new-runbook et al.
 
 ## Verification Plan
 ### Automated Tests
-- [ ] Run `agent new-runbook --help` to verify command availability.
-- [ ] Run `agent commit --help` to verify `-m` flag.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent new-runbook --help` to verify command availability.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent commit --help` to verify `-m` flag.
 
 ### Manual Verification
 - [ ] Execute `workflows/runbook.md` process (this document).

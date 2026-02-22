@@ -21,13 +21,13 @@ Provide a Command-Line Interface (CLI) tool for managing and modifying the agent
 
 - **@QA**:
   - **Test Strategy**: Unit tests for the `ConfigManager` to handle read/write/nested updates.
-  - Integration: `agent config set ...` followed by `agent run ...` (or probing the file) to verify persistence.
+  - Integration: `env -u VIRTUAL_ENV uv run agent config set ...` followed by `env -u VIRTUAL_ENV uv run agent run ...` (or probing the file) to verify persistence.
   - Edge cases: Setting a key that doesn't exist (should create it? or fail?), setting wrong types (boolean as string).
   - **Rollback**: Automatic backup of the config file before writing is a good safety net.
 
 - **@Docs**:
   - Update `README.md` with the new command syntax.
-  - `agent config --help` should be self-explanatory.
+  - `env -u VIRTUAL_ENV uv run agent config --help` should be self-explanatory.
 
 - **@Compliance**:
   - `router.yaml` defines model usage costs. Changing these via CLI impacts cost tracking. Ensure logs reflect *who* changed the config and *what* changed, for auditing.
@@ -53,7 +53,7 @@ Provide a Command-Line Interface (CLI) tool for managing and modifying the agent
 #### NEW: `agent/commands/config.py`
 1.  **Create `app` (Typer application)**.
 2.  **`get` command**:
-    -   Args: `key` (optional, if distinct files supported), or just assume global config space. Since we have specific files, maybe `agent config get router.models.gpt-4o.tier`.
+    -   Args: `key` (optional, if distinct files supported), or just assume global config space. Since we have specific files, maybe `env -u VIRTUAL_ENV uv run agent config get router.models.gpt-4o.tier`.
     -   Logic: Load yaml, traverse keys, print value (JSON or plain).
 3.  **`set` command**:
     -   Args: `key`, `value`.
@@ -80,22 +80,22 @@ Provide a Command-Line Interface (CLI) tool for managing and modifying the agent
     -   Test type inference (string "123" -> int 123, "true" -> bool True).
     -   Test atomic write and backup creation.
 -   **Integration Tests**:
-    -   Run `agent config set models.test_model.tier light`.
+    -   Run `env -u VIRTUAL_ENV uv run agent config set models.test_model.tier light`.
     -   Verify content of `.agent/etc/router.yaml`.
-    -   Run `agent config get models.test_model.tier` -> expect "light".
+    -   Run `env -u VIRTUAL_ENV uv run agent config get models.test_model.tier` -> expect "light".
 
 ### Manual Verification
-1.  Run `agent config list` -> See colorized YAML.
-2.  Run `agent config set settings.default_tier output_only_test_tier`.
+1.  Run `env -u VIRTUAL_ENV uv run agent config list` -> See colorized YAML.
+2.  Run `env -u VIRTUAL_ENV uv run agent config set settings.default_tier output_only_test_tier`.
 3.  Cat `.agent/etc/router.yaml` -> check change.
-4.  Run `agent config get settings.default_tier` -> "output_only_test_tier".
-5.  Revert change: `agent config set settings.default_tier standard`.
+4.  Run `env -u VIRTUAL_ENV uv run agent config get settings.default_tier` -> "output_only_test_tier".
+5.  Revert change: `env -u VIRTUAL_ENV uv run agent config set settings.default_tier standard`.
 
 ---
 
 ## Definition of Done
--   [ ] `agent config` commands implemented (`get`, `set`, `list`).
+-   [ ] `env -u VIRTUAL_ENV uv run agent config` commands implemented (`get`, `set`, `list`).
 -   [ ] Core config logic (atomic write, backups) implemented.
 -   [ ] Unit and integration tests passed.
 -   [ ] README updated with new command usage.
--   [ ] Governance review (via `agent preflight`) passes.
+-   [ ] Governance review (via `env -u VIRTUAL_ENV uv run agent preflight`) passes.

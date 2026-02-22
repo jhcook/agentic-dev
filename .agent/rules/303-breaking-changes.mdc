@@ -1,4 +1,11 @@
 ---
+description: Defines what constitutes a breaking change across all managed codebases.
+alwaysApply: true
+---
+
+# 303: Breaking Change Policy
+
+---
 description: Defines what constitutes a breaking change across all managed codebases
 alwaysApply: true
 ---
@@ -43,3 +50,20 @@ If the answer to all three is "no", it is **not breaking**.
 
 - @QA and @Architect MUST apply this definition when evaluating changes.
 - Flagging an internal improvement as a "breaking change" without evidence of a broken contract is a **false positive** and must not result in BLOCK.
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

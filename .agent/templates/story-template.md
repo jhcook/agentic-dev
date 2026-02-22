@@ -46,3 +46,9 @@ How will we verify correctness?
 ## Rollback Plan
 
 How do we revert safely?
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
+

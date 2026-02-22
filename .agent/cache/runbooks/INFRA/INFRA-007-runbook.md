@@ -3,7 +3,7 @@
 Status: ACCEPTED
 
 ## Goal Description
-Enable developers to identify system impact and risks associated with their code changes through an automated command `agent impact <story-id>`.
+Enable developers to identify system impact and risks associated with their code changes through an automated command `env -u VIRTUAL_ENV uv run agent impact <story-id>`.
 
 This command will generate an AI-driven impact analysis report based on a comparison of the staged changes or against a specific branch (via `--base` flag). As an optional enhancement, the command can also update the "Impact Analysis Summary" section of the corresponding story markdown document directly.
 
@@ -19,7 +19,7 @@ This command will generate an AI-driven impact analysis report based on a compar
   The testing scope is adequate, but ensuring high-quality mock data for AI responses is critical. Validation of not only correct functionality but also graceful handling of failures (e.g., timeout, empty diff) must be part of the QA process. Testing `--update-story` operations must include edge cases for malformed markdown files.
 
 - **@Docs**:  
-  Clear documentation on the usage of the `agent impact` command is crucial, including all flags and expected output. Potential updates to developer guidelines for generating consistent impact analysis summaries are also suggested for long-term consistency.
+  Clear documentation on the usage of the `env -u VIRTUAL_ENV uv run agent impact` command is crucial, including all flags and expected output. Potential updates to developer guidelines for generating consistent impact analysis summaries are also suggested for long-term consistency.
 
 - **@Compliance**:  
   All new logic impacting governance, such as the auto-update functionality for markdown files, must conform to standardized review practices. Additionally, ensure that the logs of AI analysis requests are structured for auditability while excluding sensitive details.
@@ -73,7 +73,7 @@ This command will generate an AI-driven impact analysis report based on a compar
 
 ### Automated Tests
 
-- [ ] Test that `agent impact <story-id>` correctly detects changes and returns an impact analysis string.
+- [ ] Test that `env -u VIRTUAL_ENV uv run agent impact <story-id>` correctly detects changes and returns an impact analysis string.
 - [ ] Test `--base` functionality for branch-to-branch diffing.
 - [ ] Test `--update-story` on a valid markdown file to ensure the "Impact Analysis Summary" section updates correctly without corrupting the rest of the file.
 - [ ] Test that no sensitive data from the code changes or metadata is included in the AI request payload.
@@ -81,14 +81,14 @@ This command will generate an AI-driven impact analysis report based on a compar
 
 ### Manual Verification
 
-- [ ] Validate example outputs of the `agent impact` command on realistic diffs with the observed system.
+- [ ] Validate example outputs of the `env -u VIRTUAL_ENV uv run agent impact` command on realistic diffs with the observed system.
 - [ ] Verify behavior when the AI service is unavailable (e.g., HTTP 503 failures).
 - [ ] Compare generated impact content directly with staged changes for accuracy.
 
 ## Definition of Done
 ### Documentation
 - [ ] `CHANGELOG.md` updated with details of the new functionality.
-- [ ] `README.md` updated with an additional section for the `agent impact` command, specifying usage and flags.
+- [ ] `README.md` updated with an additional section for the `env -u VIRTUAL_ENV uv run agent impact` command, specifying usage and flags.
 - [ ] Internal developer documentation updated for guidelines on crafting high-quality impact analysis.
 
 ### Observability

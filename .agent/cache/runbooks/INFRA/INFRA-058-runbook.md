@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Enforce a link between user journeys and their corresponding regression tests. Extend `validate_journey` with state-aware test enforcement, add `agent journey coverage` and `agent journey backfill-tests` commands, and integrate a journey coverage gate into `agent preflight`.
+Enforce a link between user journeys and their corresponding regression tests. Extend `validate_journey` with state-aware test enforcement, add `env -u VIRTUAL_ENV uv run agent journey coverage` and `env -u VIRTUAL_ENV uv run agent journey backfill-tests` commands, and integrate a journey coverage gate into `env -u VIRTUAL_ENV uv run agent preflight`.
 
 ## Linked Journeys
 
@@ -54,12 +54,12 @@ Enforce a link between user journeys and their corresponding regression tests. E
 **@Compliance**:
 
 - Persistable coverage report for SOC 2 CC7.1 evidence.
-- Coverage metric tracked over time for `agent audit`.
+- Coverage metric tracked over time for `env -u VIRTUAL_ENV uv run agent audit`.
 
 **@Docs**:
 
 - Journey template comment for `tests` field.
-- README updated with `agent journey coverage` and `agent journey backfill-tests`.
+- README updated with `env -u VIRTUAL_ENV uv run agent journey coverage` and `env -u VIRTUAL_ENV uv run agent journey backfill-tests`.
 
 ## Implementation Steps
 
@@ -415,14 +415,14 @@ implementation:
 - [ ] **Unit — path validation**: Path traversal (`../../etc/passwd`) rejected. Absolute paths rejected. Extension-agnostic (`.py`, `.yaml`, `.spec.ts` all valid).
 - [ ] **Unit — stub generation**: `backfill-tests` generates valid pytest file with `@pytest.mark.journey` marker. No overwrite of existing files.
 - [ ] **Unit — check_journey_coverage**: Returns correct counts for fixture journeys with mixed states.
-- [ ] **Integration — coverage command**: `agent journey coverage` produces expected table output.
+- [ ] **Integration — coverage command**: `env -u VIRTUAL_ENV uv run agent journey coverage` produces expected table output.
 - [ ] **Integration — preflight**: Preflight warns (Phase 1) on COMMITTED journey with missing tests.
 
 ### Manual Verification
 
-- [ ] `agent journey coverage` displays rich table with correct status icons
-- [ ] `agent journey backfill-tests --dry-run` previews without writing
-- [ ] `agent preflight --ai` shows journey coverage warning section
+- [ ] `env -u VIRTUAL_ENV uv run agent journey coverage` displays rich table with correct status icons
+- [ ] `env -u VIRTUAL_ENV uv run agent journey backfill-tests --dry-run` previews without writing
+- [ ] `env -u VIRTUAL_ENV uv run agent preflight --ai` shows journey coverage warning section
 - [ ] New journey creation prompts for test file linking
 
 ## Definition of Done

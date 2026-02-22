@@ -13,6 +13,22 @@
 # limitations under the License.
 
 import typer
+import logging
+import warnings
+import os
+
+# --- Suppress verbose AI / Embedding Library Logging Globally ---
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
+warnings.filterwarnings("ignore", module="huggingface_hub.*")
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("backoff").setLevel(logging.ERROR)
 
 from agent.commands import (
     admin,

@@ -6,7 +6,7 @@ COMMITTED
 
 ## Problem Statement
 
-The Voice Agent executes long-running operations (like `git status`, `npm install`, or `agent preflight`) but historically waited for them to complete before giving any feedback. This led to a "black box" user experience where the user didn't know if the agent was stuck or working. Additionally, there was no standard way to handle interactive processes (like a shell prompting for input) or ensure that subprocesses were cleaned up if the agent crashed.
+The Voice Agent executes long-running operations (like `git status`, `npm install`, or `env -u VIRTUAL_ENV uv run agent preflight`) but historically waited for them to complete before giving any feedback. This led to a "black box" user experience where the user didn't know if the agent was stuck or working. Additionally, there was no standard way to handle interactive processes (like a shell prompting for input) or ensure that subprocesses were cleaned up if the agent crashed.
 
 ## User Story
 
@@ -33,7 +33,7 @@ As a Developer using the Voice Agent, I want real-time streaming feedback from a
 - **Safety**: Interactive shell must not allow breaking out of the user's permission scope (inherits user context).
   - The `cwd` (current working directory) parameter used in subprocess calls across various tools *must* validate that the `cwd` (current working directory) is within the project root.
   - A warning message must be displayed when a user attempts to specify an invalid `cwd`.
-  - The agent configuration loads some config params from environment variables and these must be validated during `agent preflight`.
+  - The agent configuration loads some config params from environment variables and these must be validated during `env -u VIRTUAL_ENV uv run agent preflight`.
 
 ## Origin Checks Implementation Details
 
@@ -150,12 +150,12 @@ If the `cwd` is invalid, *do not* silently fail. Instead, raise an exception wit
 
 ## CLI Configuration
 
-Add `--cwd` or `--project-dir` to the agent CLI itself, which the voice commands can optionally set. If CWD is configurable on the command line, the `agent preflight` needs to validate that CWD is in the valid range.
+Add `--cwd` or `--project-dir` to the agent CLI itself, which the voice commands can optionally set. If CWD is configurable on the command line, the `env -u VIRTUAL_ENV uv run agent preflight` needs to validate that CWD is in the valid range.
 
 ## Linked ADRs
 
 - [ADR-013-voice-agent-streaming-and-process-management.md](file:///Users/jcook/repo/agentic-dev/.agent/adrs/ADR-013-voice-agent-streaming-and-process-management.md)
-- Ensure that all environment variables used for configuration are checked by `agent preflight` and add documentation so the user can be sure that the Agent is correctly configured. Also, harden the preflight checks.
+- Ensure that all environment variables used for configuration are checked by `env -u VIRTUAL_ENV uv run agent preflight` and add documentation so the user can be sure that the Agent is correctly configured. Also, harden the preflight checks.
 
 ## Impact Analysis Summary
 

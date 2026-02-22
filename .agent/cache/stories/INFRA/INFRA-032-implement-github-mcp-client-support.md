@@ -15,18 +15,18 @@ As a Developer, I want the agent to be able to connect to the GitHub MCP Server 
 ## Acceptance Criteria
 
 - [ ] **Dependency**: `modelcontextprotocol` package is added to `pyproject.toml`.
-- [ ] **Secret Management**: `agent secret` is updated to support `github` service (`agent secret set github token`).
+- [ ] **Secret Management**: `env -u VIRTUAL_ENV uv run agent secret` is updated to support `github` service (`env -u VIRTUAL_ENV uv run agent secret set github token`).
 - [ ] **Core Client**: `agent.core.mcp` package is created with an `MCPClient` capable of connecting to stdio servers.
 - [ ] **CLI Commands**:
-  - `agent mcp start <server>`: Interactive session with an MCP server works.
-  - `agent mcp run <server> <tool>`: One-off tool execution works.
-- [ ] **Onboarding**: `agent onboard` prompts for GitHub tool preference (`mcp` vs `gh`) and configures secrets/auth accordingly.
+  - `env -u VIRTUAL_ENV uv run agent mcp start <server>`: Interactive session with an MCP server works.
+  - `env -u VIRTUAL_ENV uv run agent mcp run <server> <tool>`: One-off tool execution works.
+- [ ] **Onboarding**: `env -u VIRTUAL_ENV uv run agent onboard` prompts for GitHub tool preference (`mcp` vs `gh`) and configures secrets/auth accordingly.
 - [ ] **Configuration**: `github` server configuration is added to `agent/config.py` (defaulting to `npx -y @modelcontextprotocol/server-github`).
 - [ ] **Cost Savings**: The solution relies solely on the GitHub API (PAT) and does not require Copilot subscriptions.
 
 ## Non-Functional Requirements
 
-- **Security**: GitHub tokens must be stored securely using `agent secret`, never plain text env vars in logs.
+- **Security**: GitHub tokens must be stored securely using `env -u VIRTUAL_ENV uv run agent secret`, never plain text env vars in logs.
 - **Reliability**: The client must handle stdio connection drops gracefully.
 - **Portability**: Must assume `npx` is available for running the default server.
 
@@ -43,7 +43,7 @@ Risks identified: Dependency on `npx` availability for the default server config
 ## Test Strategy
 
 - Unit tests for `MCPClient` protocol handling (mocking stdin/out).
-- Manual verification using `agent mcp run github list_repositories` to verify E2E connectivity.
+- Manual verification using `env -u VIRTUAL_ENV uv run agent mcp run github list_repositories` to verify E2E connectivity.
 
 ## Rollback Plan
 

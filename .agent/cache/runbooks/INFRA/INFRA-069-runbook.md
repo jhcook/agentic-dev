@@ -1,4 +1,4 @@
-# INFRA-069: Align `/panel` Workflow with `agent panel` CLI
+# INFRA-069: Align `/panel` Workflow with `env -u VIRTUAL_ENV uv run agent panel` CLI
 
 ## State
 
@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Simplify the `/panel` workflow to call `agent panel` instead of duplicating its consultative governance logic. The CLI already supports story/runbook loading, `--base`, `--provider`, `--apply`, `--panel-engine`, and advisory output framing. The main deliverable is workflow simplification plus minor CLI verification.
+Simplify the `/panel` workflow to call `env -u VIRTUAL_ENV uv run agent panel` instead of duplicating its consultative governance logic. The CLI already supports story/runbook loading, `--base`, `--provider`, `--apply`, `--panel-engine`, and advisory output framing. The main deliverable is workflow simplification plus minor CLI verification.
 
 ## Linked Journeys
 
@@ -19,7 +19,7 @@ Simplify the `/panel` workflow to call `agent panel` instead of duplicating its 
 - **@Security**: The `panel()` function already scrubs sensitive data via `scrub_sensitive_data()`. No new security concerns from workflow simplification.
 - **@Product**: AC1-AC3 are already satisfied by the existing CLI. AC4 (workflow simplification) is the primary deliverable.
 - **@Observability**: No new logging needed — `panel()` already uses structured console output.
-- **@Docs**: Update `/panel` workflow. Ensure `agent panel --help` is accurate.
+- **@Docs**: Update `/panel` workflow. Ensure `env -u VIRTUAL_ENV uv run agent panel --help` is accurate.
 - **@Compliance**: No GDPR/SOC2 impact.
 
 ## Targeted Refactors & Cleanups
@@ -38,10 +38,10 @@ Simplify the `/panel` workflow to call `agent panel` instead of duplicating its 
 Replace the 59-line manual simulation (adopt personas, conduct consultations, output report template) with:
 
 ```markdown
-1. Run `agent panel <STORY-ID>` for consultative governance review.
-2. Run `agent panel <STORY-ID> --base main` to compare against a specific branch.
-3. Run `agent panel <STORY-ID> --apply` to auto-apply panel advice to story/runbook.
-4. Run `agent panel "How should we approach X for INFRA-069?"` for design discussion.
+1. Run `env -u VIRTUAL_ENV uv run agent panel <STORY-ID>` for consultative governance review.
+2. Run `env -u VIRTUAL_ENV uv run agent panel <STORY-ID> --base main` to compare against a specific branch.
+3. Run `env -u VIRTUAL_ENV uv run agent panel <STORY-ID> --apply` to auto-apply panel advice to story/runbook.
+4. Run `env -u VIRTUAL_ENV uv run agent panel "How should we approach X for INFRA-069?"` for design discussion.
 ```
 
 Retain the "PURPOSE" section explaining consultative vs. preflight distinction.
@@ -80,9 +80,9 @@ Add INFRA-069 entry for workflow simplification.
 
 ### Manual Verification
 
-- [ ] Run `agent panel INFRA-069` and check consultative output
+- [ ] Run `env -u VIRTUAL_ENV uv run agent panel INFRA-069` and check consultative output
 - [ ] Verify `/panel` workflow calls CLI correctly
-- [ ] Confirm `agent panel --help` shows all flags
+- [ ] Confirm `env -u VIRTUAL_ENV uv run agent panel --help` shows all flags
 
 ## Definition of Done
 

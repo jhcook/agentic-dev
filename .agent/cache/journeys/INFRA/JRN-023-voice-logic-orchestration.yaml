@@ -1,7 +1,3 @@
-# Journey: JRN-023
-# Linked Story: INFRA-028
-# Title: Voice Logic Orchestration
-
 id: JRN-023
 title: Voice Logic Orchestration
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Implement the core orchestration logic for real-time voice interaction. This involves creating a FastAPI WebSocket
-  endpoint (`/ws/voice`) that manages the audio stream, pipes usage to a stateful ReAct agent (LangGraph), and streams synthesized
+description: Implement the core orchestration logic for real-time voice interaction.
+  This involves creating a FastAPI WebSocket endpoint (`/ws/voice`) that manages the
+  audio stream, pipes usage to a stateful ReAct agent (LangGraph), and streams synthesized
   response audio back to the client using the providers defined in INFRA-027.
 preconditions:
 - Agent CLI is installed and configured
@@ -61,4 +58,5 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_023.py

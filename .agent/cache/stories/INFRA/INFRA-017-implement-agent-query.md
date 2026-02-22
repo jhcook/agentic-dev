@@ -7,7 +7,7 @@ COMMITTED
 Finding specific information in a large, governed agentic codebase is difficult. Developers often have questions like "Where is the logic for X defined?" or "How do I create a new workflow?" that would require reading multiple markdown files or grep searching code. There is no central, natural-language interface to query the repository's knowledge base (Docs, ADRs, Code).
 
 ## User Story
-As a developer, I want to run `agent query "text"` to ask natural language questions about the codebase and receive an answer grounded in the repository's actual content (RAG), so that I can unblock myself without context switching or manual searching.
+As a developer, I want to run `env -u VIRTUAL_ENV uv run agent query "text"` to ask natural language questions about the codebase and receive an answer grounded in the repository's actual content (RAG), so that I can unblock myself without context switching or manual searching.
 
 ## Acceptance Criteria
 - [ ] **Context Retrieval**: The command uses a "Smart Keyword Search" (heuristics + grep) to find relevant chunks from `docs/`, `.agent/workflows`, and `src/`. *Note: Vector database is out of scope for MVP.*

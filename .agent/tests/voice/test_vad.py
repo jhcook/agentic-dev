@@ -55,6 +55,11 @@ def test_energy_fallback():
 
     # Silence
     chunk_silence = np.zeros(1000, dtype=np.int16).tobytes()
+    
+    # We need to simulate taking it out of calibration mode first so it processes
+    vad.calibration_frames = 25
+    vad.calibrated = True
+    
     assert vad.process(chunk_silence) is False
     
     # Loud noise (simulate speech)
@@ -67,10 +72,14 @@ def test_otel_tracing_on_process(mock_otel):
     vad.use_energy = True # Simplest path
     vad.silero_session = None
     vad.webrtc_vad = None
+    vad.calibration_frames = 25
     vad.calibrated = True
     
     chunk_loud = (np.ones(1000, dtype=np.int16) * 10000).tobytes()
-    vad.process(chunk_loud)
+    
+    # Ensure it returns True so tracing fires
+    result = vad.process(chunk_loud)
+    assert result is True
     
     # Verify tracer was called (use the mock from the autouse fixture)
     mock_otel.start_as_current_span.assert_called()

@@ -1,7 +1,3 @@
-# Journey: JRN-001
-# Linked Story: INFRA-001
-# Title: Smart AI Router and Python Rewrite
-
 id: JRN-001
 title: Smart AI Router and Python Rewrite
 state: COMMITTED
@@ -11,9 +7,10 @@ tags:
 - infra
 - mobile
 actor: mobile developer
-description: The implementation of the Smart AI Router ensures optimization of operational costs and AI model performance.
-  Furthermore, this work includes replacing legacy dependencies with `google-genai` SDK and `tiktoken` libraries for modern
-  compatibility and functionality.
+description: The implementation of the Smart AI Router ensures optimization of operational
+  costs and AI model performance. Furthermore, this work includes replacing legacy
+  dependencies with `google-genai` SDK and `tiktoken` libraries for modern compatibility
+  and functionality.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -54,4 +51,5 @@ implementation:
   - agent/core/ai.py
   - agent/core/smart_router.py
   - docs/openapi.yaml
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_001.py

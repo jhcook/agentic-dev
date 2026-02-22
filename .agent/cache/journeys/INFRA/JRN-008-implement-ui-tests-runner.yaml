@@ -1,7 +1,3 @@
-# Journey: JRN-008
-# Linked Story: INFRA-009
-# Title: Implement UI Tests Runner
-
 id: JRN-008
 title: Implement UI Tests Runner
 state: COMMITTED
@@ -56,4 +52,5 @@ implementation:
   - README.md
   - agent/commands/check.py
   - tests/test_agent_run_ui_tests.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_008.py

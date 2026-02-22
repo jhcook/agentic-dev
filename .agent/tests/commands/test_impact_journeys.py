@@ -99,7 +99,7 @@ class TestImpactJourneys:
                 "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
             )(),
         ):
-            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1"])
+            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1", "--offline"])
 
         assert result.exit_code == 0
         assert "JRN-100" in result.output or "Affected Journeys" in result.output
@@ -115,7 +115,7 @@ class TestImpactJourneys:
             )(),
         ):
             result = runner.invoke(
-                app, ["impact", "TEST-001", "--base", "HEAD~1", "--json"]
+                app, ["impact", "TEST-001", "--base", "HEAD~1", "--json", "--offline"]
             )
 
         assert result.exit_code == 0
@@ -132,7 +132,7 @@ class TestImpactJourneys:
                 "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
             )(),
         ):
-            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1"])
+            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1", "--offline"])
 
         assert result.exit_code == 0
         assert "No journeys affected" in result.output

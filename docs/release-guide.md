@@ -1,6 +1,6 @@
 # Agent Release & Upgrade Guide
 
-This guide explains how to release new versions of the Agent CLI and how to configure target repositories (like `inspected-app`) to use the latest version in GitHub Actions.
+This guide explains how to release new versions of the Agent CLI and how to configure target repositories to use the latest version in GitHub Actions.
 
 ## 1. Upgrading the Agent
 
@@ -15,7 +15,7 @@ To deploy the latest version of the Agent from `agentic-dev` to a target reposit
 ### Example
 
 ```bash
-./release.sh /Users/jcook/repo/inspected/inspected-app
+./release.sh /Users/jcook/repo/agent/agent
 ```
 
 ### What `release.sh` Does
@@ -72,7 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AI_PROVIDER_PREFERENCE: gemini
         run: |
           # 1. Capture output to both log and file
@@ -93,4 +93,4 @@ jobs:
 
 * **Install Step**: Must used `pip install .agent/[ai]` (or `.agent` if AI is not needed) instead of listing packages manually. This ensures the CI environment matches the development environment defined in `pyproject.toml`.
 * **Permissions**: Requires `pull-requests: write` to post the governance comment.
-* **Secrets**: Ensure `OPENAI_API_KEY` or `GOOGLE_GEMINI_API_KEY` are set in the repo secrets if using AI features.
+* **Secrets**: Ensure `OPENAI_API_KEY` or `GEMINI_API_KEY` are set in the repo secrets if using AI features.

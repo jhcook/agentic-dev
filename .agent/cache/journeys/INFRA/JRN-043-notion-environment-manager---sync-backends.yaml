@@ -1,7 +1,3 @@
-# Journey: JRN-043
-# Linked Story: INFRA-054
-# Title: Notion Environment Manager - Sync Backends
-
 id: JRN-043
 title: Notion Environment Manager - Sync Backends
 state: COMMITTED
@@ -11,10 +7,12 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Integrate Notion synchronization into the core `agent sync` command, allowing users to synchronize their environments
-  with Notion databases using a unified CLI experience. The integration should support a `--backend` flag to specify Notion
-  as the backend, a `--force` flag to overwrite local or remote state, and coexistence with other backends. Additionally,
-  the `agent sync janitor` command should also support the `--backend` flag for Notion.
+description: Integrate Notion synchronization into the core `agent sync` command,
+  allowing users to synchronize their environments with Notion databases using a unified
+  CLI experience. The integration should support a `--backend` flag to specify Notion
+  as the backend, a `--force` flag to overwrite local or remote state, and coexistence
+  with other backends. Additionally, the `agent sync janitor` command should also
+  support the `--backend` flag for Notion.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -54,4 +52,5 @@ implementation:
   - src/agent/sync/bootstrap.py
   - src/agent/sync/cli.py
   - src/agent/sync/notion.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_043.py

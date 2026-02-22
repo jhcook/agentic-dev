@@ -24,7 +24,7 @@ Enable the Agent CLI to use Vertex AI as an alternative provider to Gemini (AI S
 
 - PASS. Test strategy covers unit mocks of `genai.Client(vertexai=True)`, credential validation for `GOOGLE_CLOUD_PROJECT`, edge cases (ADC expired, project unset), and negative tests (invalid provider name). Existing test pattern in `test_validate_credentials.py` serves as a template.
 - **ACTION**: Add `vertex` cases to `test_validate_credentials.py` and add `test_service.py` tests for the Vertex AI `_try_complete()` branch.
-- E2E via `agent panel --panel-engine adk` with `provider: vertex` — manual verification in a GCP-authenticated environment.
+- E2E via `env -u VIRTUAL_ENV uv run agent panel --panel-engine adk` with `provider: vertex` — manual verification in a GCP-authenticated environment.
 
 **@Security**:
 
@@ -425,7 +425,7 @@ Dedicated test file for Vertex AI provider:
 
 ### Manual Verification
 
-- [ ] Set `provider: vertex` in `agent.yaml`, set `GOOGLE_CLOUD_PROJECT`, run `agent panel` — completes via Vertex AI
+- [ ] Set `provider: vertex` in `agent.yaml`, set `GOOGLE_CLOUD_PROJECT`, run `env -u VIRTUAL_ENV uv run agent panel` — completes via Vertex AI
 - [ ] Set `provider: vertex` without `GOOGLE_CLOUD_PROJECT` — clear error message
 - [ ] Expire ADC (`gcloud auth application-default revoke`) — actionable error referencing `gcloud auth application-default login`
 - [ ] Set `provider: gemini` with `GEMINI_API_KEY` — existing behavior unchanged

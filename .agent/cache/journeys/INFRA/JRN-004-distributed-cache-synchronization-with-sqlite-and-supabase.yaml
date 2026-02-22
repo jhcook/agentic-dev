@@ -1,7 +1,3 @@
-# Journey: JRN-004
-# Linked Story: INFRA-004
-# Title: Distributed Cache Synchronization with SQLite and Supabase
-
 id: JRN-004
 title: Distributed Cache Synchronization with SQLite and Supabase
 state: COMMITTED
@@ -26,12 +22,14 @@ auth_context:
   permissions: []
 steps:
 - id: 1
-  action: Developer configures prerequisites for Distributed Cache Synchronization with SQLite and Supabase
+  action: Developer configures prerequisites for Distributed Cache Synchronization
+    with SQLite and Supabase
   system_response: System validates configuration
   assertions:
   - Configuration is valid
 - id: 2
-  action: Developer executes the distributed cache synchronization with sqlite and supabase workflow
+  action: Developer executes the distributed cache synchronization with sqlite and
+    supabase workflow
   system_response: 'System performs ### observability
 
     - [ ] logging mechanism for all updates and sync operations.
@@ -70,4 +68,5 @@ implementation:
   files:
   - README.md
   - sync.yaml
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_004.py

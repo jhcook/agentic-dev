@@ -6,48 +6,38 @@ An AI-powered governance and workflow CLI for software development teams. Agent 
 
 - **Story & Runbook Management** — Create, track, and implement user stories with structured workflows and state transitions.
 - **AI Governance Panel** — Multi-role preflight checks (Security, Architect, QA, Compliance, Observability) that validate your changes before commit.
+- **Parallel ADK Engine** — Blazing fast governance evaluation leveraging the Google Agent Development Kit for concurrent multi-agent analysis.
+- **Oracle Preflight Pattern** — Advanced context retrieval fusing Notion, NotebookLM via MCP, and an embedded zero-server Vector database for high fidelity AI decisions.
 - **Multi-Provider AI** — Works with Gemini, Vertex AI, OpenAI, Anthropic, and GitHub Copilot. Automatic fallback between providers on rate limits.
-- **Notion Sync** — Bidirectional synchronization of stories, plans, and ADRs with Notion.
-- **User Journey Testing** — Define user journeys as YAML, generate test stubs, and track coverage.
+- **Smart Test Selection** — Performs real-time Python impact analysis to intelligently group and selectively execute necessary tests.
+- **User Journey Testing** — Define user journeys as YAML, auto-generate test stubs, enforce implementation gates, and track test coverage.
+- **Voice UX Reviews** — Analyze hands-free voice sessions (`agent review-voice`) to grade agent latency, accuracy, tone, and interruption handling.
+- **Automated License Headers** — Enforces and automatically generates required copyright headers across specific file types in the project.
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.10+
-- Git
-
-### Install
-
-```bash
-pip install -e .agent/
-```
-
-### Configure
-
-Set your AI provider credentials:
-
-```bash
-# Option A: Environment variable
-export GEMINI_API_KEY="AIza..."
-
-# Option B: Built-in secret store
-agent onboard
-```
-
-See [Getting Started](docs/getting_started.md) for provider comparison and Vertex AI setup.
+See [Getting Started](docs/getting_started.md) for full instructions on prerequisites, how to get `.agent` into your repository, configuration, and running `agent onboard`.
 
 ### Run
 
+The standard Agentic Development workflow follows a strict requirements-to-code pipeline:
+
 ```bash
-# Create a story
+# 1. Create a tracking story
 agent new-story INFRA-001
 
-# Run governance checks
-agent preflight --story INFRA-001 --ai
+# 2. Automatically generate an implementation plan (Runbook)
+agent new-runbook INFRA-001
 
-# Commit with governance
-agent commit -m "feat(api): add caching layer"
+# 3. Have the AI implement the approved Runbook
+agent implement INFRA-001
+
+# 4. Run the Parallel Governance Council checks
+# (Architect, Security, QA, Compliance, etc.)
+agent preflight --story INFRA-001
+
+# 5. Commit with story tracking and automated message
+agent commit
 ```
 
 ## Core Workflows
@@ -70,12 +60,17 @@ agent commit -m "feat(api): add caching layer"
 |---------|-------------|
 | `agent panel` | Convene the AI governance panel |
 | `agent impact` | Run impact analysis |
+| `agent review-voice` | Analyze a completed voice session and generate UX feedback |
 | `agent audit` | Generate audit report |
 | `agent lint` | Run linters (ruff, shellcheck, eslint) |
 | `agent validate-story` | Validate story schema |
 | `agent validate-journey` | Validate journey YAML |
 | `agent match-story` | Match staged files to a story |
 | `agent run-ui-tests` | Run UI test suite |
+
+### Voice UX Reviews
+
+The `agent review-voice` command enables you to evaluate the quality of a voice agent session. It analyzes latency, accuracy, tone, and interruption handling to provide structured UX feedback on the voice bot's performance.
 
 ## AI & Query
 
@@ -108,7 +103,8 @@ agent commit -m "feat(api): add caching layer"
 
 ## Documentation
 
-- [Getting Started](docs/getting_started.md) — Provider setup, credentials, and configuration
+- [Onboarding Guide](docs/getting_started.md) — How to install and configure `.agent` in your repository
+- [Provider Setup](.agent/docs/getting_started.md) — AI provider comparison, credentials, and advanced configuration
 - [Release Guide](docs/release-guide.md) — Packaging and release process
 - [ADRs](.agent/adrs/) — Architectural decision records
 - [Workflows](.agent/workflows/) — Detailed workflow instructions

@@ -31,7 +31,7 @@ class ContextLoader:
         self.instructions_dir = config.instructions_dir
         self.adrs_dir = config.agent_dir / "adrs"
 
-    def load_context(self) -> dict:
+    def load_context(self, story_id: str = "", legacy_context: bool = False) -> dict:
         """
         Loads the full context: Global Rules, Agents, Agent Instructions, ADRs,
         and Source Code context.
@@ -43,14 +43,48 @@ class ContextLoader:
             "Source context: tree=%d chars, snippets=%d chars",
             len(source_tree), len(source_code),
         )
+
+        if legacy_context:
+            adrs = self._load_adrs()
+            rules = self._load_global_rules()
+            instructions = self._load_role_instructions()
+        else:
+            adrs = ""
+            rules = ""
+            instructions = ""
+
+        # NotebookLM MCP / Local Vector DB integration
+        context_str = ""
+        if not legacy_context and story_id:
+            try:
+                from agent.core.mcp.client import MCPClient
+                mcp_client = MCPClient()
+                context_str = mcp_client.get_context(story_id)
+            except Exception as e:
+                logger.debug(f"MCP Server not detected. Falling back to local Vector DB: {e}")
+                context_str = self._query_local_vector_db(story_id)
+
         return {
-            "rules": self._load_global_rules(),
+            "rules": rules,
             "agents": self._load_agents(),
-            "instructions": self._load_role_instructions(),
-            "adrs": self._load_adrs(),
+            "instructions": instructions,
+            "adrs": adrs,
             "source_tree": source_tree,
             "source_code": source_code,
+            "context": context_str,
         }
+
+    def _query_local_vector_db(self, query: str) -> str:
+        """
+        Query local vector DB using ChromaDB or LanceDB.
+        """
+        try:
+            from agent.db.journey_index import JourneyIndex
+            db = JourneyIndex()
+            return db.search(query)
+        except Exception as e:
+            logger.debug(f"Local JourneyIndex unavailable: {e}")
+            return "Relevant context from local vector DB could not be retrieved."
 
     def _load_global_rules(self) -> str:
         """Loads all .mdc files from the rules directory."""

@@ -1,7 +1,3 @@
-# Journey: JRN-046
-# Linked Story: MOBILE-001
-# Title: Mobile Platform Support Policy
-
 id: JRN-046
 title: Mobile Platform Support Policy
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - mobile
 - mobile
 actor: mobile developer
-description: Establish and technically enforce a mobile platform support policy of "Current + 2" major versions for iOS and
-  Android, ensuring consistent user experience, reduced maintenance burden, and improved security.
+description: Establish and technically enforce a mobile platform support policy of
+  "Current + 2" major versions for iOS and Android, ensuring consistent user experience,
+  reduced maintenance burden, and improved security.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -27,7 +24,8 @@ steps:
   - Configuration is valid
 - id: 2
   action: Developer executes the mobile platform support policy workflow
-  system_response: System performs establish and technically enforce a mobile platform support policy of "current +
+  system_response: System performs establish and technically enforce a mobile platform
+    support policy of "current +
   assertions:
   - Operation completes successfully
   - Output matches expectations
@@ -59,4 +57,5 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_046.py

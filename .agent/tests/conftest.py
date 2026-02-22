@@ -13,6 +13,14 @@
 # limitations under the License.
 
 import pytest
+import os
+
+@pytest.fixture(autouse=True)
+def set_terminal_width():
+    """Force rich/typer to use a wide terminal so output assertions don't break due to word wrapping."""
+    os.environ["COLUMNS"] = "1000"
+    yield
+    os.environ.pop("COLUMNS", None)
 
 
 @pytest.fixture

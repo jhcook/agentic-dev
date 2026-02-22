@@ -561,6 +561,12 @@ def implement(
 
     # 4. Hybrid Strategy: Try Full Context -> Fallback to Chunking
     
+    # Load configurable license template
+    app_license_template = config.get_app_license_header()
+    license_instruction = ""
+    if app_license_template:
+        license_instruction = f"\n- **CRITICAL**: All new source code files MUST begin with the following exact license header:\n{app_license_template}\n"
+
     # Attempt 1: Full Context
     console.print("[dim]Attempting full context execution...[/dim]")
     
@@ -571,7 +577,7 @@ def implement(
     implementation_success = False
 
     try:
-        system_prompt = """You are an Implementation Agent.
+        system_prompt = f"""You are an Implementation Agent.
 Your goal is to EXECUTE ALL tasks defined in the provided RUNBOOK, including code, documentation, and tests.
 
 CONTEXT:
@@ -588,7 +594,7 @@ INSTRUCTIONS:
 - **CRITICAL**: You MUST generate ALL artifacts specified, not just the main code.
 - **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). 
 - **WARNING**: DO NOT use 'agent/' as a root folder. The source code lives in '.agent/src/agent/'.
-- **IMPORTANT**: Respect all Architectural Decision Records (ADRs). Do not contradict codified decisions.
+- **IMPORTANT**: Respect all Architectural Decision Records (ADRs). Do not contradict codified decisions.{license_instruction}
 - Output code using this format:
 
 File: path/to/file.py
@@ -665,13 +671,13 @@ Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
             # For brevity in this replacement, I need to make sure I don't lose the logic I wrote before.
             # I will use the previously written chunking loop here.
             
-            chunk_system_prompt = """You are an Implementation Agent.
+            chunk_system_prompt = f"""You are an Implementation Agent.
 Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
 CONSTRAINTS:
 1. ONLY implement the changes described in the 'CURRENT TASK'.
 2. Maintain consistency with the 'GLOBAL RUNBOOK CONTEXT'.
 3. Follow the 'IMPLEMENTATION GUIDE' and 'GOVERNANCE RULES'.
-4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py). DO NOT use 'agent/' as root.
+4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py). DO NOT use 'agent/' as root.{license_instruction}
 OUTPUT FORMAT:
 Return a Markdown response with file paths and code blocks:
 
@@ -813,13 +819,61 @@ ARCHITECTURAL DECISIONS (ADRs):
             console.print("\n[bold green]✅ All governance gates passed.[/bold green]")
 
             # Auto-stage modified files for commit pipeline
-            files_to_stage = [str(p) for p in modified_paths if p.exists()]
+            files_to_stage = [str(p.resolve().relative_to(config.repo_root.resolve())) for p in modified_paths if p.exists()]
+            
+            # --- Update Linked Journeys ---
+            if journey_result and journey_result.get("passed") and journey_result.get("journey_ids"):
+                console.print("[dim]Updating linked journey(s) implementation stanzas...[/dim]")
+                import yaml as _yaml
+                
+                new_impl_files = [f for f in files_to_stage if "/tests/" not in f and not f.startswith("tests/")]
+                new_impl_tests = [f for f in files_to_stage if "/tests/" in f or f.startswith("tests/")]
+                
+                updated_journeys = []
+                for jid in journey_result["journey_ids"]:
+                    # Find journey file in config.journeys_dir
+                    found_jfile = None
+                    if config.journeys_dir.exists():
+                        for jf in config.journeys_dir.rglob(f"{jid}*.yaml"):
+                            if jf.name.startswith(jid):
+                                found_jfile = jf
+                                break
+                    
+                    if found_jfile:
+                        try:
+                            # Parse YAML carefully to preserve structure
+                            j_data = _yaml.safe_load(found_jfile.read_text(errors="ignore"))
+                            if isinstance(j_data, dict):
+                                if "implementation" not in j_data:
+                                    j_data["implementation"] = {}
+                                
+                                # Auto-extend existing arrays ensuring uniqueness
+                                existing_files = set(j_data["implementation"].get("files") or [])
+                                existing_tests = set(j_data["implementation"].get("tests") or [])
+                                
+                                existing_files.update(new_impl_files)
+                                existing_tests.update(new_impl_tests)
+                                
+                                j_data["implementation"]["files"] = sorted(list(existing_files))
+                                j_data["implementation"]["tests"] = sorted(list(existing_tests))
+                                
+                                # Write back
+                                found_jfile.write_text(_yaml.dump(j_data, default_flow_style=False, sort_keys=False))
+                                updated_journeys.append(found_jfile)
+                        except Exception as e:
+                            logger.warning(f"Failed to update journey YAML {found_jfile.name}: {e}")
+                
+                if updated_journeys:
+                    console.print(f"[bold blue]📝 Updated {len(updated_journeys)} journey(s) with new implementation tracking.[/bold blue]")
+                    for uj in updated_journeys:
+                        files_to_stage.append(str(uj.resolve().relative_to(config.repo_root.resolve())))
+
             # Also stage story and runbook updates
             story_file_path = find_story_file(story_id) if story_id else None
             if story_file_path and story_file_path.exists():
-                files_to_stage.append(str(story_file_path))
+                files_to_stage.append(str(story_file_path.resolve().relative_to(config.repo_root.resolve())))
             if runbook_file and runbook_file.exists():
-                files_to_stage.append(str(runbook_file))
+                files_to_stage.append(str(runbook_file.resolve().relative_to(config.repo_root.resolve())))
             if files_to_stage:
                 try:
                     subprocess.run(

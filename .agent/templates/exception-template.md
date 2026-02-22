@@ -39,3 +39,9 @@ When this exception should be re-evaluated:
 ## Supersedes
 
 (Optional) Previous exception record.
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
+

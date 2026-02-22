@@ -471,6 +471,15 @@ def _validate_finding_against_source(
 
     finding_lower = finding.lower()
 
+    # ── Check 0: Mandatory Citation (Oracle Pattern) ──
+    # Findings must include a citation in the format (Source: ...) or [Source: ...]
+    if not re.search(r'\(Source:\s*[^)]+\)|\[Source:\s*[^\]]+\]', finding, re.IGNORECASE):
+        logger.info(
+            "False positive filtered (missing citation): '%s'",
+            finding[:80],
+        )
+        return False
+
     # ── Check -1: Governance self-exemption (ADR-027) ──
     # When governance.py is in the diff, the AI reviews its own code and flags
     # internal helpers (_resolve_file_path, _build_file_context, _validate_finding_against_source)
@@ -1334,7 +1343,7 @@ def convene_council_full(
                         "Output format (use EXACTLY this structure):\n"
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY: <one line summary>\n"
-                        "FINDINGS:\n- <finding 1>\n- <finding 2>\n"
+                        "FINDINGS:\n- <finding 1> (Source: [Exact file path or ADR ID])\n- <finding 2> (Source: [Exact file path or ADR ID])\n"
                         "REFERENCES:\n- <ADR-NNN, JRN-NNN, or EXC-NNN that support your findings>\n"
                         "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
                     )
@@ -1819,12 +1828,7 @@ def run_audit(
 
 
 def check_license_headers(repo_path: Path, all_files: List[Path], ignore_patterns: List[str]) -> List[str]:
-    """Check for license headers in all source files.
-    
-    Uses path-aware dual-license logic:
-    - .agent/ files: Justin Cook / Apache License 2.0
-    - All other files: Inspected Holding Pty Ltd / Proprietary
-    """
+    """Check for license headers in all source files."""
     
     missing_license_headers = []
     
@@ -1834,11 +1838,19 @@ def check_license_headers(repo_path: Path, all_files: List[Path], ignore_pattern
         re.compile(r"Licensed under the Apache License, Version 2.0", re.IGNORECASE),
     ]
     
-    # License patterns for application code (proprietary, Inspected Holding Pty Ltd)
-    app_license_patterns = [
-        re.compile(r"Copyright.*\d{4}.*Inspected Holding Pty Ltd", re.IGNORECASE),
-        re.compile(r"[Pp]roprietary and [Cc]onfidential", re.IGNORECASE),
-    ]
+    # License patterns for application code (configurable via template)
+    app_license_patterns = []
+    app_license_template = config.get_app_license_header()
+    
+    if app_license_template:
+        first_line = app_license_template.split('\n')[0].strip()
+        if first_line:
+            app_license_patterns.append(re.compile(re.escape(first_line), re.IGNORECASE))
+    else:
+        app_license_patterns = [
+            re.compile(r"Copyright.*\d{4}.*Justin Cook", re.IGNORECASE),
+            re.compile(r"Licensed under the Apache License, Version 2.0", re.IGNORECASE),
+        ]
     
     # Extensions to check
     EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".sh", ".swift", ".kt"}

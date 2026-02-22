@@ -48,5 +48,5 @@ This task aims to enhance the intelligence and functionality of Agent Councils (
 
 ### Manual Verification
 
-- [ ] Run `agent panel` on a branch with a known GitHub issue reference.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent panel` on a branch with a known GitHub issue reference.
 - [ ] Verify logs show: `Tool Call: github:get_issue` -> `Observation: ...` -> `Final Answer`.

@@ -51,7 +51,7 @@
   - Shared `_build_genai_client()` factory for Gemini and Vertex (same SDK, different auth).
   - Vertex participates in the fallback chain: `gh → gemini → vertex → openai → anthropic`.
   - Set `GOOGLE_CLOUD_PROJECT` (and optionally `GOOGLE_CLOUD_LOCATION`) to enable.
-  - See `docs/getting_started.md` for setup instructions.
+  - See `.agent/docs/getting_started.md` for setup instructions.
 
 - **Multi-Agent Governance Panel via Google ADK** (INFRA-061):
   - Opt-in ADK-based multi-agent orchestration for the governance panel.

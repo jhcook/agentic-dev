@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Implement automatic mapping of code changes to user journeys, enabling targeted regression testing and richer risk analysis during preflight checks. Build a reverse index from `implementation.files[]` patterns in journey YAMLs to journey IDs, cache it in SQLite, and surface "Affected Journeys" in both `agent impact` and `agent preflight`.
+Implement automatic mapping of code changes to user journeys, enabling targeted regression testing and richer risk analysis during preflight checks. Build a reverse index from `implementation.files[]` patterns in journey YAMLs to journey IDs, cache it in SQLite, and surface "Affected Journeys" in both `env -u VIRTUAL_ENV uv run agent impact` and `env -u VIRTUAL_ENV uv run agent preflight`.
 
 ## Linked Journeys
 
@@ -54,11 +54,11 @@ Implement automatic mapping of code changes to user journeys, enabling targeted 
 
 **@Docs**:
 
-- PASS. CHANGELOG.md updated with new `agent impact --rebuild-index` and `--json` flags. README section on impact analysis updated.
+- PASS. CHANGELOG.md updated with new `env -u VIRTUAL_ENV uv run agent impact --rebuild-index` and `--json` flags. README section on impact analysis updated.
 
 **@Product**:
 
-- PASS. "Affected Journeys" Rich table with copy-pasteable `pytest -m "journey(...)"` command is actionable. "Ungoverned file" warning suggests `agent journey backfill-tests` remediation.
+- PASS. "Affected Journeys" Rich table with copy-pasteable `pytest -m "journey(...)"` command is actionable. "Ungoverned file" warning suggests `env -u VIRTUAL_ENV uv run agent journey backfill-tests` remediation.
 
 **@Mobile** / **@Web**: No concerns — this is backend/CLI only.
 
@@ -336,10 +336,10 @@ Unit tests covering:
 
 ### Manual Verification
 
-- [ ] `agent impact INFRA-059 --base HEAD~1` outputs "Affected Journeys" Rich table
-- [ ] `agent impact INFRA-059 --json` outputs JSON with `affected_journeys` array
-- [ ] `agent impact INFRA-059 --rebuild-index` forces full index rebuild
-- [ ] `agent preflight` shows required journey tests with pytest command
+- [ ] `env -u VIRTUAL_ENV uv run agent impact INFRA-059 --base HEAD~1` outputs "Affected Journeys" Rich table
+- [ ] `env -u VIRTUAL_ENV uv run agent impact INFRA-059 --json` outputs JSON with `affected_journeys` array
+- [ ] `env -u VIRTUAL_ENV uv run agent impact INFRA-059 --rebuild-index` forces full index rebuild
+- [ ] `env -u VIRTUAL_ENV uv run agent preflight` shows required journey tests with pytest command
 - [ ] First run without index auto-builds silently
 
 ## Definition of Done

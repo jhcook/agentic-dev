@@ -1,7 +1,3 @@
-# Journey: JRN-018
-# Linked Story: INFRA-023
-# Title: Agent Config Command
-
 id: JRN-018
 title: Agent Config Command
 state: COMMITTED
@@ -70,4 +66,5 @@ implementation:
   - agent/core/config.py
   - agent/core/config_manager.py
   - agent/main.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_018.py

@@ -1,7 +1,3 @@
-# Journey: JRN-047
-# Linked Story: WEB-002
-# Title: Agent Console Foundation
-
 id: JRN-047
 title: Agent Console Foundation
 state: COMMITTED
@@ -52,4 +48,5 @@ implementation:
   - routers/admin.py
   - src/agent/commands/admin.py
   - src/backend/routers/admin.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_047.py

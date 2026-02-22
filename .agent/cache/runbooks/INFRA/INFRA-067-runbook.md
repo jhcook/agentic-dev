@@ -1,4 +1,4 @@
-# INFRA-067: Enhance `agent implement` with Post-Apply Governance Gates
+# INFRA-067: Enhance `env -u VIRTUAL_ENV uv run agent implement` with Post-Apply Governance Gates
 
 ## State
 
@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Enhance the `agent implement` CLI command to programmatically enforce post-apply governance phases (Security Scan, QA Validation, Documentation Check) instead of relying on AI agent interpretation of workflow instructions.
+Enhance the `env -u VIRTUAL_ENV uv run agent implement` CLI command to programmatically enforce post-apply governance phases (Security Scan, QA Validation, Documentation Check) instead of relying on AI agent interpretation of workflow instructions.
 
 ## Linked Journeys
 
@@ -23,7 +23,7 @@ Enhance the `agent implement` CLI command to programmatically enforce post-apply
 **@Qa**:
 
 - The Test Strategy covers unit and integration tests. Additional edge case testing should be considered (e.g., what happens if the `test_command` configured in `agent.yaml` is invalid).
-- Critical User Flows from `CRITICAL_FLOWS.mdc` aren't directly implicated in the new code itself, but end-to-end workflow using `agent implement` should be verified.
+- Critical User Flows from `CRITICAL_FLOWS.mdc` aren't directly implicated in the new code itself, but end-to-end workflow using `env -u VIRTUAL_ENV uv run agent implement` should be verified.
 
 **@Security**:
 
@@ -45,7 +45,7 @@ Enhance the `agent implement` CLI command to programmatically enforce post-apply
 **@Docs**:
 
 - A new `security_patterns.yaml` file needs to be documented (format, example patterns).
-- `agent implement` command documentation needs to be updated with the new flags (`--skip-tests`, `--skip-security`).
+- `env -u VIRTUAL_ENV uv run agent implement` command documentation needs to be updated with the new flags (`--skip-tests`, `--skip-security`).
 - The new `gates.py` module should have module-level documentation.
 
 **@Compliance**:
@@ -65,7 +65,7 @@ Enhance the `agent implement` CLI command to programmatically enforce post-apply
 **@Backend**:
 
 - Types should be strictly enforced in the new `gates.py` module.
-- API documentation (OpenAPI) will need to be reviewed if the changes to `agent implement` impact any existing API endpoints (unlikely, but should be checked).
+- API documentation (OpenAPI) will need to be reviewed if the changes to `env -u VIRTUAL_ENV uv run agent implement` impact any existing API endpoints (unlikely, but should be checked).
 
 ## Targeted Refactors & Cleanups (INFRA-043)
 
@@ -332,10 +332,10 @@ test_command: "make test"
 
 ### Manual Verification
 
-- [ ] Step 1: Create a dummy Python file with a function lacking a docstring. Run `agent implement` with `--apply` and verify that the documentation check blocks the implementation.
-- [ ] Step 2: Modify a file and include the string "sk-..." (an API key pattern). Run `agent implement` with `--apply` and verify that the security scan blocks the implementation.
-- [ ] Step 3: Run `agent implement` with `--apply --skip-tests --skip-security` and verify that the audit logs are printed to the console for both skipped gates.
-- [ ] Step 4: Configure a failing `test_command` in `agent.yaml` (e.g., `false`). Run `agent implement` with `--apply` and verify that the QA gate blocks the implementation.
+- [ ] Step 1: Create a dummy Python file with a function lacking a docstring. Run `env -u VIRTUAL_ENV uv run agent implement` with `--apply` and verify that the documentation check blocks the implementation.
+- [ ] Step 2: Modify a file and include the string "sk-..." (an API key pattern). Run `env -u VIRTUAL_ENV uv run agent implement` with `--apply` and verify that the security scan blocks the implementation.
+- [ ] Step 3: Run `env -u VIRTUAL_ENV uv run agent implement` with `--apply --skip-tests --skip-security` and verify that the audit logs are printed to the console for both skipped gates.
+- [ ] Step 4: Configure a failing `test_command` in `agent.yaml` (e.g., `false`). Run `env -u VIRTUAL_ENV uv run agent implement` with `--apply` and verify that the QA gate blocks the implementation.
 - [ ] Step 5: Verify that `--skip-journey-check` is functional. (Needs Journey setup, can use a dummy Journey)
 
 ## Definition of Done

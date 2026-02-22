@@ -4,7 +4,7 @@ Status: ACCEPTED
 
 ## Goal Description
 
-The objective is to enhance the `agent sync` command to handle large datasets (1000+ artifacts) efficiently and reliably by introducing pagination, upload chunking, progress reporting, and resume capability. This will resolve memory issues, improve performance, enhance usability, and maintain strict compliance with API and security requirements.
+The objective is to enhance the `env -u VIRTUAL_ENV uv run agent sync` command to handle large datasets (1000+ artifacts) efficiently and reliably by introducing pagination, upload chunking, progress reporting, and resume capability. This will resolve memory issues, improve performance, enhance usability, and maintain strict compliance with API and security requirements.
 
 ## Panel Review Findings
 

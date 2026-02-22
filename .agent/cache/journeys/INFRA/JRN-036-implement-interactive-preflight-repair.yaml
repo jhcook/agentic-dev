@@ -1,7 +1,3 @@
-# Journey: JRN-036
-# Linked Story: INFRA-042
-# Title: Implement Interactive Preflight Repair
-
 id: JRN-036
 title: Implement Interactive Preflight Repair
 state: COMMITTED
@@ -11,9 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: Develop an interactive "fix" mode for the `agent preflight` command to help developers resolve errors more efficiently.
-  When preflight checks fail, the tool will identify blockers, propose specific AI-generated fixes, allow developers to apply
-  and verify fixes in real-time, and ensure human oversight before any automated changes are finalized.
+description: Develop an interactive "fix" mode for the `agent preflight` command to
+  help developers resolve errors more efficiently. When preflight checks fail, the
+  tool will identify blockers, propose specific AI-generated fixes, allow developers
+  to apply and verify fixes in real-time, and ensure human oversight before any automated
+  changes are finalized.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -61,4 +59,5 @@ implementation:
   - agent/core/fixer.py
   - agent/tests/integration/test_preflight_interactive.py
   - agent/tests/unit/test_fixer.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_036.py

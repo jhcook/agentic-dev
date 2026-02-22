@@ -46,8 +46,10 @@ class NotionSync:
             self.token = os.getenv("NOTION_TOKEN")
             
         if not self.token:
-            logger.error("NOTION_TOKEN not found. Run 'agent secret login' or 'agent onboard'.")
-            raise typer.Exit(code=1)
+            logger.debug("NOTION_TOKEN not found. Notion sync is disabled.")
+            self.client = None
+            self.state = {}
+            return
 
         self.client = NotionClient(self.token)
         self.state = self._load_state()
@@ -61,8 +63,26 @@ class NotionSync:
         except json.JSONDecodeError:
             return {}
 
+    def ensure_synchronized(self) -> None:
+        """
+        Validates the Notion sync state before allowing Oracle Preflight.
+        Logs warning or raises error if the sync state is missing/stale.
+        """
+        if not self.client:
+            return
+
+        if not self.state:
+            logger.warning("Notion sync state is missing or invalid.")
+            from rich.console import Console
+            Console().print("[yellow]⚠️  Notion sync state is missing. Ensure you run 'agent sync init' to pull latest ADRs and Rules.[/yellow]")
+            return
+            
+        logger.debug("Notion sync state is present: %s", self.state)
+
     def pull(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None):
         """Pulls content from Notion to local cache."""
+        if not self.client:
+            return
         # 1. Stories
         if not artifact_type or artifact_type.lower() == "story":
             self._pull_category("Stories", config.stories_dir, "Stories", force, artifact_id)
@@ -77,6 +97,8 @@ class NotionSync:
 
     def push(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None):
         """Pushes local content to Notion."""
+        if not self.client:
+            return
         # 1. Stories
         if not artifact_type or artifact_type.lower() == "story":
             self._push_category("Stories", config.stories_dir, "Stories", force, artifact_id)

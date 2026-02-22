@@ -9,7 +9,7 @@ ACCEPTED
 Implement the foundational "Agent Console" infrastructure.
 
 1. **Frontend**: Initialize React/Vite/Tailwind in `web/`.
-2. **CLI**: `agent admin start` to launch Frontend (5173) and Backend (8000) concurrently.
+2. **CLI**: `env -u VIRTUAL_ENV uv run agent admin start` to launch Frontend (5173) and Backend (8000) concurrently.
 3. **API**: Basic Admin Router (`routers/admin.py`) for health checks.
 
 ## Panel Review Findings
@@ -19,7 +19,7 @@ Implement the foundational "Agent Console" infrastructure.
 **Sentiment**: Positive
 **Advice**:
 
-- **Process Management**: `agent admin start` must use `asyncio.create_subprocess_exec` to manage child processes (Uvicorn/Vite) and catch `SIGINT` to prevent zombie processes.
+- **Process Management**: `env -u VIRTUAL_ENV uv run agent admin start` must use `asyncio.create_subprocess_exec` to manage child processes (Uvicorn/Vite) and catch `SIGINT` to prevent zombie processes.
 - **Proxy**: Vite's `server.proxy` is the correct pattern to avoid CORS issues locally.
 
 ### @Security
@@ -79,12 +79,12 @@ Implement the foundational "Agent Console" infrastructure.
 
 ### Automated Tests
 
-1. **CLI Unit Test**: Mock `subprocess` to verify `agent admin start` attempts to launch both commands and handles `KeyboardInterrupt`.
+1. **CLI Unit Test**: Mock `subprocess` to verify `env -u VIRTUAL_ENV uv run agent admin start` attempts to launch both commands and handles `KeyboardInterrupt`.
 2. **API Test**: `TestClient` request to `/api/admin/health`.
 
 ### Manual Verification
 
-1. Run `agent admin start`.
+1. Run `env -u VIRTUAL_ENV uv run agent admin start`.
 2. Open `http://localhost:5173`.
 3. Verify page loads (React logo).
 4. Open `http://localhost:5173/api/admin/health` (Proxy test).

@@ -1,7 +1,3 @@
-# Journey: JRN-028
-# Linked Story: INFRA-033
-# Title: Enable MCP Tool Use for Agent Councils
-
 id: JRN-028
 title: Enable MCP Tool Use for Agent Councils
 state: COMMITTED
@@ -11,11 +7,13 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: This task aims to enhance the intelligence and functionality of Agent Councils (e.g., Preflight Council, Governance
-  Panel) by enabling them to autonomously leverage MCP tools like `github:get_issue` or `filesystem:read_file`. This capability
-  will allow the agents to perform deeper, context-aware analysis by dynamically interacting with the environment, rather
-  than relying solely on static git diffs. It ensures the agents can engage in a "Reason -> Act -> Observe" loop to generate
-  more accurate r
+description: This task aims to enhance the intelligence and functionality of Agent
+  Councils (e.g., Preflight Council, Governance Panel) by enabling them to autonomously
+  leverage MCP tools like `github:get_issue` or `filesystem:read_file`. This capability
+  will allow the agents to perform deeper, context-aware analysis by dynamically interacting
+  with the environment, rather than relying solely on static git diffs. It ensures
+  the agents can engage in a "Reason -> Act -> Observe" loop to generate more accurate
+  r
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -56,4 +54,5 @@ implementation:
   - agent/core/engine.py
   - agent/core/governance.py
   - tests/core/test_governance.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_028.py

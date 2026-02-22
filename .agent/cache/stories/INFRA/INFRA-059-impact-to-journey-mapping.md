@@ -6,7 +6,7 @@ COMMITTED
 
 ## Problem Statement
 
-The `agent impact` command identifies files touched by a changeset but doesn't map them to the user journeys those files support. A developer can modify `journey.py` without knowing it affects JRN-044's behavioral contract, and preflight has no way to flag that the relevant journey tests should run. The missing link between "what changed" and "what could regress" is the root cause of user-facing regressions slipping through governance.
+The `env -u VIRTUAL_ENV uv run agent impact` command identifies files touched by a changeset but doesn't map them to the user journeys those files support. A developer can modify `journey.py` without knowing it affects JRN-044's behavioral contract, and preflight has no way to flag that the relevant journey tests should run. The missing link between "what changed" and "what could regress" is the root cause of user-facing regressions slipping through governance.
 
 ## User Story
 
@@ -14,19 +14,19 @@ As a **developer governed by the agent framework**, I want the impact analysis t
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `agent impact` reads `implementation.files[]` and `implementation.tests[]` from all journey YAMLs (via `yaml.safe_load()`) and builds a reverse index: `file_pattern → [journey IDs]`. Patterns may be globs (`**/check.py`) or bare filenames (`check.py`).
-- [ ] **AC-2**: `agent impact --story STORY-ID` outputs an "Affected Journeys" Rich table (columns: Journey ID, Title, Matched Files, Test File) listing journeys whose `implementation.files` entries match the changeset.
-- [ ] **AC-3**: `agent impact --ai` includes affected journey context in the AI prompt for richer risk analysis.
-- [ ] **AC-4**: `agent preflight` uses the impact-to-journey map to identify which journey tests are *required* for the current changeset and outputs a copy-pasteable `pytest -m "journey(...)"` command.
+- [ ] **AC-1**: `env -u VIRTUAL_ENV uv run agent impact` reads `implementation.files[]` and `implementation.tests[]` from all journey YAMLs (via `yaml.safe_load()`) and builds a reverse index: `file_pattern → [journey IDs]`. Patterns may be globs (`**/check.py`) or bare filenames (`check.py`).
+- [ ] **AC-2**: `env -u VIRTUAL_ENV uv run agent impact --story STORY-ID` outputs an "Affected Journeys" Rich table (columns: Journey ID, Title, Matched Files, Test File) listing journeys whose `implementation.files` entries match the changeset.
+- [ ] **AC-3**: `env -u VIRTUAL_ENV uv run agent impact --ai` includes affected journey context in the AI prompt for richer risk analysis.
+- [ ] **AC-4**: `env -u VIRTUAL_ENV uv run agent preflight` uses the impact-to-journey map to identify which journey tests are *required* for the current changeset and outputs a copy-pasteable `pytest -m "journey(...)"` command.
 - [ ] **AC-5**: The journey reverse index is cached in a `journey_file_index` SQLite table and rebuilt lazily when any journey YAML's mtime exceeds the stored `updated_at`.
-- [ ] **AC-6**: `agent impact --rebuild-index` forces a full index rebuild regardless of staleness.
-- [ ] **AC-7**: `agent impact --json` outputs the complete impact report as JSON, including an `affected_journeys` array with `id`, `title`, `matched_files` count, and `rebuild_timestamp`.
+- [ ] **AC-6**: `env -u VIRTUAL_ENV uv run agent impact --rebuild-index` forces a full index rebuild regardless of staleness.
+- [ ] **AC-7**: `env -u VIRTUAL_ENV uv run agent impact --json` outputs the complete impact report as JSON, including an `affected_journeys` array with `id`, `title`, `matched_files` count, and `rebuild_timestamp`.
 - [ ] **AC-8**: Hybrid matching — try `fnmatch.fnmatch(changed_file, pattern)` first; fall back to `Path(changed_file).name == pattern` for bare filenames. `Path.resolve()` + `is_relative_to(repo_root)` validates all paths at index build time. Entries resolving outside the project root are rejected with a warning.
 - [ ] **AC-9**: Index rebuild warns if any single pattern matches >100 files (indicates overly broad touchpoint).
 - [ ] **AC-10**: Impact-to-journey mapping is integrated after the existing `DependencyAnalyzer.find_reverse_dependencies()` call in the `impact()` function (~line 992 in `check.py`).
 - [ ] **AC-11**: OpenTelemetry span `journey_index.rebuild` as child of `impact` span, with attributes `journey_count`, `file_glob_count`, `rebuild_duration_ms`, `cache_status` (`hit`/`miss`/`force_rebuild`).
 - [ ] **AC-12**: On first invocation with no index, auto-build silently (with `[dim]` status message). No `--rebuild-index` required for first use.
-- [ ] **AC-13**: "Ungoverned file" warning suggests `agent journey backfill-tests` for remediation.
+- [ ] **AC-13**: "Ungoverned file" warning suggests `env -u VIRTUAL_ENV uv run agent journey backfill-tests` for remediation.
 - [ ] **AC-14**: Index build logs to audit log for SOC 2 traceability. `--json` output includes `rebuild_timestamp`.
 - [ ] **Negative Test**: A file change matching no journey produces an "ungoverned file" warning with remediation suggestion.
 - [ ] **Negative Test**: A journey with `files: []` or missing `implementation.files` produces no index entries and no error.
@@ -90,7 +90,7 @@ Risks identified:
 - Unit: `test_path_traversal_rejection()` — journey entry `../../etc/passwd` rejected at index build time.
 - Unit: a file not in any journey produces "ungoverned" warning with remediation suggestion.
 - Unit: overlapping globs deduplicate journey results by journey ID.
-- Integration: `agent impact INFRA-059 --base HEAD~1` outputs "Affected Journeys" Rich table.
+- Integration: `env -u VIRTUAL_ENV uv run agent impact INFRA-059 --base HEAD~1` outputs "Affected Journeys" Rich table.
 - Integration: preflight identifies required journey tests and outputs copy-pasteable pytest command.
 - Integration: first-run auto-build creates index without `--rebuild-index`.
 

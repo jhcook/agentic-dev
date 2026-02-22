@@ -13,7 +13,7 @@ Enhance the VoiceOrchestrator with tool support, persistent memory, configurable
 - **@Architect**: The plan is sound. Decoupling tool definitions from the Orchestrator is crucial. The use of `LangGraph` is a good choice. We should explore other graph-based frameworks if needed for complexity. `SqliteSaver` is a reasonable starting point. Consider scalability implications as the agent's user base grows. Should evaluate alternatives (Postgres, Redis) for long-term persistence. Need to detail the Tool definition and interface more concretely.
 - **@Security**: Sandboxing is critical. Ensure `lookup_documentation` and any other tools cannot be abused for arbitrary code execution or data exfiltration. Validate user input thoroughly before passing it to the tools. The verbal confirmation for sensitive tools is a good first step. Implement rate limiting and usage quotas. Must prevent prompt injection attacks via the configurable prompt. The file system access limitations should be very specific and easily auditable. Tools should run with the least privilege necessary.
 - **@QA**: We need to define clear test cases for each tool, covering both success and failure scenarios. Boundary conditions for tool inputs should be tested. The latency handling with "Thinking..." audio should be tested under varying network conditions and tool execution times. Consider using synthetic speech to test voice agent responses to a controlled set of tool outputs. Must have negative test cases for the safety confirmation mechanism.
-- **@Docs**: The implementation requires updating the README to describe how to configure and use tools with the VoiceOrchestrator. Example configurations and tool definitions should be provided. The format for the system prompt via `agent config` needs to be documented clearly. Any changes to the API need corresponding documentation in the OpenAPI spec (though this seems more backend).
+- **@Docs**: The implementation requires updating the README to describe how to configure and use tools with the VoiceOrchestrator. Example configurations and tool definitions should be provided. The format for the system prompt via `env -u VIRTUAL_ENV uv run agent config` needs to be documented clearly. Any changes to the API need corresponding documentation in the OpenAPI spec (though this seems more backend).
 - **@Compliance**: Ensure compliance with data privacy regulations (e.g., GDPR, CCPA) when storing conversation history. User consent for data retention should be obtained. Anonymization or pseudonymization techniques should be considered for sensitive data. Validate the "sensitive tools" list is maintained, and that access is logged for audit purposes.
 - **@Observability**: We need to define specific metrics for tool execution duration, frequency of tool usage, and any errors encountered during tool execution. The arguments passed to each tool should be logged (with appropriate redaction of sensitive information). The system prompt needs to be included in the logs for debugging purposes. Define alerting thresholds for tool latency and error rates. Structured logging must be enforced.
 
@@ -401,7 +401,7 @@ mkdir -p .agent/storage/
 #### MODIFY backend/config.py
 
 - Add configuration options for the system prompt.
-- Add a method to update the system prompt via `agent config`.
+- Add a method to update the system prompt via `env -u VIRTUAL_ENV uv run agent config`.
 
 ```python
 # Example (Conceptual - Adapt to your actual code)
@@ -493,7 +493,7 @@ if __name__ == "__main__":
 ### Documentation
 
 - [ ] CHANGELOG.md updated
-- [ ] README.md updated to describe how to configure and use tools with the VoiceOrchestrator. Example configurations and tool definitions should be provided. The format for the system prompt via `agent config` is documented clearly.
+- [ ] README.md updated to describe how to configure and use tools with the VoiceOrchestrator. Example configurations and tool definitions should be provided. The format for the system prompt via `env -u VIRTUAL_ENV uv run agent config` is documented clearly.
 - [ ] API Documentation updated in `docs/openapi.yaml` if any API endpoints are added/modified.
 
 ### Observability

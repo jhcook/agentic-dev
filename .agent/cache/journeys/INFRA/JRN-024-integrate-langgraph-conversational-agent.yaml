@@ -1,7 +1,3 @@
-# Journey: JRN-024
-# Linked Story: INFRA-029
-# Title: Integrate LangGraph Conversational Agent
-
 id: JRN-024
 title: Integrate LangGraph Conversational Agent
 state: COMMITTED
@@ -11,9 +7,11 @@ tags:
 - infra
 - voice
 actor: developer using voice assistant
-description: Replace the placeholder echo agent in `VoiceOrchestrator` with a production-ready LangGraph-powered conversational
-  agent. This change enables stateful, multi-turn conversations with tool-calling capabilities, streaming responses, and conversation
-  checkpointing—transforming the voice assistant from a simple echo service into an intelligent conversational AI.
+description: "Replace the placeholder echo agent in `VoiceOrchestrator` with a production-ready\
+  \ LangGraph-powered conversational agent. This change enables stateful, multi-turn\
+  \ conversations with tool-calling capabilities, streaming responses, and conversation\
+  \ checkpointing\u2014transforming the voice assistant from a simple echo service\
+  \ into an intelligent conversational AI."
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -63,4 +61,5 @@ implementation:
   files:
   - orchestrator.py
   - test_voice_flow.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_024.py

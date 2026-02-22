@@ -1,7 +1,3 @@
-# Journey: JRN-029
-# Linked Story: INFRA-034
-# Title: Implement ReAct Agent Loop Engine
-
 id: JRN-029
 title: Implement ReAct Agent Loop Engine
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - web_ui
 actor: developer using admin console
-description: Build a robust, stateful `AgentExecutor` engine that enables "ReAct" (Reason + Act) loops. This decouples the
-  agent's cognitive cycle (Thinking -> Tool Call -> Observation) from the stateless `AIService`. It provides the foundational
+description: Build a robust, stateful `AgentExecutor` engine that enables "ReAct"
+  (Reason + Act) loops. This decouples the agent's cognitive cycle (Thinking -> Tool
+  Call -> Observation) from the stateless `AIService`. It provides the foundational
   "Brain" needed for Council agents to using tools securely and effectively.
 preconditions:
 - Agent CLI is installed and configured
@@ -65,4 +62,5 @@ implementation:
   - agent/core/engine/parser.py
   - agent/core/engine/typedefs.py
   - scripts/test_agent_loop.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_029.py

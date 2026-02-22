@@ -3,7 +3,7 @@
 Status: ACCEPTED
 
 ## Goal Description
-Enhance the `agent impact` command by implementing robust dependency analysis using AST parsing for Python and regex for JavaScript. This will provide accurate reverse dependency tracking to help reviewers assess risk without requiring AI.
+Enhance the `env -u VIRTUAL_ENV uv run agent impact` command by implementing robust dependency analysis using AST parsing for Python and regex for JavaScript. This will provide accurate reverse dependency tracking to help reviewers assess risk without requiring AI.
 
 ---
 
@@ -33,7 +33,7 @@ Enhance the `agent impact` command by implementing robust dependency analysis us
 ---
 
 ### **@Docs**
-- Update README.md to describe improved `agent impact` functionality.
+- Update README.md to describe improved `env -u VIRTUAL_ENV uv run agent impact` functionality.
 - Document known limitations (dynamic imports, specialized syntax).
 - Add internal documentation for maintainers.
 
@@ -381,7 +381,7 @@ def is_parsable_file(file_path: Path) -> bool:
 
 ### Documentation
 - [ ] CHANGELOG.md updated
-- [ ] README.md updated with improved `agent impact` description
+- [ ] README.md updated with improved `env -u VIRTUAL_ENV uv run agent impact` description
 - [ ] Code has comprehensive docstrings
 
 ### Observability

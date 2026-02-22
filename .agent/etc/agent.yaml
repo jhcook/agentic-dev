@@ -1,13 +1,13 @@
 panel:
-  engine: native
+  engine: adk
   num_retries: 5
 agent:
   # provider: gemini | vertex | openai | anthropic | gh
-  provider: gemini
+  provider: vertex
   test_command: "make test"
   models:
     gemini: models/gemini-pro-latest
-    vertex: gemini-pro-latest
+    vertex: gemini-2.5-pro
   github:
     tool: mcp
   mcp:
@@ -19,3 +19,14 @@ agent:
         - '@notionhq/notion-mcp-server'
         env:
           NOTION_KEY: ${NOTION_TOKEN}
+      notebooklm:
+        command: uv
+        args:
+        - tool
+        - run
+        - --from
+        - notebooklm-mcp-server
+        - notebooklm-mcp
+env:
+  CLOUD_ML_REGION: australia-southeast1
+  NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com

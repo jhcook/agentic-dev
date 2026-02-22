@@ -3,7 +3,7 @@
 Status: ACCEPTED
 
 ## Goal Description
-Refactor `agent lint` to support scanning arbitrary paths and the entire repository (`--all`). It should dispatch to the correct linter (`ruff` or `shellcheck`) based on file extension and operate on the provided path (or current working directory), rather than hardcoded internal paths.
+Refactor `env -u VIRTUAL_ENV uv run agent lint` to support scanning arbitrary paths and the entire repository (`--all`). It should dispatch to the correct linter (`ruff` or `shellcheck`) based on file extension and operate on the provided path (or current working directory), rather than hardcoded internal paths.
 
 ## Panel Review Findings
 {panel_checks}
@@ -23,13 +23,13 @@ Refactor `agent lint` to support scanning arbitrary paths and the entire reposit
 
 ## Verification Plan
 ### Automated Tests
-- [ ] `agent lint --all` passes on the repo.
-- [ ] `agent lint .agent/src` passes.
+- [ ] `env -u VIRTUAL_ENV uv run agent lint --all` passes on the repo.
+- [ ] `env -u VIRTUAL_ENV uv run agent lint .agent/src` passes.
 
 ### Manual Verification
 - [ ] `cd web && agent lint` (should scan web dir).
-- [ ] `agent lint --all` from root covers `.agent` and any web/mobile directories.
-- [ ] Verify `agent lint` correctly invokes `eslint` for TS files.
+- [ ] `env -u VIRTUAL_ENV uv run agent lint --all` from root covers `.agent` and any web/mobile directories.
+- [ ] Verify `env -u VIRTUAL_ENV uv run agent lint` correctly invokes `eslint` for TS files.
 
 ## Definition of Done
 ### Documentation

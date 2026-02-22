@@ -18,7 +18,7 @@ Everything you need to know about AI providers, model selection, and token manag
 ```bash
 export GEMINI_API_KEY="AIza..."
 # Or
-export GOOGLE_GEMINI_API_KEY="AIza..."
+export GEMINI_API_KEY="AIza..."
 ```
 
 **Get API Key:**

@@ -1,47 +1,55 @@
 # INFRA-026: Agent Secret Management Command
 
 ## State
+
 ACCEPTED
 
 ## Goal Description
+
 To design, implement, and document a secure and flexible secret management system integrated into the Agent CLI. This will enable developers to securely manage API keys and credentials using a centralized, encrypted storage system that supports key rotation, encrypted storage, seamless integration, and audit logging.
 
 ## Panel Review Findings
 
-### **@Architect**:
+### **@Architect**
+
 - The overall architecture seems solid and aligns with the functional and non-functional requirements.
 - The integration of AES-256-GCM ensures robust encryption. Using `PBKDF2` for key derivation aligns with industry standards, but particular care must be taken to select a suitable number of iterations to avoid performance issues during decryption.
 - Integration across different components shows a good separation of concerns. However, the fallback to environment variables introduces a potential lack of control over these sensitive values; an automatic prompt to migrate environment variables to the secret manager could enhance security.
 - It is critical to ensure scalability in handling large numbers of secrets since developers may deal with numerous microservices, each requiring multiple secrets.
 
-### **@Security**:
+### **@Security**
+
 - The usage of AES-256-GCM with PBKDF2 for key derivation is a secure approach. However, the master password must be adequately protected during interactive processes and not echo in the terminal.
 - It is essential to implement rate-limiting and temporary lockout mechanisms for repeated incorrect master password attempts to mitigate brute-force attacks.
 - Consider implementing a secure random generator for salt values and periodically updating the master password.
 - The audit logging mechanism should follow the principle of least privilege and avoid logging key details (e.g., keys should never appear in their plaintext or encrypted forms in the logs).
 - Verify masking logic in the `list` command to prevent accidental leakage of secrets.
 
-### **@QA**:
+### **@QA**
+
 - The test strategy is well thought out and covers unit, integration, and security testing. However, consider expanding edge-case testing, such as corrupted encrypted files, missing permissions on the `.agent/secrets/` directory, and API key retrieval for undefined services.
 - Document clear test cases for the CLI commands, focusing on inputs/outputs and error handling (e.g., invalid commands, missing flags).
 - Ensure backward compatibility tests are in place for the fallback mechanism to environment variables.
 - Confirm test data for integration testing does not include real secrets and adheres to GDPR compliance.
 
-### **@Docs**:
+### **@Docs**
+
 - The CLI commands and their usage should be fully documented in `.agent/docs/`. Examples for each subcommand (`init`, `set`, `get`, etc.) will improve usability.
-- A detailed migration guide should explain how to import pre-existing environment variables into the secret manager (e.g., instructions for `agent secret import`).
+- A detailed migration guide should explain how to import pre-existing environment variables into the secret manager (e.g., instructions for `env -u VIRTUAL_ENV uv run agent secret import`).
 - Update the Developer Onboarding guide to reflect these changes and remove outdated instructions for `.env` setup.
 - Define the structure and fields stored in `.agent/secrets/` in documentation to help engineers and users understand the design.
 - Include a glossary of terms, such as "PBKDF2", "AES-256-GCM", "master password", etc., for less experienced developers.
 
-### **@Compliance**:
+### **@Compliance**
+
 - The logging mechanism must ensure compliance with SOC2 and GDPR. Ensure no sensitive data (e.g., PII or plaintext credentials) is logged either intentionally or due to poorly masked display logic.
 - The rollback plan of encrypted secrets to `.env` format should clarify how it ensures data compliance during the recovery phase.
 - Documentation must include SOC2 compliance notes, showcasing how the system meets requirements for securing and rotating secrets while maintaining access visibility.
 - All relevant ADRs should be referenced, following governance rules (`adr-standards.mdc`). A new ADR must document the architectural choice of secret management.
 - Add a validation step in the CI pipeline to confirm no secrets are stored in plaintext or committed to the repository, as per governance guidance.
 
-### **@Observability**:
+### **@Observability**
+
 - Ensure audit logs include critical metadata, such as timestamps, operation type (e.g., `set`, `get`, etc.), user/agent ID, and status. This should integrate with existing observability pipelines.
 - Logs should be aggregated in the same logging platform as other Agent CLI events, with a tag to allow easy filtering of secret management events for investigation purposes.
 - Metrics for usage patterns (e.g., frequency of secret access to LLM providers) are vital for detecting anomalies or security breaches.
@@ -107,6 +115,7 @@ class SecretManager:
 ```
 
 **Key Implementation Details:**
+
 - **Encryption**: Use `cryptography` library's `Fernet` or `AESGCM`
 - **PBKDF2**: 100,000+ iterations with SHA-256
 - **File Permissions**: Use `os.chmod(path, 0o600)` for files, `0o700` for directory
@@ -175,7 +184,7 @@ def import_secrets(service: str):
     # Define service mappings:
     #   supabase: SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
     #   openai: OPENAI_API_KEY
-    #   gemini: GEMINI_API_KEY, GOOGLE_GEMINI_API_KEY
+    #   gemini: GEMINI_API_KEY, GEMINI_API_KEY
     #   anthropic: ANTHROPIC_API_KEY
     # Read from environment
     # Store each as encrypted secret
@@ -183,6 +192,7 @@ def import_secrets(service: str):
 ```
 
 **Error Handling:**
+
 - Invalid master password: "Incorrect password. X attempts remaining."
 - Missing service file: "Service '{service}' not configured."
 - Permission errors: "Cannot write to .agent/secrets/. Check permissions."
@@ -230,14 +240,15 @@ def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]
 Replace direct `os.getenv()` calls:
 
 **Lines 54, 66, 80, 267:**
+
 ```python
 # Before
-gemini_key = os.getenv("GOOGLE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 # After
 from agent.core.config import get_secret
 gemini_key = get_secret("api_key", "gemini") or \
-             os.getenv("GOOGLE_GEMINI_API_KEY") or \
+             os.getenv("GEMINI_API_KEY") or \
              os.getenv("GEMINI_API_KEY")
 ```
 
@@ -376,11 +387,13 @@ def test_import_command():
 ## Verification Plan
 
 ### Automated Tests
+
 - [x] Test secrets manager ensures AES-256-GCM encryption and PBKDF2 key derivation work consistently.
 - [x] Verify secret import/export from and to environment variables and `.env` files.
 - [x] Validate backward compatibility for configurations using existing environment variables.
 
 ### Manual Verification
+
 - [ ] Verify the CLI commands flow comprehensively: init, set, get, list, delete, import, export.
 - [ ] Perform compliance validation by running a simulated SOC2 audit for secret management operations.
 - [ ] Test with invalid master passwords for expected errors and messages.
@@ -388,23 +401,27 @@ def test_import_command():
 ## Definition of Done
 
 ### Documentation
+
 - [ ] Instructions for CLI commands added to `README.md`.
 - [ ] Migration guide added to `docs/`.
 - [ ] Glossary added for encryption-specific terms.
 - [ ] Ensure ADR for Secret Management Architecture is created and referenced in implementation.
 
 ### Observability and Security
+
 - [ ] Audit logs for all secret management operations integrate with existing logging solutions.
 - [ ] Default logs include operation type, user ID, and timestamps (no sensitive data).
 - [ ] Metrics provided for secret usage and errors.
 - [ ] Failed decryption attempts trigger alert notifications.
 
 ### Deployment Readiness
-- [ ] Compliance preflight check incorporated in `agent preflight`.
+
+- [ ] Compliance preflight check incorporated in `env -u VIRTUAL_ENV uv run agent preflight`.
 - [ ] CI pipeline validates the absence of plaintext secrets or configuration.
 - [ ] Backward compatibility verified.
 
 ### Testing
+
 - [ ] 100% test coverage for `SecretsManager`.
 - [ ] Unit and integration tests pass successfully.
 - [ ] Manual testing checklist completed.

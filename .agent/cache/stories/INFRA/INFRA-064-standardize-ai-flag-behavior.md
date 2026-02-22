@@ -86,8 +86,8 @@ Not all commands degrade the same way when offline:
 
 ### Integration Tests
 
-- [ ] Run `agent new-story --offline INFRA-TEST` → verify it skips AI and opens editor.
-- [ ] Run `agent preflight` with network disabled → verify clean error without traceback.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent new-story --offline INFRA-TEST` → verify it skips AI and opens editor.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent preflight` with network disabled → verify clean error without traceback.
 
 ## Impact Analysis Summary
 

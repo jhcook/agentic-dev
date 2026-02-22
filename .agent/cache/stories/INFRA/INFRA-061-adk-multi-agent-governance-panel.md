@@ -30,7 +30,7 @@ As a **developer governed by the agent framework**, I want the governance panel 
 - [ ] **AC-8**: `convene_council_full` dispatches to `_convene_council_adk()` or `_convene_council_legacy()` based on `panel.engine` config read from `agent.yaml` (under `panel:` section), defaulting to `legacy`. Uses `config.load_yaml(config.etc_dir / "agent.yaml").get("panel", {}).get("engine", "legacy")` or a new `config.panel_engine` property. Note: `Config` has no generic `get()` — AC references the dotted-key pattern, not a direct method call.
 - [ ] **AC-9**: Fallback covers: `ImportError` (ADK not installed), `asyncio.TimeoutError`, ADK-specific exceptions (e.g., `google.adk.AgentError`), and generic `Exception`. Each produces a distinct warning. Fallback message says: `pip install 'agent[adk]'`.
 - [ ] **AC-10**: The ADK panel respects existing `_filter_relevant_roles()` — skipped roles don't get instantiated as agents. Filtered role list is passed to the orchestrator factory.
-- [ ] **AC-11**: CLI flag `agent preflight --panel-engine adk` overrides config per-invocation for testing.
+- [ ] **AC-11**: CLI flag `env -u VIRTUAL_ENV uv run agent preflight --panel-engine adk` overrides config per-invocation for testing.
 - [ ] **AC-12**: Thread safety: `AIServiceModelAdapter` uses `threading.Lock()` to serialize concurrent LLM calls through the `AIService` singleton (module-level at `service.py:728`). Document that this negates parallelism benefits initially; `_ensure_initialized()` and `try_switch_provider()` mutate shared state.
 - [ ] **AC-13**: Async event loop: `_convene_council_adk()` uses `asyncio.run()` at the top of the function, wrapping the entire orchestration. NOT inside individual agent calls. Per ADR-028, CLI is synchronous — validate no nested `asyncio.run()` from providers.
 - [ ] **AC-14**: Each tool invocation has a 10-second timeout. No write or network tools are permitted.
@@ -134,7 +134,7 @@ Risks identified:
 ## Rollback Plan
 
 - Set `panel.engine: legacy` in `agent.yaml` (instant rollback, no code changes).
-- CLI override: `agent preflight --panel-engine legacy`.
+- CLI override: `env -u VIRTUAL_ENV uv run agent preflight --panel-engine legacy`.
 - Remove `google-adk` from optional dependencies if needed.
 - `governance.py` retains the legacy path indefinitely as the fallback.
 - Audit log format identical — no evidence collection disruption.

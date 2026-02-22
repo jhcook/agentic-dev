@@ -8,13 +8,13 @@ COMMITTED
 Currently, configuring the agent requires manually editing YAML files (e.g., `.agent/etc/router.yaml`). This is error-prone and less convenient than a CLI interface. Users need a quick way to view and modify configuration settings, such as the active AI model or provider, directly from the command line.
 
 ## User Story
-As a developer, I want to use `agent config get` and `agent config set` commands so that I can easily manage my agent configuration without manually editing YAML files.
+As a developer, I want to use `env -u VIRTUAL_ENV uv run agent config get` and `env -u VIRTUAL_ENV uv run agent config set` commands so that I can easily manage my agent configuration without manually editing YAML files.
 
 ## Acceptance Criteria
-- [ ] **Scenario 1**: `agent config set <key> <value>` updates the configuration in the appropriate file and persists it.
-- [ ] **Scenario 2**: `agent config get <key>` retrieves and displays the current value of a configuration key.
-- [ ] **Scenario 3**: Support dot-notation for nested keys (e.g., `agent config set models.gemini.deployment_id gemini-2.0-flash`).
-- [ ] **Scenario 4**: `agent config list` (or similar) displays all current configurations.
+- [ ] **Scenario 1**: `env -u VIRTUAL_ENV uv run agent config set <key> <value>` updates the configuration in the appropriate file and persists it.
+- [ ] **Scenario 2**: `env -u VIRTUAL_ENV uv run agent config get <key>` retrieves and displays the current value of a configuration key.
+- [ ] **Scenario 3**: Support dot-notation for nested keys (e.g., `env -u VIRTUAL_ENV uv run agent config set models.gemini.deployment_id gemini-2.0-flash`).
+- [ ] **Scenario 4**: `env -u VIRTUAL_ENV uv run agent config list` (or similar) displays all current configurations.
 - [ ] **Negative Test**: System handles invalid keys or values gracefully (e.g., setting a non-existent key, or invalid type).
 
 ## Non-Functional Requirements
@@ -32,7 +32,7 @@ As a developer, I want to use `agent config get` and `agent config set` commands
 
 ## Test Strategy
 - Unit tests for `config set` and `config get` logic.
-- Integration test ensuring `agent config set` changes persist and are reflected in subsequent agent runs.
+- Integration test ensuring `env -u VIRTUAL_ENV uv run agent config set` changes persist and are reflected in subsequent agent runs.
 
 ## Rollback Plan
 - Revert the code changes.

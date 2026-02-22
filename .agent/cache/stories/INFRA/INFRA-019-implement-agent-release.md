@@ -7,11 +7,11 @@ COMMITTED
 Releasing new versions of the agent (or the project it manages) is a manual process involving editing `CHANGELOG.md`, bumping version numbers in multiple files (like `pyproject.toml`, `package.json`), and creating git tags. This is prone to human error (forgetting a file, malformed tags) and drift between the documented changes and actual commits.
 
 ## User Story
-As a Release Manager, I want to run `agent release [major|minor|patch]` to automate the version bumping, changelog generation, and tagging process, ensuring a consistent and compliant release artifact.
+As a Release Manager, I want to run `env -u VIRTUAL_ENV uv run agent release [major|minor|patch]` to automate the version bumping, changelog generation, and tagging process, ensuring a consistent and compliant release artifact.
 
 ## Acceptance Criteria
 - [ ] **SemVer Bump**: The command accepts a bump type (major, minor, patch) and updates the version in target files. Target files should be configurable (e.g., in `agent.yaml`), strictly defaulting to `package.sh` and `pyproject.toml`.
-- [ ] **Pre-Release Verification**: Runs `agent check` (linting/tests) *before* making any changes. Fails if checks fail, unless `--force` is provided.
+- [ ] **Pre-Release Verification**: Runs `env -u VIRTUAL_ENV uv run agent check` (linting/tests) *before* making any changes. Fails if checks fail, unless `--force` is provided.
 - [ ] **Changelog Gen**: Scans git history since the last tag. Uses AI to summarize and *categorize* commits into "Added", "Fixed", "Changed", "Removed" sections (Keep a Changelog format).
 - [ ] **Story Linkage**: The generated changelog explicitly links to the Story IDs (INFRA-XXX) found in the commit messages.
 - [ ] **Git Tagging**: Commits changes and creates a git tag. Uses GPG signing (`git tag -s`) if a signing key is configured; otherwise falls back to annotated tags (`-a`).

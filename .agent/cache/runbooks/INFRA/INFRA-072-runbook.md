@@ -1,4 +1,4 @@
-# INFRA-072: Create `agent review-voice` CLI Command
+# INFRA-072: Create `env -u VIRTUAL_ENV uv run agent review-voice` CLI Command
 
 ## State
 
@@ -6,7 +6,7 @@ ACCEPTED
 
 ## Goal Description
 
-Create a new `agent review-voice` CLI command that fetches the last voice agent session via `fetch_last_session.py`, sends it to AI for analysis (latency, accuracy, tone, interruption), and outputs structured UX feedback. This replaces the fully-manual `/review-voice` workflow.
+Create a new `env -u VIRTUAL_ENV uv run agent review-voice` CLI command that fetches the last voice agent session via `fetch_last_session.py`, sends it to AI for analysis (latency, accuracy, tone, interruption), and outputs structured UX feedback. This replaces the fully-manual `/review-voice` workflow.
 
 ## Linked Journeys
 
@@ -55,7 +55,7 @@ Create a new `agent review-voice` CLI command that fetches the last voice agent 
 - Replace 25-line manual process with CLI-first instructions:
 
   ```
-  1. Run `agent review-voice`
+  1. Run `env -u VIRTUAL_ENV uv run agent review-voice`
   2. Review the structured UX feedback
   ```
 
@@ -90,5 +90,5 @@ Create a new `agent review-voice` CLI command that fetches the last voice agent 
 
 ### Manual Verification
 
-- [ ] `agent review-voice --help` shows correct usage
-- [ ] `agent review-voice` with no voice infra reports cleanly
+- [ ] `env -u VIRTUAL_ENV uv run agent review-voice --help` shows correct usage
+- [ ] `env -u VIRTUAL_ENV uv run agent review-voice` with no voice infra reports cleanly

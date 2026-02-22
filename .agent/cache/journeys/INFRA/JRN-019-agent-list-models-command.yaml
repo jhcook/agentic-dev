@@ -1,7 +1,3 @@
-# Journey: JRN-019
-# Linked Story: INFRA-024
-# Title: Agent List Models Command
-
 id: JRN-019
 title: Agent List Models Command
 state: COMMITTED
@@ -15,7 +11,8 @@ description: '### Testing
 
   - [ ] Unit test coverage >90% for new code paths.
 
-  - [ ] Integration test runs without errors when provider credentials are valid and available.'
+  - [ ] Integration test runs without errors when provider credentials are valid and
+  available.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -56,4 +53,5 @@ implementation:
   - agent/core/ai/service.py
   - agent/utils/logging.py
   - tests/test_ai_service.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_019.py

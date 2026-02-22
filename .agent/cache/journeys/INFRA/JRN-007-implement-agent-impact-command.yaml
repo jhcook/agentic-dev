@@ -1,7 +1,3 @@
-# Journey: JRN-007
-# Linked Story: INFRA-007
-# Title: Implement Agent Impact Command
-
 id: JRN-007
 title: Implement Agent Impact Command
 state: COMMITTED
@@ -11,8 +7,9 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: This command will generate an AI-driven impact analysis report based on a comparison of the staged changes or
-  against a specific branch (via `--base` flag). As an optional enhancement, the command can also update the "Impact Analysis
+description: This command will generate an AI-driven impact analysis report based
+  on a comparison of the staged changes or against a specific branch (via `--base`
+  flag). As an optional enhancement, the command can also update the "Impact Analysis
   Summary" section of the corresponding story markdown document directly.
 preconditions:
 - Agent CLI is installed and configured
@@ -54,4 +51,5 @@ implementation:
   - agent/commands/check.py
   - agent/core/ai/prompts.py
   - agent/core/logging/impact.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_007.py

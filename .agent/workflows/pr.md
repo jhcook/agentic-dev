@@ -11,9 +11,9 @@ Open a GitHub Pull Request for the current branch. Runs preflight governance che
 ## PROCESS
 
 1. **Run** `agent pr --story <STORY-ID>` to create a PR with preflight checks.
-2. **AI summary** with `agent pr --story <STORY-ID> --ai` for AI-generated PR body.
-3. **Open in browser** with `agent pr --story <STORY-ID> --web`.
-4. **Draft PR** with `agent pr --story <STORY-ID> --draft`.
+2. **Open in browser** with `agent pr --story <STORY-ID> --web`.
+3. **Draft PR** with `agent pr --story <STORY-ID> --draft`.
+4. **Disable AI summary** with `agent pr --story <STORY-ID> --offline` (requires manual CLI input for PR body).
 5. **Skip preflight** with `agent pr --story <STORY-ID> --skip-preflight` (audit-logged with timestamp).
 
 ## FLAGS
@@ -23,7 +23,7 @@ Open a GitHub Pull Request for the current branch. Runs preflight governance che
 | `--story <ID>` | Story ID (auto-inferred from branch if omitted) |
 | `--web` | Open PR in browser after creation |
 | `--draft` | Create draft PR |
-| `--ai` | Enable AI-generated PR body summary |
+| `--offline` | Disable AI-generated PR body and use manual input |
 | `--provider <name>` | Force AI provider (gh, gemini, vertex, openai, anthropic) |
 | `--skip-preflight` | Skip preflight checks (audit-logged with timestamp) |
 

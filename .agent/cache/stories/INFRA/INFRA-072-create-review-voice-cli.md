@@ -1,4 +1,4 @@
-# INFRA-072: Create `agent review-voice` CLI Command
+# INFRA-072: Create `env -u VIRTUAL_ENV uv run agent review-voice` CLI Command
 
 ## State
 
@@ -10,15 +10,15 @@ The `/review-voice` workflow is the only workflow with zero CLI backing. It inst
 
 ## User Story
 
-As a developer using `/review-voice`, I want an `agent review-voice` command that fetches the last voice session, runs AI analysis, and outputs structured UX feedback, so that voice session review is a single CLI invocation.
+As a developer using `/review-voice`, I want an `env -u VIRTUAL_ENV uv run agent review-voice` command that fetches the last voice session, runs AI analysis, and outputs structured UX feedback, so that voice session review is a single CLI invocation.
 
 ## Acceptance Criteria
 
-- [ ] **AC1: Session Fetch**: `agent review-voice` executes `fetch_last_session.py` and captures the output.
+- [ ] **AC1: Session Fetch**: `env -u VIRTUAL_ENV uv run agent review-voice` executes `fetch_last_session.py` and captures the output.
 - [ ] **AC2: AI Analysis**: The captured session history is sent to the AI with a prompt evaluating latency, accuracy, tone, and interruption.
 - [ ] **AC3: Structured Output**: Output includes per-category ratings and concrete recommendations for `voice_system_prompt.txt` or `voice.yaml`.
 - [ ] **AC4: No Session Handling**: If no active session is found, the CLI reports cleanly and exits 0.
-- [ ] **AC5: Workflow Simplification**: `/review-voice` workflow is reduced to calling `agent review-voice`.
+- [ ] **AC5: Workflow Simplification**: `/review-voice` workflow is reduced to calling `env -u VIRTUAL_ENV uv run agent review-voice`.
 - [ ] **Negative Test**: Missing `fetch_last_session.py` script produces a clear error.
 
 ## Non-Functional Requirements

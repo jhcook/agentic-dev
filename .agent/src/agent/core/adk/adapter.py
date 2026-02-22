@@ -62,8 +62,10 @@ class AIServiceModelAdapter(BaseLlm):
         # BaseLlm is Pydantic and requires `model: str`.
         # Pull the configured model name from ai_service / config.
         from agent.core.config import config
-        model_name = getattr(config, "default_model", None) or "default"
-        super().__init__(model=model_name)
+        # We don't know the provider until _sync_complete looks at ai_service,
+        # but BaseLlm requires a string model immediately on init.
+        # Delay true model resolution until the API call.
+        super().__init__(model="dynamic-resolution")
         self._ai_service = ai_service
 
     # ---- Sync bridge (runs in thread via asyncio.to_thread) ----
@@ -81,8 +83,13 @@ class AIServiceModelAdapter(BaseLlm):
         with _thread_semaphore:
             self._ai_service._ensure_initialized()
             provider = self._ai_service.provider or "gemini"
+            
+            # Use the configured model if specified in agent.yaml
+            from agent.core.config import config
+            configured_model = config.get_model(provider)
+            
             result = self._ai_service._try_complete(
-                provider, system_prompt, user_prompt
+                provider, system_prompt, user_prompt, configured_model
             )
         return (result or "")[:50_000]
 

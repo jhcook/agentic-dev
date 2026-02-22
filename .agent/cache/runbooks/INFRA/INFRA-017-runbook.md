@@ -1,46 +1,50 @@
 # STORY-ID: INFRA-017: Implement Agent Query
 
 ## State
+
 ACCEPTED
 
 ## Goal Description
-To create a new CLI command, `agent query "text"`, that allows developers to ask natural language questions about the codebase. The command will use a Retrieval-Augmented Generation (RAG) pattern, finding relevant code and documentation snippets from the local repository, scrubbing them for PII, and using an LLM to synthesize an answer with citations. This will improve developer productivity by providing a fast, self-service way to find information.
+
+To create a new CLI command, `env -u VIRTUAL_ENV uv run agent query "text"`, that allows developers to ask natural language questions about the codebase. The command will use a Retrieval-Augmented Generation (RAG) pattern, finding relevant code and documentation snippets from the local repository, scrubbing them for PII, and using an LLM to synthesize an answer with citations. This will improve developer productivity by providing a fast, self-service way to find information.
 
 ## Panel Review Findings
 
 - **@Architect**: The proposed MVP approach of using a "Smart Keyword Search" (e.g., `grep`) instead of a full vector database is a sound, pragmatic decision. It reduces initial complexity and infrastructure overhead. The component breakdown into `commands/query.py` and `core/ai/rag.py` is logical. I recommend creating a dedicated `agent/core/context_builder.py` to cleanly separate file discovery, I/O, and filtering logic from the AI synthesis logic. The design must be modular to allow replacing the keyword search with a vector index in the future. The use of `asyncio` for I/O is appropriate for performance.
 
 - **@Security**: The primary risk is data exfiltration of sensitive information (code, credentials) to the third-party LLM. The specified controls are critical and non-negotiable.
-    1.  **`.gitignore` Adherence**: This is the first line of defense and must be rigorously tested. I also recommend adding support for a `.agentignore` file for more granular control over what the agent can see, independent of Git.
-    2.  **PII Scrubbing**: The mandatory call to the existing PII Scrubber for *all* context chunks before they are sent to the LLM is the most critical control. This process must be logged for audit purposes (e.g., "Scrubbed N chunks for query_id X").
-    3.  **Command Injection**: The user's query will be used to search files. Ensure that this is done using safe subprocess calls (e.g., `subprocess.run(['grep', query, file])`) and not by embedding the query into a shell command string (`shell=True`), which would open a command injection vulnerability.
-    4.  **Credential Management**: LLM API keys must be stored in `.agent/secrets/` (e.g., `.agent/secrets/llm_api_key`). The `.agent/secrets/` directory must be added to `.gitignore` to ensure credentials are never committed. Environment variables are NOT used for secrets.
+    1. **`.gitignore` Adherence**: This is the first line of defense and must be rigorously tested. I also recommend adding support for a `.agentignore` file for more granular control over what the agent can see, independent of Git.
+    2. **PII Scrubbing**: The mandatory call to the existing PII Scrubber for *all* context chunks before they are sent to the LLM is the most critical control. This process must be logged for audit purposes (e.g., "Scrubbed N chunks for query_id X").
+    3. **Command Injection**: The user's query will be used to search files. Ensure that this is done using safe subprocess calls (e.g., `subprocess.run(['grep', query, file])`) and not by embedding the query into a shell command string (`shell=True`), which would open a command injection vulnerability.
+    4. **Credential Management**: LLM API keys must be stored in `.agent/secrets/` (e.g., `.agent/secrets/llm_api_key`). The `.agent/secrets/` directory must be added to `.gitignore` to ensure credentials are never committed. Environment variables are NOT used for secrets.
 
 - **@QA**: The test strategy is a good starting point. We need to expand it with more specific edge cases.
-    -   **Unit Tests**: Must cover the `ContextBuilder`'s file filtering logic exhaustively, including testing against a temporary directory with a dummy `.gitignore`. We need specific tests for the PII scrubber integration (using mocks), the rate limit backoff mechanism, and the graceful failure in offline mode.
-    -   **Integration Tests**: An end-to-end test should be created that mocks the filesystem and the LLM API. This test will verify that given a query, the correct files are read, the PII scrubber is called, and a well-formed prompt is sent to the LLM mock.
-    -   **Manual Verification**: We must test with queries that have known answers in the docs. We also must test adversarial queries (e.g., "ignore your instructions") and questions with no possible answer in the context to ensure the model refuses to answer rather than hallucinating. Testing should also verify that binary files and overly large files are handled gracefully (skipped or truncated).
+  - **Unit Tests**: Must cover the `ContextBuilder`'s file filtering logic exhaustively, including testing against a temporary directory with a dummy `.gitignore`. We need specific tests for the PII scrubber integration (using mocks), the rate limit backoff mechanism, and the graceful failure in offline mode.
+  - **Integration Tests**: An end-to-end test should be created that mocks the filesystem and the LLM API. This test will verify that given a query, the correct files are read, the PII scrubber is called, and a well-formed prompt is sent to the LLM mock.
+  - **Manual Verification**: We must test with queries that have known answers in the docs. We also must test adversarial queries (e.g., "ignore your instructions") and questions with no possible answer in the context to ensure the model refuses to answer rather than hallucinating. Testing should also verify that binary files and overly large files are handled gracefully (skipped or truncated).
 
 - **@Docs**: This is a significant new feature for developers and requires clear documentation.
-    1.  **CLI Help**: The command must have a comprehensive `--help` message explaining its function, arguments, and options like `--chat`.
-    2.  **README**: The main `README.md` or a `CONTRIBUTING.md` guide must be updated with a section on how to use `agent query`. This should include setup instructions for API keys in `.agent/secrets/llm_api_key` and provider config in `.agent/etc/query.yaml`.
-    3.  **Code Documentation**: All new modules (`rag.py`, `context_builder.py`) and public functions must have clear docstrings explaining their purpose, parameters, and return values.
-    4.  **CHANGELOG**: A new entry under a "Features" section must be added to `CHANGELOG.md`.
+    1. **CLI Help**: The command must have a comprehensive `--help` message explaining its function, arguments, and options like `--chat`.
+    2. **README**: The main `README.md` or a `CONTRIBUTING.md` guide must be updated with a section on how to use `env -u VIRTUAL_ENV uv run agent query`. This should include setup instructions for API keys in `.agent/secrets/llm_api_key` and provider config in `.agent/etc/query.yaml`.
+    3. **Code Documentation**: All new modules (`rag.py`, `context_builder.py`) and public functions must have clear docstrings explaining their purpose, parameters, and return values.
+    4. **CHANGELOG**: A new entry under a "Features" section must be added to `CHANGELOG.md`.
 
 - **@Compliance**: The PII scrubbing requirement is the key compliance control. We must ensure there is no path for raw context to reach the LLM without passing through the scrubber. Logs related to this feature must be scrubbed of user query content and LLM response content to avoid persisting sensitive data. A unique, traceable ID should be logged for each query instead. All new third-party libraries (e.g., `tenacity`, `tiktoken`) must be checked for compatible software licenses.
 
 - **@Observability**: To monitor cost, performance, and reliability, we need to instrument this feature.
-    -   **Logs**: All logs must be structured (JSON). We need to log the start/end of a query, the number of files found, the total context tokens, the completion tokens, and any errors (especially rate limit events). **CRITICAL**: Do NOT log the raw user query or the LLM response. Log a hash of the query or a unique request ID for correlation.
-    -   **Metrics**:
-        -   `agent_query_latency_seconds` (Histogram): Total time to get an answer.
-        -   `agent_query_total` (Counter): With labels for `status=[success|failure|rate_limited]`.
-        -   `agent_query_context_tokens` (Histogram): To monitor costs and prompt size.
-        -   `agent_query_completion_tokens` (Histogram): To monitor costs.
+  - **Logs**: All logs must be structured (JSON). We need to log the start/end of a query, the number of files found, the total context tokens, the completion tokens, and any errors (especially rate limit events). **CRITICAL**: Do NOT log the raw user query or the LLM response. Log a hash of the query or a unique request ID for correlation.
+  - **Metrics**:
+    - `agent_query_latency_seconds` (Histogram): Total time to get an answer.
+    - `agent_query_total` (Counter): With labels for `status=[success|failure|rate_limited]`.
+    - `agent_query_context_tokens` (Histogram): To monitor costs and prompt size.
+    - `agent_query_completion_tokens` (Histogram): To monitor costs.
 
 ## Implementation Steps
 
 ### agent/config.py
+
 #### MODIFY agent/config.py
+
 - Add new configuration variables that leverage existing provider keys.
 
 ```python
@@ -89,7 +93,7 @@ def get_provider_api_key(provider: str) -> str | None:
     don't require API keys.
     
     Checks in order:
-    1. Environment variable (e.g., GOOGLE_GEMINI_API_KEY, OPENAI_API_KEY)
+    1. Environment variable (e.g., GEMINI_API_KEY, OPENAI_API_KEY)
     2. .agent/secrets/<provider>_api_key file
     """
     # URL-based providers (Ollama, local LLMs) don't need API keys
@@ -98,7 +102,7 @@ def get_provider_api_key(provider: str) -> str | None:
     
     # Provider-specific env var names
     env_var_map = {
-        "gemini": ["GOOGLE_GEMINI_API_KEY", "GEMINI_API_KEY"],
+        "gemini": ["GEMINI_API_KEY", "GEMINI_API_KEY"],
         "openai": ["OPENAI_API_KEY"],
         "gh": ["GH_TOKEN", "GITHUB_TOKEN"],
     }
@@ -125,7 +129,9 @@ def is_ai_configured() -> bool:
 ```
 
 ### .agent/etc/query.yaml
+
 #### NEW .agent/etc/query.yaml
+
 - Create optional configuration file for query feature.
 
 ```yaml
@@ -138,7 +144,9 @@ max_file_tokens: 4096
 ```
 
 ### .agent/etc/router.yaml
+
 #### MODIFY .agent/etc/router.yaml
+
 - Add Ollama and other self-hosted LLM providers to the existing router config.
 
 ```yaml
@@ -170,7 +178,9 @@ settings:
 ```
 
 ### .agent/secrets/ (Optional)
+
 #### Optional: Provider-specific API key files
+
 - If env vars are not set, keys can be stored in `.agent/secrets/<provider>_api_key`
 - Example files: `gemini_api_key`, `openai_api_key`
 - These files must be in `.gitignore`
@@ -182,7 +192,9 @@ AIza...
 ```
 
 ### agent/core/context_builder.py
+
 #### NEW agent/core/context_builder.py
+
 - Create a new module responsible for finding and building the context from the local filesystem.
 
 ```python
@@ -285,7 +297,9 @@ class ContextBuilder:
 ```
 
 ### agent/core/ai/rag.py
+
 #### NEW agent/core/ai/rag.py
+
 - Create a service to handle the LLM interaction, including prompt construction and retry logic.
 
 ```python
@@ -326,7 +340,9 @@ class RAGService:
 ```
 
 ### agent/commands/query.py
+
 #### NEW agent/commands/query.py
+
 - Create the `click` command that orchestrates the workflow.
 
 ```python
@@ -386,38 +402,45 @@ async def run_query(text: str):
 ```
 
 ## Verification Plan
+
 ### Automated Tests
+
 - [ ] **`test_context_builder.py`**:
-    - [ ] `test_gitignore_is_respected`: Create a temp directory with `test.txt` and `.gitignore` ignoring it; assert `_find_relevant_files` does not return `test.txt`.
-    - [ ] `test_binary_files_are_skipped`: Write a binary file and assert `_read_and_scrub_file` returns an empty string or handles the error.
-    - [ ] `test_large_file_is_truncated`: Create a file with 10k tokens and verify the output of `_read_and_scrub_file` is truncated to `MAX_FILE_TOKENS`.
+  - [ ] `test_gitignore_is_respected`: Create a temp directory with `test.txt` and `.gitignore` ignoring it; assert `_find_relevant_files` does not return `test.txt`.
+  - [ ] `test_binary_files_are_skipped`: Write a binary file and assert `_read_and_scrub_file` returns an empty string or handles the error.
+  - [ ] `test_large_file_is_truncated`: Create a file with 10k tokens and verify the output of `_read_and_scrub_file` is truncated to `MAX_FILE_TOKENS`.
 - [ ] **`test_rag_service.py`**:
-    - [ ] `test_retry_on_rate_limit`: Mock `AIService` to raise `RateLimitError` once, then succeed. Verify the `answer_query` method succeeds after two calls to the mock.
-    - [ ] `test_no_context_response`: Call `answer_query` with an empty context string and verify the predefined "I couldn't find anything" response is returned.
+  - [ ] `test_retry_on_rate_limit`: Mock `AIService` to raise `RateLimitError` once, then succeed. Verify the `answer_query` method succeeds after two calls to the mock.
+  - [ ] `test_no_context_response`: Call `answer_query` with an empty context string and verify the predefined "I couldn't find anything" response is returned.
 - [ ] **`test_query_command.py`**:
-    - [ ] `test_offline_mode_fallback`: Unset `LLM_API_KEY` env var, run the command, and assert the offline message and `grep` fallback are triggered.
-    - [ ] `test_pii_scrubber_integration`: Use `unittest.mock.patch` to spy on the PII scrubber function and assert it is called when context is built.
+  - [ ] `test_offline_mode_fallback`: Unset `LLM_API_KEY` env var, run the command, and assert the offline message and `grep` fallback are triggered.
+  - [ ] `test_pii_scrubber_integration`: Use `unittest.mock.patch` to spy on the PII scrubber function and assert it is called when context is built.
 
 ### Manual Verification
+
 - [ ] **Setup**: Configure a valid `LLM_API_KEY` in a local `.agent/secrets` file if it doesn't already exist.
-- [ ] **Known Question**: Run `agent query "how do I create a new workflow?"`. Verify the answer is coherent, accurate, and includes citations like `[Source: .agent/workflows/pr.md]`.
-- [ ] **Code Question**: Run `agent query "where is the RAGService defined?"`. Verify it correctly cites `agent/core/ai/rag.py`.
+- [ ] **Known Question**: Run `env -u VIRTUAL_ENV uv run agent query "how do I create a new workflow?"`. Verify the answer is coherent, accurate, and includes citations like `[Source: .agent/workflows/pr.md]`.
+- [ ] **Code Question**: Run `env -u VIRTUAL_ENV uv run agent query "where is the RAGService defined?"`. Verify it correctly cites `agent/core/ai/rag.py`.
 - [ ] **Offline Mode**: Remove the `.agent/secrets/llm_api_key` file. Run the command again and verify it prints the graceful failure message and shows grep results.
-- [ ] **Hallucination Test**: Run `agent query "what is the launch date for the Mars colony project?"`. Verify the model responds that it cannot answer based on the provided context.
-- [ ] **`.gitignore` Test**: Create a file named `secrets.log` containing the word "workflow". Add `secrets.log` to `.gitignore`. Run `agent query "workflow"`. Verify the answer does not cite `secrets.log`.
+- [ ] **Hallucination Test**: Run `env -u VIRTUAL_ENV uv run agent query "what is the launch date for the Mars colony project?"`. Verify the model responds that it cannot answer based on the provided context.
+- [ ] **`.gitignore` Test**: Create a file named `secrets.log` containing the word "workflow". Add `secrets.log` to `.gitignore`. Run `env -u VIRTUAL_ENV uv run agent query "workflow"`. Verify the answer does not cite `secrets.log`.
 
 ## Definition of Done
+
 ### Documentation
-- [ ] `CHANGELOG.md` updated with an entry for the new `agent query` feature.
-- [ ] `README.md` (or contributing guide) updated to explain how to set up and use the `agent query` command.
+
+- [ ] `CHANGELOG.md` updated with an entry for the new `env -u VIRTUAL_ENV uv run agent query` feature.
+- [ ] `README.md` (or contributing guide) updated to explain how to set up and use the `env -u VIRTUAL_ENV uv run agent query` command.
 - [ ] CLI command includes a useful `--help` message.
 
 ### Observability
+
 - [ ] Logs are structured (JSON) and contain a unique `query_id` for correlation.
 - [ ] Logs are free of PII: user query text and LLM responses are NOT logged.
 - [ ] Metrics for latency (`agent_query_latency_seconds`), token counts (`agent_query_context_tokens`, `agent_query_completion_tokens`), and invocation count (`agent_query_total`) are added.
 
 ### Testing
+
 - [ ] All new unit tests pass with >90% code coverage for the new modules.
 - [ ] Manual verification plan executed and all steps passed.
 - [ ] Integration tests (mocking external services) pass.

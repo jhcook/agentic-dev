@@ -159,11 +159,11 @@ def test_set_provider_unconfigured_raises_runtime_error(mock_config):
 - [ ] Test that the `pr` command successfully runs using the `--provider=openai` option (requires mocking the API key and client).
 
 ### Manual Verification
-- [ ] Run `agent implement --help` and verify the `--provider` option is listed with its help text.
-- [ ] Configure the OpenAI API key in your environment. Run `agent implement --story="a simple feature" --provider=openai`. Verify it runs without errors.
-- [ ] Do not configure the Gemini API key. Run `agent pr --provider=gemini`. Verify the command fails with a "Gemini provider is not configured" error message.
-- [ ] Run `agent match-story --provider=foobar`. Verify the command fails with an "Invalid AI provider 'foobar'" error message.
-- [ ] Run `agent new-runbook` without the `--provider` flag. Verify it defaults to the 'gh' provider and executes successfully.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent implement --help` and verify the `--provider` option is listed with its help text.
+- [ ] Configure the OpenAI API key in your environment. Run `env -u VIRTUAL_ENV uv run agent implement --story="a simple feature" --provider=openai`. Verify it runs without errors.
+- [ ] Do not configure the Gemini API key. Run `env -u VIRTUAL_ENV uv run agent pr --provider=gemini`. Verify the command fails with a "Gemini provider is not configured" error message.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent match-story --provider=foobar`. Verify the command fails with an "Invalid AI provider 'foobar'" error message.
+- [ ] Run `env -u VIRTUAL_ENV uv run agent new-runbook` without the `--provider` flag. Verify it defaults to the 'gh' provider and executes successfully.
 
 ## Definition of Done
 ### Documentation

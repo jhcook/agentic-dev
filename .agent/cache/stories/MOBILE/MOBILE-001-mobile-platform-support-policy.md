@@ -45,7 +45,7 @@ As a Mobile Engineer, I want a clear governance rule for OS version support (Cur
 ## Test Strategy
 
 - Manual verification of file creation and content.
-- Verify `agent preflight` (if applicable) or manual inspection of rule loading (implied).
+- Verify `env -u VIRTUAL_ENV uv run agent preflight` (if applicable) or manual inspection of rule loading (implied).
 - **Sunset Test**: Final test pass on dropped versions to ensure graceful failure/message (Advice from @QA).
 
 ## Rollback Plan

@@ -1,7 +1,3 @@
-# Journey: JRN-016
-# Linked Story: INFRA-017
-# Title: Implement Agent Query
-
 id: JRN-016
 title: Implement Agent Query
 state: COMMITTED
@@ -56,4 +52,5 @@ implementation:
   - README.md
   - agent/core/ai/rag.py
   - agent/core/context_builder.py
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_016.py

@@ -267,8 +267,8 @@ class TestCouncilVerdictAggregation:
         mock_config.etc_dir = MagicMock()
         mock_ai.provider = "gh"
         mock_ai.complete.side_effect = [
-            "VERDICT: PASS\nSUMMARY: OK\nFINDINGS: None",
-            "VERDICT: BLOCK\nSUMMARY: Hardcoded secret.\nFINDINGS:\n- API key in source\nREQUIRED_CHANGES:\n- Remove API key",
+            "VERDICT: PASS\nSUMMARY: OK\nFINDINGS: None (Source: [fake.py])",
+            "VERDICT: BLOCK\nSUMMARY: Hardcoded secret.\nFINDINGS:\n- API key in source (Source: [fake.py])\nREQUIRED_CHANGES:\n- Remove API key",
         ]
 
         result = convene_council_full(
@@ -293,7 +293,7 @@ class TestCouncilVerdictAggregation:
         mock_config.etc_dir = MagicMock()
         mock_ai.provider = "gh"
         mock_ai.complete.return_value = (
-            "VERDICT: BLOCK\nSUMMARY: Issues found.\nFINDINGS:\n- Something\nREQUIRED_CHANGES:\n- Fix it"
+            "VERDICT: BLOCK\nSUMMARY: Issues found.\nFINDINGS:\n- Something (Source: [test.py])\nREQUIRED_CHANGES:\n- Fix it"
         )
 
         result = convene_council_full(

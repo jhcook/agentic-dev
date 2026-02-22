@@ -24,7 +24,7 @@ def ai_service_with_anthropic():
     """Fixture that includes Anthropic in the initialized clients."""
     with patch.dict("os.environ", {
         "OPENAI_API_KEY": "dummy",
-        "GOOGLE_GEMINI_API_KEY": "dummy",
+        "GEMINI_API_KEY": "dummy",
         "ANTHROPIC_API_KEY": "dummy"
     }):
         with patch("agent.core.ai.service.AIService._check_gh_cli", return_value=True):

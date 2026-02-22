@@ -3,7 +3,7 @@
 Status: ACCEPTED
 
 ## Goal Description
-Enhance the functionality of the `agent implement` command to include an `--apply` flag. When used, this flag should allow developers to automatically apply changes to the file system based on the code snippets provided in the runbook, while ensuring necessary safeguards such as confirmations to prevent accidental overwrites.
+Enhance the functionality of the `env -u VIRTUAL_ENV uv run agent implement` command to include an `--apply` flag. When used, this flag should allow developers to automatically apply changes to the file system based on the code snippets provided in the runbook, while ensuring necessary safeguards such as confirmations to prevent accidental overwrites.
 
 ---
 
@@ -127,7 +127,7 @@ def backup_file(file_path: str):
 
 ### Manual Verification
 1. Create test repositories with dummy files.
-2. Run `agent implement <RUNBOOK_ID> --apply`.
+2. Run `env -u VIRTUAL_ENV uv run agent implement <RUNBOOK_ID> --apply`.
 3. Confirm file changes visually.
 4. Validate backup files are created and reversible.
 

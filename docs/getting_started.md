@@ -1,70 +1,50 @@
-# Getting Started
+# Getting Started with Agentic Development
 
-## Provider Selection
+The Agent CLI is designed to be installed locally within your project repository to provide AI-powered governance and workflow automation.
 
-The Agent CLI supports multiple AI providers. Set your provider in `.agent/etc/agent.yaml`:
+## Prerequisites
 
-```yaml
-agent:
-  provider: gemini   # or: vertex, openai, anthropic, gh
-```
+- **Python 3.10+** and **pip**
+- **Git** (for repository management)
 
-### Provider Comparison
+## Installation
 
-| Provider | Auth Method | Rate Limits | Best For |
-|----------|-------------|-------------|----------|
-| **Gemini** (default) | `GEMINI_API_KEY` | Free-tier limits | Quick prototyping, personal use |
-| **Vertex AI** | ADC (`gcloud auth`) | Pay-as-you-go, high | Production workloads, multi-agent panels |
-| **OpenAI** | `OPENAI_API_KEY` | Plan-based | GPT-4o access |
-| **Anthropic** | `ANTHROPIC_API_KEY` | Plan-based | Claude access |
-| **GitHub CLI** | `gh` CLI auth | Copilot limits | GitHub-integrated workflows |
-
-## Vertex AI Setup
-
-Vertex AI uses [Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials) — no API key needed.
-
-### Prerequisites
-
-1. A GCP project with the [Vertex AI API enabled](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)
-2. `gcloud` CLI installed and authenticated
-
-### Steps
+1. Copy the `.agent` directory into the root of your repository.
+2. Create a virtual environment and install the CLI:
 
 ```bash
-# 1. Authenticate with GCP
-gcloud auth application-default login
+cd /path/to/your/repo
 
-# 2. Set your project
-export GOOGLE_CLOUD_PROJECT="your-project-id"
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
-# 3. (Optional) Set region — defaults to us-central1
-export GOOGLE_CLOUD_LOCATION="us-central1"
-
-# 4. Update agent.yaml
-# provider: vertex
+# Install the agent CLI
+pip install -e .agent/
 ```
 
-### Verification
+## Credentials
+
+The Agent requires access to an AI provider to function. The default provider is Gemini. Configure this via an environment variable initially:
 
 ```bash
-agent query "Hello from Vertex AI"
+export GEMINI_API_KEY="your-api-key-here"
 ```
 
-You should see the response without any API key errors.
+## Bootstrapping the Repository
 
-## Gemini (AI Studio) Setup
+To initialize the Agent configuration, templates, and directory structures in your repository, run the onboard command:
 
 ```bash
-# Get a key from https://aistudio.google.com/apikey
-export GEMINI_API_KEY="AIza..."
+agent onboard
 ```
 
-## Fallback Behavior
+This interactive wizard will guide you through:
 
-When a provider hits rate limits or errors, the CLI automatically falls back through the chain:
+1. Setting up your core `.agent/etc/agent.yaml` configuration.
+2. Selecting your preferred AI provider (Gemini, Vertex, OpenAI, Anthropic, or GitHub CLI).
+3. Establishing the `.agent/cache` structure for tracking stories, runbooks, and journeys.
+4. Saving your credentials into the securely encrypted secret store.
+5. Configuring the NotebookLM MCP server for advanced context retrieval.
 
-```
-gh → gemini → vertex → openai → anthropic
-```
-
-Set `provider` in `agent.yaml` to control which is tried first. The fallback chain is deterministic and skips providers without credentials.
+For detailed provider authentication (such as Vertex AI setup) and advanced configuration, see the comprehensive [Agent Documentation](.agent/docs/getting_started.md).

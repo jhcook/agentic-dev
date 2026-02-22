@@ -130,7 +130,7 @@ class TestImpactStaticAnalysis:
             patch("agent.db.journey_index.is_stale", return_value=False),
             patch("agent.db.init.get_db_path", return_value=":memory:"),
         ):
-            result = runner.invoke(_app, ["TEST-001", "--base", "main"])
+            result = runner.invoke(_app, ["TEST-001", "--base", "main", "--offline"])
 
         assert result.exit_code == 0
         assert "Impact Analysis" in result.output
@@ -174,7 +174,7 @@ class TestImpactUpdateStory:
         ):
             result = runner.invoke(
                 _app,
-                ["TEST-001", "--base", "main", "--update-story"],
+                ["TEST-001", "--base", "main", "--update-story", "--offline"],
             )
 
         assert result.exit_code == 0
@@ -217,7 +217,7 @@ class TestImpactJsonOutput:
         ):
             result = runner.invoke(
                 _app,
-                ["TEST-001", "--base", "main", "--json"],
+                ["TEST-001", "--base", "main", "--json", "--offline"],
             )
 
         assert result.exit_code == 0

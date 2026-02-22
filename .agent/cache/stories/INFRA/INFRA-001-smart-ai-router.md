@@ -26,7 +26,7 @@ As a developer, I want the agent to automatically select the best AI model for a
 
 ## Test Strategy
 - Unit tests for SmartRouter logic.
-- Integration tests for `agent preflight`.
+- Integration tests for `env -u VIRTUAL_ENV uv run agent preflight`.
 - Legacy test suite verification.
 
 ## Rollback Plan

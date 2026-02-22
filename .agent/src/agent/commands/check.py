@@ -384,7 +384,8 @@ def preflight(
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
     interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'."),
-    thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens).")
+    thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens)."),
+    legacy_context: bool = typer.Option(False, "--legacy-context", help="Use full legacy context instead of Oracle Pattern.")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -399,6 +400,7 @@ def preflight(
         ignore_tests: Run tests but ignore failure.
         panel_engine: Override panel engine ('adk' or 'native').
         thorough: Enable thorough AI review with full-file context and post-processing validation.
+        legacy_context: Use full legacy context instead of Oracle Pattern.
     """
     # Apply panel engine override (INFRA-061)
     if panel_engine:
@@ -406,6 +408,24 @@ def preflight(
         console.print(f"[dim]Panel engine override: {panel_engine}[/dim]")
 
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
+
+    if not offline and not legacy_context:
+        try:
+            from agent.sync.notion import NotionSync
+            sync = NotionSync()
+            sync.ensure_synchronized()
+        except typer.Exit:
+            raise
+        except Exception as e:
+            logger.debug(f"Could not verify Notion sync state: {e}")
+            console.print("[yellow]⚠️  Could not verify Notion sync state. Ensure 'agent sync init' was run.[/yellow]")
+            
+        try:
+            from agent.sync.notebooklm import ensure_notebooklm_sync
+            ensure_notebooklm_sync()
+        except Exception as e:
+            logger.debug(f"Could not sync with NotebookLM: {e}")
+            console.print(f"[yellow]⚠️  NotebookLM sync degraded: {e}[/yellow]")
 
     # Check for unstaged changes (Security Maintenance)
     # Check for unstaged changes (Security Maintenance)
@@ -455,6 +475,42 @@ def preflight(
              import json
              report_file.write_text(json.dumps(json_report, indent=2))
         raise typer.Exit(code=1)
+
+    # 1.1 Notion Sync Awareness (Oracle Pattern)
+    if not legacy_context:
+        console.print("\n[bold blue]🔄 Verifying Notion Sync Status (Oracle Pattern)...[/bold blue]")
+        try:
+            from agent.sync.notion import NotionSync
+            NotionSync()
+            console.print("[green]✅ Notion sync ready (Oracle Pattern context active).[/green]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Notion sync unreachable: {e}. Oracle Pattern may have stale context.[/yellow]")
+            
+        notebooklm_ready = False
+        console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
+        try:
+            from agent.sync.notebooklm import ensure_notebooklm_sync
+            sync_status = ensure_notebooklm_sync()
+            if sync_status == "SUCCESS":
+                console.print("[green]✅ NotebookLM sync ready.[/green]")
+                notebooklm_ready = True
+            elif sync_status == "NOT_CONFIGURED":
+                # Inform the user that it's just not set up
+                console.print("[yellow]ℹ️  NotebookLM sync not configured.[/yellow]")
+            else:
+                console.print("[yellow]⚠️  NotebookLM sync unavailable or degraded.[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️  NotebookLM sync unreachable: {e}.[/yellow]")
+
+        if not notebooklm_ready:
+            console.print("\n[bold blue]🔄 Rebuilding Local Vector DB (Oracle Pattern Fallback)...[/bold blue]")
+            try:
+                from agent.db.journey_index import JourneyIndex
+                idx = JourneyIndex()
+                idx.build()
+                console.print("[green]✅ Local Vector DB ready.[/green]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Local Vector DB build failed: {e}.[/yellow]")
 
     # 1.2 Journey Gate (INFRA-055)
     console.print("\n[bold blue]🗺️  Checking Journey Gate...[/bold blue]")
@@ -965,7 +1021,7 @@ def preflight(
             
             
     # Load full context (rules + instructions + ADRs)
-    full_context = context_loader.load_context()
+    full_context = context_loader.load_context(story_id=story_id, legacy_context=legacy_context)
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
     adrs_content = full_context.get("adrs", "")
@@ -973,7 +1029,8 @@ def preflight(
     # Cap diff size - if larger than chunk limit, we might need a smart splitter, 
     # but for assimilating roles, we send the same diff to each role agent.
     # We'll stick to a reasonable cap for now to fit in context.
-    diff_cmd = cmd = ["git", "diff", "--cached", "-U10", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "-U10", "."]
+    diff_context_lines = "10" if legacy_context else "3" # Oracle Pattern uses -U3 to reduce noise
+    diff_cmd = cmd = ["git", "diff", "--cached", f"-U{diff_context_lines}", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", f"-U{diff_context_lines}", "."]
     diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
     # Full diff for chunking
     full_diff = diff_res.stdout
@@ -1014,7 +1071,7 @@ def preflight(
                 console.print(f"\n[bold cyan]🔄 Re-running Governance Council (attempt {governance_attempt + 1}/{MAX_GOVERNANCE_RETRIES})...[/bold cyan]")
                 
                 # Re-compute diff after fix was applied
-                diff_cmd = ["git", "diff", "--cached", "-U10", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "-U10", "."]
+                diff_cmd = ["git", "diff", "--cached", f"-U{diff_context_lines}", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", f"-U{diff_context_lines}", "."]
                 diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
                 full_diff = diff_res.stdout or ""
                 
@@ -1577,7 +1634,7 @@ def panel(
     if not story_content:
          console.print(f"[yellow]⚠️  Story/Runbook for {story_id} not found. Reviewing without specific document context.[/yellow]")
 
-    full_context = context_loader.load_context()
+    full_context = context_loader.load_context(story_id=story_id)
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
     adrs_content = full_context.get("adrs", "")

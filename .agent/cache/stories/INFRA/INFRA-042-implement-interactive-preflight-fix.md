@@ -6,15 +6,15 @@ COMMITTED
 
 ## Problem Statement
 
-When `agent preflight` fails (e.g., due to invalid Story schema, linting errors, or test failures), the user is presented with an error message and must manually investigate, edit files, and re-run the command. This context switching is inefficient. Users want the Agent to not only detect issues but also analyze them and propose specific, actionable fixes that can be applied immediately and verified.
+When `env -u VIRTUAL_ENV uv run agent preflight` fails (e.g., due to invalid Story schema, linting errors, or test failures), the user is presented with an error message and must manually investigate, edit files, and re-run the command. This context switching is inefficient. Users want the Agent to not only detect issues but also analyze them and propose specific, actionable fixes that can be applied immediately and verified.
 
 ## User Story
 
-As a Developer, I want an interactive "fix" mode for the `agent preflight` command (e.g., `agent preflight --interactive`) that identifies blocking issues, presents me with AI-generated options to resolve them, and automatically verifies the chosen fix against the test suite, so that I can resolve governance blockers rapidly without leaving the terminal.
+As a Developer, I want an interactive "fix" mode for the `env -u VIRTUAL_ENV uv run agent preflight` command (e.g., `env -u VIRTUAL_ENV uv run agent preflight --interactive`) that identifies blocking issues, presents me with AI-generated options to resolve them, and automatically verifies the chosen fix against the test suite, so that I can resolve governance blockers rapidly without leaving the terminal.
 
 ## Acceptance Criteria
 
-- [ ] **CLI Command**: Add a `--interactive` flag to `agent preflight`.
+- [ ] **CLI Command**: Add a `--interactive` flag to `env -u VIRTUAL_ENV uv run agent preflight`.
 - [ ] **Architecture**: Implement `InteractiveFixer` as a standalone, reusable service in `agent.core.fixer` (decoupled from CLI).
 - [ ] **Analysis Engine**: Implement logic to capture failure details from:
   - Story Schema Validation (missing sections, headers).
@@ -55,7 +55,7 @@ As a Developer, I want an interactive "fix" mode for the `agent preflight` comma
   - Verify `validate_story` returns `True` for valid stories.
 
 - **E2E (Automated)**:
-  - `test_e2e_interactive.py`: Simulate the full CLI loop (`agent preflight --interactive`).
+  - `test_e2e_interactive.py`: Simulate the full CLI loop (`env -u VIRTUAL_ENV uv run agent preflight --interactive`).
   - Corrupt a dummy story file.
   - Mock User Input to select a fix.
   - Assert that the file is repaired and the command exits successfully.

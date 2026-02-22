@@ -99,7 +99,7 @@ Rules are stored in `.agent/rules/` as Markdown Context (`.mdc`) files.
 
 ### Rule Types
 
-#### 1. Global Rules (`main.mdc`)
+#### 1. Global Rules (`100-main.mdc`)
 
 Apply to all code changes:
 
@@ -119,7 +119,7 @@ Apply to all code changes:
 
 #### 2. Compliance Rules
 
-**SOC2** (`global-compliance-requirements.mdc`):
+**SOC2** (`102-global-compliance-requirements.mdc`):
 
 - Data encryption at rest and in transit
 - Audit logging for sensitive operations
@@ -133,7 +133,7 @@ Apply to all code changes:
 - Right to erasure implementation
 - Data portability support
 
-#### 3. Architectural Rules (`adr-standards.mdc`)
+#### 3. Architectural Rules (`202-adr-standards.mdc`)
 
 ```markdown
 # ADR Standards
@@ -154,19 +154,19 @@ Use the template in .agent/templates/adr-template.md
 
 #### 4. Domain-Specific Rules
 
-**Testing** (`test.mdc`):
+**Testing** (`500-test.mdc`):
 
 - Unit test coverage > 80%
 - Integration tests for all API endpoints
 - E2E tests for critical user flows
 
-**Documentation** (`documentation.mdc`):
+**Documentation** (`501-documentation.mdc`):
 
 - All API changes require OpenAPI updates
 - Public modules require README
 - Breaking changes need migration guide
 
-**API Contracts** (`api-contract-validation.mdc`):
+**API Contracts** (`201-api-contract-validation.mdc`):
 
 - OpenAPI spec must be valid
 - No breaking changes without version bump
@@ -242,7 +242,7 @@ Runbook: PROPOSED → ACCEPTED
 
 ### Enforcement Rules
 
-Defined in `.agent/rules/state-enforcement.md`:
+Defined in `.agent/rules/203-state-enforcement.mdc`:
 
 #### Rule 1: Plan Approval Required
 
@@ -374,18 +374,27 @@ Update story state before proceeding.
 1. Create rule file in `.agent/rules/`:
 
 ```bash
-cat > .agent/rules/performance.mdc << 'EOF'
-# Performance Standards
+cat > .agent/rules/403-performance.mdc << 'EOF'
+---
+description: Performance requirements to prevent slow code paths.
+globs: ["**/*.py", "**/*.js"]
+alwaysApply: false
+---
 
-## Database Queries
-- Maximum query time: 100ms
-- Use indexes for frequently queried fields
-- Avoid N+1 queries
+# 403: Performance Standards
 
-## API Response Times
-- GET endpoints: < 200ms
-- POST endpoints: < 500ms
-- Background jobs for > 5s operations
+## 1. Context & Purpose
+Ensure API responsiveness and avoid n+1 queries.
+
+## 2. Requirements
+- **MUST** optimize queries
+- **MUST NOT** exceed 100ms response targets for GET requests
+
+## 3. Examples
+...
+
+## 4. Enforcement
+- **@Backend**: Evaluates backend endpoint code. `VERDICT: BLOCK` on missing index definitions.
 EOF
 ```
 
@@ -395,7 +404,7 @@ EOF
 cat > .agent/instructions/backend/performance.md << 'EOF'
 # Performance Review Checklist
 
-Use .agent/rules/performance.mdc as baseline.
+Use .agent/rules/403-performance.mdc as baseline.
 
 For each API endpoint:
 - [ ] Response time measured
@@ -447,18 +456,12 @@ EOF
 
 ### Modifying Severity
 
-In your rules, use severity markers:
+In your rules, use VERDICT markers in the Enforcement section:
 
 ```markdown
-# Security Rules
-
-## BLOCKER: No Hardcoded Secrets
-Hardcoded API keys, passwords, or tokens are STRICTLY FORBIDDEN.
-This is a BLOCKER - builds will fail.
-
-## WARNING: Dependency Versions
-Outdated dependencies may have vulnerabilities.
-This is a WARNING - review recommended.
+## 4. Enforcement
+- @Security: Reviews all diffs for hardcoded passwords. `VERDICT: BLOCK`
+- @Architect: Reviews code dependencies. `VERDICT: WARNING` on outdated versions.
 ```
 
 The AI will categorize issues based on these markers.

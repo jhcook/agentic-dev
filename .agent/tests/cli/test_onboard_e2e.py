@@ -144,8 +144,9 @@ def test_app():
 def mock_onboard_steps():
     with patch("agent.commands.onboard.configure_voice_settings") as m1, \
          patch("agent.commands.onboard.setup_frontend") as m2, \
-         patch("agent.commands.onboard.configure_notion_settings") as m3:
-        yield m1, m2, m3
+         patch("agent.commands.onboard.configure_notion_settings") as m3, \
+         patch("agent.commands.onboard.configure_mcp_settings") as m4:
+        yield m1, m2, m3, m4
 
 def test_onboard_dependencies_missing(test_app, mock_shutil_which):
 
@@ -232,7 +233,8 @@ def test_onboard_happy_path(
     # Ensure get_value returns None so it doesn't think provider is configured
     mock_config.get_value.return_value = None
 
-    result = mock_runner.invoke(test_app, [])
+    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+        result = mock_runner.invoke(test_app, [])
     
     # Print output for debugging if it fails
     if result.exit_code != 0:
@@ -290,7 +292,8 @@ def test_onboard_skip_keys(
     # Ensure get_value returns None
     mock_config.get_value.return_value = None
 
-    result = mock_runner.invoke(test_app, [])
+    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+        result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
     # No keys should be saved
@@ -373,7 +376,12 @@ def test_check_github_auth_not_authenticated_yes(
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
         
-        with patch("agent.commands.onboard.typer.confirm", return_value=True):
+        def confirm_side_effect(text, *args, **kwargs):
+            if "Vertex" in text:
+                return False
+            return True
+
+        with patch("agent.commands.onboard.typer.confirm", side_effect=confirm_side_effect):
             result = mock_runner.invoke(test_app, [])
     
     assert result.exit_code == 0
@@ -499,7 +507,12 @@ def test_onboard_migration(
         # Anthropic skip, Provider 1, Model 1, Panel Engine 1
         mock_user_input.side_effect = ["", "1", "1", "1"]
         
-        with patch("agent.commands.onboard.typer.confirm", return_value=True):
+        def confirm_side_effect(text, *args, **kwargs):
+            if "Vertex" in text:
+                return False
+            return True
+
+        with patch("agent.commands.onboard.typer.confirm", side_effect=confirm_side_effect):
             result = mock_runner.invoke(test_app, [])
             
         assert result.exit_code == 0

@@ -11,18 +11,28 @@ The Agent CLI governance system is highly customizable through two main mechanis
 
 ## Rules Directory Structure
 
+The `.agent/rules/` directory follows a 100-based numerical indexing system to group rules logically:
+
 ```
 .agent/rules/
-├── main.mdc                              # Core governance rules
-├── adr-standards.mdc                     # ADR creation guidelines
-├── api-contract-validation.mdc           # API standards
-├── commit-workflow.mdc                   # Commit message rules
-├── documentation.mdc                     # Documentation requirements
-├── global-compliance-requirements.mdc    # SOC2, GDPR
-├── lean-code.mdc                        # Code quality standards
-├── state-enforcement.mdc                  # Workflow state transitions
-├── test.mdc                             # Testing requirements
-└── the-team.mdc                         # Team roles and responsibilities
+├── 100-main.mdc                              # Core governance rules
+├── 101-the-team.mdc                          # Team roles and responsibilities
+├── 102-global-compliance-requirements.mdc    # SOC2, GDPR
+├── 200-architectural-standards.mdc           # System design boundaries
+├── 201-api-contract-validation.mdc           # API standards
+├── 202-adr-standards.mdc                     # ADR creation guidelines
+├── 203-state-enforcement.mdc                 # Workflow state transitions
+├── 300-commit-workflow.mdc                   # Commit message rules
+├── 301-anti-drift.mdc                        # Scope enforcement
+├── 302-env-safety.mdc                        # Environment & test boundaries
+├── 303-breaking-changes.mdc                  # Breaking changes policy
+├── 400-lean-code.mdc                         # Code quality standards
+├── 401-no-stubs.mdc                          # Stub prohibition
+├── 402-colours.mdc                           # UI Brand and colours
+├── 500-test.mdc                              # Testing requirements
+├── 501-documentation.mdc                     # Documentation requirements
+├── 502-license-header.mdc                    # License requirements
+└── 600-mobile-platform-support.mdc           # Mobile OS support policy
 ```
 
 ## instructions Directory Structure
@@ -40,63 +50,67 @@ The Agent CLI governance system is highly customizable through two main mechanis
 
 ### Rule File Format
 
-Rules are written in **Markdown Context (`.mdc`)** format:
+Every rule must be strictly self-documenting and follow this **Markdown Context (`.mdc`)** layout format to ensure precision for the AI parsing engine:
 
 ```markdown
-# Rule Category Name
+---
+description: A brief, single-sentence summary of the rule's purpose.
+globs: ["**/*"] # Optional: specific files this rule applies to
+alwaysApply: true # Optional: whether this rule applies regardless of glob
+---
 
-## Severity Level: Rule Name
+# [Rule ID]: [Rule Name]
 
-Description of the rule and why it exists.
+## 1. Context & Purpose
+Why does this rule exist? What specific problem or risk does it mitigate?
 
-### Examples
+## 2. Requirements
+The actionable directives that must be followed.
+- **MUST**: Things that are strictly required.
+- **MUST NOT**: Things that are strictly forbidden.
 
-**✅ Good:**
+## 3. Examples
+Concrete examples of compliance vs. violation.
+
+### ✅ Good
 \`\`\`python
-# Example of correct implementation
-def get_user(user_id: str) -> User:
-    """Get user by ID."""
-    return db.query(User).filter_by(id=user_id).first()
+def example():
+    pass
 \`\`\`
 
-**❌ Bad:**
+### ❌ Bad
 \`\`\`python
-# Example of violation
-def get_user(user_id):  # Missing type hints
-    return db.query(User).filter_by(id=user_id).first()
+def bad_example():
+    pass
 \`\`\`
 
-### Enforcement
-This rule is checked by: @Backend, @Architect
-
-### Exceptions
-Document any valid exceptions to this rule.
+## 4. Enforcement
+Which agent persona (e.g., @Architect, @Security, @QA) is responsible for enforcing this rule? What is the penalty for violation (e.g., `VERDICT: BLOCK`)?
 ```
-
-### Severity Levels
-
-Use these severity markers in your rule titles:
-
-- **BLOCKER** - Must fix, build will fail
-- **ERROR** - Should fix, may cause issues
-- **WARNING** - Should review, best practice
-- **INFO** - Informational, suggestion
 
 ### Example: Creating a Performance Rule
 
 ```bash
 # Create new rule file
-cat > .agent/rules/performance.mdc << 'EOF'
-# Performance Standards
+cat > .agent/rules/403-performance.mdc << 'EOF'
+---
+description: Performance standards preventing blocking I/O in asynchronous backend flows.
+globs: ["**/*.py"]
+alwaysApply: true
+---
 
-## BLOCKER: No Blocking Operations in Async Functions
+# 403: Performance Standards
 
-Blocking operations in async functions defeat the purpose of async/await
-and can cause severe performance degradation.
+## 1. Context & Purpose
+Blocking operations in async functions defeat the purpose of async/await in the Python backend, causing severe performance degradation and latency spikes across the API.
 
-### Examples
+## 2. Requirements
+- **MUST** use async alternatives (like asyncpg, aiohttp) for any I/O bound tasks in FastAPI endpoint routes.
+- **MUST NOT** make synchronous requests, sleep, or run blocking ORM queries inside an `async def`.
 
-**✅ Good:**
+## 3. Examples
+
+### ✅ Good
 \`\`\`python
 async def fetch_user_data(user_id: str) -> dict:
     # Non-blocking database query
@@ -104,7 +118,7 @@ async def fetch_user_data(user_id: str) -> dict:
     return user.to_dict()
 \`\`\`
 
-**❌ Bad:**
+### ❌ Bad
 \`\`\`python
 async def fetch_user_data(user_id: str) -> dict:
     # Blocking call in async function!
@@ -112,33 +126,8 @@ async def fetch_user_data(user_id: str) -> dict:
     return user.to_dict()
 \`\`\`
 
-### Enforcement
-This rule is checked by: @Backend, @Architect
-
-## WARNING: Database Query Optimization
-
-All frequently-used queries should have appropriate indexes.
-
-### Checklist
-- [ ] Queries measured in production or load tests
-- [ ] Indexes created for WHERE clauses
-- [ ] N+1 queries avoided (use eager loading)
-- [ ] Query plan analyzed with EXPLAIN
-
-### Enforcement
-This rule is checked by: @Backend, @Observability
-
-## INFO: Caching Strategy
-
-Consider caching for:
-- Expensive computations
-- External API calls
-- Frequently accessed, rarely changed data
-
-### Recommended Tools
-- Redis for distributed caching
-- LRU cache for in-memory caching
-- HTTP caching headers for API responses
+## 4. Enforcement
+- **@Backend**: Evaluates endpoint signatures. `VERDICT: BLOCK` if synchronous I/O operations block an async route.
 EOF
 ```
 
@@ -240,7 +229,7 @@ async def call_external_api():
 
 - [FastAPI Async Best Practices](https://fastapi.tiangolo.com/async/)
 - ADR-015: Async/Await Patterns
-- .agent/rules/performance.mdc
+- .agent/rules/403-performance.mdc
 EOF
 ```
 
@@ -319,12 +308,11 @@ EOF
 
 Connect rules to instructions for comprehensive guidance:
 
-**In rule file** (`.agent/rules/security.mdc`):
+**In rule file** (`.agent/rules/102-global-compliance-requirements.mdc`):
 
 ```markdown
-## BLOCKER: No Secrets in Code
-
-See: .agent/instructions/security/secrets-management.md
+## 2. Requirements
+- **MUST NOT** commit raw secrets. See: `.agent/instructions/security/secrets-management.md`
 ```
 
 **In instruction file** (`.agent/instructions/security/secrets-management.md`):
@@ -332,7 +320,7 @@ See: .agent/instructions/security/secrets-management.md
 ```markdown
 # Secrets Management
 
-This enforces the rule: .agent/rules/security.mdc → "No Secrets in Code"
+This enforces the rule: .agent/rules/102-global-compliance-requirements.mdc → "No Secrets in Code"
 
 ## Approved Patterns
 
@@ -477,17 +465,24 @@ Write clean, maintainable code.
 **✅ Specific:**
 
 ```markdown
-## BLOCKER: Functions Must Have Type Hints
+---
+description: Functions must declare proper type hints.
+---
 
-All public functions must have type hints for parameters and return values.
+# 404: Type Hints Required
 
-**Good:**
+## 1. Context & Purpose
+All public functions must have type hints for parameters and return values to improve safety and DX.
+
+## 3. Examples
+
+### ✅ Good
 \`\`\`python
 def calculate_total(items: List[Item]) -> Decimal:
     return sum(item.price for item in items)
 \`\`\`
 
-**Bad:**
+### ❌ Bad
 \`\`\`python
 def calculate_total(items):
     return sum(item.price for item in items)
@@ -525,11 +520,14 @@ When bugs occur:
 Example:
 
 ```markdown
-## BLOCKER: Validate All User Input
+---
+description: Ensure all user input is validated before processing to prevent SQL injection.
+---
 
-Added after: SEC-2026-001 (SQL Injection vulnerability)
+# 103: Validate All User Input
 
-All user-provided data must be validated before processing.
+## 1. Context & Purpose
+Added after SEC-2026-001 (SQL injection vulnerability). All user-provided data must be validated before processing to prevent arbitrary code execution or invalid state.
 ```
 
 ### 6. Version Control Everything

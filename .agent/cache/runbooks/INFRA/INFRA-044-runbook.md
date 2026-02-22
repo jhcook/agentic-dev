@@ -17,7 +17,7 @@ Create a "fail fast" mechanism that verifies the presence of necessary credentia
 
 - [ ] **Centralization**: Implement the credential check in a centralized location (e.g., `agent.core.auth` or a startup hook) rather than scattered across individual commands.
 - [ ] **CLI Standards**: Ensure error messages follow proper CLI output standards (ADR-016). Use structured exits (`sys.exit(1)`) with user-friendly messages.
-**Deep Dive**: Consider adding a `validate_credentials()` dependency that can be injected into commands that require it, ensuring lazy loading so commands that don't need credentials (like `agent version`) remain fast.
+**Deep Dive**: Consider adding a `validate_credentials()` dependency that can be injected into commands that require it, ensuring lazy loading so commands that don't need credentials (like `env -u VIRTUAL_ENV uv run agent version`) remain fast.
 
 ## Security (@security)
 
@@ -34,7 +34,7 @@ Create a "fail fast" mechanism that verifies the presence of necessary credentia
 **Advice**:
 
 - [ ] **Clarity**: The "Value" in the User Story is high. The "hint" is the most critical part for UX.
-- [ ] **Onboarding Loop**: If possible, suggest running `agent onboard` again if that can fix the missing credentials.
+- [ ] **Onboarding Loop**: If possible, suggest running `env -u VIRTUAL_ENV uv run agent onboard` again if that can fix the missing credentials.
 **Deep Dive**: This directly addresses a known pain point. Ensure the error message distinguishes between "Credentials missing" vs "Credentials invalid". The story currently implies "missing" (locally), effectively covering local env vars or keyring state.
 
 ## QA (@qa)
@@ -44,7 +44,7 @@ Create a "fail fast" mechanism that verifies the presence of necessary credentia
 
 - [ ] **Testability**: The Test Strategy needs to clarify how to *mock* the secret store in automated tests. We don't want tests failing because the CI runner doesn't have a system keyring.
 - [ ] **Matrix**: Verify behavior across different OSs if using system keyrings.
-**Deep Dive**: Please verify that the "fail fast" doesn't break the `help` command. We must be able to run `agent --help` without crashing even if credentials are missing.
+**Deep Dive**: Please verify that the "fail fast" doesn't break the `help` command. We must be able to run `env -u VIRTUAL_ENV uv run agent --help` without crashing even if credentials are missing.
 
 ## Observability (@observability)
 
@@ -113,7 +113,7 @@ Create a "fail fast" mechanism that verifies the presence of necessary credentia
 
 - Identify AI-dependent commands (`new-story`, `runbook`, `implement`, `fix`, `chat`).
 - Inject `validate_credentials()` check at the start of these command handlers.
-- **Note**: Do NOT add to global `cli` callback to preserve `agent --help` and `agent version`.
+- **Note**: Do NOT add to global `cli` callback to preserve `env -u VIRTUAL_ENV uv run agent --help` and `env -u VIRTUAL_ENV uv run agent version`.
 
 ---
 
@@ -145,21 +145,21 @@ Create a "fail fast" mechanism that verifies the presence of necessary credentia
 
 - [ ] **Scenario 1 (No Creds)**:
   - Clear env vars and rename `.agent/secrets` (temporarily).
-  - Run `agent admin start`.
+  - Run `env -u VIRTUAL_ENV uv run agent admin start`.
   - Expect: **Fail Fast** with explicit error listing missing keys.
 - [ ] **Scenario 2 (Env Only)**:
   - Export `OPENAI_API_KEY=sk-fake...`.
-  - Run `agent admin start`.
+  - Run `env -u VIRTUAL_ENV uv run agent admin start`.
   - Expect: Pass credential check (backend process starts).
 - [ ] **Scenario 3 (Store Only)**:
   - Unset Env. Setup Secret Store.
-  - Run `agent admin start`.
+  - Run `env -u VIRTUAL_ENV uv run agent admin start`.
   - Expect: Pass.
 - [ ] **Scenario 4 (Mixed)**:
   - Env has one key, Store has another.
   - Expect: Pass.
 - [ ] **Scenario 5 (Agent Version)**:
-  - Run `agent version` with NO credentials.
+  - Run `env -u VIRTUAL_ENV uv run agent version` with NO credentials.
   - Expect: Pass (no check performed).
 
 ## Definition of Done
