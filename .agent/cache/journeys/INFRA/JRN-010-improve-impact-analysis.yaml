@@ -42,6 +42,8 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/core/dependency_analyzer.py
   tests:
   - .agent/tests/journeys/test_jrn_010.py

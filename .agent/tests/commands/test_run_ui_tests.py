@@ -96,7 +96,9 @@ def test_run_success(mock_shutil_which, mock_path_exists, mock_path_is_dir, mock
     mock_path_rglob.side_effect = [[mock_flow], [], [], []] 
     
     # Mock subprocess success
-    mock_subprocess_run.return_value.returncode = 0
+    mock_run_res = MagicMock()
+    mock_run_res.returncode = 0
+    mock_subprocess_run.return_value = mock_run_res
     
     result = runner.invoke(app, ["INFRA-009"])
     
@@ -118,7 +120,9 @@ def test_run_failure(mock_shutil_which, mock_path_exists, mock_path_is_dir, mock
     mock_path_rglob.side_effect = [[mock_flow], [], [], []]
     
     # Mock subprocess failure
-    mock_subprocess_run.return_value.returncode = 1
+    mock_run_res = MagicMock()
+    mock_run_res.returncode = 1
+    mock_subprocess_run.return_value = mock_run_res
     
     result = runner.invoke(app, ["INFRA-009"])
     
@@ -139,7 +143,9 @@ def test_filter_argument(mock_shutil_which, mock_path_exists, mock_path_is_dir, 
     # 4 calls to rglob
     mock_path_rglob.side_effect = [[mock_flow1, mock_flow2], [], [], []]
     
-    mock_subprocess_run.return_value.returncode = 0
+    mock_run_res = MagicMock()
+    mock_run_res.returncode = 0
+    mock_subprocess_run.return_value = mock_run_res
     
     # Filter for 'login'
     result = runner.invoke(app, ["INFRA-009", "--filter", "login"])

@@ -71,9 +71,32 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - journey.py
-  - runbook.py
-  - story.py
-  - user_journeys.md
+  - .agent/scripts/generate_journeys.py
+  - .agent/scripts/notion_schema_manager.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/importer.py
+  - .agent/src/agent/commands/journey.py
+  - .agent/src/agent/commands/list.py
+  - .agent/src/agent/commands/match.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/utils.py
+  - .agent/src/agent/commands/visualize.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/logger.py
+  - .agent/src/agent/core/notion/__init__.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/sync.py
+  - .agent/src/backend/scripts/generate_openapi.py
+  - .agent/templates/journey-template.yaml
   tests:
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_implement_branching.py
+  - .agent/tests/integration/test_python_agent.py
   - .agent/tests/journeys/test_jrn_044.py
+  - .agent/tests/unit/test_janitor.py
+  - .agent/tests/unit/test_net_utils.py
+  - .agent/tests/unit/test_notion_schema.py

@@ -193,11 +193,13 @@ def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, m
         
         # Mock AI Response
         mock_gov_ai.complete.return_value = "Verdict: PASS\nAnalysis: Looks good."
+        mock_check_ai._try_complete.return_value = "Verdict: PASS\nAnalysis: Looks good."
         
-        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
+        # Test native engine since ADK does not chunk large diffs
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123", "--panel-engine", "native"])
     
         assert result.exit_code == 0
-        assert "initiating governance preflight checks" in clean_out(result.stdout).lower()
+        assert "running preflight checks" in clean_out(result.stdout).lower()
         
         # Verify Scrubbing was called
         mock_scrub.assert_called()
@@ -227,8 +229,9 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     
     # Mock AI Response: Security returns BLOCK, others PASS
     # Note: governance.py parses with re.search(r"^VERDICT:\s*BLOCK", ..., re.IGNORECASE)
-    def side_effect(sys, user):
-        if "Security" in sys or "Security" in user or len(sys) > 0:
+    def side_effect(*args, **kwargs):
+        sys_str = str(args) + str(kwargs)
+        if "Security" in sys_str or len(sys_str) > 0:
             # Just block on the very first call to guarantee at least one block
             side_effect.called = getattr(side_effect, 'called', False)
             if not side_effect.called:
@@ -237,6 +240,7 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
         return "VERDICT: PASS\nSUMMARY:\nLooks good.\nFINDINGS:\n- None (Source: [none])"
         
     mock_gov_ai.complete.side_effect = side_effect
+    mock_check_ai._try_complete.side_effect = side_effect
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
         result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
@@ -259,7 +263,8 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     mock_run.return_value.stdout = "diff"
     mock_run.return_value.returncode = 0
 
-    mock_gov_ai.complete.return_value = "Verdict: PASS"
+    mock_gov_ai.complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
+    mock_check_ai._try_complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
     
     # Run
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
@@ -299,6 +304,7 @@ Analysis: This change is good.
 It avoids the error markdown for a BLOCK verdict.
 """
     mock_gov_ai.complete.return_value = review_text
+    mock_check_ai._try_complete.return_value = review_text
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
         result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
@@ -325,6 +331,7 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
 * Verdict Aggregation: Validation that a single BLOCK from any role results in an overall exit code 1.
 """
     mock_gov_ai.complete.return_value = review_text
+    mock_check_ai._try_complete.return_value = review_text
     
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
         result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
@@ -343,7 +350,8 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
     mock_gov_ai.provider = "openai"
     mock_run.return_value.stdout = "diff"
     mock_run.return_value.returncode = 0
-    mock_gov_ai.complete.return_value = "Verdict: PASS"
+    mock_gov_ai.complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None"
+    mock_check_ai._try_complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None"
     
     report_file = tmp_path / "report.json"
     

@@ -1,7 +1,3 @@
-# Journey: JRN-059
-# Linked Story: INFRA-070
-# Title: PR Creation Workflow
-
 id: JRN-059
 title: PR Creation Workflow
 state: DRAFT
@@ -12,10 +8,9 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: >
-  End-to-end PR creation workflow. Developer runs `agent pr` to run preflight,
-  generate PR title and body, and invoke `gh pr create`. Encapsulates the
-  full /pr workflow in a single CLI command.
+description: 'End-to-end PR creation workflow. Developer runs `agent pr` to run preflight,
+  generate PR title and body, and invoke `gh pr create`. Encapsulates the full /pr
+  workflow in a single CLI command.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is on a feature branch with commits
@@ -71,6 +66,23 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/journey.py
+  - .agent/src/agent/commands/visualize.py
   - .agent/src/agent/commands/workflow.py
   - .agent/workflows/pr.md
-  tests: []
+  tests:
+  - .agent/tests/cli/test_cli_options.py
+  - .agent/tests/cli/test_onboard_e2e.py
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/commands/test_basic_commands.py
+  - .agent/tests/commands/test_check_commands.py
+  - .agent/tests/commands/test_implement_branching.py
+  - .agent/tests/commands/test_journey_ai.py
+  - .agent/tests/commands/test_journey_coverage.py
+  - .agent/tests/commands/test_pr.py
+  - .agent/tests/commands/test_visualize.py
+  - .agent/tests/e2e/test_e2e_interactive.py
+  - .agent/tests/integration/test_agent_integration.py
+  - .agent/tests/integration/test_preflight_report.py
+  - .agent/tests/integration/test_python_agent.py

@@ -14,16 +14,20 @@
 
 """Integration tests for impact-to-journey mapping CLI (INFRA-059)."""
 
-import json
-import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 import yaml
+import typer
+from unittest.mock import MagicMock
 from typer.testing import CliRunner
 
-from agent.main import app
+from agent.commands.check import impact
+
+_app = typer.Typer()
+_app.command()(impact)
+
 
 runner = CliRunner()
 
@@ -93,13 +97,37 @@ class TestImpactJourneys:
         """The impact command should display affected journeys in output."""
         changed = "src/agent/commands/check.py"
 
-        with patch(
-            "subprocess.run",
-            return_value=type(
-                "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
-            )(),
+        mock_analyzer = MagicMock()
+        mock_analyzer.find_reverse_dependencies.return_value = {
+            Path("src/agent/commands/check.py"): set(["src/agent/main.py"]),
+        }
+
+        with (
+            patch(
+                "subprocess.run",
+                return_value=type(
+                    "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
+                )(),
+            ),
+            patch(
+                "agent.core.dependency_analyzer.DependencyAnalyzer",
+                return_value=mock_analyzer,
+            ),
+            patch(
+                "agent.db.journey_index.get_affected_journeys",
+                return_value=[
+                    {
+                        "id": "JRN-100",
+                        "title": "Test Journey",
+                        "matched_files": ["src/agent/commands/check.py"],
+                        "tests": ["tests/commands/test_impact_journeys.py"],
+                    }
+                ],
+            ),
+            patch("agent.db.journey_index.is_stale", return_value=False),
+            patch("agent.db.init.get_db_path", return_value=":memory:"),
         ):
-            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1", "--offline"])
+            result = runner.invoke(_app, ["TEST-001", "--base", "HEAD~1", "--offline"])
 
         assert result.exit_code == 0
         assert "JRN-100" in result.output or "Affected Journeys" in result.output
@@ -108,14 +136,38 @@ class TestImpactJourneys:
         """--json should output machine-readable JSON with affected_journeys."""
         changed = "src/agent/commands/check.py"
 
-        with patch(
-            "subprocess.run",
-            return_value=type(
-                "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
-            )(),
+        mock_analyzer = MagicMock()
+        mock_analyzer.find_reverse_dependencies.return_value = {
+            Path("src/agent/commands/check.py"): set(["src/agent/main.py"]),
+        }
+
+        with (
+            patch(
+                "subprocess.run",
+                return_value=type(
+                    "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
+                )(),
+            ),
+            patch(
+                "agent.core.dependency_analyzer.DependencyAnalyzer",
+                return_value=mock_analyzer,
+            ),
+            patch(
+                "agent.db.journey_index.get_affected_journeys",
+                return_value=[
+                    {
+                        "id": "JRN-100",
+                        "title": "Test Journey",
+                        "matched_files": ["src/agent/commands/check.py"],
+                        "tests": ["tests/commands/test_impact_journeys.py"],
+                    }
+                ],
+            ),
+            patch("agent.db.journey_index.is_stale", return_value=False),
+            patch("agent.db.init.get_db_path", return_value=":memory:"),
         ):
             result = runner.invoke(
-                app, ["impact", "TEST-001", "--base", "HEAD~1", "--json", "--offline"]
+                _app, ["TEST-001", "--base", "HEAD~1", "--json", "--offline"]
             )
 
         assert result.exit_code == 0
@@ -126,13 +178,25 @@ class TestImpactJourneys:
         """Files not matching any pattern should show 'No journeys affected'."""
         changed = "README.md"
 
-        with patch(
-            "subprocess.run",
-            return_value=type(
-                "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
-            )(),
+        mock_analyzer = MagicMock()
+        mock_analyzer.find_reverse_dependencies.return_value = {}
+
+        with (
+            patch(
+                "subprocess.run",
+                return_value=type(
+                    "R", (), {"stdout": changed, "stderr": "", "returncode": 0}
+                )(),
+            ),
+            patch(
+                "agent.core.dependency_analyzer.DependencyAnalyzer",
+                return_value=mock_analyzer,
+            ),
+            patch("agent.db.journey_index.get_affected_journeys", return_value=[]),
+            patch("agent.db.journey_index.is_stale", return_value=False),
+            patch("agent.db.init.get_db_path", return_value=":memory:"),
         ):
-            result = runner.invoke(app, ["impact", "TEST-001", "--base", "HEAD~1", "--offline"])
+            result = runner.invoke(_app, ["TEST-001", "--base", "HEAD~1", "--offline"])
 
         assert result.exit_code == 0
         assert "No journeys affected" in result.output

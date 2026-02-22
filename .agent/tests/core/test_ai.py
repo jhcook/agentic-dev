@@ -82,9 +82,10 @@ def test_complete_openai(mock_env_openai):
     with patch.dict(sys.modules, {"openai": mock_openai}):
         # Mock config to prevent loading real agent.yaml
         with patch("agent.core.config.config.load_yaml", return_value={}):
-            # Force GH check fail to default to OpenAI
+            # Force GH check fail but set provider directly to test openai completion
             with patch("subprocess.run", side_effect=FileNotFoundError):
                 ai = AIService()
+                ai.set_provider("openai")
                 ai.reload()
                 ai._initialized = True
                 # Double check

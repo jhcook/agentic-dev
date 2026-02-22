@@ -58,7 +58,9 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - tests/test_interrupt.py
-  - tests/test_vad.py
+  - .agent/src/backend/voice/vad.py
+  - .agent/src/backend/voice/interrupt.py
   tests:
+  - .agent/tests/voice/test_interrupt.py
+  - .agent/tests/voice/test_vad.py
   - .agent/tests/journeys/test_jrn_030.py

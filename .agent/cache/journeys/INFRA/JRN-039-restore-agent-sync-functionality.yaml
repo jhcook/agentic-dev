@@ -64,7 +64,14 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - main.py
-  - sync/cli.py
+  - .agent/src/agent/core/auth/credentials.py
+  - .agent/src/agent/core/auth/decorators.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/bootstrap.py
+  - .agent/src/agent/sync/cli.py
+  - .agent/src/agent/sync/sync.py
   tests:
+  - .agent/tests/commands/test_ai_commands.py
+  - .agent/tests/integration/test_python_agent.py
   - .agent/tests/journeys/test_jrn_039.py
+  - .agent/tests/smoke_sync.sh

@@ -1,7 +1,3 @@
-# Journey: JRN-056
-# Linked Story: INFRA-067
-# Title: Full Implementation Workflow
-
 id: JRN-056
 title: Full Implementation Workflow
 state: DRAFT
@@ -12,12 +8,11 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: >
-  End-to-end implementation workflow from runbook to verified code. Covers
-  pre-validation, journey gate, AI code generation, post-apply security scan,
-  QA validation, documentation check, and structured verdict output.
-  Post-apply phases use composable functions from gates.py with externalized
-  security patterns and configurable test commands.
+description: 'End-to-end implementation workflow from runbook to verified code. Covers
+  pre-validation, journey gate, AI code generation, post-apply security scan, QA validation,
+  documentation check, and structured verdict output. Post-apply phases use composable
+  functions from gates.py with externalized security patterns and configurable test
+  commands.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -36,7 +31,8 @@ steps:
   - Non-ACCEPTED runbooks are rejected with exit code 1
 - id: 2
   action: System checks branch and git state
-  system_response: CLI creates or switches to story branch, warns about uncommitted changes on story branches
+  system_response: CLI creates or switches to story branch, warns about uncommitted
+    changes on story branches
   assertions:
   - Feature branch is created or switched to
   - Dirty working tree on main is rejected with clear error
@@ -50,7 +46,8 @@ steps:
   - --skip-journey-check bypasses gate with audit log entry
 - id: 4
   action: System generates code via AI
-  system_response: AI produces implementation code based on runbook and governance context
+  system_response: AI produces implementation code based on runbook and governance
+    context
   assertions:
   - AI receives runbook content, governance rules, and ADRs
   - Generated code is returned as markdown with file paths
@@ -88,7 +85,8 @@ steps:
   - --json flag produces machine-readable output
 - id: 9
   action: System auto-stages modified files
-  system_response: CLI runs `git add` on all modified implementation files, story file, and runbook
+  system_response: CLI runs `git add` on all modified implementation files, story
+    file, and runbook
   assertions:
   - All files from code blocks are staged
   - Story file (state=IN_PROGRESS) is staged
@@ -143,8 +141,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - .agent/src/agent/commands/implement.py
-  - .agent/src/agent/commands/gates.py
+  - .agent/etc/agent.yaml
   - .agent/etc/security_patterns.yaml
+  - .agent/src/agent/commands/gates.py
+  - .agent/src/agent/commands/implement.py
   - .agent/workflows/implement.md
-  tests: []
+  tests:
+  - .agent/tests/commands/test_gates.py

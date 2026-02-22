@@ -52,7 +52,11 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - App.tsx
-  - all_stories.json
+  - .agent/src/agent/core/notion/client.py
+  - .agent/src/agent/sync/janitor.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/dashboard.py
+  - .agent/src/web/App.tsx
   tests:
   - .agent/tests/journeys/test_jrn_042.py
+  - .agent/tests/test_dashboard_api.py

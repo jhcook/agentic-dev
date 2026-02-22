@@ -68,10 +68,14 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - README.md
-  - agent/commands/visualize.py
-  - agent/core/graph.py
-  - agent/utils/text.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/visualize.py
+  - .agent/src/agent/core/graph.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/utils/__init__.py
+  - .agent/src/agent/utils/text.py
   tests:
+  - .agent/tests/commands/test_visualize.py
+  - .agent/tests/core/test_graph.py
+  - .agent/tests/core/test_text_utils.py
   - .agent/tests/journeys/test_jrn_015.py

@@ -59,7 +59,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - orchestrator.py
-  - test_voice_flow.py
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/voice/orchestrator.py
   tests:
+  - .agent/tests/voice/test_voice_flow.py
   - .agent/tests/journeys/test_jrn_024.py

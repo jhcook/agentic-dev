@@ -58,10 +58,14 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - CHANGELOG.md
-  - README.md
-  - __init__.py
-  - backend/speech/README.md
-  - backend/speech/factory.py
+  - .agent/pyproject.toml
+  - .agent/src/agent/core/config.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/speech/factory.py
+  - .agent/src/backend/speech/interfaces.py
+  - .agent/src/backend/speech/providers/__init__.py
+  - .agent/src/backend/speech/providers/deepgram.py
+  - .agent/src/backend/voice/orchestrator.py
   tests:
   - .agent/tests/journeys/test_jrn_022.py

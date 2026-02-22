@@ -57,7 +57,16 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - test_local_tts.py
-  - voices.json
+  - .agent/etc/agent.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/scripts/debug_langgraph.py
+  - .agent/src/backend/scripts/download_models.py
+  - .agent/src/backend/speech/factory.py
+  - .agent/src/backend/speech/providers/local.py
+  - .agent/src/backend/voice/buffer.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/vad.py
   tests:
   - .agent/tests/journeys/test_jrn_025.py

@@ -49,8 +49,7 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - README.md
-  - agent/commands/check.py
-  - tests/test_agent_run_ui_tests.py
+  - .agent/src/agent/commands/check.py
   tests:
+  - .agent/tests/commands/test_run_ui_tests.py
   - .agent/tests/journeys/test_jrn_008.py

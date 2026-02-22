@@ -59,10 +59,28 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/core/utils.py
-  - agent/core/utils/file_helpers.py
-  - agent/core/utils/id_helpers.py
-  - agent/core/utils/text_helpers.py
-  - check.py
+  - .agent/etc/voice.yaml
+  - .agent/src/agent/commands/admin.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/tools/architect.py
+  - .agent/src/backend/voice/tools/create_tool.py
+  - .agent/src/backend/voice/tools/get_installed_packages.py
+  - .agent/src/backend/voice/tools/git.py
+  - .agent/src/backend/voice/tools/list_capabilities.py
+  - .agent/src/backend/voice/tools/project.py
+  - .agent/src/backend/voice/tools/qa.py
+  - .agent/src/backend/voice/tools/read_tool_source.py
+  - .agent/src/backend/voice/tools/registry.py
+  - .agent/src/backend/voice/tools/security.py
+  - .agent/src/backend/voice/tools/workflows.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/core/utils/file_helpers.py
+  - .agent/src/agent/core/utils/id_helpers.py
+  - .agent/src/agent/core/utils/text_helpers.py
   tests:
+  - .agent/tests/admin/test_cli.py
   - .agent/tests/journeys/test_jrn_011.py
+  - .agent/tests/voice/test_voice_tools.py

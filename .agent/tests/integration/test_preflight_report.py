@@ -76,6 +76,10 @@ class TestPreflightReport(unittest.TestCase):
         self.mock_journey = self.mock_journey_patch.start()
         self.mock_journey.return_value = {"passed": True, "journey_ids": [], "error": None}
 
+        # Mock Notion and NotebookLM interactions
+        self.mock_sync_notebooklm_patch = patch('agent.sync.notebooklm.ensure_notebooklm_sync')
+        self.mock_sync_notebooklm = self.mock_sync_notebooklm_patch.start()
+
 
     def tearDown(self):
         self.mock_console_patch.stop()
@@ -84,6 +88,7 @@ class TestPreflightReport(unittest.TestCase):
         self.mock_analyzer_patch.stop()
         self.mock_convene_patch.stop()
         self.mock_journey_patch.stop()
+        self.mock_sync_notebooklm_patch.stop()
         shutil.rmtree(self.test_dir)
 
     def test_report_generated_on_success(self):

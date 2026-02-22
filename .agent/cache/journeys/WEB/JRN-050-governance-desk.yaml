@@ -54,6 +54,25 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/etc/voice.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/admin.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/backend/main.py
+  - .agent/src/backend/routers/governance.py
+  - .agent/src/backend/routers/voice.py
+  - .agent/src/backend/speech/providers/deepgram_streaming.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/src/backend/voice/tools/__init__.py
+  - .agent/src/backend/voice/tools/architect.py
+  - .agent/src/backend/voice/tools/docs.py
+  - .agent/src/backend/voice/tools/git.py
+  - .agent/src/backend/voice/tools/observability.py
+  - .agent/src/backend/voice/tools/project.py
+  - .agent/src/backend/voice/tools/qa.py
+  - .agent/src/backend/voice/tools/registry.py
+  - .agent/src/backend/voice/tools/security.py
+  - .agent/src/backend/voice/vad.py
   - admin/logger.py
   - routers/governance.py
   tests:

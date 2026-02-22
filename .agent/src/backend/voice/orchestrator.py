@@ -21,6 +21,12 @@ from datetime import datetime
 import json
 from collections import deque
 
+import warnings
+try:
+    from langgraph.utils.warnings import LangGraphDeprecationWarning
+    warnings.filterwarnings("ignore", category=LangGraphDeprecationWarning)
+except ImportError:
+    pass
 
 
 from langgraph.prebuilt import create_react_agent

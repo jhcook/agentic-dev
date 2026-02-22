@@ -1,7 +1,3 @@
-# Journey: JRN-058
-# Linked Story: INFRA-069
-# Title: Panel Consultation Workflow
-
 id: JRN-058
 title: Panel Consultation Workflow
 state: DRAFT
@@ -12,10 +8,9 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: >
-  Consultative governance panel session. Developer runs `agent panel` to get
-  expert advisory feedback from all governance roles. Output is advisory
-  (advice and recommendations), not blocking verdicts.
+description: 'Consultative governance panel session. Developer runs `agent panel`
+  to get expert advisory feedback from all governance roles. Output is advisory (advice
+  and recommendations), not blocking verdicts.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer has staged changes
@@ -66,4 +61,5 @@ implementation:
   files:
   - .agent/src/agent/commands/check.py
   - .agent/workflows/panel.md
-  tests: []
+  tests:
+  - .agent/tests/commands/test_panel.py

@@ -62,7 +62,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - main.py
-  - tests/core/test_version.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/main.py
   tests:
+  - .agent/tests/commands/test_panel.py
+  - .agent/tests/core/test_version.py
   - .agent/tests/journeys/test_jrn_006.py

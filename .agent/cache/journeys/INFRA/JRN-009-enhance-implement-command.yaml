@@ -68,10 +68,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - agent/commands/implement.py
-  - agent/utils/backup_manager.py
-  - agent/utils/code_parser.py
-  - agent/utils/logger.py
-  - tests/agent/test_implement.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/utils/backup_manager.py
+  - .agent/src/agent/utils/code_parser.py
+  - .agent/src/agent/utils/logger.py
   tests:
+  - .agent/tests/commands/test_implement.py
   - .agent/tests/journeys/test_jrn_009.py

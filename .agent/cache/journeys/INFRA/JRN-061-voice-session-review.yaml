@@ -1,7 +1,3 @@
-# Journey: JRN-061
-# Linked Story: INFRA-072
-# Title: Voice Session Review Workflow
-
 id: JRN-061
 title: Voice Session Review Workflow
 state: DRAFT
@@ -12,10 +8,9 @@ tags:
 - cli
 - voice
 actor: developer using agent CLI
-description: >
-  Voice session review workflow. Developer runs `agent review-voice` to
-  fetch the last voice agent session, run AI-powered UX analysis, and get
-  structured feedback on latency, accuracy, tone, and interruption handling.
+description: 'Voice session review workflow. Developer runs `agent review-voice` to
+  fetch the last voice agent session, run AI-powered UX analysis, and get structured
+  feedback on latency, accuracy, tone, and interruption handling.'
 preconditions:
 - Agent CLI is installed and configured
 - Voice agent infrastructure is running or session data is available
@@ -73,4 +68,5 @@ implementation:
   - .agent/src/agent/commands/voice.py
   - .agent/src/agent/main.py
   - .agent/workflows/review-voice.md
-  tests: []
+  tests:
+  - .agent/tests/commands/test_voice.py

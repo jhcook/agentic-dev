@@ -1,7 +1,3 @@
-# Journey: JRN-055
-# Linked Story: INFRA-061
-# Title: ADK Multi-Agent Panel Review
-
 id: JRN-055
 title: ADK Multi-Agent Panel Review
 state: DRAFT
@@ -13,11 +9,10 @@ tags:
 - adk
 - multi-agent
 actor: developer running governance panel
-description: >
-  Replace the sequential-prompt governance panel with an ADK multi-agent system.
-  Each role becomes an LlmAgent with tools, delegation, and loop capabilities.
+description: 'Replace the sequential-prompt governance panel with an ADK multi-agent
+  system. Each role becomes an LlmAgent with tools, delegation, and loop capabilities.
   A CoordinatorAgent orchestrates parallel role reviews and produces the final verdict.
-  The existing AIService is used as the model backend for vendor agnosticism.
+  The existing AIService is used as the model backend for vendor agnosticism.'
 preconditions:
 - Agent CLI is installed and configured
 - google-adk optional dependency is installed
@@ -27,7 +22,7 @@ auth_context:
   permissions: []
 steps:
 - id: 1
-  action: Developer sets `council.engine: adk` in config
+  action: 'Developer sets `council.engine: adk` in config'
   system_response: Configuration is updated to use ADK panel
   assertions:
   - Config validates the engine value (adk or legacy)
@@ -52,7 +47,8 @@ steps:
   - Loop terminates when verdict is conclusive or max iterations reached
 - id: 5
   action: CoordinatorAgent collects all role verdicts
-  system_response: Final verdict produced in VERDICT/SUMMARY/FINDINGS/REQUIRED_CHANGES format
+  system_response: Final verdict produced in VERDICT/SUMMARY/FINDINGS/REQUIRED_CHANGES
+    format
   assertions:
   - Any BLOCK from a role agent means overall BLOCK
   - Output is structurally identical to legacy panel output
@@ -97,9 +93,36 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - core/governance.py
-  - core/governance_tools.py
-  - core/config.py
-  - pyproject.toml
+  - .agent/etc/agent.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/core/adk/__init__.py
+  - .agent/src/agent/core/adk/adapter.py
+  - .agent/src/agent/core/adk/agents.py
+  - .agent/src/agent/core/adk/compat.py
+  - .agent/src/agent/core/adk/orchestrator.py
+  - .agent/src/agent/core/adk/tools.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/dependency_analyzer.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/sync/client.py
+  - .agent/src/agent/sync/test_spacing.py
   tests:
-  - tests/core/test_governance_adk.py
+  - .agent/src/agent/core/tests/test_utils_json.py
+  - .agent/src/agent/sync/tests/__init__.py
+  - .agent/tests/backend/voice/test_e2e_console_flow.py
+  - .agent/tests/backend/voice/test_mute_behavior.py
+  - .agent/tests/commands/test_config_command.py
+  - .agent/tests/commands/test_create_tool.py
+  - .agent/tests/commands/test_run_ui_tests.py
+  - .agent/tests/core/test_ai_service.py
+  - .agent/tests/core/test_status_preservation.py
+  - .agent/tests/core/test_sync_fix.py
+  - .agent/tests/db/__init__.py
+  - .agent/tests/integration/test_preflight_report.py
+  - .agent/tests/integration/test_tools.py
+  - .agent/tests/test_secret_rotation.py
+  - .agent/tests/unit/test_audit.py
+  - .agent/tests/core/test_governance_adk.py

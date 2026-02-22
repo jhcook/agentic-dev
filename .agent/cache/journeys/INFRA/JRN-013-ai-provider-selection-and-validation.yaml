@@ -1,7 +1,3 @@
-# Journey: JRN-013
-# Linked Story: INFRA-014
-# Title: AI Provider Selection and Validation
-
 id: JRN-013
 title: AI Provider Selection and Validation
 state: COMMITTED
@@ -11,12 +7,11 @@ tags:
 - infra
 - cli
 actor: developer using agent CLI
-description: >
-  A developer selects and validates an AI provider for the Agent CLI.
-  The CLI supports five providers: gh, gemini, vertex, openai, and anthropic.
-  Providers can be set globally in agent.yaml or overridden per-command with
-  the --provider flag. The CLI validates credentials and falls back through
-  a deterministic chain on rate limits or errors.
+description: 'A developer selects and validates an AI provider for the Agent CLI.
+  The CLI supports five providers: gh, gemini, vertex, openai, and anthropic. Providers
+  can be set globally in agent.yaml or overridden per-command with the --provider
+  flag. The CLI validates credentials and falls back through a deterministic chain
+  on rate limits or errors.'
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -27,23 +22,28 @@ auth_context:
 steps:
 - id: 1
   action: Developer runs `agent --help` to discover available providers
-  system_response: CLI displays top-level help including `--provider` option listing all five providers (gh, gemini, vertex, openai, anthropic)
+  system_response: CLI displays top-level help including `--provider` option listing
+    all five providers (gh, gemini, vertex, openai, anthropic)
   assertions:
   - Command exits with status 0
   - Help output includes `--provider` with all five provider names
 - id: 2
-  action: Developer sets `provider: vertex` in `.agent/etc/agent.yaml`
+  action: 'Developer sets `provider: vertex` in `.agent/etc/agent.yaml`'
   system_response: Configuration is persisted
   assertions:
   - agent.yaml contains `provider: vertex`
 - id: 3
-  action: Developer runs `agent query "hello" --provider gemini` to override the configured provider
-  system_response: CLI uses gemini provider for this invocation regardless of agent.yaml setting
+  action: Developer runs `agent query "hello" --provider gemini` to override the configured
+    provider
+  system_response: CLI uses gemini provider for this invocation regardless of agent.yaml
+    setting
   assertions:
   - Command uses gemini provider, not vertex
-  - Command exits with status 0 or displays credential error if GEMINI_API_KEY not set
+  - Command exits with status 0 or displays credential error if GEMINI_API_KEY not
+    set
 - id: 4
-  action: Developer runs `agent list-models` to see available models for the active provider
+  action: Developer runs `agent list-models` to see available models for the active
+    provider
   system_response: CLI displays available models for the currently configured provider
   assertions:
   - Command exits with status 0
@@ -51,13 +51,15 @@ steps:
 error_paths:
 - trigger_step: 3
   condition: Provider credentials are missing (e.g., no GEMINI_API_KEY)
-  system_response: CLI displays `MissingCredentialsError` with actionable message indicating which env var to set
+  system_response: CLI displays `MissingCredentialsError` with actionable message
+    indicating which env var to set
   assertions:
   - Error message names the specific missing credential
   severity: expected
 - trigger_step: 3
   condition: Provider hits rate limit
-  system_response: CLI automatically falls back to next provider in chain (gh → gemini → vertex → openai → anthropic)
+  system_response: "CLI automatically falls back to next provider in chain (gh \u2192\
+    \ gemini \u2192 vertex \u2192 openai \u2192 anthropic)"
   assertions:
   - Fallback is logged
   - Command eventually succeeds or exhausts all providers with clear error
@@ -81,10 +83,34 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - .agent/src/agent/main.py
-  - .agent/src/agent/core/ai/service.py
-  - .agent/src/agent/core/config.py
-  - .agent/src/agent/core/auth/credentials.py
   - .agent/etc/agent.yaml
+  - .agent/etc/router.yaml
+  - .agent/pyproject.toml
+  - .agent/src/agent/cli.py
+  - .agent/src/agent/commands/__init__.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/match.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/utils.py
+  - .agent/src/agent/commands/workflow.py
+  - .agent/src/agent/core/__init__.py
+  - .agent/src/agent/core/ai/__init__.py
+  - .agent/src/agent/core/ai/service.py
+  - .agent/src/agent/core/auth/credentials.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/dependency_analyzer.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/__init__.py
+  - .agent/src/agent/sync/pagination.py
+  - .agent/src/agent/sync/progress.py
+  - .agent/src/agent/sync/sync.py
   tests:
-  - .agent/tests/journeys/test_jrn_013.py
+  - .agent/src/agent/core/ai/tests/test_vertex_provider.py
+  - .agent/tests/commands/test_basic_commands.py
+  - .agent/tests/commands/test_implement.py
+  - .agent/tests/commands/test_implement_pathing.py
+  - .agent/tests/commands/test_runbook.py
+  - .agent/tests/conftest.py

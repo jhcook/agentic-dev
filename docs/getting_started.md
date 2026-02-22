@@ -25,10 +25,43 @@ pip install -e .agent/
 
 ## Credentials
 
-The Agent requires access to an AI provider to function. The default provider is Gemini. Configure this via an environment variable initially:
+The Agent requires access to an AI provider to function. Configure this via an environment variable initially:
 
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
+export OPENAI_API_KEY="your-api-key-here"
+export ANTHROPIC_API_KEY="your-api-key-here"
+```
+
+```bash
+export GITHUB_TOKEN="your-github-token-here"
+```
+
+```bash
+# For Vertex AI
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account.json"
+```
+
+```bash
+# Vertex AI with gcloud
+export GOOGLE_APPLICATION_CREDENTIALS="$(gcloud auth application-default print-access-token)"
+```
+
+```bash
+# Vertex AI login with gcloud and NotebookLM
+gcloud projects add-iam-policy-binding inspected-staging \         
+    --member="user:jhcook@example.com" \
+    --role="roles/serviceusage.serviceUsageConsumer"
+
+gcloud projects add-iam-policy-binding inspected-staging \
+    --member="user:jhcook@example.com" \
+    --role="roles/aiplatform.user"
+
+gcloud config set project example-staging
+
+gcloud auth application-default set-quota-project example-staging
+
+uv tool run --from notebooklm-mcp-server notebooklm-mcp-auth
 ```
 
 ## Bootstrapping the Repository
@@ -48,3 +81,7 @@ This interactive wizard will guide you through:
 5. Configuring the NotebookLM MCP server for advanced context retrieval.
 
 For detailed provider authentication (such as Vertex AI setup) and advanced configuration, see the comprehensive [Agent Documentation](.agent/docs/getting_started.md).
+
+## License
+
+The Agent CLI is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.

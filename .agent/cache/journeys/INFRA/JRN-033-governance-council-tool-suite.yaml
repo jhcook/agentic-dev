@@ -63,10 +63,10 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - architect.py
-  - core.py
-  - git.py
-  - meta.py
-  - observability.py
+  - .agent/src/agent/core/governance/tools/architect.py
+  - .agent/src/agent/core/governance/tools/core.py
+  - .agent/src/agent/core/governance/tools/git.py
+  - .agent/src/agent/core/governance/tools/meta.py
+  - .agent/src/agent/core/governance/tools/observability.py
   tests:
   - .agent/tests/journeys/test_jrn_033.py

@@ -71,10 +71,14 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - README.md
-  - agent/commands/mcp.py
-  - agent/commands/onboard.py
-  - agent/config.py
-  - agent/core/mcp/__init__.py
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/mcp.py
+  - .agent/src/agent/commands/onboard.py
+  - .agent/src/agent/core/config.py
+  - .agent/src/agent/core/mcp/__init__.py
+  - .agent/src/agent/core/mcp/client.py
+  - .agent/src/agent/core/secrets.py
+  - .agent/src/agent/main.py
   tests:
+  - .agent/tests/commands/test_mcp.py
   - .agent/tests/journeys/test_jrn_027.py

@@ -43,9 +43,16 @@ depends_on: []
 implementation:
   routes: []
   files:
-  - audit.py
-  - check.py
-  - governance.py
-  - lint.py
+  - .agent/pyproject.toml
+  - .agent/src/agent/commands/audit.py
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/security.py
+  - .agent/src/agent/core/utils.py
+  - .agent/src/agent/main.py
+  - .agent/src/backend/voice/tools/workflows.py
   tests:
+  - .agent/tests/core/test_security.py
   - .agent/tests/journeys/test_jrn_017.py
+  - .agent/tests/unit/test_audit.py
