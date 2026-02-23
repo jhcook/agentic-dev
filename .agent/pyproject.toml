@@ -82,6 +82,7 @@ dev = [
     "rich>=13.0.0",
     "PyYAML>=6.0",
     "google-adk>=1.0.0",
+    "soundfile>=0.13.1",
 ]
 
 [project.scripts]

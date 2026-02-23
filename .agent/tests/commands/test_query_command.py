@@ -102,4 +102,4 @@ class TestGrepFallback:
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
         assert "grep" in call_args
-        assert "test query" in call_args
+        assert "test|query" in call_args
