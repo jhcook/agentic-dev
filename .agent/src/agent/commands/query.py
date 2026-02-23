@@ -94,10 +94,16 @@ def grep_fallback(query: str) -> None:
     if not existing_dirs:
         console.print("[red]No searchable directories found.[/red]")
         return
+        
+    import re
+    stopwords = {"how", "what", "where", "why", "when", "who", "do", "i", "is", "a", "an", "the", "in", "on", "at", "to", "for", "with", "about", "can", "you", "does", "did", "of"}
+    words = re.findall(r'\b\w+\b', query.lower())
+    keywords = [w for w in words if w not in stopwords and len(w) > 2]
+    pattern = "|".join(keywords[:5]) if keywords else query
     
     try:
         subprocess.run(
-            ['grep', '-rni', '--color=always', query] + existing_dirs,
+            ['grep', '-rniE', '--color=always', pattern] + existing_dirs,
             timeout=30
         )
     except subprocess.TimeoutExpired:

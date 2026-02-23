@@ -179,6 +179,11 @@ class ContextBuilder:
         Returns:
             List of file paths matching the query.
         """
+        import re
+        stopwords = {"how", "what", "where", "why", "when", "who", "do", "i", "is", "a", "an", "the", "in", "on", "at", "to", "for", "with", "about", "can", "you", "does", "did", "of"}
+        words = re.findall(r'\b\w+\b', query.lower())
+        keywords = [w for w in words if w not in stopwords and len(w) > 2]
+        
         # Search directories
         search_dirs = self.search_dirs
         
@@ -193,12 +198,14 @@ class ContextBuilder:
         if not existing_dirs:
             logger.warning("No search directories found")
             return []
+            
+        pattern = "|".join(keywords[:5]) if keywords else query
         
         # Use grep for fast search (case-insensitive, files only)
         try:
-            cmd = ['grep', '-ril', '--include=*.py', '--include=*.md', 
+            cmd = ['grep', '-rilE', '--include=*.py', '--include=*.md', 
                    '--include=*.yaml', '--include=*.yml', '--include=*.txt',
-                   query] + existing_dirs
+                   pattern] + existing_dirs
             
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
