@@ -4,7 +4,11 @@ An AI-powered governance and workflow CLI for software development teams. Agent 
 
 ## Introduction
 
-Read our philosophy on why we built `agentic-dev`: [Engineering Discipline in the Age of AI: The End of "Vibe Coding"](docs/engineering-discipline.md)
+Read our core philosophy on how `agentic-dev` approaches AI-assisted engineering:
+- [Engineering Discipline in the Age of AI: The End of "Vibe Coding"](docs/engineering-discipline.md)
+- [Commanding the AI Assembly Line: Configuration, Ingestion, and Visualization](docs/config-and-visualization.md)
+- [Credential Security in the Agentic Workflow: Safety Meets Absolute Convenience](docs/credential-security.md)
+- [Eradicating Developer Toil: The Magic of the Agentic CLI](docs/developer-experience.md)
 
 ## What It Does
 
@@ -110,6 +114,9 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 - [Onboarding Guide](docs/getting_started.md) — How to install and configure `.agent` in your repository
 - [Provider Setup](.agent/docs/getting_started.md) — AI provider comparison, credentials, and advanced configuration
 - [Release Guide](docs/release-guide.md) — Packaging and release process
+- [Configuration & Visualization](docs/config-and-visualization.md) — Managing the AI assembly line
+- [Credential Security](docs/credential-security.md) — AES-256 and native OS keyring integration
+- [Developer Experience](docs/developer-experience.md) — Frictionless operations via `match-story`, `commit`, and `pr`
 - [ADRs](.agent/adrs/) — Architectural decision records
 - [Workflows](.agent/workflows/) — Detailed workflow instructions
 
