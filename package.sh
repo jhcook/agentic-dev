@@ -40,7 +40,7 @@ find "$SOURCE_DIR" -name ".DS_Store" -delete
 find "$SOURCE_DIR" -name ".pytest_cache" -type d -exec rm -rf {} +
 find "$SOURCE_DIR" -name ".ruff_cache" -type d -exec rm -rf {} +
 
-rm -rf dist/build dist/$ARCHIVE_NAME $SOURCE_DIR/bin/agent
+rm -rf dist/build dist/$ARCHIVE_NAME
 
 # Stamp Version
 echo "🔖 Stamping version..."
