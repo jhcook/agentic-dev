@@ -15,10 +15,14 @@
 
 set -e
 
-# Configuration
 DIST_DIR="dist"
 ARCHIVE_NAME="agent-release.tar.gz"
 SOURCE_DIR=".agent"
+
+INCLUDE_SOURCE=false
+if [ "$1" = "--source" ]; then
+    INCLUDE_SOURCE=true
+fi
 
 # Ensure we are in the root
 if [ ! -d "$SOURCE_DIR" ]; then
@@ -48,16 +52,20 @@ else
     echo "unknown" > .agent/src/VERSION
 fi
 
-echo "📦 Compile the agent binary..."
-echo "   Compiling with PyInstaller..."
-cd .agent
-# Get PyInstaller via uv if available, falling back to uv run
-uv pip install pyinstaller
-uv run pyinstaller --onefile --name agent \
-    --collect-all rich \
-    --add-data "$(pwd)/src/VERSION:." \
-    src/agent/main.py --distpath ../dist/bin --workpath ../dist/build --specpath ../dist/
-cd ..
+if [ "$INCLUDE_SOURCE" = false ]; then
+    echo "📦 Compile the agent binary..."
+    echo "   Compiling with PyInstaller..."
+    cd .agent
+    # Get PyInstaller via uv if available, falling back to uv run
+    uv pip install pyinstaller
+    uv run pyinstaller --onefile --name agent \
+        --collect-all rich \
+        --add-data "$(pwd)/src/VERSION:." \
+        src/agent/main.py --distpath ../dist/bin --workpath ../dist/build --specpath ../dist/
+    cd ..
+else
+    echo "ℹ️  Source mode enabled; skipping PyInstaller compilation."
+fi
 
 # list tracked files
 git ls-files "$SOURCE_DIR" > "$DIST_DIR/files_to_package.txt"
@@ -65,28 +73,47 @@ git ls-files "$SOURCE_DIR" > "$DIST_DIR/files_to_package.txt"
 # Add version file
 echo ".agent/src/VERSION" >> "$DIST_DIR/files_to_package.txt"
 # Add compiled binary
-echo "dist/bin/agent" >> "$DIST_DIR/files_to_package.txt"
+if [ "$INCLUDE_SOURCE" = false ]; then
+    echo "dist/bin/agent" >> "$DIST_DIR/files_to_package.txt"
+fi
 
 echo "📦 Packaging agent..."
 # We use -T - to read files from stdin
 # Exclude raw python code and build artifacts
-grep -v "/tests/" "$DIST_DIR/files_to_package.txt" \
-    | grep -v "/test_"          \
-    | grep -v "/conftest.py"    \
-    | grep -v "\.agent/cache/"   \
-    | grep -v "\.agent/adrs/"    \
-    | grep -v "\.agent/scripts/" \
-    | grep -v "\.agent/backups/" \
-    | grep -v "\.agent/logs/"    \
-    | grep -v "\.agent/secrets/" \
-    | grep -v "\.agent/storage/" \
-    | grep -v "\.agent/\.venv/"   \
-    | grep -v "\.agent/Makefile" \
-    | grep -v "\.agent/src/" \
-    | grep -v "pyproject\.toml" \
-    | grep -v "uv\.lock" \
-    | grep -v "\.agent/bin/agent" \
-    | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
+if [ "$INCLUDE_SOURCE" = true ]; then
+    grep -v "/tests/" "$DIST_DIR/files_to_package.txt" \
+        | grep -v "/test_"          \
+        | grep -v "/conftest.py"    \
+        | grep -v "\.agent/cache/"   \
+        | grep -v "\.agent/adrs/"    \
+        | grep -v "\.agent/scripts/" \
+        | grep -v "\.agent/backups/" \
+        | grep -v "\.agent/logs/"    \
+        | grep -v "\.agent/secrets/" \
+        | grep -v "\.agent/storage/" \
+        | grep -v "\.agent/\.venv/"   \
+        | grep -v "\.agent/Makefile" \
+        | grep -v "\.agent/bin/agent" \
+        | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
+else
+    grep -v "/tests/" "$DIST_DIR/files_to_package.txt" \
+        | grep -v "/test_"          \
+        | grep -v "/conftest.py"    \
+        | grep -v "\.agent/cache/"   \
+        | grep -v "\.agent/adrs/"    \
+        | grep -v "\.agent/scripts/" \
+        | grep -v "\.agent/backups/" \
+        | grep -v "\.agent/logs/"    \
+        | grep -v "\.agent/secrets/" \
+        | grep -v "\.agent/storage/" \
+        | grep -v "\.agent/\.venv/"   \
+        | grep -v "\.agent/Makefile" \
+        | grep -v "\.agent/src/" \
+        | grep -v "pyproject\.toml" \
+        | grep -v "uv\.lock" \
+        | grep -v "\.agent/bin/agent" \
+        | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
+fi
 
 echo "✅ Build complete!"
 echo "   Archive: $DIST_DIR/$ARCHIVE_NAME"
