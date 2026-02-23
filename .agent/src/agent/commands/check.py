@@ -1087,18 +1087,24 @@ def preflight(
                 story_content = scrub_sensitive_data(story_content)
 
             with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
-                result = convene_council_full(
-                    story_id=story_id,
-                    story_content=story_content,
-                    rules_content=rules_content,
-                    instructions_content=instructions_content,
-                    full_diff=full_diff,
-                    report_file=report_file,
-                    council_identifier="preflight",
-                    adrs_content=adrs_content,
-                    thorough=thorough,
-                    progress_callback=None # Silence individual role progress to reduce noise
-                )
+                try:
+                    result = convene_council_full(
+                        story_id=story_id,
+                        story_content=story_content,
+                        rules_content=rules_content,
+                        instructions_content=instructions_content,
+                        full_diff=full_diff,
+                        report_file=report_file,
+                        council_identifier="preflight",
+                        adrs_content=adrs_content,
+                        thorough=thorough,
+                        progress_callback=None # Silence individual role progress to reduce noise
+                    )
+                except Exception as e:
+                    console.print(f"\n[bold red]❌ Governance Panel Failed:[/bold red] {e}")
+                    if any(ind in str(e).lower() for ind in ["ssl", "certificate_verify", "deadline_exceeded", "504", "deadline expired"]):
+                        console.print("[yellow]Hint: Your corporate proxy may be blocking the AI provider or hitting API rate limits/timeouts. Check your VPN/Proxy settings.[/yellow]")
+                    raise typer.Exit(code=1)
 
             # Merge AI report details
             if "json_report" in result:
@@ -1647,18 +1653,24 @@ def panel(
 
 
     with console.status("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]"):
-        result = convene_council_full(
-            story_id=story_id,
-            story_content=scrubbed_content,
-            rules_content=rules_content,
-            instructions_content=instructions_content,
-            full_diff=full_diff,
-            mode="consultative",
-            council_identifier="panel",
-            user_question=question,
-            adrs_content=adrs_content,
-            progress_callback=None # Silence individual role progress
-        )
+        try:
+            result = convene_council_full(
+                story_id=story_id,
+                story_content=scrubbed_content,
+                rules_content=rules_content,
+                instructions_content=instructions_content,
+                full_diff=full_diff,
+                mode="consultative",
+                council_identifier="panel",
+                user_question=question,
+                adrs_content=adrs_content,
+                progress_callback=None # Silence individual role progress
+            )
+        except Exception as e:
+            console.print(f"\n[bold red]❌ Governance Panel Failed:[/bold red] {e}")
+            if any(ind in str(e).lower() for ind in ["ssl", "certificate_verify", "deadline_exceeded", "504", "deadline expired"]):
+                console.print("[yellow]Hint: Your corporate proxy may be blocking the AI provider or hitting API rate limits/timeouts. Check your VPN/Proxy settings.[/yellow]")
+            raise typer.Exit(code=1)
     
     # 4.5 Display Results
     console.print("\n[bold]Governance Panel Findings:[/bold]")

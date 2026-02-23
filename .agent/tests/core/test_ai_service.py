@@ -166,7 +166,7 @@ def test_rate_limit_retry_backoff(ai_service):
     # Should have retried same provider, not switched
     assert ai_service.provider == "openai"
     assert call_count == 3
-    # Exponential backoff: 2^0=1, 2^1=2
+    # Exponential backoff: 5*(2^0)=5, 5*(2^1)=10
     assert mock_sleep.call_count == 2
-    mock_sleep.assert_any_call(1)
-    mock_sleep.assert_any_call(2)
+    mock_sleep.assert_any_call(5)
+    mock_sleep.assert_any_call(10)

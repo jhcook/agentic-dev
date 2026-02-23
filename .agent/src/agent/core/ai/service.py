@@ -162,7 +162,8 @@ class AIService:
         from google import genai
         from google.genai import types
 
-        http_options = types.HttpOptions(timeout=600000)
+        timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
+        http_options = types.HttpOptions(timeout=timeout_ms)
 
         if provider == "gemini":
             api_key = get_secret("api_key", service="gemini")
@@ -645,9 +646,10 @@ class AIService:
 
                     bg_client = self._build_genai_client(provider)
                     
+                    timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
                     config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
-                        http_options=types.HttpOptions(timeout=600000),
+                        http_options=types.HttpOptions(timeout=timeout_ms),
                         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
                     response_stream = bg_client.models.generate_content_stream(
@@ -780,8 +782,13 @@ class AIService:
                     # Do not retry SSL errors, they are configuration issues
                     raise e
                     
-                # Catch transient network errors and retry
+                # Check for fatal proxy/connection errors FIRST
                 error_str = str(e).lower()
+                if any(ind in error_str for ind in ["certificate_verify", "ssl", "deadline_exceeded", "504"]):
+                    # If corporate proxy killed the proxy prematurely, abort
+                    raise e
+                    
+                # Catch transient network errors and retry
                 transient_indicators = [
                     "remote protocol error",  
                     "server disconnected", 
@@ -808,7 +815,8 @@ class AIService:
                     if any(ind in error_str for ind in rate_limit_indicators):
                          rate_limit_max = _cfg.panel_num_retries
                          if attempt < rate_limit_max - 1:
-                             wait_time = min(2 ** attempt, 60)
+                             # Base 5s, then 10s, 20s, up to 60s
+                             wait_time = min(5 * (2 ** attempt), 60)
                              console.print(
                                  f"[yellow]⚠️ Rate limit ({provider}). "
                                  f"Backoff retry {attempt+1}/{rate_limit_max} "

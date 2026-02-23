@@ -92,7 +92,7 @@ async def _sync_notebook() -> str:
                 logger.info(f"Successfully created NotebookLM notebook: {notebook_id}")
 
             # Gather files to sync
-            adrs_dir = config.repo_root / "docs" / "adrs"
+            adrs_dir = config.repo_root / ".agent" / "adrs"
             rules_dir = config.repo_root / ".agent" / "rules"
             
             cache_dirs = [
@@ -129,6 +129,7 @@ async def _sync_notebook() -> str:
                     content = file_path.read_text(errors="ignore")
                     scrubbed_content = scrub_sensitive_data(content)
                     
+                    # Provide the expected mcp_notebooklm_ prefix for NotebookLM tools
                     await client.call_tool("mcp_notebooklm_notebook_add_text", {
                         "notebook_id": notebook_id,
                         "title": file_key,

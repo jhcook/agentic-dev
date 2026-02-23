@@ -74,9 +74,9 @@ Rewrite the prompt format in `governance.py` to force the agent to cite its tool
 
 ### Phase 4: NotebookLM MCP Integration, Automated Sync, & Local Vector Database Fallback
 
-- **NotebookLM Automated Sync (Notebook Management)**: Before retrieval begins, the preflight orchestrator automatically calls the MCP server to ensure a NotebookLM notebook exists for the current repository. The orchestrator actively synchronized any local `docs/adrs/` and `.mdc` rules into it using the MCP commands (such as `notebook_add_text`), maintaining an up-to-date managed NotebookLM.
+- **NotebookLM Automated Sync (Notebook Management)**: Before retrieval begins, the preflight orchestrator automatically calls the MCP server to ensure a NotebookLM notebook exists for the current repository. The orchestrator actively synchronized any local `.agent/adrs/` and `.mdc` rules into it using the MCP commands (such as `notebook_add_text`), maintaining an up-to-date managed NotebookLM.
 - **NotebookLM MCP Primary Route**: When the NotebookLM Enterprise API MCP server is detected in the environment and synchronized, the agent routes its retrieval queries through the MCP server first for optimal enterprise document retrieval.
-- **Local Vector DB Fallback (Offline Mobile Support)**: When the MCP server or external endpoints are unavailable, gracefully fall back to an embedded, zero-server vector database (like `sqlite-vec` or `LanceDB`) to index `docs/adrs/` and `.mdc` rules. These run purely in-process and can be easily bundled into a compiled binary for cross-platform, entirely offline use (e.g., compiled, protected mobile add-ons) without requiring a heavy Python server.
+- **Local Vector DB Fallback (Offline Mobile Support)**: When the MCP server or external endpoints are unavailable, gracefully fall back to an embedded, zero-server vector database (like `sqlite-vec` or `LanceDB`) to index `.agent/adrs/` and `.mdc` rules. These run purely in-process and can be easily bundled into a compiled binary for cross-platform, entirely offline use (e.g., compiled, protected mobile add-ons) without requiring a heavy Python server.
 - **Legacy Mode**: Introduce a `--legacy-context` flag (or similar mechanism in `agent.yaml`) that completely bypasses the Oracle Pattern and reverts to the original Context Stuffing behavior.
 
 ### Lawful Basis for Processing (GDPR)

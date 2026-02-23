@@ -29,6 +29,7 @@ Design decisions:
 
 import asyncio
 import logging
+import os
 import threading
 from typing import AsyncGenerator
 
@@ -39,10 +40,10 @@ from agent.core.ai import ai_service
 
 logger = logging.getLogger(__name__)
 
-# Limit concurrent API calls to avoid overwhelming the provider.
+# Limit concurrent API calls to avoid overwhelming the provider quotas (e.g. Vertex 5 RPM limit).
 # Uses a threading.Semaphore (not asyncio.Semaphore) because the actual
 # blocking happens in threads via asyncio.to_thread().
-_MAX_CONCURRENT_API_CALLS = 3
+_MAX_CONCURRENT_API_CALLS = int(os.environ.get("AGENT_MAX_CONCURRENT_API_CALLS", 2))
 _thread_semaphore = threading.Semaphore(_MAX_CONCURRENT_API_CALLS)
 
 

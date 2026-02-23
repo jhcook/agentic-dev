@@ -257,7 +257,7 @@ class NotionSync:
 
 ### NEW `agent/sync/notebooklm.py`
 
-- Create a module to ensure a NotebookLM notebook exists for the current repository and to iterate over `docs/adrs/` and `.agent/rules/`, calling MCP tools (`notebook_add_text` or `notebook_add_drive`) to synchronize local architectural context to Google NotebookLM.
+- Create a module to ensure a NotebookLM notebook exists for the current repository and to iterate over `.agent/adrs/` and `.agent/rules/`, calling MCP tools (`notebook_add_text` or `notebook_add_drive`) to synchronize local architectural context to Google NotebookLM.
 
 ### NEW `agent/db/journey_index.py`
 

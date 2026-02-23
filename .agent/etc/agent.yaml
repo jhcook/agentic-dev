@@ -30,3 +30,4 @@ agent:
 env:
   CLOUD_ML_REGION: australia-southeast1
   NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com
+  AGENT_MAX_CONCURRENT_API_CALLS: "5"

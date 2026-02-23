@@ -1,0 +1,74 @@
+
+# Journey: JRN-063
+# Title: NotebookLM Authentication Flow
+# State: DRAFT
+# Copyright 2026 Justin Cook
+
+actor: "Technical User"
+description: "User authenticates the agent with NotebookLM using automated cookie extraction, bypassing robot detection by ensuring primary browser profile is logged into the correct account."
+
+steps:
+  - action: "User ensures they are logged into their desired NotebookLM account as the primary profile in their browser (e.g. Chrome)."
+    system_response: "Browser displays the NotebookLM interface with the user's account active."
+    assertions:
+      - "User can access their NotebookLM projects and documents."
+      - "The correct Google account avatar is visible in the browser."
+
+  - action: "User runs the command `agent mcp auth notebooklm --auto` in the terminal."
+    system_response: "Agent CLI displays an explicit GDPR consent warning outlining the data it will access and store."
+    assertions:
+      - "The user is prompted to consent to cookie extraction."
+      - "The prompt clearly explains the sensitive nature of the data being accessed."
+
+  - action: "User explicitly consents to the GDPR prompt."
+    system_response: "Agent CLI proceeds to automatically extract Google login session cookies from the user's browser."
+    assertions:
+      - "Agent CLI successfully identifies and accesses the browser's cookie storage."
+      - "CLI output indicates successful cookie extraction or an error message."
+
+  - action: "System uses the extracted cookies to authenticate with NotebookLM."
+    system_response: "Agent CLI displays a success message indicating NotebookLM authentication."
+    assertions:
+      - "Subsequent agent commands targeting NotebookLM are authorized."
+      - "The agent can access NotebookLM resources on behalf of the user."
+
+acceptance_criteria:
+  - "User can successfully authenticate with NotebookLM using the `agent mcp auth notebooklm --auto` command when logged into the correct account in their primary browser profile."
+  - "The agent is able to access NotebookLM resources after successful authentication."
+
+error_paths:
+  - trigger: "Google's robot detection is triggered during cookie extraction or authentication."
+    expected: "Agent CLI displays an error message explaining that robot detection was triggered and suggests alternative authentication methods (e.g., manual cookie input)."
+
+edge_cases:
+  - scenario: "User's browser has multiple Google accounts logged in simultaneously, but the primary profile isn't the desired NotebookLM account."
+    expected: "Authentication may succeed but use the wrong NotebookLM account. The agent should warn that it’s using the default browser session."
+  - scenario: "User's browser cookie storage is encrypted or inaccessible to the agent CLI."
+    expected: "Agent CLI displays an error message indicating that it cannot access the cookie storage and suggests alternative authentication methods."
+
+auth_context:
+  roles: []
+  permissions: []
+
+data_state:
+  data_classification: internal
+  preconditions:
+    - "User has a Google account with access to NotebookLM."
+    - "Agent CLI is installed and configured."
+    - "User has a compatible browser (e.g., Chrome) with an active Google login session."
+  postconditions:
+    - "Agent CLI is authenticated with NotebookLM."
+    - "User can access NotebookLM resources via the agent."
+
+implementation:
+  routes: []
+  files:
+    - ".agent/src/agent/commands/mcp.py"
+    - ".agent/src/agent/sync/notebooklm.py"
+  tests:
+    - ".agent/tests/integration/test_notebooklm_sync.py" # Required for COMMITTED journeys. List paths to test files relative to project root.
+    - ".agent/tests/integration/test_mcp_auth.py"
+
+linked_stories: []
+linked_adrs: []
+depends_on: []

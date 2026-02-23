@@ -70,7 +70,7 @@ def create_role_agent(role: Dict, tools: List, model, other_domains: str = "") -
         f"VERDICT: PASS or BLOCK\n"
         f"SUMMARY: One-line summary\n"
         f"FINDINGS:\n- finding 1 (Source: [Exact file path or ADR ID])\n- finding 2 (Source: [Exact file path or ADR ID])\n"
-        f"REQUIRED_CHANGES:\n- change 1 (if BLOCK)\n"
+        f"REQUIRED_CHANGES:\n- change 1 (Source: [Exact file path or ADR ID]) (if BLOCK)\n"
         f"REFERENCES:\n- ADR-XXX, JRN-XXX (cite what you consulted)"
     )
 

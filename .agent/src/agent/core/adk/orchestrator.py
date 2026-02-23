@@ -84,36 +84,43 @@ def _parse_agent_output(output: str) -> Dict:
         result["summary"] = summary_match.group(1).strip()
 
     # Extract findings
+    # Use re.DOTALL and non-greedy match to grab everything until the next known section
     findings_match = re.search(
-        r"FINDINGS:\s*\n((?:\s*-\s*.+\n?)*)", output
+        r"(?:\*\*)?FINDINGS:(?:\*\*)?\s*\n(.*?)(?:\n(?:\*\*)?(?:REQUIRED_CHANGES|REFERENCES):|\Z)", 
+        output,
+        re.DOTALL | re.IGNORECASE
     )
     if findings_match:
         result["findings"] = [
-            line.strip().lstrip("- ").strip()
+            line.strip().lstrip("-* ").strip()
             for line in findings_match.group(1).strip().split("\n")
-            if line.strip() and line.strip() != "- None"
+            if line.strip() and not line.strip().lower().startswith(("- none", "none"))
         ]
 
     # Extract required changes
     changes_match = re.search(
-        r"REQUIRED_CHANGES:\s*\n((?:\s*-\s*.+\n?)*)", output
+        r"(?:\*\*)?REQUIRED_CHANGES:(?:\*\*)?\s*\n(.*?)(?:\n(?:\*\*)?REFERENCES:|\Z)", 
+        output,
+        re.DOTALL | re.IGNORECASE
     )
     if changes_match:
         result["required_changes"] = [
-            line.strip().lstrip("- ").strip()
+            line.strip().lstrip("-* ").strip()
             for line in changes_match.group(1).strip().split("\n")
-            if line.strip() and line.strip() != "- None"
+            if line.strip() and not line.strip().lower().startswith(("- none", "none"))
         ]
 
     # Extract references
     refs_match = re.search(
-        r"REFERENCES:\s*\n((?:\s*-\s*.+\n?)*)", output
+        r"(?:\*\*)?REFERENCES:(?:\*\*)?\s*\n(.*)", 
+        output,
+        re.DOTALL | re.IGNORECASE
     )
     if refs_match:
         result["references"] = [
-            line.strip().lstrip("- ").strip()
+            line.strip().lstrip("-* ").strip()
             for line in refs_match.group(1).strip().split("\n")
-            if line.strip() and line.strip() != "- None"
+            if line.strip() and not line.strip().lower().startswith(("- none", "none"))
         ]
 
     return result
@@ -229,6 +236,13 @@ async def _orchestrate_async(
             if progress_callback:
                 progress_callback(f"⏱️ @{role_name} timed out")
         except Exception as e:
+            error_str = str(e).lower()
+            if any(ind in error_str for ind in ["certificate_verify", "ssl", "deadline_exceeded", "504"]):
+                logger.error("Fatal network/proxy error in agent %s: %s", role_name, e)
+                if progress_callback:
+                    progress_callback(f"❌ Fatal proxy/connection error: {e}")
+                raise e
+
             logger.warning("Agent %s failed: %s", role_name, e)
             raw_output = (
                 f"VERDICT: PASS\n"

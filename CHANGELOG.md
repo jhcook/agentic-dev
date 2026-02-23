@@ -4,6 +4,14 @@
 
 ### Added
 
+- **NotebookLM Authentication Remediation** (INFRA-078):
+  - Refactored `agent mcp auth notebooklm` to include an explicit GDPR consent prompt for automatic cookie extraction.
+  - Cookies are now securely stored in the OS-native Keychain via `SecretManager` instead of a plaintext file.
+  - Added `--no-auto-launch` flag to print manual extraction instructions.
+  - Built-in `--file` and `--auto` flags are now properly documented.
+  - Pinned `browser-cookie3` to version `0.20.1` and verified its LGPL-3.0 license.
+  - Re-introduced OpenTelemetry tracing spans and structured logging for observability.
+
 - **Source Code Context for Runbook Generation** (INFRA-066):
   - `agent new-runbook` now includes source file tree and code outlines in AI prompts.
   - Produces runbooks with accurate file paths and SDK usage matching the actual codebase.
