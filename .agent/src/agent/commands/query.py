@@ -85,8 +85,11 @@ def grep_fallback(query: str) -> None:
     """Fall back to simple grep search when AI is not available."""
     console.print("[yellow]AI features not configured. Falling back to grep search:[/yellow]\n")
     
-    search_dirs = ["docs", ".agent/workflows", ".agent/src", "README.md"]
-    existing_dirs = [d for d in search_dirs if Path(d).exists()]
+    from agent.core.config import config
+    context_builder = ContextBuilder(config.repo_root)
+    
+    search_dirs = [str(d) for d in context_builder.search_dirs]
+    existing_dirs = [d for d in search_dirs if Path(d).resolve().exists()]
     
     if not existing_dirs:
         console.print("[red]No searchable directories found.[/red]")
