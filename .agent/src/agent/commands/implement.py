@@ -325,6 +325,11 @@ def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool
         file_path.write_text(content)
         console.print(f"[bold green]✅ Applied changes to {filepath}[/bold green]")
         
+        # Apply license header if applicable
+        from agent.commands.license import apply_license_to_file
+        if apply_license_to_file(file_path):
+            console.print(f"[dim]Added copyright header to {filepath}[/dim]")
+        
         # Log the change
         log_file = Path(".agent/logs/implement_changes.log")
         log_file.parent.mkdir(parents=True, exist_ok=True)
