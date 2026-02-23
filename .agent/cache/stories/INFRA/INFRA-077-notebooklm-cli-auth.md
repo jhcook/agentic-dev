@@ -28,7 +28,7 @@ As a NotebookLM CLI user, I want the ability to authenticate using browser cooki
 
 ## Linked ADRs
 
-- ADR-XXX (Placeholder, replace with actual ADR number if applicable)
+- ADR-031: NotebookLM Cookie Authentication
 
 ## Linked Journeys
 
@@ -44,6 +44,10 @@ Components touched:
 
 Workflows affected:
 - NotebookLM CLI authentication
+- `agent sync notebooklm` operations
+- `agent mcp run-tool notebooklm` execution
+
+*Note: User-facing documentation (e.g., CLI help text, user guides) must be updated for the new `--auto`, `--file`, and `--no-auto-launch` flags.*
 
 Risks identified:
 - Browser compatibility issues.

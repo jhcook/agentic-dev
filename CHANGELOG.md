@@ -9,6 +9,7 @@
   - Cookies are now securely stored in the OS-native Keychain via `SecretManager` instead of a plaintext file.
   - Added `--no-auto-launch` flag to print manual extraction instructions.
   - Built-in `--file` and `--auto` flags are now properly documented.
+  - Added `--clear-session` flag to clear saved session cookies.
   - Pinned `browser-cookie3` to version `0.20.1` and verified its LGPL-3.0 license.
   - Re-introduced OpenTelemetry tracing spans and structured logging for observability.
 

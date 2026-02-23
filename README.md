@@ -116,6 +116,7 @@ The `agent mcp auth` command manages authentication for MCP servers (e.g., Noteb
 - `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent).
 - `--file <path>`: Uses a file-based cookie import from the provided path instead of launching Chrome interactively.
 - `--no-auto-launch`: Prints instructions for manual cookie extraction instead of launching the interactive browser script.
+- `--clear-session`: Clears the saved authentication session cookies for this server from the secure storage.
 
 ## Documentation
 

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from agent.core.config import config
 from agent.core.mcp.client import MCPClient
+from agent.core.secrets import get_secret
 from agent.core.utils import scrub_sensitive_data
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,16 @@ async def _sync_notebook() -> str:
             return "NOT_CONFIGURED"
 
         mcp_config = servers["notebooklm"]
+        
+        with tracer.start_as_current_span("notebooklm.sync.prepare_auth"):
+            # Inject NOTEBOOKLM_COOKIES if present
+            notebooklm_cookies = get_secret("cookies", "notebooklm")
+            if notebooklm_cookies:
+                logger.info("NotebookLM cookies found and injected for sync", extra={"method": "cookies"})
+                if "env" not in mcp_config:
+                    mcp_config["env"] = {}
+                mcp_config["env"]["NOTEBOOKLM_COOKIES"] = notebooklm_cookies
+
         client = MCPClient(
             command=mcp_config["command"], 
             args=mcp_config.get("args", []), 
@@ -76,12 +87,12 @@ async def _sync_notebook() -> str:
                     if not notebook_id:
                         if "Unknown tool" in result_text:
                             logger.warning("NotebookLM tool not found (often due to missing authentication).")
-                            logger.warning("Please run: uv tool run --from notebooklm-mcp-server notebooklm-mcp-auth")
+                            logger.warning("Please run: agent mcp auth notebooklm")
                         else:
                             logger.error(f"Failed to extract notebook ID from response: {result_text}")
                         return "FAILED"
                 except Exception as e:
-                    logger.warning(f"NotebookLM tool call failed (often due to missing authentication). Please run: `uv tool run --from notebooklm-mcp-server notebooklm-mcp-auth`")
+                    logger.warning(f"NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
                     logger.debug(f"Details: {e}")
                     return "FAILED"
                     

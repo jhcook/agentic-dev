@@ -46,14 +46,16 @@ def test_mcp_auth_auto_success(mock_sm_cls, mock_confirm, mock_subprocess_run):
     mock_subprocess_run.return_value = mock_result
     
     mock_sm = MagicMock()
+    mock_sm.is_initialized.return_value = True
+    mock_sm.is_unlocked.return_value = True
     mock_sm_cls.return_value = mock_sm
     
     result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
     
     assert result.exit_code == 0
     mock_sm.set_secret.assert_called_once_with(
-        "notebooklm_cookies", 
-        {"SID": "123", "HSID": "456", "SSID": "789"}
+        "notebooklm", "cookies",
+        json.dumps({"SID": "123", "HSID": "456", "SSID": "789"})
     )
     
 @patch("agent.commands.mcp.subprocess.run")
