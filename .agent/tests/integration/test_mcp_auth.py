@@ -89,3 +89,22 @@ def test_mcp_auth_file(mock_subprocess_run):
     called_args = mock_subprocess_run.call_args[0][0]
     assert "--file" in called_args
     assert "cookies.json" in called_args
+
+@patch("agent.commands.mcp.subprocess.run")
+@patch("agent.commands.mcp.Confirm.ask")
+def test_mcp_auth_auto_json_decode_error(mock_confirm, mock_subprocess_run, caplog):
+    """Test that a JSONDecodeError during cookie extraction is handled gracefully."""
+    mock_confirm.return_value = True
+    
+    # Mock subprocess result with invalid JSON
+    mock_result = MagicMock()
+    mock_result.stdout = "This is not valid JSON data"
+    mock_result.stderr = "Some stderr output"
+    mock_subprocess_run.return_value = mock_result
+    
+    result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
+    
+    # Should catch JSONDecodeError and exit cleanly without crashing
+    assert result.exit_code == 1
+    # Check that error was logged
+    assert "Auto-extraction failed to parse output." in caplog.text
