@@ -9,6 +9,7 @@ Read our core philosophy on how `agentic-dev` approaches AI-assisted engineering
 - [Commanding the AI Assembly Line: Configuration, Ingestion, and Visualization](docs/config-and-visualization.md)
 - [Credential Security in the Agentic Workflow: Safety Meets Absolute Convenience](docs/credential-security.md)
 - [Eradicating Developer Toil: The Magic of the Agentic CLI](docs/developer-experience.md)
+- [Admin and Voice: Visibility and Feedback Loops](docs/admin-and-voice.md)
 
 ## What It Does
 
@@ -117,6 +118,7 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 - [Configuration & Visualization](docs/config-and-visualization.md) — Managing the AI assembly line
 - [Credential Security](docs/credential-security.md) — AES-256 and native OS keyring integration
 - [Developer Experience](docs/developer-experience.md) — Frictionless operations via `match-story`, `commit`, and `pr`
+- [Admin and Voice](docs/admin-and-voice.md) — Embedded visibility and continuous UX refinement
 - [ADRs](.agent/adrs/) — Architectural decision records
 - [Workflows](.agent/workflows/) — Detailed workflow instructions
 
