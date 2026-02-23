@@ -65,12 +65,12 @@ async def _sync_notebook() -> str:
             env=mcp_config.get("env", {})
         )
 
-        state_file = config.agent_dir / "cache" / "notebooklm_state.json"
+        from agent.db.client import get_all_artifacts_content, upsert_artifact
+        state_docs = get_all_artifacts_content("notebooklm_state")
         state = {}
-        if state_file.exists():
+        if state_docs and state_docs[0].get("content"):
             try:
-                with open(state_file, "r") as f:
-                    state = json.load(f)
+                state = json.loads(state_docs[0]["content"])
             except Exception:
                 pass
 
@@ -80,7 +80,7 @@ async def _sync_notebook() -> str:
             if not notebook_id:
                 logger.info("Creating a new NotebookLM notebook for agentic-dev...")
                 try:
-                    result = await client.call_tool("mcp_notebooklm_notebook_create", {"title": f"agentic-dev ({config.repo_root.name})"})
+                    result = await client.call_tool("notebook_create", {"title": f"agentic-dev ({config.repo_root.name})"})
                     result_text = "\n".join([c.text for c in result.content if hasattr(c, "text")])
                     notebook_id = extract_uuid(result_text)
                     
@@ -97,9 +97,7 @@ async def _sync_notebook() -> str:
                     return "FAILED"
                     
                 state["notebook_id"] = notebook_id
-                state_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(state_file, "w") as f:
-                    json.dump(state, f)
+                upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
                 logger.info(f"Successfully created NotebookLM notebook: {notebook_id}")
 
             # Gather files to sync
@@ -140,18 +138,16 @@ async def _sync_notebook() -> str:
                     content = file_path.read_text(errors="ignore")
                     scrubbed_content = scrub_sensitive_data(content)
                     
-                    # Provide the expected mcp_notebooklm_ prefix for NotebookLM tools
-                    await client.call_tool("mcp_notebooklm_notebook_add_text", {
+                    # Use the native tool name for NotebookLM
+                    await client.call_tool("notebook_add_text", {
                         "notebook_id": notebook_id,
                         "title": file_key,
                         "text": scrubbed_content
                     })
                     
                     synced_files[file_key] = mtime
-                    with open(state_file, "w") as f:
-                        state["synced_files"] = synced_files
-                        json.dump(state, f)
-                        
+                    state["synced_files"] = synced_files
+                    upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
                 except Exception as e:
                     logger.error(f"Failed to sync file {file_path}: {e}")
 
@@ -162,6 +158,6 @@ async def _sync_notebook() -> str:
             logger.warning(f"NotebookLM sync failed or degraded: {e}")
             return "FAILED"
 
-def ensure_notebooklm_sync() -> str:
+async def ensure_notebooklm_sync() -> str:
     """Synchronize local ADRs and MDC rules to NotebookLM. Returns status string."""
-    return asyncio.run(_sync_notebook())
+    return await _sync_notebook()

@@ -19,7 +19,7 @@ As a developer using the `agentic-dev` CLI, I want the NotebookLM authentication
 - [ ] **Dependency Pinning**: The `browser-cookie3` dependency must be pinned to exactly version `0.20.1` during runtime execution to prevent supply-chain attacks.
 - [ ] **Flag Documentation**: The `--file`, `--no-auto-launch`, and `--auto` flags must be documented in the README and CHANGELOG.
 - [ ] **Fix File Input**: The `--file` flag must accept a file path (`str`) rather than a boolean.
-- [ ] **Synchronize Tool Names**: The backend NotebookLM sync tools must use the correct prefix (`mcp_notebooklm_`) as defined by the MCP server, and the integration test must assert this.
+- [ ] **Synchronize Tool Names**: The backend NotebookLM sync tools must use the correct, un-prefixed names (e.g., `notebook_query`), and the integration test must assert this.
 - [ ] **Observability**: The authentication flow must use structured logging (`logger`) and include OpenTelemetry tracing spans.
 - [ ] **ADR Creation**: An ADR must be written to formalize the decision to use automated cookie extraction with user consent and secure storage.
 - [ ] **Preflight Pass**: The `agent preflight` command must pass for these changes.
@@ -51,7 +51,7 @@ How will we verify correctness?
 - Integration tests in `.agent/tests/integration/test_mcp_auth.py` will mock the subprocess to verify `browser-cookie3` JSON parsing and `SecretManager` storage.
 - Tests will ensure that negative cases (like user consent rejection and JSON decode errors) are handled gracefully without exposing PII.
 - The `--no-auto-launch`, `--file`, and `--auto` flows will be covered.
-- The "Synchronize Tool Names" acceptance criterion will be verified by `test_notebooklm_sync_execution` in `.agent/tests/integration/test_notebooklm_sync.py`, ensuring all tool calls use the `mcp_notebooklm_` prefix.
+- The "Synchronize Tool Names" acceptance criterion will be verified by `test_notebooklm_sync_execution` in `.agent/tests/integration/test_notebooklm_sync.py`, ensuring all tool calls use the un-prefixed names.
 
 ## Rollback Plan
 

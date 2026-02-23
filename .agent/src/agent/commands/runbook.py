@@ -74,8 +74,8 @@ def new_runbook(
     # 3. Context — single source via context_loader
     console.print(f"🛈 invoking AI Governance Panel for {story_id}...")
     story_content = scrub_sensitive_data(story_file.read_text())
-    
-    ctx = context_loader.load_context()
+    import asyncio
+    ctx = asyncio.run(context_loader.load_context())
     rules_full = ctx.get("rules", "")
     agents_data = ctx.get("agents", {})
     instructions_content = ctx.get("instructions", "")

@@ -421,8 +421,9 @@ def preflight(
             console.print("[yellow]⚠️  Could not verify Notion sync state. Ensure 'agent sync init' was run.[/yellow]")
             
         try:
+            import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
-            ensure_notebooklm_sync()
+            asyncio.run(ensure_notebooklm_sync())
         except Exception as e:
             logger.debug(f"Could not sync with NotebookLM: {e}")
             console.print(f"[yellow]⚠️  NotebookLM sync degraded: {e}[/yellow]")
@@ -489,8 +490,9 @@ def preflight(
         notebooklm_ready = False
         console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
         try:
+            import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
-            sync_status = ensure_notebooklm_sync()
+            sync_status = asyncio.run(ensure_notebooklm_sync())
             if sync_status == "SUCCESS":
                 console.print("[green]✅ NotebookLM sync ready.[/green]")
                 notebooklm_ready = True
@@ -1021,7 +1023,8 @@ def preflight(
             
             
     # Load full context (rules + instructions + ADRs)
-    full_context = context_loader.load_context(story_id=story_id, legacy_context=legacy_context)
+    import asyncio
+    full_context = asyncio.run(context_loader.load_context(story_id=story_id, legacy_context=legacy_context))
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
     adrs_content = full_context.get("adrs", "")
@@ -1640,7 +1643,8 @@ def panel(
     if not story_content:
          console.print(f"[yellow]⚠️  Story/Runbook for {story_id} not found. Reviewing without specific document context.[/yellow]")
 
-    full_context = context_loader.load_context(story_id=story_id)
+    import asyncio
+    full_context = asyncio.run(context_loader.load_context(story_id=story_id))
     rules_content = full_context.get("rules", "")
     instructions_content = full_context.get("instructions", "")
     adrs_content = full_context.get("adrs", "")

@@ -31,7 +31,7 @@ class ContextLoader:
         self.instructions_dir = config.instructions_dir
         self.adrs_dir = config.agent_dir / "adrs"
 
-    def load_context(self, story_id: str = "", legacy_context: bool = False) -> dict:
+    async def load_context(self, story_id: str = "", legacy_context: bool = False) -> dict:
         """
         Loads the full context: Global Rules, Agents, Agent Instructions, ADRs,
         and Source Code context.
@@ -59,7 +59,7 @@ class ContextLoader:
             try:
                 from agent.core.mcp.client import MCPClient
                 mcp_client = MCPClient()
-                context_str = mcp_client.get_context(story_id)
+                context_str = await mcp_client.get_context(story_id)
             except Exception as e:
                 logger.debug(f"MCP Server not detected. Falling back to local Vector DB: {e}")
                 context_str = self._query_local_vector_db(story_id)

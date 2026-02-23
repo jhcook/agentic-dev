@@ -26,9 +26,10 @@ def test_extract_uuid():
 @pytest.mark.asyncio
 @patch("agent.sync.notebooklm.config")
 @patch("agent.sync.notebooklm.MCPClient")
-@patch("builtins.open")
+@patch("agent.db.client.get_all_artifacts_content")
+@patch("agent.db.client.upsert_artifact")
 @patch("pathlib.Path.exists")
-async def test_notebooklm_sync_execution(mock_exists, mock_open, mock_mcp_cls, mock_config):
+async def test_notebooklm_sync_execution(mock_exists, mock_upsert, mock_get_content, mock_mcp_cls, mock_config):
     """Test AC-12: The framework actively pushes local rules/ADRs to NotebookLM."""
     
     # Setup Config
@@ -40,8 +41,8 @@ async def test_notebooklm_sync_execution(mock_exists, mock_open, mock_mcp_cls, m
     mock_adrs_dir = MagicMock()
     mock_config.repo_root.__truediv__.return_value = mock_adrs_dir
     
-    # Mocking paths and their exists/glob
     mock_exists.return_value = False  # Ignore state file for now
+    mock_get_content.return_value = [] # Empty state to force notebook creation
     
     # Mock MCP Client
     mock_mcp = MagicMock()
@@ -61,37 +62,29 @@ async def test_notebooklm_sync_execution(mock_exists, mock_open, mock_mcp_cls, m
     mock_mcp.call_tool.assert_called()
     calls = mock_mcp.call_tool.call_args_list
     assert len(calls) >= 1
-    assert calls[0][0][0].startswith("mcp_notebooklm_")
-    assert calls[0][0][0] == "mcp_notebooklm_notebook_create"
+    assert calls[0][0][0] == "notebook_create"
     assert "test-repo" in calls[0][0][1]["title"]
 @pytest.mark.asyncio
-@patch("agent.core.mcp.client.asyncio.run")
-@patch("builtins.open")
-@patch("pathlib.Path.exists")
-async def test_notebooklm_get_context(mock_exists, mock_open, mock_run):
+@patch("agent.db.client.get_all_artifacts_content")
+async def test_notebooklm_get_context(mock_get_content):
     """Test get_context integration with NotebookLM."""
     
-    # Mocking paths and their exists
-    mock_exists.return_value = True 
-    
     # Mock state file content
-    mock_file = MagicMock()
-    mock_file.read.return_value = '{"notebook_id": "test-uuid"}'
-    mock_open.return_value.__enter__.return_value = mock_file
+    mock_get_content.return_value = [{"content": '{"notebook_id": "test-uuid"}'}]
     
     # Mock MCP Client
     from agent.core.mcp.client import MCPClient
     client = MCPClient(command="test")
-    
-    # Mock the asyncio.run to close the coroutine to avoid RuntimeWarning
-    def mock_run_side_effect(coro, *args, **kwargs):
-        coro.close()
-        return "Retrieved Context"
-    mock_run.side_effect = mock_run_side_effect
+    client.call_tool = AsyncMock()
+    mock_result = MagicMock()
+    mock_content = MagicMock()
+    mock_content.text = "Retrieved Context"
+    mock_result.content = [mock_content]
+    client.call_tool.return_value = mock_result
     
     # Run
-    result = client.get_context("test query")
+    result = await client.get_context("test query")
     
     # Assert
     assert result == "Retrieved Context"
-    mock_run.assert_called()
+    client.call_tool.assert_called_with("notebook_query", {"notebook_id": "test-uuid", "query": "test query"})

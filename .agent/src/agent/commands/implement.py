@@ -549,8 +549,8 @@ def implement(
     if guide_path.exists():
         guide_content = scrub_sensitive_data(guide_path.read_text())
     
-    # 3. Load Context — single source via context_loader
-    ctx = context_loader.load_context()
+    import asyncio
+    ctx = asyncio.run(context_loader.load_context())
     rules_content = ctx.get("rules", "")
     instructions_content = ctx.get("instructions", "")
     adrs_content = ctx.get("adrs", "")

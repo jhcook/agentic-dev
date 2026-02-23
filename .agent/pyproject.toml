@@ -44,6 +44,7 @@ dependencies = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
     "langchain-openai>=0.2.0",
+    "browser-cookie3==0.20.1",
 ]
 
 [project.optional-dependencies]
