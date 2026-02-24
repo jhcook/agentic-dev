@@ -7,7 +7,7 @@
 - **NotebookLM Authentication Remediation** (INFRA-078):
   - Refactored `agent mcp auth notebooklm` to include an explicit GDPR consent prompt for automatic cookie extraction.
   - Cookies are now securely stored in the OS-native Keychain via `SecretManager` instead of a plaintext file.
-  - Added and fully supported the new `--no-auto-launch` flag to print manual extraction instructions (this flag is explicitly present and active, NOT removed).
+  - Properly documented and improved the existing `--no-auto-launch` flag to print manual extraction instructions (this flag is explicitly present and active, NOT removed).
   - Built-in `--file` and `--auto` flags are now properly documented.
   - Added `--clear-session` flag to clear saved session cookies.
   - Pinned `browser-cookie3` to version `0.20.1` and verified its LGPL-3.0 license.
