@@ -102,7 +102,7 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 | Command | Description |
 |---------|-------------|
 | `agent sync` | Distributed sync (push/pull/status/scan/janitor/init/flush) |
-| `agent sync notebooklm` | Manage NotebookLM state (use `--flush` to reset) |
+| `agent sync notebooklm` | Manage NotebookLM state (use `--flush` to reset and delete remote notebook) |
 | `agent journey` | Journey management (coverage, backfill-tests) |
 | `agent config` | Manage configuration |
 | `agent secret` | Manage encrypted secrets |
