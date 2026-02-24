@@ -15,6 +15,7 @@
 import logging
 import os
 import re as _re
+from typing import Dict, Any
 
 import yaml
 
@@ -31,7 +32,7 @@ class ContextLoader:
         self.instructions_dir = config.instructions_dir
         self.adrs_dir = config.agent_dir / "adrs"
 
-    async def load_context(self, story_id: str = "", legacy_context: bool = False) -> dict:
+    async def load_context(self, story_id: str = "", legacy_context: bool = False) -> Dict[str, Any]:
         """
         Loads the full context: Global Rules, Agents, Agent Instructions, ADRs,
         and Source Code context.

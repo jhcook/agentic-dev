@@ -423,7 +423,11 @@ def preflight(
         try:
             import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
-            asyncio.run(ensure_notebooklm_sync())
+            from rich.status import Status
+            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
+                def _update_notebooklm_status_2(msg: str):
+                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status_2))
         except Exception as e:
             logger.debug(f"Could not sync with NotebookLM: {e}")
             console.print(f"[yellow]⚠️  NotebookLM sync degraded: {e}[/yellow]")
@@ -492,7 +496,14 @@ def preflight(
         try:
             import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
-            sync_status = asyncio.run(ensure_notebooklm_sync())
+            from rich.status import Status
+            
+            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
+                def _update_notebooklm_status(msg: str):
+                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                
+                sync_status = asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status))
+                
             if sync_status == "SUCCESS":
                 console.print("[green]✅ NotebookLM sync ready.[/green]")
                 notebooklm_ready = True

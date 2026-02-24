@@ -25,6 +25,8 @@ from agent.core.utils import scrub_sensitive_data
 
 logger = logging.getLogger(__name__)
 
+from typing import Optional, Callable
+
 def extract_uuid(text: str) -> str:
     """Extracts a UUID from a string."""
     match = re.search(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', text, re.IGNORECASE)
@@ -32,7 +34,7 @@ def extract_uuid(text: str) -> str:
         return match.group(0)
     return ""
 
-async def _sync_notebook() -> str:
+async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = None) -> str:
     from opentelemetry import trace
     tracer = trace.get_tracer(__name__)
     
@@ -77,87 +79,91 @@ async def _sync_notebook() -> str:
         notebook_id = state.get("notebook_id")
 
         try:
-            if not notebook_id:
-                logger.info("Creating a new NotebookLM notebook for agentic-dev...")
-                try:
-                    result = await client.call_tool("notebook_create", {"title": f"agentic-dev ({config.repo_root.name})"})
-                    result_text = "\n".join([c.text for c in result.content if hasattr(c, "text")])
-                    notebook_id = extract_uuid(result_text)
-                    
-                    if not notebook_id:
-                        if "Unknown tool" in result_text:
-                            logger.warning("NotebookLM tool not found (often due to missing authentication).")
-                            logger.warning("Please run: agent mcp auth notebooklm")
-                        else:
-                            logger.error(f"Failed to extract notebook ID from response: {result_text}")
-                        return "FAILED"
-                except Exception as e:
-                    logger.warning(f"NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
-                    logger.debug(f"Details: {e}")
-                    return "FAILED"
-                    
-                state["notebook_id"] = notebook_id
-                upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
-                logger.info(f"Successfully created NotebookLM notebook: {notebook_id}")
-
-            # Gather files to sync
-            adrs_dir = config.repo_root / ".agent" / "adrs"
-            rules_dir = config.repo_root / ".agent" / "rules"
-            
-            cache_dirs = [
-                config.agent_dir / "cache" / "journeys",
-                config.agent_dir / "cache" / "plans",
-                config.agent_dir / "cache" / "runbooks",
-                config.agent_dir / "cache" / "stories"
-            ]
-            
-            files_to_sync = []
-            if adrs_dir.exists():
-                files_to_sync.extend(list(adrs_dir.rglob("*.md")))
-            if rules_dir.exists():
-                files_to_sync.extend(list(rules_dir.rglob("*.mdc")))
-                
-            for cdir in cache_dirs:
-                if cdir.exists():
-                    files_to_sync.extend(list(cdir.rglob("*.md")))
-                    files_to_sync.extend(list(cdir.rglob("*.yaml")))
-                    files_to_sync.extend(list(cdir.rglob("*.yml")))
-                
-            synced_files = state.get("synced_files", {})
-            
-            for file_path in files_to_sync:
-                try:
-                    mtime = file_path.stat().st_mtime
-                    file_key = str(file_path.relative_to(config.repo_root))
-                    
-                    if file_key in synced_files and synced_files[file_key] >= mtime:
-                        # Skip if not modified
-                        continue
+            async with client.session() as mcp_session:
+                if not notebook_id:
+                    logger.info("Creating a new NotebookLM notebook for agentic-dev...")
+                    try:
+                        result = await client.call_tool("notebook_create", {"title": f"agentic-dev ({config.repo_root.name})"}, session=mcp_session)
+                        result_text = "\n".join([c.text for c in result.content if hasattr(c, "text")])
+                        notebook_id = extract_uuid(result_text)
                         
-                    logger.info(f"Syncing {file_key} to NotebookLM...")
-                    content = file_path.read_text(errors="ignore")
-                    scrubbed_content = scrub_sensitive_data(content)
-                    
-                    # Use the native tool name for NotebookLM
-                    await client.call_tool("notebook_add_text", {
-                        "notebook_id": notebook_id,
-                        "title": file_key,
-                        "text": scrubbed_content
-                    })
-                    
-                    synced_files[file_key] = mtime
-                    state["synced_files"] = synced_files
+                        if not notebook_id:
+                            if "Unknown tool" in result_text:
+                                logger.warning("NotebookLM tool not found (often due to missing authentication).")
+                                logger.warning("Please run: agent mcp auth notebooklm")
+                            else:
+                                logger.error(f"Failed to extract notebook ID from response: {result_text}")
+                            return "FAILED"
+                    except Exception as e:
+                        logger.warning(f"NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
+                        logger.debug(f"Details: {e}")
+                        return "FAILED"
+                        
+                    state["notebook_id"] = notebook_id
                     upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
-                except Exception as e:
-                    logger.error(f"Failed to sync file {file_path}: {e}")
+                    logger.info(f"Successfully created NotebookLM notebook: {notebook_id}")
 
-            logger.info("NotebookLM sync completed.")
+                # Gather files to sync
+                adrs_dir = config.repo_root / ".agent" / "adrs"
+                rules_dir = config.repo_root / ".agent" / "rules"
+                
+                cache_dirs = [
+                    config.agent_dir / "cache" / "journeys",
+                    config.agent_dir / "cache" / "plans",
+                    config.agent_dir / "cache" / "runbooks",
+                    config.agent_dir / "cache" / "stories"
+                ]
+                
+                files_to_sync = []
+                if adrs_dir.exists():
+                    files_to_sync.extend(list(adrs_dir.rglob("*.md")))
+                if rules_dir.exists():
+                    files_to_sync.extend(list(rules_dir.rglob("*.mdc")))
+                    
+                for cdir in cache_dirs:
+                    if cdir.exists():
+                        files_to_sync.extend(list(cdir.rglob("*.md")))
+                        files_to_sync.extend(list(cdir.rglob("*.yaml")))
+                        files_to_sync.extend(list(cdir.rglob("*.yml")))
+                    
+                synced_files = state.get("synced_files", {})
+                
+                for file_path in files_to_sync:
+                    try:
+                        mtime = file_path.stat().st_mtime
+                        file_key = str(file_path.relative_to(config.repo_root))
+                        
+                        if file_key in synced_files and synced_files[file_key] >= mtime:
+                            # Skip if not modified
+                            continue
+                            
+                        if progress_callback:
+                            progress_callback(f"Syncing {file_key}...")
+                            
+                        logger.info(f"Syncing {file_key} to NotebookLM...")
+                        content = file_path.read_text(errors="ignore")
+                        scrubbed_content = scrub_sensitive_data(content)
+                        
+                        # Use the native tool name for NotebookLM
+                        await client.call_tool("notebook_add_text", {
+                            "notebook_id": notebook_id,
+                            "title": file_key,
+                            "text": scrubbed_content
+                        }, session=mcp_session)
+                        
+                        synced_files[file_key] = mtime
+                        state["synced_files"] = synced_files
+                    except Exception as e:
+                        logger.error(f"Failed to sync file {file_path}: {e}")
+
+                upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
+                logger.info("NotebookLM sync completed.")
             return "SUCCESS"
             
         except BaseException as e:
             logger.warning(f"NotebookLM sync failed or degraded: {e}")
             return "FAILED"
 
-async def ensure_notebooklm_sync() -> str:
+async def ensure_notebooklm_sync(progress_callback: Optional[Callable[[str], None]] = None) -> str:
     """Synchronize local ADRs and MDC rules to NotebookLM. Returns status string."""
-    return await _sync_notebook()
+    return await _sync_notebook(progress_callback)
