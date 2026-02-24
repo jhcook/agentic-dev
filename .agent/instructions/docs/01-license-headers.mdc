@@ -9,3 +9,13 @@ All source code files (Python, TypeScript, JavaScript, CSS, Shell) MUST contain 
 - All new or modified source code files must include the license preamble.
 - Using the `add_license` tool is the preferred way to add this header.
 - Files without a header must be flagged as BLOCK in the `@Docs` review.
+
+## 📝 Output Formatting
+
+When generating your findings and listing necessary modifications in the `REQUIRED_CHANGES` section, you **MUST** include a `(Source: <filepath or ADR>)` citation for each item to prove the change is grounded in actual codebase context and policy.
+
+Example:
+```
+REQUIRED_CHANGES:
+- change 1 (Source: path/to/file.py): Details of the change.
+```

@@ -35,7 +35,7 @@ Improve the NotebookLM authentication flow in the `agentic-dev` CLI to address s
 
 #### MODIFY src/agent/cli.py
 
-- Add `--auto` flag to the `auth` command and remove the deprecated `--no-auto-launch` flag. Implement consent prompt using `rich.prompt.Confirm` if `--auto` is specified.
+- Add `--auto` flag to the `auth` command, and keep and document the `--no-auto-launch` flag. Implement consent prompt using `rich.prompt.Confirm` if `--auto` is specified.
 
 ```python
 import typer
@@ -186,7 +186,7 @@ browser-cookie3==0.20.1
 
 #### MODIFY README.md
 
-- Document the `--file`, `--auto`, and `--no-auto-launch` flags in the CLI documentation. Remove the deprecated `--no-auto-launch` flag.
+- Document the `--file`, `--auto`, and `--no-auto-launch` flags in the CLI documentation.
 
 ```markdown
 ## Authentication
@@ -211,7 +211,7 @@ The CLI supports multiple authentication methods:
 - Improved NotebookLM authentication flow:
     - Added `--auto` flag for automatic cookie extraction with explicit user consent.
     - Securely store extracted cookies using `SecretManager`.
-    - Removed `--no-auto-launch` flag.
+    - Documented exactly how to use `--no-auto-launch` flag.
     - Fixed: `--file` flag accepts a file path argument.
 ```
 
