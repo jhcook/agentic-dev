@@ -24,6 +24,7 @@ The service must integrate seamlessly with the local SQLite layer (ADR-002) and 
 We will use **Supabase** (managed PostgreSQL with real-time features) as the remote collaboration layer.
 
 ### Architecture
+
 ```
 ┌───────────────────────────────────────────────────┐
 │ Developer Machines                                 │
@@ -98,6 +99,7 @@ CREATE INDEX idx_artifacts_team_state ON artifacts(team_id, state);
 ```
 
 ### Configuration (`.agent/etc/sync.yaml`)
+
 ```yaml
 remote:
   type: supabase
@@ -113,6 +115,7 @@ sync:
 ```
 
 ### Python Client (Supabase SDK)
+
 ```python
 from supabase import create_client, Client
 
@@ -153,6 +156,7 @@ class RemoteSync:
 
 ### Real-Time Subscriptions (Optional)
 For live collaboration, developers can subscribe to changes:
+
 ```python
 def on_artifact_change(payload):
     """Handle real-time update from Supabase."""
@@ -232,11 +236,17 @@ supabase.table("artifacts").on("UPDATE", on_artifact_change).subscribe()
 6. **Schema Synchronization**: Migrations must apply to both SQLite and Supabase
 7. **Rate Limits**: Supabase API has rate limits (1000 req/min on free tier)
 8. **Data Residency**: Supabase hosts in specific regions (compliance consideration for GDPR)
+9. **Offline mode limitations:** Real-time collaboration relies on Supabase's cloud infrastructure, meaning offline capabilities will be restricted to local caching until reconnected.
+10. **Security:** Database access policies (RLS) must be carefully designed to prevent unauthorized story modifications.
+
+## Copyright
+
+Copyright 2026 Justin Cook
 
 ## Implementation Notes
 
 ### Setup Instructions
-1. **Create Supabase Project**: Sign up at https://supabase.com, create project
+1. **Create Supabase Project**: Sign up at <https://supabase.com>, create project
 2. **Run Migrations**: Apply schema SQL to Supabase SQL Editor
 3. **Configure RLS**: Enable Row-Level Security and create policies
 4. **Generate Team ID**: Create team UUID, set in `.agent/etc/sync.yaml`
