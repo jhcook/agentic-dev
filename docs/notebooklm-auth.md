@@ -33,7 +33,14 @@ If you prefer not to use automatic extraction, you can manually extract the cook
 agent mcp auth notebooklm --file path/to/cookies.json
 ```
 
-### 3. Clear Session
+### 3. Print Manual Instructions
+If you wish to view the manual extraction instructions directly in your terminal without using the interactive shell script or the `--auto` extractor, run:
+
+```bash
+agent mcp auth notebooklm --no-auto-launch
+```
+
+### 4. Clear Session
 If you need to switch accounts or clear your cached credentials, use the `--clear-session` flag:
 
 ```bash
