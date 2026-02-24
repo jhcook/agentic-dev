@@ -30,4 +30,5 @@ agent:
 env:
   CLOUD_ML_REGION: australia-southeast1
   NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com
+  # The maximum number of concurrent API calls allowed during parallel operations (e.g., ADK governance panel).
   AGENT_MAX_CONCURRENT_API_CALLS: "5"

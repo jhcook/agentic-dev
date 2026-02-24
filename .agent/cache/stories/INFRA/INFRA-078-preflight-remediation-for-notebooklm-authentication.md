@@ -41,8 +41,9 @@ As a developer using the `agentic-dev` CLI, I want the NotebookLM authentication
 
 ## Impact Analysis Summary
 
-Components touched: `agent/commands/mcp.py`, `agent/sync/notebooklm.py`, and `test_notebooklm_sync.py`.
-Workflows affected: NotebookLM authentication for syncing files.
+Components touched: `agent/commands/mcp.py`, `agent/sync/notebooklm.py`, and `agent/sync/cli.py`.
+Workflows affected: NotebookLM authentication for syncing files, as well as core framework adjustments (e.g., ADK error handling, AI service timeouts).
+Modifications include new integration tests (`test_mcp_auth.py`, `test_notebooklm_sync.py`), new documentation files (`environment_variables.md`, `secret_management.md`), and new architectural decision records (ADR-030, ADR-031).
 Risks identified: Potential for PII exposure if cookies are logged or leaked during unhandled exceptions. Mitigated by strict error handling and SecretManager usage.
 
 ## Test Strategy

@@ -87,3 +87,32 @@ def test_mcp_auth_file(mock_subprocess_run):
     called_args = mock_subprocess_run.call_args[0][0]
     assert "--file" in called_args
     assert "cookies.json" in called_args
+
+@patch("agent.commands.mcp.subprocess.run")
+@patch("agent.commands.mcp.Confirm.ask")
+def test_mcp_auth_auto_malformed_json(mock_confirm, mock_subprocess_run):
+    """Test that malformed JSON from the subprocess is handled gracefully."""
+    mock_confirm.return_value = True
+    
+    mock_result = MagicMock()
+    mock_result.stdout = '{"status": "success", "browser": "Chrome", "cookies": {"SID": "123", '
+    mock_subprocess_run.return_value = mock_result
+    
+    result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
+    assert result.exit_code == 1
+
+@patch("agent.commands.mcp.subprocess.run")
+@patch("agent.commands.mcp.Confirm.ask")
+def test_mcp_auth_auto_error_status(mock_confirm, mock_subprocess_run):
+    """Test that a valid JSON response with an error status is handled gracefully."""
+    mock_confirm.return_value = True
+    
+    mock_result = MagicMock()
+    mock_result.stdout = json.dumps({
+        "status": "error",
+        "message": "Browser profile not found"
+    })
+    mock_subprocess_run.return_value = mock_result
+    
+    result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
+    assert result.exit_code == 1

@@ -102,6 +102,7 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 | Command | Description |
 |---------|-------------|
 | `agent sync` | Distributed sync (push/pull/status/scan/janitor/init/flush) |
+| `agent sync notebooklm` | Manage NotebookLM state (use `--flush` to reset) |
 | `agent journey` | Journey management (coverage, backfill-tests) |
 | `agent config` | Manage configuration |
 | `agent secret` | Manage encrypted secrets |
@@ -113,9 +114,22 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 ### MCP Authentication
 
 The `agent mcp auth` command manages authentication for MCP servers (e.g., NotebookLM).
-- `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent).
+**Flags:**
+- `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent). This enables automated cookie extraction with user consent.
 - `--file <path>`: Uses a file-based cookie import from the provided path instead of launching Chrome interactively.
 - `--no-auto-launch`: Prints instructions for manual cookie extraction instead of launching the interactive browser script.
+
+## Environment Variables
+
+For a full list of all environment variables and secrets manager configurations, see the following guides:
+- [Environment Variables Guide](.agent/docs/environment_variables.md)
+- [Secret Management Guide](.agent/docs/secret_management.md)
+
+Key variables include:
+
+- `AGENT_AI_TIMEOUT_MS`: The maximum time (in milliseconds) to wait for an AI provider response.
+- `AGENT_MCP_TIMEOUT`: The maximum time (in seconds) to wait for Model Context Protocol (MCP) server operations.
+- `AGENT_MAX_CONCURRENT_API_CALLS`: The maximum number of concurrent API calls allowed during parallel operations (e.g., ADK governance panel).
 
 ## Documentation
 
@@ -131,4 +145,4 @@ The `agent mcp auth` command manages authentication for MCP servers (e.g., Noteb
 
 ## License
 
-Apache License 2.0
+Copyright 2026 Justin Cook

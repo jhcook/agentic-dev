@@ -32,9 +32,16 @@ steps:
       - "Subsequent agent commands targeting NotebookLM are authorized."
       - "The agent can access NotebookLM resources on behalf of the user."
 
+  - action: "User runs the command `agent sync notebooklm --flush` or `--reset`."
+    system_response: "Agent CLI reports that NotebookLM sync state was successfully reset."
+    assertions:
+      - "The NotebookLM artifact state is deleted from the cache."
+      - "Subsequent syncs will initialize a fresh NotebookLM notebook."
+
 acceptance_criteria:
   - "User can successfully authenticate with NotebookLM using the `agent mcp auth notebooklm --auto` command when logged into the correct account in their primary browser profile."
   - "The agent is able to access NotebookLM resources after successful authentication."
+  - "User can clear their NotebookLM session state using `agent sync notebooklm --flush`."
 
 error_paths:
   - trigger: "Google's robot detection is triggered during cookie extraction or authentication."
@@ -65,6 +72,7 @@ implementation:
   files:
     - ".agent/src/agent/commands/mcp.py"
     - ".agent/src/agent/sync/notebooklm.py"
+    - ".agent/src/agent/sync/cli.py"
   tests:
     - ".agent/tests/integration/test_notebooklm_sync.py" # Required for COMMITTED journeys. List paths to test files relative to project root.
     - ".agent/tests/integration/test_mcp_auth.py"

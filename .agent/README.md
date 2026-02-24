@@ -66,6 +66,12 @@ agent secret set huggingface token
 ```
 
 See [Getting Started](../docs/getting_started.md) for provider comparison and Vertex AI setup.
+
+For a comprehensive list of environment variables (like proxy settings or timeouts) and how to manage secrets securely, see these guides:
+
+- [Environment Variables Guide](docs/environment_variables.md)
+- [Secret Management Guide](docs/secret_management.md)
+
 Secrets are managed via the system keyring ([ADR-006](adrs/ADR-006-encrypted-secret-management.md)).
 
 ## Quick Start: The Agentic Workflow
@@ -151,6 +157,7 @@ agent pr
 | Command | Description |
 |---------|-------------|
 | `agent sync push/pull/status/scan/janitor/init/flush` | Distributed sync with Notion |
+| `agent sync notebooklm` | Manage NotebookLM state (`--flush` to reset) |
 | `agent config` | Manage configuration |
 | `agent secret` | Manage encrypted secrets |
 | `agent admin` | Launch management console |

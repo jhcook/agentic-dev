@@ -93,3 +93,19 @@ def init(backend: str = typer.Option(None, "--backend", help="Specific backend t
 def flush(hard: bool = typer.Option(False, "--hard", help="Also delete Notion DB linkage (requires re-init)")):
     """Delete local sync state so the next pull refreshes from remote."""
     sync_ops.flush(hard=hard)
+
+@app.command()
+def notebooklm(
+    reset: bool = typer.Option(False, "--reset", help="Reset the NotebookLM sync state"),
+    flush: bool = typer.Option(False, "--flush", help="Alias for --reset")
+):
+    """Manage NotebookLM synchronization state."""
+    if reset or flush:
+        from agent.db.client import delete_artifact
+        success = delete_artifact("notebooklm_state", "state")
+        if success:
+            print("Successfully reset NotebookLM sync state.")
+        else:
+            print("Failed to reset NotebookLM sync state (or it was already empty).")
+    else:
+        print("Use --reset or --flush to clear the NotebookLM sync state.")

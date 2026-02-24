@@ -69,3 +69,27 @@ def test_sync_pull_notion_backend(mock_sync_ops):
     result = runner.invoke(app, ["pull", "--backend", "notion"])
     assert result.exit_code == 0
     mock_sync_ops.pull.assert_called_once_with(verbose=False, backend="notion", force=False, artifact_id=None, artifact_type=None)
+
+@patch("agent.sync.cli.delete_artifact")
+def test_sync_notebooklm_reset(mock_delete):
+    """Verify that --reset deletes the notebooklm_state artifact."""
+    mock_delete.return_value = True
+    result = runner.invoke(app, ["notebooklm", "--reset"])
+    assert result.exit_code == 0
+    assert "Successfully reset NotebookLM sync state" in result.output
+    mock_delete.assert_called_once_with("notebooklm_state", "state")
+
+@patch("agent.sync.cli.delete_artifact")
+def test_sync_notebooklm_flush(mock_delete):
+    """Verify that --flush deletes the notebooklm_state artifact."""
+    mock_delete.return_value = True
+    result = runner.invoke(app, ["notebooklm", "--flush"])
+    assert result.exit_code == 0
+    assert "Successfully reset NotebookLM sync state" in result.output
+    mock_delete.assert_called_once_with("notebooklm_state", "state")
+
+def test_sync_notebooklm_no_flags():
+    """Verify that notebooklm without flags prints help."""
+    result = runner.invoke(app, ["notebooklm"])
+    assert result.exit_code == 0
+    assert "Use --reset or --flush" in result.output
