@@ -63,10 +63,19 @@ Risks identified:
 
 ## Test Strategy
 
-- Unit tests for cookie extraction logic.
-- Integration tests for the `agent mcp auth notebooklm` command with different browsers.
-- End-to-end tests to verify successful authentication and authorization with NotebookLM.
-- Security audits to identify potential vulnerabilities.
+- **Unit/Integration Tests**:
+  - Test cookie extraction logic explicitly to ensure it correctly falls back or errors when cookies are not found.
+  - Test command argument parsing to ensure `--auto`, `--file`, and `--no-auto-launch` are correctly passed to handlers.
+  - Test `async` connection capabilities when pulling NotebookLM state.
+  - **New Requirement (ADR-033)**: Add integration tests for `agent sync notebooklm --reset` and `--flush` commands. These tests should assert the correct changes in the local database and mock the remote deletion for the flush command.
+
+- **Journey Tests**:
+  - Implement the end-to-end journey test in `test_infra_077.py` for the NotebookLM authentication flow and data syncing to ensure the user journey is validated (removing the stub).
+
+- **Manual Testing/Security Audits**:
+  - Verify `--auto` extracts cookies on a valid Chrome user profile.
+  - Verify `--no-auto-launch` prevents the browser from opening.
+  - Security audits to identify potential vulnerabilities in cookie extraction.
 
 ## Rollback Plan
 

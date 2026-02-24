@@ -73,6 +73,10 @@ If your NotebookLM queries start failing with unauthorized errors, your session 
 If your NotebookLM sync state becomes invalid or corrupted, preventing synchronization:
 **Solution:** Run `agent sync notebooklm --reset` to clear the internal caching state and force a fresh sync on the next attempt.
 
+### Stale NotebookLM Sources
+If your sources are out of date and need to be fully resynchronized from NotebookLM:
+**Solution:** Run `agent sync notebooklm --flush` to delete all tracked NotebookLM sources and artifacts from the local database cache.
+
 ## Copyright
 Copyright 2024-2026 Google LLC
 

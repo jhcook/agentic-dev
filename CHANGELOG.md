@@ -10,6 +10,7 @@
   - Properly documented and improved the existing `--no-auto-launch` flag to print manual extraction instructions (this flag is explicitly present and active, NOT removed).
   - Built-in `--file` and `--auto` flags are now properly documented.
   - Added `--clear-session` flag to clear saved session cookies.
+  - Added new `agent sync notebooklm` command and the `--reset` and `--flush` flags for database state management.
   - Pinned `browser-cookie3` to version `0.20.1` and verified its LGPL-3.0 license.
   - Re-introduced OpenTelemetry tracing spans and structured logging for observability.
 

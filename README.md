@@ -118,6 +118,12 @@ The `agent mcp auth` command manages authentication for MCP servers (e.g., Noteb
 - `--no-auto-launch`: Prints instructions for manual cookie extraction instead of launching the interactive browser script.
 - `--clear-session`: Clears the saved authentication session cookies for this server from the secure storage.
 
+### Syncing MCP Server Context
+
+The `agent sync notebooklm` command syncs notebook context into the local database cache using the MCP functionality.
+- `--reset`: Clears internal caching state only, forcing a fresh fetch on the next sync.
+- `--flush`: Clears both internal caching state and deletes all previously tracked artifacts and sources from the database cache.
+
 ## Documentation
 
 - [Onboarding Guide](docs/getting_started.md) — How to install and configure `.agent` in your repository
