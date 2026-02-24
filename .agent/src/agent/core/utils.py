@@ -90,6 +90,31 @@ def get_next_id(directory: Path, prefix: str) -> str:
     return f"{prefix}-{next_num:03d}"
 
 
+def get_copyright_header() -> str:
+    """Returns the first line of the license_header.txt template, or a fallback."""
+    license_path = config.templates_dir / "license_header.txt"
+    if license_path.exists():
+        lines = license_path.read_text().splitlines()
+        for line in lines:
+            if "Copyright" in line:
+                return line.strip()
+        if lines:
+            return lines[0].strip()
+    return "Copyright 2026 Justin Cook"
+
+
+def get_full_license_header(prefix: str = "# ") -> str:
+    """Returns the full text of the license_header.txt template, formatted as a comment block."""
+    license_path = config.templates_dir / "license_header.txt"
+    if license_path.exists():
+        lines = license_path.read_text().splitlines()
+        formatted_lines = [f"{prefix}{line}".rstrip() for line in lines]
+        return "\n".join(formatted_lines) + "\n\n"
+    
+    # Fallback
+    return f"{prefix}{get_copyright_header()}\n\n"
+
+
 def sanitize_title(title: str) -> str:
     """
     Sanitizes a title for use in a filename.

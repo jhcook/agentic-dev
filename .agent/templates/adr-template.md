@@ -26,8 +26,6 @@ The architectural decision.
 
 (Optional) Previous ADR.
 
-
 ## Copyright
 
-Copyright 2026 Justin Cook
-
+{{ COPYRIGHT_HEADER }}

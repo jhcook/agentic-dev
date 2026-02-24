@@ -47,8 +47,6 @@ How will we verify correctness?
 
 How do we revert safely?
 
-
 ## Copyright
 
-Copyright 2026 Justin Cook
-
+{{ COPYRIGHT_HEADER }}

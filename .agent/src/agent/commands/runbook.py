@@ -24,6 +24,7 @@ from agent.core.config import config
 from agent.core.utils import (
     find_story_file,
     scrub_sensitive_data,
+    get_copyright_header,
 )
 from agent.core.context import context_loader
 from agent.db.client import upsert_artifact
@@ -100,6 +101,7 @@ def new_runbook(
         raise typer.Exit(code=1)
         
     template_content = template_path.read_text()
+    template_content = template_content.replace("{{ COPYRIGHT_HEADER }}", get_copyright_header())
     
     system_prompt = f"""You are the AI Governance Panel for this repository.
 Your role is to design and document a DETAILED Implementation Runbook for a software engineering task.
