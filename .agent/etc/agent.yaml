@@ -4,7 +4,7 @@ panel:
 agent:
   # provider: gemini | vertex | openai | anthropic | gh
   provider: vertex
-  test_command: "make test"
+  test_command: "PYTHONPATH=.agent/src .venv/bin/pytest .agent/tests"
   models:
     gemini: models/gemini-pro-latest
     vertex: gemini-2.5-pro

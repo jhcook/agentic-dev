@@ -8,6 +8,8 @@ max_file_tokens: 4096
 # Search directories (relative to repo root)
 search_dirs:
   - docs
+  - .agent/docs
   - .agent/workflows
   - .agent/src/agent
   - .agent/rules
+  - .agent/instructions

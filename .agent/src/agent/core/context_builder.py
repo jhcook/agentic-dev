@@ -28,12 +28,8 @@ from agent.core.utils import scrub_sensitive_data
 
 logger = logging.getLogger(__name__)
 
-MAX_FILE_TOKENS = 4096
-CONTEXT_TOKEN_BUDGET = 8192
-
 # Approximate tokens per character (conservative estimate)
 CHARS_PER_TOKEN = 4
-
 
 class ContextBuilder:
     """
@@ -51,6 +47,38 @@ class ContextBuilder:
         """
         self.root_dir = Path(root_dir).resolve()
         self.ignore_patterns = self._load_gitignore()
+        
+        # Load query.yaml overrides
+        self.max_file_tokens = 4096
+        self.context_token_budget = 8192
+        self.search_dirs = [
+            self.root_dir / "docs",
+            self.root_dir / ".agent" / "workflows",
+            self.root_dir / ".agent" / "src" / "agent",
+            self.root_dir / ".agent" / "rules",
+        ]
+        self._load_query_config()
+
+    def _load_query_config(self):
+        """Load optional query.yaml overrides."""
+        import yaml
+        query_yaml_path = self.root_dir / ".agent" / "etc" / "query.yaml"
+        if query_yaml_path.exists():
+            try:
+                with open(query_yaml_path, "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f) or {}
+                
+                if "max_file_tokens" in config:
+                    self.max_file_tokens = int(config["max_file_tokens"])
+                if "max_context_tokens" in config:
+                    self.context_token_budget = int(config["max_context_tokens"])
+                
+                if "search_dirs" in config and isinstance(config["search_dirs"], list):
+                    self.search_dirs = [
+                        self.root_dir / d for d in config["search_dirs"]
+                    ]
+            except Exception as e:
+                logger.warning(f"Failed to load query.yaml: {e}")
     
     def _load_gitignore(self) -> Set[str]:
         """Load and parse .gitignore patterns."""
@@ -151,13 +179,13 @@ class ContextBuilder:
         Returns:
             List of file paths matching the query.
         """
+        import re
+        stopwords = {"how", "what", "where", "why", "when", "who", "do", "i", "is", "a", "an", "the", "in", "on", "at", "to", "for", "with", "about", "can", "you", "does", "did", "of"}
+        words = re.findall(r'\b\w+\b', query.lower())
+        keywords = [w for w in words if w not in stopwords and len(w) > 2]
+        
         # Search directories
-        search_dirs = [
-            self.root_dir / "docs",
-            self.root_dir / ".agent" / "workflows",
-            self.root_dir / ".agent" / "src" / "agent",
-            self.root_dir / ".agent" / "rules",
-        ]
+        search_dirs = self.search_dirs
         
         # Add README if exists
         readme = self.root_dir / "README.md"
@@ -170,12 +198,14 @@ class ContextBuilder:
         if not existing_dirs:
             logger.warning("No search directories found")
             return []
+            
+        pattern = "|".join(keywords[:5]) if keywords else query
         
         # Use grep for fast search (case-insensitive, files only)
         try:
-            cmd = ['grep', '-ril', '--include=*.py', '--include=*.md', 
+            cmd = ['grep', '-rilE', '--include=*.py', '--include=*.md', 
                    '--include=*.yaml', '--include=*.yml', '--include=*.txt',
-                   query] + existing_dirs
+                   pattern] + existing_dirs
             
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -217,8 +247,8 @@ class ContextBuilder:
                 content = f.read()
             
             # Truncate if too large
-            if self._estimate_tokens(content) > MAX_FILE_TOKENS:
-                content = self._truncate_to_tokens(content, MAX_FILE_TOKENS)
+            if self._estimate_tokens(content) > self.max_file_tokens:
+                content = self._truncate_to_tokens(content, self.max_file_tokens)
             
             # Scrub PII
             scrubbed = scrub_sensitive_data(content)
@@ -266,7 +296,7 @@ class ContextBuilder:
             if content:
                 content_tokens = self._estimate_tokens(content)
                 
-                if total_tokens + content_tokens <= CONTEXT_TOKEN_BUDGET:
+                if total_tokens + content_tokens <= self.context_token_budget:
                     context_parts.append(content)
                     total_tokens += content_tokens
                 else:

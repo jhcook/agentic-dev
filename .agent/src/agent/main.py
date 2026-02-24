@@ -39,6 +39,7 @@ from agent.commands import (
     implement,
     importer,
     journey,
+    license as license_cmd,
     lint,
     list as list_cmd,
     match,
@@ -166,6 +167,7 @@ app.command("list-journeys")(list_cmd.list_journeys)
 app.command("match-story")(with_creds(match.match_story))
 app.command("validate-story")(check.validate_story)
 app.command("new-plan")(plan.new_plan)
+app.command("apply-license")(license_cmd.apply_license)
 
 
 if __name__ == "__main__":

@@ -85,16 +85,25 @@ def grep_fallback(query: str) -> None:
     """Fall back to simple grep search when AI is not available."""
     console.print("[yellow]AI features not configured. Falling back to grep search:[/yellow]\n")
     
-    search_dirs = ["docs", ".agent/workflows", ".agent/src", "README.md"]
-    existing_dirs = [d for d in search_dirs if Path(d).exists()]
+    from agent.core.config import config
+    context_builder = ContextBuilder(config.repo_root)
+    
+    search_dirs = [str(d) for d in context_builder.search_dirs]
+    existing_dirs = [d for d in search_dirs if Path(d).resolve().exists()]
     
     if not existing_dirs:
         console.print("[red]No searchable directories found.[/red]")
         return
+        
+    import re
+    stopwords = {"how", "what", "where", "why", "when", "who", "do", "i", "is", "a", "an", "the", "in", "on", "at", "to", "for", "with", "about", "can", "you", "does", "did", "of"}
+    words = re.findall(r'\b\w+\b', query.lower())
+    keywords = [w for w in words if w not in stopwords and len(w) > 2]
+    pattern = "|".join(keywords[:5]) if keywords else query
     
     try:
         subprocess.run(
-            ['grep', '-rni', '--color=always', query] + existing_dirs,
+            ['grep', '-rniE', '--color=always', pattern] + existing_dirs,
             timeout=30
         )
     except subprocess.TimeoutExpired:

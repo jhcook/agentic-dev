@@ -16,8 +16,30 @@
 set -e
 
 # Configuration
-TARGET_DIR="${1:?Usage: ./release.sh <target_dir> [license_file]}"
-LICENSE_FILE="$2"
+TARGET_DIR="$1"
+if [ -z "$TARGET_DIR" ]; then
+    echo "Usage: ./release.sh <target_dir> [license_file] [--source]"
+    exit 1
+fi
+
+LICENSE_FILE=""
+PACKAGE_ARGS=""
+INCLUDE_SOURCE=false
+
+shift
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --source)
+            INCLUDE_SOURCE=true
+            PACKAGE_ARGS="--source"
+            ;;
+        *)
+            LICENSE_FILE="$1"
+            ;;
+    esac
+    shift
+done
+
 WORKFLOW_FILE="$TARGET_DIR/.github/workflows/global-governance-preflight.yml"
 
 # Ensure we are in the root
@@ -32,7 +54,7 @@ if [ -n "$LICENSE_FILE" ] && [ ! -f "$LICENSE_FILE" ]; then
 fi
 
 echo "📦 Packaging Agent..."
-./package.sh
+./package.sh $PACKAGE_ARGS
 
 # Check if target directory exists
 if [ ! -d "$TARGET_DIR" ]; then
@@ -98,8 +120,9 @@ fi
 echo "✅ Agent files deployed."
 
 # Update Workflow
-echo "🔧 Updating GitHub Workflow in $TARGET_DIR..."
-if [ -f "$WORKFLOW_FILE" ]; then
+if [ "$INCLUDE_SOURCE" = false ]; then
+    echo "🔧 Updating GitHub Workflow in $TARGET_DIR for binary usage..."
+    if [ -f "$WORKFLOW_FILE" ]; then
     # We use python for robust text replacement instead of complex sed
     python3 -c "
 import sys
@@ -150,8 +173,11 @@ except Exception as e:
     print(f'❌ Error processing workflow file: {e}')
     sys.exit(1)
 "
+    else
+        echo "⚠️ Workflow file not found at $WORKFLOW_FILE"
+    fi
 else
-    echo "⚠️ Workflow file not found at $WORKFLOW_FILE"
+    echo "ℹ️  Source mode enabled; skipping GitHub Workflow binary conversion."
 fi
 
 echo "✨ Release Process Complete!"
