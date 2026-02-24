@@ -61,6 +61,7 @@ async def test_notebooklm_sync_execution(mock_exists, mock_open, mock_mcp_cls, m
     mock_mcp.call_tool.assert_called()
     calls = mock_mcp.call_tool.call_args_list
     assert len(calls) >= 1
+    assert calls[0][0][0].startswith("mcp_notebooklm_")
     assert calls[0][0][0] == "mcp_notebooklm_notebook_create"
     assert "test-repo" in calls[0][0][1]["title"]
 @pytest.mark.asyncio
@@ -82,8 +83,11 @@ async def test_notebooklm_get_context(mock_exists, mock_open, mock_run):
     from agent.core.mcp.client import MCPClient
     client = MCPClient(command="test")
     
-    # Mock the asyncio.run to just return the expected text
-    mock_run.return_value = "Retrieved Context"
+    # Mock the asyncio.run to close the coroutine to avoid RuntimeWarning
+    def mock_run_side_effect(coro, *args, **kwargs):
+        coro.close()
+        return "Retrieved Context"
+    mock_run.side_effect = mock_run_side_effect
     
     # Run
     result = client.get_context("test query")

@@ -1,6 +1,6 @@
 # ADR-029: ADK Multi-Agent Integration for Governance Panel
 
-## State
+## Status
 
 ACCEPTED
 

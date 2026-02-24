@@ -93,3 +93,30 @@ def init(backend: str = typer.Option(None, "--backend", help="Specific backend t
 def flush(hard: bool = typer.Option(False, "--hard", help="Also delete Notion DB linkage (requires re-init)")):
     """Delete local sync state so the next pull refreshes from remote."""
     sync_ops.flush(hard=hard)
+
+@app.command()
+def notebooklm(
+    reset: bool = typer.Option(False, "--reset", help="Reset the NotebookLM sync state and delete the remote notebook"),
+    flush: bool = typer.Option(False, "--flush", help="Alias for --reset")
+):
+    """Manage NotebookLM synchronization state."""
+    if reset or flush:
+        from agent.sync.notebooklm import delete_remote_notebook
+        from agent.db.client import delete_artifact
+        
+        # 1. Attempt to delete remote notebook
+        print("Attempting to delete remote Notebook...")
+        remote_deleted = delete_remote_notebook()
+        if remote_deleted:
+            print("Successfully deleted remote notebook.")
+        else:
+            print("Could not delete remote notebook (maybe it doesn't exist or auth failed).")
+            
+        # 2. Delete local caching state
+        success = delete_artifact("notebooklm_state", "state")
+        if success:
+            print("Successfully cleared local NotebookLM sync state.")
+        else:
+            print("Failed to clear local NotebookLM sync state (or it was already empty).")
+    else:
+        print("Use --reset or --flush to clear the NotebookLM sync state and delete the remote notebook.")

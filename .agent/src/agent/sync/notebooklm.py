@@ -92,7 +92,7 @@ async def _sync_notebook() -> str:
                 logger.info(f"Successfully created NotebookLM notebook: {notebook_id}")
 
             # Gather files to sync
-            adrs_dir = config.repo_root / "docs" / "adrs"
+            adrs_dir = config.repo_root / ".agent" / "adrs"
             rules_dir = config.repo_root / ".agent" / "rules"
             
             cache_dirs = [
@@ -129,6 +129,7 @@ async def _sync_notebook() -> str:
                     content = file_path.read_text(errors="ignore")
                     scrubbed_content = scrub_sensitive_data(content)
                     
+                    # Provide the expected mcp_notebooklm_ prefix for NotebookLM tools
                     await client.call_tool("mcp_notebooklm_notebook_add_text", {
                         "notebook_id": notebook_id,
                         "title": file_key,
@@ -149,6 +150,61 @@ async def _sync_notebook() -> str:
         except BaseException as e:
             logger.warning(f"NotebookLM sync failed or degraded: {e}")
             return "FAILED"
+
+async def _delete_remote_notebook() -> bool:
+    """Attempts to delete the current NotebookLM notebook using the stored ID."""
+    try:
+        user_config = config.load_yaml(config.etc_dir / "agent.yaml")
+    except FileNotFoundError:
+        user_config = {}
+        
+    servers = config.get_value(user_config, "agent.mcp.servers") or {}
+
+    if "notebooklm" not in servers:
+        logger.debug("NotebookLM MCP server not configured.")
+        return False
+
+    mcp_config = servers["notebooklm"]
+    
+    # Inject NOTEBOOKLM_COOKIES if present
+    from agent.core.secrets import get_secret
+    notebooklm_cookies = get_secret("cookies", "notebooklm")
+    if notebooklm_cookies:
+        if "env" not in mcp_config:
+            mcp_config["env"] = {}
+        mcp_config["env"]["NOTEBOOKLM_COOKIES"] = notebooklm_cookies
+        
+    client = MCPClient(
+        command=mcp_config["command"], 
+        args=mcp_config.get("args", []), 
+        env=mcp_config.get("env", {})
+    )
+
+    state_file = config.agent_dir / "cache" / "notebooklm_state.json"
+    if not state_file.exists():
+        return False
+        
+    try:
+        with open(state_file, "r") as f:
+            state = json.load(f)
+        notebook_id = state.get("notebook_id")
+        
+        if notebook_id:
+            logger.info(f"Attempting to delete remote NotebookLM notebook: {notebook_id}")
+            result = await client.call_tool("mcp_notebooklm_notebook_delete", {
+                "notebook_id": notebook_id,
+                "confirm": True
+            })
+            logger.info("Remote NotebookLM notebook deleted successfully.")
+            return True
+    except Exception as e:
+        logger.warning(f"Failed to delete remote NotebookLM notebook: {e}")
+        
+    return False
+
+def delete_remote_notebook() -> bool:
+    """Synchronous wrapper to delete the remote notebook."""
+    return asyncio.run(_delete_remote_notebook())
 
 def ensure_notebooklm_sync() -> str:
     """Synchronize local ADRs and MDC rules to NotebookLM. Returns status string."""

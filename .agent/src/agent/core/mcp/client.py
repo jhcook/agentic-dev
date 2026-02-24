@@ -62,8 +62,16 @@ class MCPClient:
         with open(os.devnull, "w") as devnull:
             async with stdio_client(server_params, errlog=devnull) as (read, write):
                 async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+                    try:
+                        timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 15.0))
+                        async def _init_and_list():
+                            await session.initialize()
+                            return await session.list_tools()
+                        result = await asyncio.wait_for(_init_and_list(), timeout=timeout_sec)
+                    except asyncio.TimeoutError:
+                        logger.error(f"MCP list_tools timed out after {timeout_sec} seconds.")
+                        raise RuntimeError("list_tools timed out. The server might be unreachable or hanging due to network/proxy issues.")
+                    
                     return [
                     Tool(
                         name=t.name,
@@ -87,9 +95,18 @@ class MCPClient:
             with open(os.devnull, "w") as devnull:
                 async with stdio_client(server_params, errlog=devnull) as (read, write):
                     async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.call_tool(name, arguments)
-                        return result
+                        try:
+                            timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 15.0))
+                            async def _init_and_call():
+                                await session.initialize()
+                                return await session.call_tool(name, arguments)
+                            result = await asyncio.wait_for(
+                                _init_and_call(), timeout=timeout_sec
+                            )
+                            return result
+                        except asyncio.TimeoutError:
+                            logger.error(f"MCP tool call '{name}' timed out after {timeout_sec} seconds.")
+                            raise RuntimeError(f"Tool call '{name}' timed out. The server might be unreachable or hanging due to network/proxy issues.")
 
     def get_context(self, query: str) -> str:
         """

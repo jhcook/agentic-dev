@@ -21,7 +21,7 @@ from rich.prompt import IntPrompt, Prompt
 from agent.core.auth.credentials import validate_credentials
 
 from agent.core.config import config
-from agent.core.utils import get_next_id, sanitize_title
+from agent.core.utils import get_next_id, sanitize_title, get_copyright_header
 from agent.db.client import upsert_artifact
 
 console = Console()
@@ -80,6 +80,7 @@ def new_plan(
     
     if template_path.exists():
         content = template_path.read_text()
+        content = content.replace("{{ COPYRIGHT_HEADER }}", get_copyright_header())
         content = f"# {plan_id}: {title}\n\n" + content
         
         if offline:

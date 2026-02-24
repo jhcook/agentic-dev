@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.prompt import IntPrompt, Prompt
 
 from agent.core.config import config
-from agent.core.utils import sanitize_title
+from agent.core.utils import sanitize_title, get_copyright_header, get_full_license_header
 from agent.db.client import upsert_artifact
 
 app = typer.Typer(help="User journey management.")
@@ -121,6 +121,7 @@ def new_journey(
         content = template_path.read_text()
         content = content.replace("JRN-XXX", journey_id)
         content = content.replace("<Title>", title)
+        content = content.replace("{{ COPYRIGHT_HEADER }}", get_copyright_header())
     else:
         # Fallback template
         content = f"""# Journey: {journey_id}
@@ -452,22 +453,6 @@ def coverage(
 
 
 # -- License header for AI-generated test files --
-_LICENSE_HEADER = """\
-# Copyright 2026 Justin Cook
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
 
 _MAX_SOURCE_CHARS = 32_000  # ~8k tokens
 
@@ -681,7 +666,7 @@ def _generate_ai_test(
 
     slug = jid.lower().replace("-", "_")
     return (
-        _LICENSE_HEADER
+        get_full_license_header()
         + f'"""AI-generated regression tests for {jid}."""\n'
         + response
     )

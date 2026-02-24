@@ -21,7 +21,7 @@ from rich.prompt import IntPrompt, Prompt
 from agent.core.auth.credentials import validate_credentials
 
 from agent.core.config import config
-from agent.core.utils import get_next_id, sanitize_title
+from agent.core.utils import get_next_id, sanitize_title, get_copyright_header
 from agent.db.client import upsert_artifact
 
 app = typer.Typer()
@@ -84,6 +84,7 @@ def new_story(
         content = template_path.read_text()
         content = content.replace("STORY-XXX", story_id)
         content = content.replace(": Title", f": {title}")
+        content = content.replace("{{ COPYRIGHT_HEADER }}", get_copyright_header())
         
         if offline:
             edited_content = typer.edit(text=content)

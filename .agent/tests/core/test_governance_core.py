@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 import pytest
 from rich.console import Console
@@ -22,9 +22,11 @@ from agent.core.governance import convene_council_full
 
 @pytest.fixture
 def mock_ai_service():
-    with patch("agent.core.governance.ai_service") as mock:
-        mock.provider = "openai"
-        yield mock
+    with patch("agent.core.config.Config.panel_engine", new_callable=PropertyMock) as mock_engine:
+        mock_engine.return_value = "native"
+        with patch("agent.core.governance.ai_service") as mock:
+            mock.provider = "openai"
+            yield mock
 
 def test_governance_gatekeeper_block(mock_ai_service):
     """

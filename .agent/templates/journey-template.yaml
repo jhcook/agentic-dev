@@ -1,6 +1,7 @@
 # Journey: JRN-XXX
 # Title: <Title>
 # State: DRAFT
+# {{ COPYRIGHT_HEADER }}
 
 actor: "<user persona>"
 description: "<what this journey achieves>"

@@ -24,9 +24,16 @@ from rich.table import Table
 
 from agent.core.config import config, DEFAULT_MCP_SERVERS
 from agent.core.mcp import MCPClient
-from agent.core.secrets import get_secret, get_secret_manager
+from agent.core.secrets import get_secret, get_secret_manager, SecretManager
+from opentelemetry import trace
+import subprocess
+import shutil
+from pathlib import Path
+from rich.prompt import Confirm
+
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 app = typer.Typer(
     name="mcp",
@@ -263,3 +270,162 @@ def start_session(
             
         except (KeyboardInterrupt, EOFError):
             break
+
+@app.command(name="auth")
+def authenticate_server(
+    server: str = typer.Argument(..., help="Server name (e.g., notebooklm)"),
+    file: Optional[str] = typer.Option(None, "--file", help="Use file-based cookie import from the provided path instead of launching Chrome"),
+    auto: bool = typer.Option(False, "--auto", help="Automatically extracts session cookies from a supported local browser using the OS-native keychain (no DevTools needed)"),
+    no_auto_launch: bool = typer.Option(False, "--no-auto-launch", help="Provide instructions for manual browser cookie extraction without launching the interactive script")
+) -> None:
+    """
+    Authenticate with an MCP server (e.g., notebooklm).
+    """
+    with tracer.start_as_current_span("mcp.authenticate_server") as span:
+        span.set_attribute("server.name", server)
+        if server == "notebooklm":
+            logger.info("Starting NotebookLM authentication flow...")
+
+            
+            if no_auto_launch:
+                logger.info("Manual extraction instructions:")
+                logger.info("1. Open your browser and go to https://notebooklm.google.com")
+                logger.info("2. Open Developer Tools -> Application/Storage -> Cookies")
+                logger.info("3. Copy the values of SID, HSID, and SSID")
+                logger.info("4. Save them to a JSON file and run: agent mcp auth notebooklm --file <path>")
+                return
+
+            if auto:
+                with tracer.start_as_current_span("notebooklm.auto_extract"):
+                    consent = Confirm.ask(
+                        "[bold yellow]WARNING (GDPR Informed Consent):[/bold yellow]\n"
+                        "This action will read your highly sensitive active Google session cookies (`SID`, `HSID`, `SSID`) "
+                        "from your local browser to authenticate with NotebookLM.\n"
+                        "These cookies will be briefly processed in memory and subsequently stored securely using encrypted system keychains (SecretManager). "
+                        "No plain text cookies will be written to disk. "
+                        "Do you explicitly consent to this processing?",
+                        default=False
+                    )
+                    
+                    if not consent:
+                        logger.warning("Cookie extraction aborted by user.")
+                        raise typer.Exit(code=1)
+
+                    logger.info("Attempting automatic extraction... (your OS may prompt you for your Keychain/Keyring password)")
+                    
+                    # Use pinned version and output JSON for parsing
+                    script = """
+import sys
+import json
+import time
+
+try:
+    import browser_cookie3
+except ImportError:
+    print(json.dumps({"status": "error", "message": "browser-cookie3 not installed."}))
+    sys.exit(1)
+
+browsers = [
+    ("Chrome", browser_cookie3.chrome),
+    ("Chromium", browser_cookie3.chromium),
+    ("Brave", browser_cookie3.brave),
+    ("Edge", browser_cookie3.edge),
+    ("Vivaldi", browser_cookie3.vivaldi),
+    ("Firefox", browser_cookie3.firefox)
+]
+
+cookie_dict = {}
+found_browser = None
+
+for name, func in browsers:
+    try:
+        cookies = func(domain_name=".google.com")
+        temp_dict = {c.name: c.value for c in cookies}
+        
+        required = ["SID", "HSID", "SSID"]
+        missing = [r for r in required if r not in temp_dict]
+        
+        if not missing:
+            cookie_dict = temp_dict
+            found_browser = name
+            break
+    except Exception as e:
+        pass
+
+if not cookie_dict:
+    print(json.dumps({"status": "error", "message": "Could not find required NotebookLM cookies."}))
+    sys.exit(1)
+
+print(json.dumps({
+    "status": "success", 
+    "browser": found_browser, 
+    "cookies": cookie_dict
+}))
+"""
+                    try:
+                        # Need to use check=False to read stdout even if script exits 1
+                        result = subprocess.run(
+                            ["uv", "run", "--with", "browser-cookie3==0.20.1", "python", "-c", script],
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        try:
+                            output = json.loads(result.stdout.strip())
+                            if output.get("status") == "success":
+                                cookies = output.get("cookies", {})
+                                browser = output.get("browser", "unknown")
+                                
+                                # Store using SecretManager
+                                sm = SecretManager()
+                                
+                                with tracer.start_as_current_span("notebooklm.store_cookies"):
+                                    # Note: In a real implementation we might exchange cookies for an API token.
+                                    # Since we must persist the cookies for MCP, we store them encrypted via SecretManager.
+                                    sm.set_secret("notebooklm_cookies", cookies)
+                                
+                                logger.info(f"SUCCESS! {len(cookies)} cookies extracted from {browser} and securely stored.")
+                                return
+                            else:
+                                logger.error(f"Auto-extraction failed: {output.get('message')}")
+                                logger.warning("Try using the standard interactive method without --auto.")
+                                raise typer.Exit(code=1)
+                        except json.JSONDecodeError:
+                            logger.error("Auto-extraction failed to parse output.")
+                            logger.error(result.stderr) # Safely print stderr, exclude stdout to prevent PII leak
+                            raise typer.Exit(code=1)
+                            
+                    except FileNotFoundError:
+                        logger.error("Error: 'uv' command not found. Please install uv.")
+                        raise typer.Exit(code=1)
+
+            try:
+                # We run this interactively so the user can see the browser and the prompts
+                with tracer.start_as_current_span("notebooklm.interactive_auth"):
+                    cmd = ["uv", "tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp-auth"]
+                    if file:
+                        cmd.extend(["--file", str(file)])
+                        
+                    subprocess.run(
+                        cmd,
+                        check=True
+                    )
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Authentication failed with exit code {e.returncode}.")
+                raise typer.Exit(code=e.returncode)
+            except FileNotFoundError:
+                logger.error("Error: 'uv' command not found. Please install uv.")
+                raise typer.Exit(code=1)
+
+        elif server == "github":
+            logger.warning("GitHub MCP does not have a dedicated auth command.")
+            logger.info("Please set GITHUB_PERSONAL_ACCESS_TOKEN or run 'gh auth login'.")
+        else:
+            # Check if it's a known server without a specific auth flow
+            try:
+                _get_server_config(server)
+                logger.warning(f"No dedicated authentication command for '{server}'.")
+            except typer.Exit:
+                 logger.error(f"Error: Unknown server '{server}'.")
+                 raise typer.Exit(code=1)
+

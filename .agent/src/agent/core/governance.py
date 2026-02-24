@@ -1162,6 +1162,12 @@ def convene_council_full(
                     "Install with: pip install 'agent[adk]'"
                 )
         except Exception as e:
+            error_str = str(e).lower()
+            if any(ind in error_str for ind in ["certificate_verify", "ssl", "deadline_exceeded", "504"]):
+                logger.error("Fatal network/proxy error: %s", e)
+                if progress_callback:
+                    progress_callback(f"❌ Fatal proxy/connection error: {e}")
+                raise e
             logger.warning("ADK panel failed, falling back to native: %s", e)
             if progress_callback:
                 progress_callback(f"⚠️  ADK error: {e}. Falling back to native panel.")
@@ -1345,7 +1351,7 @@ def convene_council_full(
                         "SUMMARY: <one line summary>\n"
                         "FINDINGS:\n- <finding 1> (Source: [Exact file path or ADR ID])\n- <finding 2> (Source: [Exact file path or ADR ID])\n"
                         "REFERENCES:\n- <ADR-NNN, JRN-NNN, or EXC-NNN that support your findings>\n"
-                        "REQUIRED_CHANGES:\n- <change 1>\n(Only if BLOCK)"
+                        "REQUIRED_CHANGES:\n- <change 1> (Source: [Exact file path or ADR ID])\n(Only if BLOCK)"
                     )
 
             # Build user prompt with all available context
@@ -1388,6 +1394,12 @@ def convene_council_full(
                     if parsed.get("references"):
                         all_role_refs.extend(parsed["references"])
             except Exception as e:
+                error_str = str(e).lower()
+                if any(ind in error_str for ind in ["certificate_verify", "ssl", "deadline_exceeded", "504"]):
+                    logger.error("Fatal network/proxy error in native loop: %s", e)
+                    if progress_callback:
+                        progress_callback(f"❌ Fatal proxy/connection error: {e}")
+                    raise e
                 if progress_callback:
                     progress_callback(f"Error during review: {e}")
         
@@ -1417,20 +1429,22 @@ def convene_council_full(
                 if _validate_finding_against_source(c, full_diff)
             ]
             _changes_filtered = original_changes_count - len(role_changes)
-            _ai_filtered += _changes_filtered
-            _ai_total += original_changes_count
+            
             if _changes_filtered > 0:
                 if progress_callback:
                     progress_callback(
                         f"🛡️  Filtered {_changes_filtered} false positive(s) from @{role_name} required changes"
                     )
+            _ai_filtered += _changes_filtered
+            _ai_total += original_changes_count
+
         # If ALL findings AND all required changes were filtered, demote BLOCK to PASS
         if (_ai_filtered > 0 and not role_findings and not role_changes
-                and role_verdict == "BLOCK"):
+            and role_verdict == "BLOCK"):
             role_verdict = "PASS"
             if progress_callback:
                 progress_callback(
-                    f"✅ @{role_name}: BLOCK demoted to PASS (all findings were false positives)"
+                    f"⚠️  @{role_name}: BLOCK demoted to PASS (All blocking findings were hallucinations)"
                 )
         _ai_validated = _ai_total - _ai_filtered
 

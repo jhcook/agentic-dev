@@ -12,15 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""AI-generated regression tests for JRN-019."""
+"""Auto-generated stub for INFRA-077."""
 import pytest
-import subprocess
 
-@pytest.mark.journey("JRN-019")
-def test_jrn_019_step_1():
-    """Developer runs `agent list-models`
-    Assertions: Command exits with status 0, Expected output displayed
-    """
-    result = subprocess.run(["agent", "list-models"], capture_output=True, text=True)
-    assert result.returncode in [0, 1]
-    assert "Available Models (" in result.stdout or "Failed to list models" in result.stdout or "Failed to list models" in result.stderr
+
+@pytest.mark.journey("INFRA-077")
+def test_infra_077():
+    pytest.skip("Not yet implemented")

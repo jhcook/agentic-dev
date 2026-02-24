@@ -24,8 +24,6 @@ High-level description of the change.
 ## Verification
 How we will confirm the plan was successful.
 
-
 ## Copyright
 
-Copyright 2026 Justin Cook
-
+{{ COPYRIGHT_HEADER }}
