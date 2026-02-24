@@ -19,7 +19,7 @@ As a developer using the `agentic-dev` CLI, I want the NotebookLM authentication
 - [ ] **Dependency Pinning**: The `browser-cookie3` dependency must be pinned to exactly version `0.20.1` during runtime execution to prevent supply-chain attacks.
 - [ ] **Flag Documentation**: The `--file`, `--no-auto-launch`, and `--auto` flags must be documented in the README and CHANGELOG.
 - [ ] **Fix File Input**: The `--file` flag must accept a file path (`str`) rather than a boolean.
-- [ ] **Synchronize Tool Names**: The backend NotebookLM sync tools must use the correct prefix (`mcp_notebooklm_`) as defined by the MCP server, and the integration test must assert this.
+- [ ] **Synchronize Tool Names**: The backend NotebookLM sync tools must use the correct, un-prefixed names (e.g., `notebook_query`), and the integration test must assert this.
 - [ ] **Observability**: The authentication flow must use structured logging (`logger`) and include OpenTelemetry tracing spans.
 - [ ] **ADR Creation**: An ADR must be written to formalize the decision to use automated cookie extraction with user consent and secure storage.
 - [ ] **Preflight Pass**: The `agent preflight` command must pass for these changes.
@@ -41,9 +41,8 @@ As a developer using the `agentic-dev` CLI, I want the NotebookLM authentication
 
 ## Impact Analysis Summary
 
-Components touched: `agent/commands/mcp.py`, `agent/sync/notebooklm.py`, and `agent/sync/cli.py`.
-Workflows affected: NotebookLM authentication for syncing files, as well as core framework adjustments (e.g., ADK error handling, AI service timeouts).
-Modifications include new integration tests (`test_mcp_auth.py`, `test_notebooklm_sync.py`), new documentation files (`environment_variables.md`, `secret_management.md`), and new architectural decision records (ADR-030, ADR-031).
+Components touched: `agent/commands/mcp.py`, `agent/commands/mcp_077.py`, `agent/commands/mcp_078.py`, `agent/commands/check.py`, `agent/commands/runbook.py`, `agent/commands/implement.py`, `agent/core/context.py`, `agent/core/mcp/client.py`, `agent/core/secrets.py`, `agent/sync/notebooklm.py`, `pyproject.toml`, `README.md`, `CHANGELOG.md`, `docs/notebooklm-auth.md`, `.agent/tests/integration/test_mcp_auth.py`, `.agent/tests/integration/test_notebooklm_sync.py`, `.agent/adrs/ADR-030-notebooklm-authentication.md`, `.agent/adrs/ADR-031-notebooklm-cookie-authentication.md`.
+Workflows affected: NotebookLM authentication for syncing files, preflight check context loading, and general command context loading due to `async` refactoring and transitioning from local file `notebooklm_state.json` to the internal database caching.
 Risks identified: Potential for PII exposure if cookies are logged or leaked during unhandled exceptions. Mitigated by strict error handling and SecretManager usage.
 
 ## Test Strategy
@@ -52,7 +51,7 @@ How will we verify correctness?
 - Integration tests in `.agent/tests/integration/test_mcp_auth.py` will mock the subprocess to verify `browser-cookie3` JSON parsing and `SecretManager` storage.
 - Tests will ensure that negative cases (like user consent rejection and JSON decode errors) are handled gracefully without exposing PII.
 - The `--no-auto-launch`, `--file`, and `--auto` flows will be covered.
-- The "Synchronize Tool Names" acceptance criterion will be verified by `test_notebooklm_sync_execution` in `.agent/tests/integration/test_notebooklm_sync.py`, ensuring all tool calls use the `mcp_notebooklm_` prefix.
+- The "Synchronize Tool Names" acceptance criterion will be verified by `test_notebooklm_sync_execution` in `.agent/tests/integration/test_notebooklm_sync.py`, ensuring all tool calls use the un-prefixed names.
 
 ## Rollback Plan
 

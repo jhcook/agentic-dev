@@ -80,26 +80,56 @@ class MCPClient:
                     ) for t in result.tools
                 ]
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> CallToolResult:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def session(self):
+        """Yields an initialized ClientSession for batching multiple tool calls."""
+        server_params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            env=self._full_env
+        )
+        with open(os.devnull, "w") as devnull:
+            async with stdio_client(server_params, errlog=devnull) as (read, write):
+                async with ClientSession(read, write) as session:
+                    timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
+                    try:
+                        await asyncio.wait_for(session.initialize(), timeout=timeout_sec)
+                    except asyncio.TimeoutError:
+                        logger.error(f"MCP session initialization timed out after {timeout_sec} seconds.")
+                        raise RuntimeError(f"Session initialization timed out. The server might be unreachable.")
+                    yield session
+
+    async def call_tool(self, name: str, arguments: Dict[str, Any], session: Optional[ClientSession] = None) -> CallToolResult:
         """Call a specific tool on the server."""
         from opentelemetry import trace
         tracer = trace.get_tracer(__name__)
         
         with tracer.start_as_current_span("mcp.call_tool") as span:
             span.set_attribute("tool_name", name)
+            
+            if session:
+                timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
+                try:
+                    return await asyncio.wait_for(session.call_tool(name, arguments), timeout=timeout_sec)
+                except asyncio.TimeoutError:
+                    logger.error(f"MCP tool call '{name}' timed out after {timeout_sec} seconds.")
+                    raise RuntimeError(f"Tool call '{name}' timed out. The server might be unreachable or hanging due to network/proxy issues.")
+            
             server_params = StdioServerParameters(
                 command=self.command,
                 args=self.args,
-                env=self.env
+                env=self._full_env
             )
             with open(os.devnull, "w") as devnull:
                 async with stdio_client(server_params, errlog=devnull) as (read, write):
-                    async with ClientSession(read, write) as session:
+                    async with ClientSession(read, write) as new_session:
                         try:
-                            timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 15.0))
+                            timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
                             async def _init_and_call():
-                                await session.initialize()
-                                return await session.call_tool(name, arguments)
+                                await new_session.initialize()
+                                return await new_session.call_tool(name, arguments)
                             result = await asyncio.wait_for(
                                 _init_and_call(), timeout=timeout_sec
                             )
@@ -108,35 +138,44 @@ class MCPClient:
                             logger.error(f"MCP tool call '{name}' timed out after {timeout_sec} seconds.")
                             raise RuntimeError(f"Tool call '{name}' timed out. The server might be unreachable or hanging due to network/proxy issues.")
 
-    def get_context(self, query: str) -> str:
+    async def get_context(self, query: str) -> str:
         """
         Request context from the active MCP service (e.g., NotebookLM).
         """
         from agent.core.config import config
-        state_file = config.agent_dir / "cache" / "notebooklm_state.json"
+        from agent.db.client import get_all_artifacts_content
+        from opentelemetry import trace
         
         try:
-            if not state_file.exists():
-                raise RuntimeError("NotebookLM state file not found.")
-                
-            with open(state_file, "r") as f:
-                state = json.load(f)
-                
+            state_docs = get_all_artifacts_content("notebooklm_state")
+            state = {}
+            if state_docs and state_docs[0].get("content"):
+                try:
+                    state = json.loads(state_docs[0]["content"])
+                except Exception:
+                    pass
+                    
             notebook_id = state.get("notebook_id")
             if not notebook_id:
                 raise RuntimeError("notebook_id not found in NotebookLM state.")
                 
             logger.debug(f"Querying NotebookLM MCP for context: {query}")
             
-            async def _query():
-                result = await self.call_tool("mcp_notebooklm_notebook_query", {
-                    "notebook_id": notebook_id,
-                    "query": query
+            tracer = trace.get_tracer(__name__)
+            
+            @tracer.start_as_current_span("mcp.query_notebooklm_context")
+            async def query_notebooklm_context(q: str, nid: str) -> str:
+                span = trace.get_current_span()
+                span.set_attribute("notebook_id", nid)
+                span.set_attribute("query", q)
+                result = await self.call_tool("notebook_query", {
+                    "notebook_id": nid,
+                    "query": q
                 })
                 # Check for standard prompt responses vs actual objects depending on Tool response
                 return "\n".join([c.text for c in result.content if hasattr(c, "text")])
                 
-            return asyncio.run(_query())
+            return await query_notebooklm_context(query, notebook_id)
             
         except Exception as e:
             logger.debug(f"NotebookLM context retrieval failed, triggering fallback: {e}")

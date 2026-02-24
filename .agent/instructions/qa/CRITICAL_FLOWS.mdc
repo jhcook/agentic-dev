@@ -22,3 +22,13 @@ This document defines the critical user journeys that MUST be covered by automat
 ## 4. Settings & Account
 *   **Profile Update**: User can update their display name.
 *   **Subscription**: User can view their current plan (Free/Pro). -->
+
+## 📝 Output Formatting
+
+When generating your findings and listing necessary modifications in the `REQUIRED_CHANGES` section, you **MUST** include a `(Source: <filepath or ADR>)` citation for each item to prove the change is grounded in actual codebase context and policy.
+
+Example:
+```
+REQUIRED_CHANGES:
+- change 1 (Source: path/to/file.py): Details of the change.
+```

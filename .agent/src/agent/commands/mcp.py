@@ -143,6 +143,10 @@ def list_tools(
     if server == "github":
         token = _get_github_token()
         env["GITHUB_PERSONAL_ACCESS_TOKEN"] = token
+    elif server == "notebooklm":
+        notebooklm_cookies = get_secret("cookies", "notebooklm")
+        if notebooklm_cookies:
+            env["NOTEBOOKLM_COOKIES"] = notebooklm_cookies
 
     client = MCPClient(command, args, env)
     
@@ -171,6 +175,10 @@ async def _run_tool_internal(server: str, tool: str, args_str: str) -> None:
     if server == "github":
         token = _get_github_token()
         env["GITHUB_PERSONAL_ACCESS_TOKEN"] = token
+    elif server == "notebooklm":
+        notebooklm_cookies = get_secret("cookies", "notebooklm")
+        if notebooklm_cookies:
+            env["NOTEBOOKLM_COOKIES"] = notebooklm_cookies
 
     try:
         tool_args = json.loads(args_str)
@@ -276,15 +284,43 @@ def authenticate_server(
     server: str = typer.Argument(..., help="Server name (e.g., notebooklm)"),
     file: Optional[str] = typer.Option(None, "--file", help="Use file-based cookie import from the provided path instead of launching Chrome"),
     auto: bool = typer.Option(False, "--auto", help="Automatically extracts session cookies from a supported local browser using the OS-native keychain (no DevTools needed)"),
-    no_auto_launch: bool = typer.Option(False, "--no-auto-launch", help="Provide instructions for manual browser cookie extraction without launching the interactive script")
+    no_auto_launch: bool = typer.Option(False, "--no-auto-launch", help="Provide instructions for manual browser cookie extraction without launching the interactive script"),
+    clear_session: bool = typer.Option(False, "--clear-session", help="Clear the saved authentication session cookies for this server")
 ) -> None:
     """
     Authenticate with an MCP server (e.g., notebooklm).
+
+    For the 'notebooklm' server, this command supports several authentication flows:
+    - --auto: Automatically extract your active session cookies from a local browser.
+    - --file <path>: Import cookies from a saved JSON file.
+    - --no-auto-launch: Print instructions for manual cookie extraction.
+    - --clear-session: Delete the securely stored NotebookLM cookies.
+    
+    Security: NotebookLM relies on Google session cookies which are highly sensitive. 
+    They are stored encrypted in the OS keyring and never written to disk in plain text.
     """
     with tracer.start_as_current_span("mcp.authenticate_server") as span:
         span.set_attribute("server.name", server)
         if server == "notebooklm":
             logger.info("Starting NotebookLM authentication flow...")
+            
+            if clear_session:
+                sm = SecretManager()
+                if sm.is_initialized() and not sm.is_unlocked():
+                    try:
+                        from agent.commands.secret import _prompt_password
+                        password = _prompt_password(confirm=False)
+                        sm.unlock(password)
+                    except Exception as e:
+                        logger.error(f"Failed to unlock SecretManager: {e}")
+                        raise typer.Exit(code=1)
+                
+                if sm.is_unlocked() and sm.has_secret("notebooklm", "cookies"):
+                    sm.delete_secret("notebooklm", "cookies")
+                    logger.info("Successfully cleared NotebookLM session cookies from secure storage.")
+                else:
+                    logger.info("No NotebookLM session cookies found to clear.")
+                return
 
             
             if no_auto_launch:
@@ -301,7 +337,8 @@ def authenticate_server(
                         "[bold yellow]WARNING (GDPR Informed Consent):[/bold yellow]\n"
                         "This action will read your highly sensitive active Google session cookies (`SID`, `HSID`, `SSID`) "
                         "from your local browser to authenticate with NotebookLM.\n"
-                        "These cookies will be briefly processed in memory and subsequently stored securely using encrypted system keychains (SecretManager). "
+                        "These cookies can grant broad access to your Google Account.\n"
+                        "They will be briefly processed in memory and subsequently stored securely using encrypted system keychains (SecretManager). "
                         "No plain text cookies will be written to disk. "
                         "Do you explicitly consent to this processing?",
                         default=False
@@ -346,7 +383,7 @@ for name, func in browsers:
         missing = [r for r in required if r not in temp_dict]
         
         if not missing:
-            cookie_dict = temp_dict
+            cookie_dict = {k: temp_dict[k] for k in required}
             found_browser = name
             break
     except Exception as e:
@@ -378,13 +415,24 @@ print(json.dumps({
                                 
                                 # Store using SecretManager
                                 sm = SecretManager()
-                                
+                                if sm.is_initialized() and not sm.is_unlocked():
+                                    try:
+                                        from agent.commands.secret import _prompt_password
+                                        password = _prompt_password(confirm=False)
+                                        sm.unlock(password)
+                                    except Exception as e:
+                                        logger.error(f"Failed to unlock SecretManager: {e}")
+                                        raise typer.Exit(code=1)
+                                        
                                 with tracer.start_as_current_span("notebooklm.store_cookies"):
                                     # Note: In a real implementation we might exchange cookies for an API token.
                                     # Since we must persist the cookies for MCP, we store them encrypted via SecretManager.
-                                    sm.set_secret("notebooklm_cookies", cookies)
+                                    sm.set_secret("notebooklm", "cookies", json.dumps(cookies))
                                 
-                                logger.info(f"SUCCESS! {len(cookies)} cookies extracted from {browser} and securely stored.")
+                                logger.info(
+                                    "SUCCESS! Cookies extracted and securely stored.", 
+                                    extra={"browser": browser, "cookie_count": len(cookies)}
+                                )
                                 return
                             else:
                                 logger.error(f"Auto-extraction failed: {output.get('message')}")

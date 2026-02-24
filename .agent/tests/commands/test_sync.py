@@ -61,43 +61,33 @@ def test_sync_delete_with_type(mock_sync_ops):
     assert result.exit_code == 0
     mock_sync_ops.delete.assert_called_once_with("INFRA-001", "story")
 
-
-
-
 def test_sync_pull_notion_backend(mock_sync_ops):
     """Verify that specifying --backend notion triggers the pull with the correct backend."""
     result = runner.invoke(app, ["pull", "--backend", "notion"])
     assert result.exit_code == 0
     mock_sync_ops.pull.assert_called_once_with(verbose=False, backend="notion", force=False, artifact_id=None, artifact_type=None)
 
-@patch("agent.sync.notebooklm.delete_remote_notebook")
 @patch("agent.db.client.delete_artifact")
-def test_sync_notebooklm_reset(mock_delete, mock_delete_remote):
-    """Verify that --reset deletes the notebooklm_state artifact and remote notebook."""
+def test_sync_notebooklm_reset(mock_delete):
+    """Verify that --reset deletes only the local notebooklm_state artifact."""
     mock_delete.return_value = True
-    mock_delete_remote.return_value = True
     result = runner.invoke(app, ["notebooklm", "--reset"])
     assert result.exit_code == 0
-    assert "Successfully cleared local NotebookLM sync state" in result.output
-    assert "Successfully deleted remote notebook" in result.output
-    mock_delete_remote.assert_called_once()
+    assert "Successfully reset" in result.output
     mock_delete.assert_called_once_with("notebooklm_state", "state")
 
-@patch("agent.sync.notebooklm.delete_remote_notebook")
-@patch("agent.db.client.delete_artifact")
-def test_sync_notebooklm_flush(mock_delete, mock_delete_remote):
-    """Verify that --flush deletes the notebooklm_state artifact and remote notebook."""
-    mock_delete.return_value = True
-    mock_delete_remote.return_value = True
+@patch("agent.sync.notebooklm.flush_notebooklm")
+def test_sync_notebooklm_flush(mock_flush):
+    """Verify that --flush calls flush_notebooklm to delete remote and local state."""
+    mock_flush.return_value = True
     result = runner.invoke(app, ["notebooklm", "--flush"])
     assert result.exit_code == 0
-    assert "Successfully cleared local NotebookLM sync state" in result.output
-    assert "Successfully deleted remote notebook" in result.output
-    mock_delete_remote.assert_called_once()
-    mock_delete.assert_called_once_with("notebooklm_state", "state")
+    assert "Successfully flushed" in result.output
+    mock_flush.assert_called_once()
 
 def test_sync_notebooklm_no_flags():
     """Verify that notebooklm without flags prints help."""
     result = runner.invoke(app, ["notebooklm"])
     assert result.exit_code == 0
-    assert "Use --reset or --flush" in result.output
+    assert "--reset" in result.output or "--flush" in result.output
+
