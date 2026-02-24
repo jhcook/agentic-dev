@@ -69,6 +69,10 @@ If you receive secret manager errors:
 If your NotebookLM queries start failing with unauthorized errors, your session cookies may have expired.
 **Solution:** Re-run the authentication command (`agent mcp auth notebooklm --auto`) to refresh the stored cookies from your active browser session.
 
+### Invalid or Corrupted NotebookLM Sync State
+If your NotebookLM sync state becomes invalid or corrupted, preventing synchronization:
+**Solution:** Run `agent sync notebooklm --reset` to clear the internal caching state and force a fresh sync on the next attempt.
+
 ## Copyright
 Copyright 2024-2026 Google LLC
 
