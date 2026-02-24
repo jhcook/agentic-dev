@@ -16,6 +16,8 @@ As a NotebookLM CLI user, I want the ability to authenticate using browser cooki
 - [ ] **Scenario 2**: Given the `--file <path>` flag, When the `agent mcp auth notebooklm` command is executed, Then the CLI attempts to authenticate using cookies from the file at `<path>`.
 - [ ] **Scenario 3**: Given the `--no-auto-launch` flag, When the `agent mcp auth notebooklm` command is executed, Then the CLI skips the auto-launch of the browser for interactive authentication.
 - [ ] **Scenario 4**: When cookies are successfully extracted via the `--auto` flag, the CLI should store the authentication token securely for subsequent commands.
+- [ ] **Scenario 5**: Commands refactored for `async` communication (like `mcp` and `sync`) should function correctly without regression.
+- [ ] **Scenario 6**: Given NotebookLM sync state is stored in the database, When calling `agent sync notebooklm --reset` or `--flush`, Then the local database index should be successfully purged (and remote notebook deleted for `--flush`).
 - [ ] **Negative Test**: System handles the case where no supported browsers are found on the user's machine gracefully, informing the user to use other authentication methods.
 - [ ] **Negative Test**: System handles the case where cookie extraction fails gracefully, providing informative error messages.
 
@@ -29,6 +31,8 @@ As a NotebookLM CLI user, I want the ability to authenticate using browser cooki
 ## Linked ADRs
 
 - ADR-031: NotebookLM Cookie Authentication
+- ADR-032: Async Refactoring for MCP Commands
+- ADR-033: NotebookLM Database Caching and Reset/Flush Commands
 
 ## Linked Journeys
 
@@ -41,18 +45,21 @@ Components touched:
 - Authentication logic
 - Cookie extraction library (browser_cookie3)
 - Configuration storage
+- Async event loop integration for MCP connection pooling
+- SQLite database caching layer for NotebookLM artifact synchronization state
 
 Workflows affected:
 - NotebookLM CLI authentication
-- `agent sync notebooklm` operations
-- `agent mcp run-tool notebooklm` execution
+- `agent sync notebooklm` operations (now async per ADR-032, with new `--reset` and `--flush` commands per ADR-033)
+- `agent mcp run-tool notebooklm` execution (now async per ADR-032)
 
-*Note: User-facing documentation (e.g., CLI help text, user guides) must be updated for the new `--auto`, `--file`, and `--no-auto-launch` flags.*
+*Note: User-facing documentation (e.g., CLI help text, user guides) must be updated for the new `--auto`, `--file`, `--no-auto-launch`, `--reset`, and `--flush` flags.*
 
 Risks identified:
 - Browser compatibility issues.
 - Potential for security vulnerabilities in cookie extraction.
 - Reliance on external library (browser_cookie3) which may be subject to change.
+- Multi-threading deadlocks related to improper `asyncio.run` usage within synchronous callers.
 
 ## Test Strategy
 
