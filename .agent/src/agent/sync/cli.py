@@ -95,9 +95,20 @@ def flush(hard: bool = typer.Option(False, "--hard", help="Also delete Notion DB
     sync_ops.flush(hard=hard)
 
 @app.command()
-def notebooklm(reset: bool = typer.Option(False, "--reset", help="Reset the NotebookLM sync state")):
+def notebooklm(
+    reset: bool = typer.Option(False, "--reset", help="Reset the local NotebookLM sync state"),
+    flush: bool = typer.Option(False, "--flush", help="Delete the remote NotebookLM notebook and clear local state")
+):
     """Manage NotebookLM synchronization state."""
-    if reset:
+    if flush:
+        import asyncio
+        from agent.sync.notebooklm import flush_notebooklm
+        success = asyncio.run(flush_notebooklm())
+        if success:
+            print("Successfully flushed remote NotebookLM notebook and local state.")
+        else:
+            print("Failed to completely flush NotebookLM. You may need to authenticate or the backend may be unavailable.")
+    elif reset:
         from agent.db.client import delete_artifact
         success = delete_artifact("notebooklm_state", "state")
         if success:
@@ -105,4 +116,4 @@ def notebooklm(reset: bool = typer.Option(False, "--reset", help="Reset the Note
         else:
             print("Failed to reset NotebookLM sync state (or it was already empty).")
     else:
-        print("Use --reset to clear the NotebookLM sync state.")
+        print("Use --reset to clear the NotebookLM sync state, or --flush to permanently delete the remote notebook.")

@@ -167,3 +167,72 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
 async def ensure_notebooklm_sync(progress_callback: Optional[Callable[[str], None]] = None) -> str:
     """Synchronize local ADRs and MDC rules to NotebookLM. Returns status string."""
     return await _sync_notebook(progress_callback)
+
+async def flush_notebooklm() -> bool:
+    """Delete the NotebookLM notebook via MCP and clear local state."""
+    from opentelemetry import trace
+    from agent.db.client import get_all_artifacts_content, delete_artifact
+    tracer = trace.get_tracer(__name__)
+    
+    with tracer.start_as_current_span("notebooklm.flush"):
+        try:
+            user_config = config.load_yaml(config.etc_dir / "agent.yaml")
+        except FileNotFoundError:
+            user_config = {}
+            
+        servers = config.get_value(user_config, "agent.mcp.servers") or {}
+    
+        if "notebooklm" not in servers:
+            logger.debug("NotebookLM MCP server not configured. Cannot flush.")
+            return False
+
+        mcp_config = servers["notebooklm"]
+        
+        # Inject NOTEBOOKLM_COOKIES if present
+        notebooklm_cookies = get_secret("cookies", "notebooklm")
+        if notebooklm_cookies:
+            if "env" not in mcp_config:
+                mcp_config["env"] = {}
+            mcp_config["env"]["NOTEBOOKLM_COOKIES"] = notebooklm_cookies
+
+        client = MCPClient(
+            command=mcp_config["command"], 
+            args=mcp_config.get("args", []), 
+            env=mcp_config.get("env", {})
+        )
+
+        state_docs = get_all_artifacts_content("notebooklm_state")
+        state = {}
+        if state_docs and state_docs[0].get("content"):
+            try:
+                state = json.loads(state_docs[0]["content"])
+            except Exception:
+                pass
+
+        notebook_id = state.get("notebook_id")
+        
+        success = False
+        try:
+            if notebook_id:
+                logger.info(f"Deleting NotebookLM notebook via MCP: {notebook_id}...")
+                async with client.session() as mcp_session:
+                    try:
+                        result = await client.call_tool("notebook_delete", {"notebook_id": notebook_id, "confirm": True}, session=mcp_session)
+                        result_text = "\\n".join([c.text for c in result.content if hasattr(c, "text")])
+                        logger.info(f"Notebook deleted: {result_text.strip()}")
+                        success = True
+                    except Exception as e:
+                        logger.error(f"Failed to delete notebook {notebook_id}: {e}")
+            else:
+                logger.info("No active NotebookLM notebook found in local state to delete.")
+                success = True
+                
+            # Always delete the local state if flush was requested
+            delete_success = delete_artifact("notebooklm_state", "state")
+            if delete_success:
+                logger.info("Successfully reset local NotebookLM sync state.")
+            
+            return success
+        except BaseException as e:
+            logger.warning(f"NotebookLM flush failed: {e}")
+            return False

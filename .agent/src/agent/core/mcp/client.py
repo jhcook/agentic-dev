@@ -80,13 +80,43 @@ class MCPClient:
                     ) for t in result.tools
                 ]
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> CallToolResult:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def session(self):
+        """Yields an initialized ClientSession for batching multiple tool calls."""
+        server_params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            env=self._full_env
+        )
+        with open(os.devnull, "w") as devnull:
+            async with stdio_client(server_params, errlog=devnull) as (read, write):
+                async with ClientSession(read, write) as session:
+                    timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
+                    try:
+                        await asyncio.wait_for(session.initialize(), timeout=timeout_sec)
+                    except asyncio.TimeoutError:
+                        logger.error(f"MCP session initialization timed out after {timeout_sec} seconds.")
+                        raise RuntimeError(f"Session initialization timed out. The server might be unreachable.")
+                    yield session
+
+    async def call_tool(self, name: str, arguments: Dict[str, Any], session: Optional[ClientSession] = None) -> CallToolResult:
         """Call a specific tool on the server."""
         from opentelemetry import trace
         tracer = trace.get_tracer(__name__)
         
         with tracer.start_as_current_span("mcp.call_tool") as span:
             span.set_attribute("tool_name", name)
+            
+            if session:
+                timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
+                try:
+                    return await asyncio.wait_for(session.call_tool(name, arguments), timeout=timeout_sec)
+                except asyncio.TimeoutError:
+                    logger.error(f"MCP tool call '{name}' timed out after {timeout_sec} seconds.")
+                    raise RuntimeError(f"Tool call '{name}' timed out. The server might be unreachable or hanging due to network/proxy issues.")
+            
             server_params = StdioServerParameters(
                 command=self.command,
                 args=self.args,
@@ -94,12 +124,12 @@ class MCPClient:
             )
             with open(os.devnull, "w") as devnull:
                 async with stdio_client(server_params, errlog=devnull) as (read, write):
-                    async with ClientSession(read, write) as session:
+                    async with ClientSession(read, write) as new_session:
                         try:
-                            timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 15.0))
+                            timeout_sec = float(os.environ.get("AGENT_MCP_TIMEOUT", 120.0))
                             async def _init_and_call():
-                                await session.initialize()
-                                return await session.call_tool(name, arguments)
+                                await new_session.initialize()
+                                return await new_session.call_tool(name, arguments)
                             result = await asyncio.wait_for(
                                 _init_and_call(), timeout=timeout_sec
                             )
