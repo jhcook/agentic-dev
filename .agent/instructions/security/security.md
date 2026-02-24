@@ -40,3 +40,13 @@ Since this codebase *is* a local developer tool, it requires access to system re
 - **System Imports**: `os`, `sys`, `subprocess`, `shutil` are **PERMITTED** for necessary file system and process operations.
 - **File Operations**: `open()`, `write()`, `read()` are permitted.
 - **Validation**: Ensure all paths and inputs are validated before use, but do not block the distinct libraries themselves.
+
+## 📝 Output Formatting
+
+When generating your findings and listing necessary modifications in the `REQUIRED_CHANGES` section, you **MUST** include a `(Source: <filepath or ADR>)` citation for each item to prove the change is grounded in actual codebase context and policy.
+
+Example:
+```
+REQUIRED_CHANGES:
+- change 1 (Source: path/to/file.py): Details of the change.
+```

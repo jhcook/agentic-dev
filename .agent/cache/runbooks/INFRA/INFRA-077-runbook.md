@@ -111,6 +111,12 @@ def store_notebooklm_token(token: str):
 from . import mcp
 ```
 
+### `src/agent/sync/notebooklm.py`
+
+#### MODIFY `src/agent/sync/notebooklm.py`
+
+- Retrieve and inject `NOTEBOOKLM_COOKIES` into the MCPClient environment.
+
 ## Verification Plan
 
 ### Automated Tests

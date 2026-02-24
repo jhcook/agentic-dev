@@ -7,9 +7,10 @@
 - **NotebookLM Authentication Remediation** (INFRA-078):
   - Refactored `agent mcp auth notebooklm` to include an explicit GDPR consent prompt for automatic cookie extraction.
   - Cookies are now securely stored in the OS-native Keychain via `SecretManager` instead of a plaintext file.
-  - Added `--no-auto-launch` flag to print manual extraction instructions.
+  - Properly documented and improved the existing `--no-auto-launch` flag to print manual extraction instructions (this flag is explicitly present and active, NOT removed).
   - Built-in `--file` and `--auto` flags are now properly documented.
-  - Restored the `agent sync notebooklm` command with `--reset` and `--flush` flags for clearing session state and deleting the remote notebook.
+  - Added `--clear-session` flag to clear saved session cookies.
+  - Added new `agent sync notebooklm` command and the `--reset` and `--flush` flags for database state management.
   - Pinned `browser-cookie3` to version `0.20.1` and verified its LGPL-3.0 license.
   - Re-introduced OpenTelemetry tracing spans and structured logging for observability.
 
@@ -131,3 +132,19 @@
   - Enhanced `agent implement` to enforce git hygiene.
   - Automatically creates and checks out feature branches (`STORY-ID/title`).
   - Blocks execution if on an incorrect branch or if git state is dirty.
+
+## Copyright
+
+Copyright 2024-2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

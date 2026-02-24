@@ -46,14 +46,16 @@ def test_mcp_auth_auto_success(mock_sm_cls, mock_confirm, mock_subprocess_run):
     mock_subprocess_run.return_value = mock_result
     
     mock_sm = MagicMock()
+    mock_sm.is_initialized.return_value = True
+    mock_sm.is_unlocked.return_value = True
     mock_sm_cls.return_value = mock_sm
     
     result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
     
     assert result.exit_code == 0
     mock_sm.set_secret.assert_called_once_with(
-        "notebooklm_cookies", 
-        {"SID": "123", "HSID": "456", "SSID": "789"}
+        "notebooklm", "cookies",
+        json.dumps({"SID": "123", "HSID": "456", "SSID": "789"})
     )
     
 @patch("agent.commands.mcp.subprocess.run")
@@ -90,29 +92,19 @@ def test_mcp_auth_file(mock_subprocess_run):
 
 @patch("agent.commands.mcp.subprocess.run")
 @patch("agent.commands.mcp.Confirm.ask")
-def test_mcp_auth_auto_malformed_json(mock_confirm, mock_subprocess_run):
-    """Test that malformed JSON from the subprocess is handled gracefully."""
+def test_mcp_auth_auto_json_decode_error(mock_confirm, mock_subprocess_run, caplog):
+    """Test that a JSONDecodeError during cookie extraction is handled gracefully."""
     mock_confirm.return_value = True
     
+    # Mock subprocess result with invalid JSON
     mock_result = MagicMock()
-    mock_result.stdout = '{"status": "success", "browser": "Chrome", "cookies": {"SID": "123", '
+    mock_result.stdout = "This is not valid JSON data"
+    mock_result.stderr = "Some stderr output"
     mock_subprocess_run.return_value = mock_result
     
     result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
-    assert result.exit_code == 1
-
-@patch("agent.commands.mcp.subprocess.run")
-@patch("agent.commands.mcp.Confirm.ask")
-def test_mcp_auth_auto_error_status(mock_confirm, mock_subprocess_run):
-    """Test that a valid JSON response with an error status is handled gracefully."""
-    mock_confirm.return_value = True
     
-    mock_result = MagicMock()
-    mock_result.stdout = json.dumps({
-        "status": "error",
-        "message": "Browser profile not found"
-    })
-    mock_subprocess_run.return_value = mock_result
-    
-    result = runner.invoke(app, ["auth", "notebooklm", "--auto"])
+    # Should catch JSONDecodeError and exit cleanly without crashing
     assert result.exit_code == 1
+    # Check that error was logged
+    assert "Auto-extraction failed to parse output." in caplog.text

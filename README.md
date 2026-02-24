@@ -102,7 +102,6 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 | Command | Description |
 |---------|-------------|
 | `agent sync` | Distributed sync (push/pull/status/scan/janitor/init/flush) |
-| `agent sync notebooklm` | Manage NotebookLM state (use `--flush` to reset and delete remote notebook) |
 | `agent journey` | Journey management (coverage, backfill-tests) |
 | `agent config` | Manage configuration |
 | `agent secret` | Manage encrypted secrets |
@@ -114,22 +113,16 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 ### MCP Authentication
 
 The `agent mcp auth` command manages authentication for MCP servers (e.g., NotebookLM).
-**Flags:**
-- `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent). This enables automated cookie extraction with user consent.
+- `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent).
 - `--file <path>`: Uses a file-based cookie import from the provided path instead of launching Chrome interactively.
 - `--no-auto-launch`: Prints instructions for manual cookie extraction instead of launching the interactive browser script.
+- `--clear-session`: Clears the saved authentication session cookies for this server from the secure storage.
 
-## Environment Variables
+### Syncing MCP Server Context
 
-For a full list of all environment variables and secrets manager configurations, see the following guides:
-- [Environment Variables Guide](.agent/docs/environment_variables.md)
-- [Secret Management Guide](.agent/docs/secret_management.md)
-
-Key variables include:
-
-- `AGENT_AI_TIMEOUT_MS`: The maximum time (in milliseconds) to wait for an AI provider response.
-- `AGENT_MCP_TIMEOUT`: The maximum time (in seconds) to wait for Model Context Protocol (MCP) server operations.
-- `AGENT_MAX_CONCURRENT_API_CALLS`: The maximum number of concurrent API calls allowed during parallel operations (e.g., ADK governance panel).
+The `agent sync notebooklm` command syncs notebook context into the local database cache using the MCP functionality.
+- `--reset`: Clears internal caching state only, forcing a fresh fetch on the next sync.
+- `--flush`: Clears both internal caching state and deletes all previously tracked artifacts and sources from the database cache.
 
 ## Documentation
 
@@ -145,4 +138,20 @@ Key variables include:
 
 ## License
 
-Copyright 2026 Justin Cook
+Apache License 2.0
+
+## Copyright
+
+Copyright 2024-2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

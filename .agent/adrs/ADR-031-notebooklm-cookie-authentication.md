@@ -1,3 +1,18 @@
+<!--
+ Copyright 2026 Justin Cook
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
 # ADR-031: NotebookLM Cookie Authentication
 
 ## Status
@@ -10,7 +25,7 @@ NotebookLM does not provide a traditional API key or service account authenticat
 
 ## Decision
 
-We will implement a cookie-based authentication flow. Users can either provide a JSON file containing the cookies (`--file`), receive instructions for manual extraction (`--no-auto-launch`), or use an automated extraction method (`--auto`) that reads cookies directly from the local browser's SQLite database. The automated extraction will use the `browser_cookie3` library. Since these cookies provide full access to the user's Google account, we will strictly filter for only the necessary cookies (`SID`, `HSID`, `SSID`) and store them securely using the OS-native keychain via our `SecretManager`. **Crucially, user consent is defined as the lawful basis for this cookie processing (GDPR Article 6(1)(a)), and this consent must be explicitly obtained before the `--auto` extraction can proceed.**
+We will implement a cookie-based authentication flow. Users can either provide a JSON file containing the cookies (`--file`), receive instructions for manual extraction (`--no-auto-launch`), or use an automated extraction method (`--auto`) that reads cookies directly from the local browser's SQLite database. The automated extraction will use the `browser_cookie3` library. Since these cookies provide full access to the user's Google account, we will strictly filter for only the necessary cookies (`SID`, `HSID`, `SSID`) and store them securely using the OS-native keychain via our `SecretManager`.
 
 ## Alternatives Considered
 

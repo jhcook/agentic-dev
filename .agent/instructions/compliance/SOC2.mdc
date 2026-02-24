@@ -17,3 +17,13 @@
 ## Risk Management
 - [ ] Vulnerability scanning is enabled.
 - [ ] Dependencies are patched.
+
+## 📝 Output Formatting
+
+When generating your findings and listing necessary modifications in the `REQUIRED_CHANGES` section, you **MUST** include a `(Source: <filepath or ADR>)` citation for each item to prove the change is grounded in actual codebase context and policy.
+
+Example:
+```
+REQUIRED_CHANGES:
+- change 1 (Source: path/to/file.py): Details of the change.
+```

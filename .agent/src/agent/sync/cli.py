@@ -96,27 +96,24 @@ def flush(hard: bool = typer.Option(False, "--hard", help="Also delete Notion DB
 
 @app.command()
 def notebooklm(
-    reset: bool = typer.Option(False, "--reset", help="Reset the NotebookLM sync state and delete the remote notebook"),
-    flush: bool = typer.Option(False, "--flush", help="Alias for --reset")
+    reset: bool = typer.Option(False, "--reset", help="Reset the local NotebookLM sync state"),
+    flush: bool = typer.Option(False, "--flush", help="Delete the remote NotebookLM notebook and clear local state")
 ):
     """Manage NotebookLM synchronization state."""
-    if reset or flush:
-        from agent.sync.notebooklm import delete_remote_notebook
-        from agent.db.client import delete_artifact
-        
-        # 1. Attempt to delete remote notebook
-        print("Attempting to delete remote Notebook...")
-        remote_deleted = delete_remote_notebook()
-        if remote_deleted:
-            print("Successfully deleted remote notebook.")
+    if flush:
+        import asyncio
+        from agent.sync.notebooklm import flush_notebooklm
+        success = asyncio.run(flush_notebooklm())
+        if success:
+            print("Successfully flushed remote NotebookLM notebook and local state.")
         else:
-            print("Could not delete remote notebook (maybe it doesn't exist or auth failed).")
-            
-        # 2. Delete local caching state
+            print("Failed to completely flush NotebookLM. You may need to authenticate or the backend may be unavailable.")
+    elif reset:
+        from agent.db.client import delete_artifact
         success = delete_artifact("notebooklm_state", "state")
         if success:
-            print("Successfully cleared local NotebookLM sync state.")
+            print("Successfully reset NotebookLM sync state.")
         else:
-            print("Failed to clear local NotebookLM sync state (or it was already empty).")
+            print("Failed to reset NotebookLM sync state (or it was already empty).")
     else:
-        print("Use --reset or --flush to clear the NotebookLM sync state and delete the remote notebook.")
+        print("Use --reset to clear the NotebookLM sync state, or --flush to permanently delete the remote notebook.")

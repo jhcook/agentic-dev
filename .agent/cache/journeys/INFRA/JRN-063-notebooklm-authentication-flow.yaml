@@ -1,7 +1,6 @@
-
 # Journey: JRN-063
 # Title: NotebookLM Authentication Flow
-# State: DRAFT
+# State: COMMITTED
 # Copyright 2026 Justin Cook
 
 actor: "Technical User"
@@ -77,6 +76,10 @@ implementation:
     - ".agent/tests/integration/test_notebooklm_sync.py" # Required for COMMITTED journeys. List paths to test files relative to project root.
     - ".agent/tests/integration/test_mcp_auth.py"
 
-linked_stories: []
-linked_adrs: []
+linked_stories:
+  - INFRA-077
+  - INFRA-078
+linked_adrs:
+  - ADR-030
+  - ADR-031
 depends_on: []
