@@ -93,7 +93,6 @@ if [ "$INCLUDE_SOURCE" = true ]; then
         | grep -v "\.agent/storage/" \
         | grep -v "\.agent/\.venv/"   \
         | grep -v "\.agent/Makefile" \
-        | grep -v "\.agent/bin/agent" \
         | tar -czf "$DIST_DIR/$ARCHIVE_NAME" -T -
 else
     grep -v "/tests/" "$DIST_DIR/files_to_package.txt" \

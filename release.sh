@@ -85,20 +85,48 @@ fi
 
 # Sync to target
 echo "   Syncing to $TARGET_DIR..."
-# We use rsync to update files, honoring .gitignore
-# -a: archive mode
-# -v: verbose
-# --filter=':- .gitignore': Use .gitignore rules from target if present
-# We also want to ensure we don't delete files in target unless we want to match exact state?
-# The user requirement was "overwrite everything in the paths they copy to" but "honor .gitignore".
-# rsync will overwrite existing files with same name.
-# It will NOT delete extra files in target unless --delete is used (we won't use it for safety).
+# We use rsync to deploy the agent code while preserving project-specific data.
+# --delete is ONLY used for code directories (src/, templates/, etc., workflows/, docs/, tests/)
+# where we want an exact mirror. Project data (cache/, adrs/, secrets/, logs/) is never deleted.
+#
+# Strategy:
+#   1. Mirror code directories with --delete (renamed/deleted files get cleaned up)
+#   2. Sync everything else without --delete (additive only, preserves local data)
+
+# Check if target has a .gitignore to honor
+HAS_GITIGNORE=false
 if [ -f "$TARGET_DIR/.gitignore" ]; then
-    rsync -av --filter=':- .gitignore' "$TEMP_DIR/" "$TARGET_DIR/"
-else
-    # If no .gitignore in target, just sync
-    rsync -av "$TEMP_DIR/" "$TARGET_DIR/"
+    HAS_GITIGNORE=true
 fi
+
+# Directories that should be exact mirrors of the release (code, not data)
+CODE_DIRS="src templates etc workflows docs tests"
+
+for dir in $CODE_DIRS; do
+    if [ -d "$TEMP_DIR/.agent/$dir" ]; then
+        mkdir -p "$TARGET_DIR/.agent/$dir"
+        if [ "$HAS_GITIGNORE" = true ]; then
+            rsync -av --delete --filter=':- .gitignore' "$TEMP_DIR/.agent/$dir/" "$TARGET_DIR/.agent/$dir/"
+        else
+            rsync -av --delete "$TEMP_DIR/.agent/$dir/" "$TARGET_DIR/.agent/$dir/"
+        fi
+    fi
+done
+
+# Sync remaining .agent files (bin, top-level configs) without --delete
+# Exclude the code dirs we already handled
+EXCLUDE_ARGS=""
+for dir in $CODE_DIRS; do
+    EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude=$dir/"
+done
+if [ "$HAS_GITIGNORE" = true ]; then
+    rsync -av --filter=':- .gitignore' $EXCLUDE_ARGS "$TEMP_DIR/.agent/" "$TARGET_DIR/.agent/"
+else
+    rsync -av $EXCLUDE_ARGS "$TEMP_DIR/.agent/" "$TARGET_DIR/.agent/"
+fi
+
+# Sync any top-level files from the package (e.g., docs/) without --delete
+rsync -av --ignore-existing --exclude '.agent/' "$TEMP_DIR/" "$TARGET_DIR/"
 
 # Cleanup
 rm -rf "$TEMP_DIR"
