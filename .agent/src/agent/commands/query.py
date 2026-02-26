@@ -144,7 +144,8 @@ def query(
         return
     
     try:
-        answer = asyncio.run(run_query(text, Path(".")))
+        from agent.core.config import config
+        answer = asyncio.run(run_query(text, config.repo_root))
         
         console.print("\n[bold green]✅ Answer:[/bold green]\n")
         console.print(answer)
