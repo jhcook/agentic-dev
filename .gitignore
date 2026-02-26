@@ -48,6 +48,7 @@ Thumbs.db
 # Secrets
 .agent/secrets/
 .agent/cache/agent.db
+.agent/cache/console.db
 
 # Node
 node_modules/

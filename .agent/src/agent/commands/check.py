@@ -1280,6 +1280,44 @@ def preflight(
                 report_file.write_text(json.dumps(json_report, indent=2))
 
             raise typer.Exit(code=1)
+
+        # Detect when all agents failed (e.g. auth expired) — all findings
+        # were filtered with 0 validated, meaning no agent actually reviewed
+        _fv_check = result.get("json_report", {}).get("finding_validation", {})
+        _total_ai = _fv_check.get("total_ai_findings", 0)
+        _validated = _fv_check.get("validated", 0)
+        _filtered = _fv_check.get("filtered_false_positives", 0)
+        if _total_ai > 0 and _validated == 0 and _filtered == _total_ai:
+            _obs_logger = get_logger(__name__)
+            from agent.core.ai import ai_service as _ai_svc
+            _provider = getattr(_ai_svc, "provider", None) or "unknown"
+            _obs_logger.warning(
+                "Preflight inconclusive: all governance agents failed",
+                extra={"provider": _provider, "total_findings": _total_ai},
+            )
+            console.print(
+                "[bold yellow]⚠️  Preflight INCONCLUSIVE — all governance agents failed "
+                "(likely due to expired credentials). No checks were actually performed.[/bold yellow]"
+            )
+            # Provider-aware credential hint
+            _auth_hints = {
+                "gemini": "Run [bold]agent secret set GEMINI_API_KEY[/bold] or check your API key.",
+                "vertex": "Run [bold]gcloud auth application-default login[/bold] to reauthenticate.",
+                "openai": "Run [bold]agent secret set OPENAI_API_KEY[/bold] or check your API key.",
+                "anthropic": "Run [bold]agent secret set ANTHROPIC_API_KEY[/bold] or check your API key.",
+                "ollama": "Ensure Ollama is running locally ([bold]ollama serve[/bold]).",
+                "gh": "Run [bold]gh auth login[/bold] to reauthenticate.",
+            }
+            _hint = _auth_hints.get(_provider, "Check your AI provider credentials.")
+            console.print(
+                f"[yellow]{_hint} Then re-run [bold]agent preflight[/bold].[/yellow]"
+            )
+            if report_file:
+                json_report["overall_verdict"] = "INCONCLUSIVE"
+                json_report["error"] = "All governance agents failed — no checks performed."
+                import json
+                report_file.write_text(json.dumps(json_report, indent=2))
+            raise typer.Exit(code=1)
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 

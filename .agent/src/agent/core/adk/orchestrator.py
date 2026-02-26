@@ -349,7 +349,6 @@ async def _orchestrate_async(
                 progress_callback(f"⚠️ @{role_name} cited {inv} which does not exist")
 
         # ── Build role_data ──
-        role_data["verdict"] = role_verdict
         role_data["findings"] = role_findings
         role_data["required_changes"] = role_changes
         role_data["references"] = {
@@ -357,11 +356,26 @@ async def _orchestrate_async(
             "valid": valid_refs,
             "invalid": invalid_refs,
         }
+
+        # Demote BLOCK to PASS if ALL cited references are hallucinated (Option 4)
+        # A finding that can't point to real files/ADRs shouldn't block a merge.
+        if (role_verdict == "BLOCK" and role_refs
+                and len(valid_refs) == 0 and len(invalid_refs) > 0):
+            role_verdict = "PASS"
+            if progress_callback:
+                progress_callback(
+                    f"⚠️  @{role_name}: BLOCK demoted to PASS "
+                    f"(all {len(invalid_refs)} cited reference(s) are hallucinated)"
+                )
+
         role_data["finding_validation"] = {
             "total": _ai_total,
             "validated": _ai_validated,
             "filtered": _ai_filtered,
         }
+
+        # ── Build role_data verdict (must come after demotion checks) ──
+        role_data["verdict"] = role_verdict
 
         # ── Verdict logic ──
         if mode == "gatekeeper" and role_verdict == "BLOCK":

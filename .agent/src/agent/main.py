@@ -36,6 +36,7 @@ from agent.commands import (
     audit,
     check,
     config,
+    console as console_cmd,
     implement,
     importer,
     journey,
@@ -143,6 +144,7 @@ app.command(name="new-adr")(adr.new_adr)
 # Infrastructure
 app.command(name="onboard")(onboard.onboard)
 app.command(name="query")(query.query)
+app.command(name="console")(console_cmd.console)
 
 from agent.sync import cli as sync_cli
 app.add_typer(sync_cli.app, name="sync")

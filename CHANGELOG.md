@@ -4,6 +4,23 @@
 
 ### Added
 
+- **Terminal Console TUI** (INFRA-087):
+  - New `agent console` command launches an interactive terminal UI for AI-assisted development.
+  - Textual-based layout with chat panel, workflow sidebar, and role sidebar.
+  - Persistent conversation sessions stored in local SQLite (`console.db`) with `0600` permissions.
+  - Token-by-token streaming via `AIService.stream_complete()` for Gemini, Vertex, Anthropic, OpenAI, and Ollama.
+  - Built-in commands: `/help`, `/new`, `/conversations` (`/history`), `/delete`, `/rename`, `/clear`, `/provider`, `/model`, `/quit`.
+  - Click-to-insert workflow (`/commit`, `/preflight`, etc.) and role (`@architect`, `@security`, etc.) from the sidebar.
+  - Agent disconnect recovery modal with Retry / Switch Provider / Cancel options.
+  - FIFO token budget pruning to stay within context window limits.
+  - Install with: `pip install 'agent[console]'`.
+
+- **Preflight INCONCLUSIVE Detection**:
+  - `agent preflight` now detects when all governance agents fail (e.g. expired credentials) and reports `INCONCLUSIVE` with a provider-specific remediation hint instead of falsely reporting `✅ Passed`.
+
+- **NotebookLM Integration Guide**:
+  - New `.agent/docs/notebooklm.md` documentation covering MCP server configuration, authentication (`agent mcp auth notebooklm`), sync commands (`agent sync notebooklm`), security considerations, and troubleshooting.
+
 - **Ollama Local AI Provider** (INFRA-017):
   - Added Ollama as a self-hosted AI provider using the OpenAI-compatible API.
   - Health check on startup with graceful skip if Ollama is not running.

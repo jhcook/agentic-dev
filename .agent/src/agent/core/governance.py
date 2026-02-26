@@ -161,7 +161,7 @@ def _parse_findings(review: str) -> Dict:
     
     # Extract REQUIRED_CHANGES section
     changes_match = re.search(
-        r"^REQUIRED_CHANGES:\s*\n(.*)",
+        r"^REQUIRED_CHANGES:\s*\n(.*?)(?:^REFERENCES:|$)",
         review,
         re.MULTILINE | re.DOTALL | re.IGNORECASE
     )
@@ -179,14 +179,19 @@ def _parse_bullet_list(text: str) -> List[str]:
     """Parse a block of text into individual bullet point strings."""
     if not text or not text.strip():
         return []
+    _skip = {"none", "n/a", "no issues", "no issues found"}
     items = []
     for line in text.strip().split("\n"):
         line = line.strip()
         if line.startswith("- "):
-            items.append(line[2:].strip())
+            val = line[2:].strip()
+            if val.lower() not in _skip:
+                items.append(val)
         elif line.startswith("* "):
-            items.append(line[2:].strip())
-        elif line and line.lower() not in ("none", "n/a", "no issues", "no issues found"):
+            val = line[2:].strip()
+            if val.lower() not in _skip:
+                items.append(val)
+        elif line and line.lower() not in _skip:
             items.append(line)
     return [item for item in items if item]
 
@@ -1533,6 +1538,17 @@ def convene_council_full(
             "valid": valid_refs,
             "invalid": invalid_refs,
         }
+
+        # Demote BLOCK to PASS if ALL cited references are hallucinated (Option 4)
+        # A finding that can't point to real files/ADRs shouldn't block a merge.
+        if (role_verdict == "BLOCK" and role_refs
+                and len(valid_refs) == 0 and len(invalid_refs) > 0):
+            role_verdict = "PASS"
+            if progress_callback:
+                progress_callback(
+                    f"⚠️  @{role_name}: BLOCK demoted to PASS "
+                    f"(all {len(invalid_refs)} cited reference(s) are hallucinated)"
+                )
 
         # Emit warnings for invalid/missing references (AC-7, AC-8)
         for inv in invalid_refs:

@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 import time
-from typing import List, Optional
+from typing import Generator, List, Optional
 import warnings
 
 from prometheus_client import Counter, Histogram
@@ -596,6 +596,121 @@ class AIService:
             ),
             user_prompt=prompt
         )
+
+    def stream_complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+    ) -> Generator[str, None, None]:
+        """
+        Generator that yields text chunks from an AI provider.
+
+        Supports token-by-token streaming for Gemini, Vertex, Anthropic,
+        OpenAI, and Ollama. Falls back to single-chunk for GH CLI.
+
+        Args:
+            system_prompt: System-level instruction for the AI model.
+            user_prompt: The user query or content to process.
+            model: Model override. If None, uses provider default.
+            temperature: Temperature override.
+
+        Yields:
+            str: Text chunks as they arrive from the provider.
+
+        Raises:
+            Exception: On provider errors after retry exhaustion.
+        """
+        self._ensure_initialized()
+        provider = self.provider or "gemini"
+        model_used = model or self.models.get(provider)
+        from agent.core.config import config as _cfg
+
+        timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
+
+        # OBSERVABILITY: OTel span for streaming
+        try:
+            from opentelemetry import trace as _otel_trace
+            _tracer = _otel_trace.get_tracer(__name__)
+        except ImportError:
+            _tracer = None
+
+        import contextlib
+        _span_ctx = _tracer.start_as_current_span("ai.stream_completion") if _tracer else contextlib.nullcontext()
+        with _span_ctx as span:
+            if span is not None and hasattr(span, "set_attribute"):
+                span.set_attribute("ai.provider", provider)
+                span.set_attribute("ai.model", model_used or "")
+                span.set_attribute("ai.streaming", True)
+
+            logging.info(
+                "AI Stream Request Start",
+                extra={"provider": provider, "model": model_used, "streaming": True},
+            )
+
+            if provider in ("gemini", "vertex"):
+                from google.genai import types
+
+                client = self._build_genai_client(provider)
+                gen_config_kwargs = {
+                    "system_instruction": system_prompt,
+                    "http_options": types.HttpOptions(timeout=timeout_ms),
+                    "automatic_function_calling": types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    ),
+                }
+                if temperature is not None:
+                    gen_config_kwargs["temperature"] = temperature
+                config = types.GenerateContentConfig(**gen_config_kwargs)
+
+                for chunk in client.models.generate_content_stream(
+                    model=model_used, contents=user_prompt, config=config
+                ):
+                    if chunk.text:
+                        yield chunk.text
+
+            elif provider == "anthropic":
+                client = self.clients["anthropic"]
+                stream_kwargs = {
+                    "model": model_used,
+                    "max_tokens": 4096,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
+                if temperature is not None:
+                    stream_kwargs["temperature"] = temperature
+                with client.messages.stream(**stream_kwargs) as stream:
+                    for text in stream.text_stream:
+                        yield text
+
+            elif provider in ("openai", "ollama"):
+                client = self.clients[provider]
+                create_kwargs = {
+                    "model": model_used,
+                    "stream": True,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                }
+                if temperature is not None:
+                    create_kwargs["temperature"] = temperature
+                response = client.chat.completions.create(**create_kwargs)
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+
+            elif provider == "gh":
+                # GH CLI does not support streaming; yield full response as one chunk
+                result = self.complete(
+                    system_prompt, user_prompt, model=model, temperature=temperature
+                )
+                if result:
+                    yield result
+
+            else:
+                raise ValueError(f"Unknown provider: {provider}")
 
     def get_available_models(self, provider: str | None = None) -> List[dict]:
         """
