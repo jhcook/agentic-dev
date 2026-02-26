@@ -35,7 +35,7 @@ console = Console()
 def new_runbook(
     story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
 ):
     """

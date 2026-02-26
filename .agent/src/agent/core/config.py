@@ -426,7 +426,7 @@ def get_valid_providers() -> List[str]:
     """
     Returns list of valid AI provider names.
     """
-    return ["gh", "openai", "gemini", "anthropic", "vertex"]
+    return ["gh", "openai", "gemini", "anthropic", "vertex", "ollama"]
 
 
 # Configuration for Agent Query feature (INFRA-017)

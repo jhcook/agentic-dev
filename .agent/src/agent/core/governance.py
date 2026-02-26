@@ -450,6 +450,55 @@ _CODE_CLAIM_KEYWORDS = {
 }
 
 
+def _line_in_diff_hunk(filepath: str, line_num: int, diff: str) -> bool:
+    """Check if a line number falls within a changed hunk in the diff.
+
+    Parses unified diff @@ headers to extract changed line ranges.
+    Returns True if the line is within a changed hunk, False otherwise.
+    """
+    # Normalize filename for matching (strip leading a/ b/ prefixes and common prefixes)
+    normalized = filepath.replace("\\", "/")
+    # Strip common path prefixes the AI might use
+    for prefix in [".agent/src/", ".agent/", "agent/"]:
+        if normalized.startswith(prefix):
+            break
+    else:
+        # Also match by basename
+        pass
+
+    in_target_file = False
+    for diff_line in diff.split("\n"):
+        # Match diff file header: +++ b/path/to/file.py
+        if diff_line.startswith("+++ "):
+            diff_path = diff_line[4:].strip()
+            # Strip b/ prefix
+            if diff_path.startswith("b/"):
+                diff_path = diff_path[2:]
+            # Check if this diff section matches our file
+            in_target_file = (
+                diff_path.endswith(normalized) or
+                normalized.endswith(diff_path) or
+                diff_path.endswith(filepath) or
+                filepath.endswith(diff_path)
+            )
+        elif in_target_file and diff_line.startswith("@@ "):
+            # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+            hunk_match = re.match(r'@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', diff_line)
+            if hunk_match:
+                hunk_start = int(hunk_match.group(1))
+                hunk_count = int(hunk_match.group(2) or 1)
+                hunk_end = hunk_start + hunk_count - 1
+                # Allow 5-line margin for context lines around the hunk
+                if hunk_start - 5 <= line_num <= hunk_end + 5:
+                    return True
+        elif in_target_file and diff_line.startswith("diff --git"):
+            # New file section, reset
+            in_target_file = False
+
+    # If we couldn't find the file in the diff at all, don't filter (assume valid)
+    return True
+
+
 def _validate_finding_against_source(
     finding: str,
     diff: str,
@@ -479,6 +528,21 @@ def _validate_finding_against_source(
             finding[:80],
         )
         return False
+
+    # ── Check 0b: Diff-hunk scope validation ──
+    # If finding references a specific file:line, verify the line is in a changed hunk
+    file_line_refs_scope = re.findall(
+        r'[`"]?([a-zA-Z0-9_/.-]+\.py)[`"]?:(\d+)', finding
+    )
+    if file_line_refs_scope and diff:
+        for filepath_str_scope, line_num_str_scope in file_line_refs_scope:
+            line_num_scope = int(line_num_str_scope)
+            if not _line_in_diff_hunk(filepath_str_scope, line_num_scope, diff):
+                logger.info(
+                    "False positive filtered (line %d not in diff hunk for %s): '%s'",
+                    line_num_scope, filepath_str_scope, finding[:80],
+                )
+                return False
 
     # ── Check -1: Governance self-exemption (ADR-027) ──
     # When governance.py is in the diff, the AI reviews its own code and flags
@@ -1346,6 +1410,11 @@ def convene_council_full(
                         "tests or reviews) does NOT constitute processing of personal data under GDPR. "
                         "Do NOT require GDPR lawful basis documentation for functions that process source code, "
                         "unless they specifically handle user-facing personal data (names, emails, addresses).\n\n"
+                        "DIFF SCOPE CONSTRAINT (CRITICAL):\n"
+                        "You may ONLY flag issues that are VISIBLE in the <diff> section within ADDED (+) or MODIFIED lines. "
+                        "Do NOT flag pre-existing issues in unchanged code. If a function existed before this diff "
+                        "without type hints, OTel spans, metrics, or documentation — that is OUT OF SCOPE. "
+                        "If you cannot confirm an issue was INTRODUCED by this diff, you MUST PASS it.\n\n"
                         "Output format (use EXACTLY this structure):\n"
                         "VERDICT: [PASS|BLOCK]\n"
                         "SUMMARY: <one line summary>\n"
@@ -1367,7 +1436,9 @@ def convene_council_full(
             user_prompt += f"<diff>{chunk}</diff>"
             
             try:
-                review = ai_service.complete(system_prompt, user_prompt)
+                # Use temperature=0 for deterministic governance findings
+                _gov_temp = 0.0 if mode == "gatekeeper" else None
+                review = ai_service.complete(system_prompt, user_prompt, temperature=_gov_temp)
                 review = scrub_sensitive_data(review) # Scrub AI output
                 if mode == "consultative":
                     role_findings.append(review)

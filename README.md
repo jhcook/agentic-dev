@@ -17,7 +17,7 @@ Read our core philosophy on how `agentic-dev` approaches AI-assisted engineering
 - **AI Governance Panel** — Multi-role preflight checks (Security, Architect, QA, Compliance, Observability) that validate your changes before commit.
 - **Parallel ADK Engine** — Blazing fast governance evaluation leveraging the Google Agent Development Kit for concurrent multi-agent analysis.
 - **Oracle Preflight Pattern** — Advanced context retrieval fusing Notion, NotebookLM via MCP, and an embedded zero-server Vector database for high fidelity AI decisions.
-- **Multi-Provider AI** — Works with Gemini, Vertex AI, OpenAI, Anthropic, and GitHub Copilot. Automatic fallback between providers on rate limits.
+- **Multi-Provider AI** — Works with Gemini, Vertex AI, OpenAI, Anthropic, GitHub Copilot, and Ollama (local). Automatic fallback between providers on rate limits.
 - **Smart Test Selection** — Performs real-time Python impact analysis to intelligently group and selectively execute necessary tests.
 - **User Journey Testing** — Define user journeys as YAML, auto-generate test stubs, enforce implementation gates, and track test coverage.
 - **Voice UX Reviews** — Analyze hands-free voice sessions (`agent review-voice`) to grade agent latency, accuracy, tone, and interruption handling.
@@ -123,6 +123,23 @@ The `agent mcp auth` command manages authentication for MCP servers (e.g., Noteb
 The `agent sync notebooklm` command syncs notebook context into the local database cache using the MCP functionality.
 - `--reset`: Clears internal caching state only, forcing a fresh fetch on the next sync.
 - `--flush`: Clears both internal caching state and deletes all previously tracked artifacts and sources from the database cache.
+
+### Ollama (Local AI Provider)
+
+Ollama enables fully local, self-hosted AI inference with no data leaving your machine. Any model available in Ollama can be used.
+
+```bash
+# Start Ollama and pull a model
+ollama serve && ollama pull llama3
+
+# Use with any agent command
+agent query "how does the router work?" --provider ollama
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server address (localhost only) |
+| `OLLAMA_MODEL` | `llama3` | Default model to use |
 
 ## Documentation
 

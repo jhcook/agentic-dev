@@ -79,7 +79,7 @@ def new_journey(
         False, "--offline", help="Disable AI and use manual input for journey content."
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
 ):
     """

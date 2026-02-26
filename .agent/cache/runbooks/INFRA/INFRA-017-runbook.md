@@ -177,6 +177,124 @@ settings:
   provider_priority: ["gemini", "openai", "ollama", "gh"]
 ```
 
+### agent/core/ai/service.py
+
+#### MODIFY agent/core/ai/service.py
+
+- Register Ollama as a valid provider and wire it into the AIService lifecycle.
+- Ollama exposes an OpenAI-compatible API at `http://localhost:11434/v1`, so we reuse the `openai` Python SDK with a custom `base_url`.
+
+**1. Add to `PROVIDERS` dict (after the `"vertex"` entry):**
+
+```python
+PROVIDERS = {
+    # ... existing providers ...
+    "ollama": {
+        "name": "Ollama (Local)",
+        "service": "ollama",
+        "secret_key": None,       # No API key required
+        "env_var": "OLLAMA_HOST",  # Optional: override default localhost
+    },
+}
+```
+
+**2. Add Ollama initialization in `reload()` (after the Anthropic block, step 5):**
+
+> **@Security**: `OLLAMA_HOST` must be guarded to localhost-only to prevent accidental remote data exfiltration.
+
+```python
+    # 6. Check Ollama (Self-hosted, no API key required)
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+    # @Security: Guard against remote Ollama hosts to prevent data exfiltration
+    from urllib.parse import urlparse
+    parsed = urlparse(ollama_host)
+    if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
+        logging.warning(
+            "OLLAMA_HOST=%s is not localhost — skipping for security.",
+            ollama_host,
+        )
+    else:
+        try:
+            import httpx
+            # Quick health check — Ollama returns 200 on GET /
+            resp = httpx.get(f"{ollama_host}/", timeout=2.0)
+            if resp.status_code == 200:
+                from openai import OpenAI
+                self.clients['ollama'] = OpenAI(
+                    base_url=f"{ollama_host}/v1",
+                    api_key="ollama",  # Dummy — Ollama ignores this but SDK requires it
+                    timeout=120.0,
+                )
+                self.models['ollama'] = 'llama3'  # Default model
+                # @Observability: Log health check at INFO for operational visibility
+                logging.info("Ollama provider initialized at %s", ollama_host)
+            else:
+                logging.info("Ollama health check failed (status %s)", resp.status_code)
+        except Exception:
+            logging.debug("Skipping Ollama: not reachable at %s", ollama_host)
+```
+
+**3. Add `elif provider == "ollama":` branch in `_try_complete()` (after the `anthropic` branch):**
+
+```python
+                elif provider == "ollama":
+                    # Ollama uses the OpenAI-compatible API
+                    client = self.clients['ollama']
+                    response = client.chat.completions.create(
+                        model=model_used,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ]
+                    )
+                    if response.choices:
+                        return response.choices[0].message.content.strip()
+                    return ""
+```
+
+**4. Add Ollama to fallback chain in `try_switch_provider()` and `_set_default_provider()`:**
+
+```python
+    # try_switch_provider: update chain
+    fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic', 'ollama']
+
+    # _set_default_provider: add after anthropic check
+    elif 'ollama' in self.clients:
+        self.provider = 'ollama'
+```
+
+**5. Add `"ollama"` to `get_valid_providers()` in `agent/core/config.py`:**
+
+```python
+def get_valid_providers():
+    return ["gemini", "vertex", "openai", "anthropic", "gh", "ollama"]
+```
+
+**6. Add `"ollama"` to `host_map` in `_try_complete()` error handling (@Observability):**
+
+```python
+    host_map = {
+        # ... existing entries ...
+        "ollama": "localhost:11434",
+    }
+```
+
+**7. Map `local` tier to `light` in `_tier_matches()` (@Architect):**
+
+> The `router.yaml` uses `tier: "local"` for Ollama but `_tier_matches()` only knows `light/standard/advanced`. Normalize `local` → `light` so the router can select Ollama models.
+
+```python
+    def _tier_matches(self, model_tier: str, requested_tier: str) -> bool:
+        # Normalize aliases
+        tier_aliases = {"local": "light"}
+        model_tier = tier_aliases.get(model_tier, model_tier)
+        requested_tier = tier_aliases.get(requested_tier, requested_tier)
+
+        tiers = ["light", "standard", "advanced"]
+        # ... rest unchanged ...
+```
+
 ### .agent/secrets/ (Optional)
 
 #### Optional: Provider-specific API key files
@@ -415,6 +533,12 @@ async def run_query(text: str):
 - [ ] **`test_query_command.py`**:
   - [ ] `test_offline_mode_fallback`: Unset `LLM_API_KEY` env var, run the command, and assert the offline message and `grep` fallback are triggered.
   - [ ] `test_pii_scrubber_integration`: Use `unittest.mock.patch` to spy on the PII scrubber function and assert it is called when context is built.
+- [ ] **`test_ollama_provider.py`** (@QA Panel Recommendation):
+  - [ ] `test_ollama_health_check_success`: Mock `httpx.get` to return 200; verify `self.clients['ollama']` is initialized.
+  - [ ] `test_ollama_health_check_failure`: Mock `httpx.get` to raise `ConnectError`; verify graceful skip, no crash.
+  - [ ] `test_ollama_host_localhost_guard`: Set `OLLAMA_HOST` to a remote URL; verify the provider is NOT initialized.
+  - [ ] `test_ollama_completion`: Mock the OpenAI client `chat.completions.create`; verify response extraction matches OpenAI path.
+  - [ ] `test_ollama_fallback_chain`: Set Ollama as active provider, mock it to raise; verify fallback proceeds to next provider.
 
 ### Manual Verification
 
@@ -430,17 +554,27 @@ async def run_query(text: str):
 ### Documentation
 
 - [ ] `CHANGELOG.md` updated with an entry for the new `env -u VIRTUAL_ENV uv run agent query` feature.
+- [ ] `CHANGELOG.md` updated with Ollama as a supported local AI provider.
 - [ ] `README.md` (or contributing guide) updated to explain how to set up and use the `env -u VIRTUAL_ENV uv run agent query` command.
+- [ ] `README.md` documents Ollama as a provider option and the `OLLAMA_HOST` env var.
 - [ ] CLI command includes a useful `--help` message.
+- [ ] `--provider` help text updated to include `ollama` across all commands.
 
 ### Observability
 
 - [ ] Logs are structured (JSON) and contain a unique `query_id` for correlation.
 - [ ] Logs are free of PII: user query text and LLM responses are NOT logged.
 - [ ] Metrics for latency (`agent_query_latency_seconds`), token counts (`agent_query_context_tokens`, `agent_query_completion_tokens`), and invocation count (`agent_query_total`) are added.
+- [ ] Ollama health check result logged at `INFO` level (success/failure).
+- [ ] `host_map` in `_try_complete()` includes `"ollama": "localhost:11434"`.
+
+### Dependencies
+
+- [ ] Verify `httpx` is in `pyproject.toml` dependencies (likely already present via transitive deps).
 
 ### Testing
 
 - [ ] All new unit tests pass with >90% code coverage for the new modules.
 - [ ] Manual verification plan executed and all steps passed.
 - [ ] Integration tests (mocking external services) pass.
+- [ ] Ollama provider tests (`test_ollama_provider.py`) pass.

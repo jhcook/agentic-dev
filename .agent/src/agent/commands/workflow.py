@@ -33,7 +33,7 @@ def pr(
     web: bool = typer.Option(False, "--web", help="Open PR in browser."),
     draft: bool = typer.Option(False, "--draft", help="Create draft PR."),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
     offline: bool = typer.Option(False, "--offline", help="Disable AI and use manual input for PR summary."),
     skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip preflight checks (audit-logged)."),

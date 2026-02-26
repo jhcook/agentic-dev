@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Ollama Local AI Provider** (INFRA-017):
+  - Added Ollama as a self-hosted AI provider using the OpenAI-compatible API.
+  - Health check on startup with graceful skip if Ollama is not running.
+  - Localhost-only security guard on `OLLAMA_HOST` to prevent data exfiltration.
+  - Configurable via `OLLAMA_HOST` (default: `http://localhost:11434`) and `OLLAMA_MODEL` (default: `llama3`).
+  - Added `local` → `light` tier alias in the Smart Router for Ollama model selection.
+  - Ollama participates in the fallback chain: `gh → gemini → vertex → openai → anthropic → ollama`.
+
 - **NotebookLM Authentication Remediation** (INFRA-078):
   - Refactored `agent mcp auth notebooklm` to include an explicit GDPR consent prompt for automatic cookie extraction.
   - Cookies are now securely stored in the OS-native Keychain via `SecretManager` instead of a plaintext file.

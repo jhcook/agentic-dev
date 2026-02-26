@@ -61,7 +61,7 @@ Format your response as structured sections with clear headings.
 
 def review_voice(
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
     json_output: bool = typer.Option(
         False, "--json", help="Output raw AI response as JSON for CI integration."

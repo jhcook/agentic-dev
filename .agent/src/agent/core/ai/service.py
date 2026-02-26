@@ -20,7 +20,7 @@ import time
 from typing import List, Optional
 import warnings
 
-from prometheus_client import Counter
+from prometheus_client import Counter, Histogram
 from rich.console import Console
 
 # --- Suppress verbose AI / Embedding Library Logging ---
@@ -41,10 +41,14 @@ from agent.core.secrets import get_secret
 
 console = Console()
 
-# Prometheus Metrics
 ai_command_runs_total = Counter(
     "ai_command_runs_total",
     "Total number of AI command executions",
+    ["provider"],
+)
+ai_completion_latency = Histogram(
+    "ai_completion_latency_seconds",
+    "Latency of AI completion calls in seconds",
     ["provider"],
 )
 
@@ -79,6 +83,12 @@ PROVIDERS = {
         "secret_key": "api_key",
         "env_var": "GOOGLE_CLOUD_PROJECT",
     },
+    "ollama": {
+        "name": "Ollama (Local)",
+        "service": "ollama",
+        "secret_key": None,
+        "env_var": "OLLAMA_HOST",
+    },
 }
 
 
@@ -99,7 +109,8 @@ class AIService:
             'gemini': 'gemini-pro-latest',
             'vertex': 'gemini-2.0-flash',
             'openai': os.getenv("OPENAI_MODEL", "gpt-4o"),
-            'anthropic': 'claude-sonnet-4-5-20250929'
+            'anthropic': 'claude-sonnet-4-5-20250929',
+            'ollama': os.getenv("OLLAMA_MODEL", "llama3"),
         }
         
         self._initialized = False
@@ -277,7 +288,34 @@ class AIService:
         else:
             logging.debug("Skipping Anthropic: ANTHROPIC_API_KEY not found in environment or secrets.")
 
-        # Default Priority: GH -> Gemini -> Vertex -> OpenAI
+        # 6. Check Ollama (Self-hosted, no API key required)
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        # @Security: Guard against remote Ollama hosts to prevent data exfiltration
+        from urllib.parse import urlparse
+        parsed = urlparse(ollama_host)
+        if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
+            logging.warning(
+                "OLLAMA_HOST=%s is not localhost — skipping for security.",
+                ollama_host,
+            )
+        else:
+            try:
+                import httpx
+                resp = httpx.get(f"{ollama_host}/", timeout=2.0)
+                if resp.status_code == 200:
+                    from openai import OpenAI
+                    self.clients['ollama'] = OpenAI(
+                        base_url=f"{ollama_host}/v1",
+                        api_key="ollama",  # Dummy — Ollama ignores this but SDK requires it
+                        timeout=120.0,
+                    )
+                    logging.info("Ollama provider initialized at %s", ollama_host)
+                else:
+                    logging.info("Ollama health check failed (status %s)", resp.status_code)
+            except Exception:
+                logging.debug("Skipping Ollama: not reachable at %s", ollama_host)
+
+        # Default Priority: GH -> Gemini -> Vertex -> OpenAI -> Anthropic -> Ollama
         self._set_default_provider()
 
     def _check_gh_cli(self) -> bool:
@@ -354,6 +392,8 @@ class AIService:
             self.provider = 'openai'
         elif 'anthropic' in self.clients:
             self.provider = 'anthropic'
+        elif 'ollama' in self.clients:
+            self.provider = 'ollama'
         else:
             self.provider = None
             
@@ -392,9 +432,9 @@ class AIService:
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
         """
-        # Chain order: gh -> gemini -> vertex -> openai -> anthropic
+        # Chain order: gh -> gemini -> vertex -> openai -> anthropic -> ollama
         # TODO: This chain could also be dynamic from config
-        fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic']
+        fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic', 'ollama']
         
         current_idx = -1
         try:
@@ -419,10 +459,19 @@ class AIService:
         self,
         system_prompt: str,
         user_prompt: str,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        temperature: Optional[float] = None
     ) -> str:
         """
         Sends a completion request with automatic fallback.
+
+        Args:
+            system_prompt: System-level instruction for the AI model.
+            user_prompt: The user query or content to process.
+            model: Optional specific model deployment ID to use.
+            temperature: Optional float controlling response randomness.
+                Use 0.0 for deterministic output (e.g. governance checks).
+                If None, uses each provider's default.
         """
         self._ensure_initialized()
         
@@ -466,18 +515,32 @@ class AIService:
             try:
                 start_time = time.time()
                 
-                # OBSERVABILITY: Log start
-                logging.info(
-                    "AI Request Start",
-                    extra={"provider": current_p, "model": model_to_use}
-                )
-                
-                content = self._try_complete(
-                    current_p,
-                    system_prompt,
-                    user_prompt,
-                    model_to_use if current_p == provider_to_use else None
-                )
+                # OBSERVABILITY: OTel span + log start
+                try:
+                    from opentelemetry import trace as _otel_trace
+                    _tracer = _otel_trace.get_tracer(__name__)
+                except ImportError:
+                    _tracer = None
+
+                import contextlib
+                _span_ctx = _tracer.start_as_current_span("ai.completion") if _tracer else contextlib.nullcontext()
+                with _span_ctx as span:
+                    if span is not None and hasattr(span, "set_attribute"):
+                        span.set_attribute("ai.provider", current_p)
+                        span.set_attribute("ai.model", model_to_use or "")
+                    
+                    logging.info(
+                        "AI Request Start",
+                        extra={"provider": current_p, "model": model_to_use}
+                    )
+                    
+                    content = self._try_complete(
+                        current_p,
+                        system_prompt,
+                        user_prompt,
+                        model_to_use if current_p == provider_to_use else None,
+                        temperature=temperature
+                    )
                 
                 duration = time.time() - start_time
                 if content:
@@ -486,8 +549,9 @@ class AIService:
                         f"Duration: {duration:.2f}s"
                     )
                     
-                    # METRICS: Increment Counter
+                    # METRICS: Increment Counter + Latency Histogram
                     ai_command_runs_total.labels(provider=current_p).inc()
+                    ai_completion_latency.labels(provider=current_p).observe(duration)
                     
                     return content
                 else:
@@ -633,7 +697,8 @@ class AIService:
         provider: str,
         system_prompt: str,
         user_prompt: str,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        temperature: Optional[float] = None
     ) -> str:
         model_used = model or self.models.get(provider)
         from agent.core.config import config as _cfg
@@ -648,11 +713,14 @@ class AIService:
                     bg_client = self._build_genai_client(provider)
                     
                     timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
-                    config = types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        http_options=types.HttpOptions(timeout=timeout_ms),
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-                    )
+                    gen_config_kwargs = {
+                        "system_instruction": system_prompt,
+                        "http_options": types.HttpOptions(timeout=timeout_ms),
+                        "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+                    }
+                    if temperature is not None:
+                        gen_config_kwargs["temperature"] = temperature
+                    config = types.GenerateContentConfig(**gen_config_kwargs)
                     response_stream = bg_client.models.generate_content_stream(
                         model=model_used,
                         contents=user_prompt,
@@ -670,13 +738,16 @@ class AIService:
 
                 elif provider == "openai":
                     client = self.clients['openai']
-                    response = client.chat.completions.create(
-                        model=model_used,
-                        messages=[
+                    create_kwargs = {
+                        "model": model_used,
+                        "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
-                        ]
-                    )
+                        ],
+                    }
+                    if temperature is not None:
+                        create_kwargs["temperature"] = temperature
+                    response = client.chat.completions.create(**create_kwargs)
                     if response.choices:
                         return response.choices[0].message.content.strip()
                     return ""
@@ -748,17 +819,38 @@ class AIService:
                     full_text = ""
                     # Use streaming to prevent timeouts with large contexts
                     # (similar to Gemini)
-                    with client.messages.stream(
-                        model=model_used,
-                        max_tokens=4096,
-                        system=system_prompt,
-                        messages=[
+                    stream_kwargs = {
+                        "model": model_used,
+                        "max_tokens": 4096,
+                        "system": system_prompt,
+                        "messages": [
                             {"role": "user", "content": user_prompt}
-                        ]
-                    ) as stream:
+                        ],
+                    }
+                    if temperature is not None:
+                        stream_kwargs["temperature"] = temperature
+                    with client.messages.stream(**stream_kwargs) as stream:
                         for text in stream.text_stream:
                             full_text += text
                     return full_text.strip()
+
+                elif provider == "ollama":
+                    # Ollama uses the OpenAI-compatible API
+                    client = self.clients['ollama']
+                    ollama_kwargs = {
+                        "model": model_used,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                    }
+                    if temperature is not None:
+                        ollama_kwargs["temperature"] = temperature
+                    response = client.chat.completions.create(**ollama_kwargs)
+                    if response.choices:
+                        content = response.choices[0].message.content
+                        return content.strip() if content else ""
+                    return ""
                 
             except Exception as e:
                 # Catch-all is necessary because different provider SDKs (Google, OpenAI, Anthropic) 
@@ -773,7 +865,8 @@ class AIService:
                     "gemini": "generativelanguage.googleapis.com",
                     "vertex": "us-central1-aiplatform.googleapis.com",
                     "anthropic": "api.anthropic.com", 
-                    "gh": "models.github.com"
+                    "gh": "models.github.com",
+                    "ollama": "localhost:11434",
                 }
                 target_host = host_map.get(provider, f"Provider: {provider}")
                 

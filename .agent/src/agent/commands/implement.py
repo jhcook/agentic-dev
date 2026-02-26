@@ -431,7 +431,7 @@ def implement(
         False, "--yes", "-y", help="Skip confirmation prompts (use with --apply)."
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."
+        None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
     model: Optional[str] = typer.Option(
         None, "--model", help="Force specific AI model deployment ID."

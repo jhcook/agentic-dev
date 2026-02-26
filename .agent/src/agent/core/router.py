@@ -124,6 +124,11 @@ class SmartRouter:
         If requested 'light', we accept anything.
         If requested 'advanced', we only accept 'advanced'.
         """
+        # Normalize aliases (e.g., Ollama uses "local" which maps to "light")
+        tier_aliases = {"local": "light"}
+        model_tier = tier_aliases.get(model_tier, model_tier)
+        requested_tier = tier_aliases.get(requested_tier, requested_tier)
+
         tiers = ["light", "standard", "advanced"]
         try:
             model_idx = tiers.index(model_tier)

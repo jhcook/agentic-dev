@@ -378,7 +378,7 @@ def preflight(
     story_id: Optional[str] = typer.Option(None, "--story", help="The story ID to validate against."),
     offline: bool = typer.Option(False, "--offline", help="Disable AI-powered governance review."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)"),
     report_file: Optional[Path] = typer.Option(None, "--report-file", help="Path to save the preflight report as JSON."),
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
@@ -394,7 +394,7 @@ def preflight(
         story_id: The ID of the story to validate.
         offline: Disable AI-powered governance review.
         base: Base branch for comparison (defaults to staged changes).
-        provider: Force a specific AI provider (gh, gemini, vertex, openai, anthropic).
+        provider: Force a specific AI provider (gh, gemini, vertex, openai, anthropic, ollama).
         report_file: Path to save the preflight report as JSON.
         skip_tests: Skip running tests.
         ignore_tests: Run tests but ignore failure.
@@ -1297,7 +1297,7 @@ def impact(
     offline: bool = typer.Option(False, "--offline", help="Disable AI-powered impact analysis."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."),
     rebuild_index: bool = typer.Option(False, "--rebuild-index", help="Force rebuild journey file index."),
     json_output: bool = typer.Option(False, "--json", help="Output results as JSON."),
 ):
@@ -1559,7 +1559,7 @@ def impact(
 def panel(
     input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic)."),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."),
     apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
 ):
