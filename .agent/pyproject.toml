@@ -73,6 +73,10 @@ adk = [
     "google-adk>=1.0.0",
 ]
 
+console = [
+    "textual>=0.80.0",
+]
+
 [dependency-groups]
 # uv dev-dependencies are ALWAYS installed by default with `uv sync`/`uv run`.
 # This prevents accidental stripping of admin packages.
@@ -83,6 +87,7 @@ dev = [
     "PyYAML>=6.0",
     "google-adk>=1.0.0",
     "soundfile>=0.13.1",
+    "textual>=0.80.0",
 ]
 
 [project.scripts]

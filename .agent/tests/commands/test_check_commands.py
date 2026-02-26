@@ -263,8 +263,8 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     mock_run.return_value.stdout = "diff"
     mock_run.return_value.returncode = 0
 
-    mock_gov_ai.complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
-    mock_check_ai._try_complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
+    mock_gov_ai.complete.return_value = "VERDICT: PASS\nSUMMARY: All clear\nFINDINGS:\n- None\nREQUIRED_CHANGES:\n- None\nREFERENCES:\n- None\n"
+    mock_check_ai._try_complete.return_value = "VERDICT: PASS\nSUMMARY: All clear\nFINDINGS:\n- None\nREQUIRED_CHANGES:\n- None\nREFERENCES:\n- None\n"
     
     # Run
     with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
@@ -374,3 +374,103 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
     
     # Check Output still contains human readable logs
     assert "Preflight checks passed" in clean_out(result.stdout)
+
+
+# ─── INCONCLUSIVE Detection ──────────────────────────────────────────
+
+@patch("agent.core.governance.ai_service")
+@patch("agent.core.ai.ai_service")
+@patch("agent.commands.check.subprocess.run")
+def test_preflight_inconclusive_when_all_agents_fail(mock_run, mock_check_ai, mock_gov_ai, clean_env):
+    """
+    When all governance agents fail (e.g. auth expired), all findings are
+    filtered and the result should be INCONCLUSIVE, not PASS.
+    """
+    mock_check_ai.provider = "vertex"
+    mock_gov_ai.provider = "vertex"
+    mock_run.return_value.stdout = "diff content"
+    mock_run.return_value.returncode = 0
+
+    # Simulate all agents returning hallucinated findings citing files not in the diff.
+    # The diff validator will filter ALL of these, resulting in INCONCLUSIVE.
+    _hallucinated_response = (
+        "VERDICT: BLOCK\n"
+        "SUMMARY: Found issues\n"
+        "FINDINGS:\n"
+        "- Critical vulnerability in /nonexistent/file.py (Source: /nonexistent/file.py)\n"
+        "REQUIRED_CHANGES:\n"
+        "- Fix /nonexistent/file.py (Source: /nonexistent/file.py)\n"
+        "REFERENCES:\n"
+        "- None\n"
+    )
+    mock_gov_ai.complete.return_value = _hallucinated_response
+    mock_check_ai._try_complete.return_value = _hallucinated_response
+
+    with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
+
+    # Should fail (exit code 1), NOT pass
+    assert result.exit_code == 1
+    out = clean_out(result.output)
+    # Should mention failure, not "Preflight checks passed"
+    assert "Preflight checks passed" not in out
+
+
+@patch("agent.core.governance.ai_service")
+@patch("agent.core.ai.ai_service")
+@patch("agent.commands.check.subprocess.run")
+def test_preflight_passes_when_findings_validated(mock_run, mock_check_ai, mock_gov_ai, clean_env):
+    """
+    When agents run successfully and produce validated findings with a PASS
+    verdict, the preflight should pass normally.
+    """
+    mock_check_ai.provider = "openai"
+    mock_gov_ai.provider = "openai"
+    mock_run.return_value.stdout = "diff"
+    mock_run.return_value.returncode = 0
+
+    mock_gov_ai.complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
+    mock_check_ai._try_complete.return_value = "VERDICT: PASS\nSUMMARY: Good\nFINDINGS:\n- None\n"
+
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
+
+    assert result.exit_code == 0
+    assert "Preflight checks passed" in clean_out(result.output)
+
+
+@patch("agent.core.governance.ai_service")
+@patch("agent.core.ai.ai_service")
+@patch("agent.commands.check.subprocess.run")
+def test_preflight_block_demoted_when_all_refs_hallucinated(mock_run, mock_check_ai, mock_gov_ai, clean_env):
+    """
+    When a governance agent returns BLOCK but ALL of its cited references
+    are hallucinated (do not exist on disk), the BLOCK is demoted to PASS.
+    """
+    mock_check_ai.provider = "openai"
+    mock_gov_ai.provider = "openai"
+    mock_run.return_value.stdout = "diff --git a/test.py\n+hello"
+    mock_run.return_value.returncode = 0
+
+    # Agent returns BLOCK but cites ADR-999 and JRN-999, which do not exist
+    _hallucinated_block = (
+        "VERDICT: BLOCK\n"
+        "SUMMARY: Missing ADR coverage\n"
+        "FINDINGS:\n"
+        "- No ADR covers this pattern (Source: `.agent/src/agent/tui/app.py`)\n"
+        "REQUIRED_CHANGES:\n"
+        "- Create ADR-999 for this pattern (Source: `.agent/adrs/ADR-999.md`)\n"
+        "REFERENCES:\n"
+        "- ADR-999\n"
+        "- JRN-999\n"
+    )
+    mock_gov_ai.complete.return_value = _hallucinated_block
+    mock_check_ai._try_complete.return_value = _hallucinated_block
+
+    with patch.dict("os.environ", {"OPENAI_API_KEY": "dummy"}):
+        result = runner.invoke(app, ["preflight", "--story", "INFRA-123"])
+
+    # BLOCK should have been demoted to PASS because refs are hallucinated
+    assert result.exit_code == 0
+    out = clean_out(result.output)
+    assert "Preflight checks passed" in out

@@ -1,0 +1,65 @@
+# Journey: JRN-072
+# Title: Terminal Console TUI Chat
+# State: COMMITTED
+# Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0.
+
+actor: "Developer"
+description: "Developer uses the terminal-based TUI console for interactive AI-assisted development"
+
+steps:
+  - action: "Run `agent console` from the project root"
+    system_response: "Textual TUI launches in the terminal with a chat interface, status bar, and input field"
+    assertions:
+      - "TUI displays provider and model info in the status bar"
+      - "Chat history panel is visible with a welcome message"
+      - "Input field is focused and ready for typing"
+
+  - action: "Type a question: 'Explain the governance preflight flow'"
+    system_response: "AI streams a response into the chat panel using the configured provider"
+    assertions:
+      - "Response text streams in real-time with markdown rendering"
+      - "Status bar shows the active provider during generation"
+
+  - action: "Type `/help` in the input field"
+    system_response: "System displays a list of all available slash commands"
+    assertions:
+      - "/help, /new, /clear, /conversations, /switch, /delete, /provider, /model, /quit are listed"
+
+  - action: "Type `/new` to start a new conversation"
+    system_response: "A new session is created and the chat panel is cleared"
+    assertions:
+      - "Previous conversation is saved to session store"
+      - "Chat panel shows a fresh welcome message"
+
+  - action: "Type `/conversations` to view saved sessions"
+    system_response: "System displays a numbered list of saved conversation sessions with titles"
+    assertions:
+      - "Each session shows an index number, title, and timestamp"
+      - "Current session is highlighted"
+
+  - action: "Type `/switch 1` to switch to the first conversation"
+    system_response: "Chat panel reloads with the messages from the selected session"
+    assertions:
+      - "Previous messages from session 1 are displayed"
+      - "Status bar updates to reflect the loaded session"
+
+  - action: "Type `/delete 2` to delete a specific conversation"
+    system_response: "System prompts for confirmation before deleting session 2"
+    assertions:
+      - "Confirmation message shown before deletion"
+      - "Session is removed from the session store after confirmation"
+
+  - action: "Type `/provider vertex` to switch AI provider"
+    system_response: "AI provider switches to Vertex AI"
+    assertions:
+      - "Status bar updates to show 'vertex' as the active provider"
+      - "Next query uses the Vertex AI provider"
+
+  - action: "Type `/quit` or press Ctrl+C to exit"
+    system_response: "TUI exits cleanly and returns to the shell"
+    assertions:
+      - "Terminal is restored to normal state"
+      - "Session data is persisted"
+
+linked_stories:
+  - INFRA-087

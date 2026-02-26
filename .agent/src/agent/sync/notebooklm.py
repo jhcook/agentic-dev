@@ -91,6 +91,8 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                             if "Unknown tool" in result_text:
                                 logger.warning("NotebookLM tool not found (often due to missing authentication).")
                                 logger.warning("Please run: agent mcp auth notebooklm")
+                            elif "authentication" in result_text.lower() or "expired" in result_text.lower():
+                                logger.error("NotebookLM authentication expired. Please run: agent mcp auth notebooklm")
                             else:
                                 logger.error(f"Failed to extract notebook ID from response: {result_text}")
                             return "FAILED"

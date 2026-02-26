@@ -171,66 +171,137 @@ class ContextBuilder:
     
     async def _find_relevant_files(self, query: str) -> List[Path]:
         """
-        Find files containing query terms using grep.
-        
+        Find files relevant to query terms, ranked by relevance score.
+
+        Scores each candidate file by keyword hit count and filename match,
+        then returns the top results sorted by descending relevance.
+
         Args:
             query: Search query string.
-            
+
         Returns:
-            List of file paths matching the query.
+            List of file paths matching the query, ranked by relevance.
         """
         import re
         stopwords = {"how", "what", "where", "why", "when", "who", "do", "i", "is", "a", "an", "the", "in", "on", "at", "to", "for", "with", "about", "can", "you", "does", "did", "of"}
         words = re.findall(r'\b\w+\b', query.lower())
         keywords = [w for w in words if w not in stopwords and len(w) > 2]
-        
+
         # Search directories
-        search_dirs = self.search_dirs
-        
+        search_dirs = list(self.search_dirs)
+
         # Add README if exists
         readme = self.root_dir / "README.md"
         if readme.exists():
             search_dirs.append(readme)
-        
+
         # Filter to existing paths
         existing_dirs = [str(d) for d in search_dirs if d.exists()]
-        
+
         if not existing_dirs:
             logger.warning("No search directories found")
             return []
-            
+
         pattern = "|".join(keywords[:5]) if keywords else query
-        
-        # Use grep for fast search (case-insensitive, files only)
+
         try:
-            cmd = ['grep', '-rilE', '--include=*.py', '--include=*.md', 
+            # Phase 1: find candidate files (grep -ril)
+            cmd = ['grep', '-rilE', '--include=*.py', '--include=*.md',
                    '--include=*.yaml', '--include=*.yml', '--include=*.txt',
                    pattern] + existing_dirs
-            
+
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
-            
+
             if proc.returncode is not None and proc.returncode > 1:
-                # grep error
                 logger.warning(f"grep error: {stderr.decode()}")
                 return []
-            
-            found_files = []
+
+            candidates = []
             for line in stdout.decode().strip().split('\n'):
                 if line:
                     path = Path(line)
                     if not self._is_ignored(path) and not self._is_binary_file(path):
-                        found_files.append(path)
-            
-            return found_files[:20]  # Limit to 20 files
-            
+                        candidates.append(path)
+
+            if not candidates:
+                return []
+
+            # Phase 2: score each candidate by keyword hit count
+            scored = await self._score_files(candidates, keywords, pattern)
+
+            # Sort by score descending, return top 20
+            scored.sort(key=lambda x: x[1], reverse=True)
+            ranked = [path for path, _score in scored[:20]]
+
+            if ranked:
+                logger.info(f"Top result: {ranked[0]} (score={scored[0][1]})")
+
+            return ranked
+
         except Exception as e:
             logger.warning(f"Search failed: {e}")
             return []
+
+    async def _score_files(
+        self,
+        candidates: List[Path],
+        keywords: List[str],
+        pattern: str,
+    ) -> list:
+        """
+        Score candidate files by relevance to the query keywords.
+
+        Scoring formula per file:
+          - +1 per matching line in file content  (grep -ciE)
+          - +3 per keyword that appears in the filename
+
+        Args:
+            candidates: List of file paths found by initial grep.
+            keywords: Extracted query keywords (lowercased).
+            pattern: The grep regex pattern string.
+
+        Returns:
+            List of (path, score) tuples.
+        """
+        # Count matching lines per file with grep -ciE (count, case-insensitive)
+        cmd = ['grep', '-ciE', pattern] + [str(p) for p in candidates]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+
+        # Parse "filepath:count" output
+        hit_counts: dict[str, int] = {}
+        for line in stdout.decode().strip().split('\n'):
+            if ':' in line:
+                # rsplit to handle paths with colons (unlikely but safe)
+                file_part, _, count_part = line.rpartition(':')
+                try:
+                    hit_counts[file_part] = int(count_part)
+                except ValueError:
+                    pass
+
+        scored = []
+        for path in candidates:
+            score = hit_counts.get(str(path), 0)
+
+            # Filename boost: +3 per keyword found in the basename
+            basename_lower = path.stem.lower()
+            for kw in keywords:
+                if kw in basename_lower:
+                    score += 3
+
+            scored.append((path, score))
+
+        return scored
     
     def _read_and_scrub_file(self, file_path: Path) -> str:
         """

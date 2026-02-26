@@ -106,13 +106,15 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 | `agent config` | Manage configuration |
 | `agent secret` | Manage encrypted secrets |
 | `agent admin` | Launch management console |
+| `agent console` | Interactive terminal TUI for AI-assisted development ([guide](.agent/docs/console.md)) |
 | `agent mcp` | Manage MCP servers |
 | `agent import` | Import artifacts from external sources |
 | `agent onboard` | Interactive onboarding wizard |
 
 ### MCP Authentication
 
-The `agent mcp auth` command manages authentication for MCP servers (e.g., NotebookLM).
+The `agent mcp auth` command manages authentication for MCP servers (e.g., NotebookLM). See the [NotebookLM Integration Guide](.agent/docs/notebooklm.md) for full setup and configuration.
+
 - `--auto`: Automatically extracts session cookies from a supported local browser using the OS-native keychain (requires explicit GDPR consent).
 - `--file <path>`: Uses a file-based cookie import from the provided path instead of launching Chrome interactively.
 - `--no-auto-launch`: Prints instructions for manual cookie extraction instead of launching the interactive browser script.
@@ -150,6 +152,7 @@ agent query "how does the router work?" --provider ollama
 - [Credential Security](docs/credential-security.md) — AES-256 and native OS keyring integration
 - [Developer Experience](docs/developer-experience.md) — Frictionless operations via `match-story`, `commit`, and `pr`
 - [Admin and Voice](docs/admin-and-voice.md) — Embedded visibility and continuous UX refinement
+- [NotebookLM Integration](.agent/docs/notebooklm.md) — Configuration, authentication, and sync for NotebookLM MCP
 - [ADRs](.agent/adrs/) — Architectural decision records
 - [Workflows](.agent/workflows/) — Detailed workflow instructions
 
@@ -159,16 +162,4 @@ Apache License 2.0
 
 ## Copyright
 
-Copyright 2024-2026 Google LLC
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright 2026 Justin Cook
