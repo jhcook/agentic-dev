@@ -206,9 +206,14 @@ def make_interactive_tools(
             # Use Popen for real-time streaming of output lines.
             # We use shell=True as requested by the user to support pipes/redirections.
             # Sandbox safety is managed by path validation above.
+            import os
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            
             proc = subprocess.Popen(
                 command,
                 cwd=str(repo_root),
+                env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

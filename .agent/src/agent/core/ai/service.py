@@ -1025,27 +1025,33 @@ class AIService:
                          if attempt < rate_limit_max - 1:
                              # Base 5s, then 10s, 20s, up to 60s
                              wait_time = min(5 * (2 ** attempt), 60)
-                             console.print(
+                             msg = (
                                  f"[yellow]⚠️ Rate limit ({provider}). "
                                  f"Backoff retry {attempt+1}/{rate_limit_max} "
                                  f"in {wait_time}s...[/yellow]"
                              )
+                             console.print(msg)
+                             logging.warning(f"Rate limit ({provider}). Backoff retry {attempt+1}/{rate_limit_max} in {wait_time}s")
                              time.sleep(wait_time)
                              continue
                          else:
-                             console.print(
+                             msg = (
                                  f"[yellow]⚠️ Rate limit ({provider}). "
                                  f"Exhausted {rate_limit_max} retries, "
                                  f"switching providers...[/yellow]"
                              )
+                             console.print(msg)
+                             logging.error(f"Rate limit ({provider}). Exhausted {rate_limit_max} retries.")
                              raise e
                     
                     wait_time = (attempt + 1) * 2
-                    console.print(
+                    msg = (
                         f"[yellow]⚠️ AI Provider error: {e}. "
                         f"Retrying ({attempt+1}/{max_retries}) "
                         f"in {wait_time}s...[/yellow]"
                     )
+                    console.print(msg)
+                    logging.warning(f"AI Provider error: {e}. Retrying ({attempt+1}/{max_retries}) in {wait_time}s")
                     time.sleep(wait_time)
                     continue
                 else:
