@@ -23,7 +23,7 @@ conversation.
 Journey refs: JRN-088 steps 1-6 (agentic tools only via workflows)
 """
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 

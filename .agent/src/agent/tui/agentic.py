@@ -142,7 +142,7 @@ class LocalToolClient:
                     # Specific fix for "input" key
                     arguments = {pname: arguments["input"]}
 
-            result = fn(**arguments)
+            result = await asyncio.to_thread(fn, **arguments)
             return _ToolResult(content=str(result))
         except Exception as e:
             logger.error(f"Tool '{name}' failed: {e}", exc_info=True)
@@ -214,7 +214,6 @@ async def run_agentic_loop(
 
     # 5. Run the executor and handle streamed events
     try:
-        from agent.core.engine.executor import AgentEvent
         async for event in executor.run(user_prompt=full_user_prompt):
             event_type = event.get("type")
 

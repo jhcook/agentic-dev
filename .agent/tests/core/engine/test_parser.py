@@ -15,7 +15,6 @@
 """Tests for ReActJsonParser — comprehensive coverage of all 3 extraction
 strategies and the brace-counting _extract_json helper."""
 
-import pytest
 from agent.core.engine.parser import ReActJsonParser
 from agent.core.engine.typedefs import AgentAction, AgentFinish
 

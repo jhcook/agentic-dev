@@ -90,13 +90,14 @@ def _build_system_prompt() -> str:
         "## Formatting Rules\n"
         "1. **Be Concise**: Keep responses short unless asked for detail.\n"
         "2. **Think Before Acting**: Use the ReAct format to `Thought:` about what to do, then use an `Action:`.\n"
-        "3. **Direct Answers**: When providing the Final Answer, be direct and assertive. No filler.\n"
-        "4. **Infer Context**: If asked about the current state, proactively "
+        "3. **Direct Answers**: When providing the Final Answer, be direct and assertive. No filler. Do not narrate your actions (e.g., avoid \"I will now...\", \"I have...\").\n"
+        "4. **No Apologies**: If an error is pointed out, acknowledge it briefly and provide the correction. Do not apologize.\n"
+        "5. **Infer Context**: If asked about the current state, proactively "
         "check git branches, logs, or status files without asking permission.\n"
-        "5. **Technical Output**: All technical lists (files, git status, logs) "
+        "6. **Technical Output**: All technical lists (files, git status, logs) "
         "MUST be inside markdown code blocks.\n"
-        "6. **Never Guess**: When asked about code, read the file first.\n"
-        "7. Assume the role of Engineering Lead, Developer, or Release "
+        "7. **Never Guess**: When asked about code, read the file first.\n"
+        "8. Assume the role of Engineering Lead, Developer, or Release "
         "Coordinator as needed.\n\n"
         "## Project Layout\n"
         "```\n"
@@ -110,8 +111,12 @@ def _build_system_prompt() -> str:
         "│   ├── adrs/            # Architecture Decision Records\n"
         "│   └── docs/            # Project documentation\n"
         "├── CHANGELOG.md\n"
-        "└── README.md\n"
+                "└── README.md\n"
         "```\n\n"
+        "## Slash Commands & Workflows\n"
+        "1. **Workflow Priority**: For any message starting with `/` (e.g., `/commit`, `/story`), you MUST first use `read_file` to retrieve the corresponding workflow definition from `.agent/workflows/[command].md`.\n"
+        "2. **Strict Adherence**: Follow the steps in the workflow precisely. Assumptions lead to regressions.\n"
+        "3. **Role Adoption**: If the workflow specifies a role (e.g., @Architect, @Security), adopt that persona's priorities and checks.\n\n"
         "## Tool Creation\n"
         "You are **self-evolving**. If you lack a tool, build one:\n"
         "1. Write the tool function with `edit_file` to "
@@ -141,9 +146,11 @@ def _build_system_prompt() -> str:
             + "\n```\n\n"
             "For CSS/JS files, wrap in `/* */` block comments.\n"
             "For Markdown, use the raw text at the top of the file.\n\n"
-            "The template lives at `.agent/templates/license_header.txt`. "
-            "You can also call `agent.core.utils.get_full_license_header(prefix)` "
-            "programmatically to get the formatted header for any comment style.\n\n"
+                        "The template lives at `.agent/templates/license_header.txt`. You can also call `agent.core.utils.get_full_license_header(prefix)` programmatically to get the formatted header for any comment style.\n\n"
+            "## Interaction Style\n"
+            "- **Assertive & Neutral**: Use a professional, engineering-focused tone. \n"
+            "- **Action-Oriented**: Focus on state changes and verification.\n"
+            "- **Minimalist**: Use the smallest possible tool calls to achieve the goal.\n"
         )
 
     return prompt
@@ -175,10 +182,8 @@ search results from tool use are sent to the external AI provider
 you have configured. Do not use tools on files containing secrets
 or sensitive personal data.
 
-[dim]Key Shortcuts:[/dim]
-  [bold]Tab[/bold]       Switch between panels
-  [bold]↑ ↓[/bold]       Navigate lists
-  [bold]Enter[/bold]     Select / Send message
+  [bold]Ctrl+C / Q[/bold] Exit the console
+  [bold]Ctrl+Y[/bold]       Copy chat to clipboard
   [bold]/help[/bold]     Show all commands
 
 [dim]Conversations are stored locally in .agent/cache/console.db[/dim]
@@ -350,12 +355,13 @@ class ConsoleApp(App):
     """The main Agent Console TUI application."""
 
     CSS_PATH = "styles.tcss"
-
     BINDINGS = [
         Binding("tab", "focus_next", "Next Panel", show=False),
         Binding("shift+tab", "focus_previous", "Previous Panel", show=False),
         Binding("escape", "dismiss_modal", "Dismiss", show=False),
-        Binding("ctrl+c", "copy_or_quit", "Copy / Quit", show=False, priority=False),
+        Binding("ctrl+c", "quit", "Quit", show=False, priority=True),
+        Binding("ctrl+q", "quit", "Quit", show=False),
+        Binding("ctrl+y", "copy", "Copy", show=False),
     ]
 
     def __init__(
@@ -428,11 +434,9 @@ class ConsoleApp(App):
         # Session store
         self._store = SessionStore()
 
-        # Token budget — use the selected model's context window from router.yaml,
-        # falling back to 128K (appropriate for modern LLMs like Gemini 2.5 Pro).
-        # NOTE: query.yaml's max_context_tokens (8192) is for `agent query`, not console.
-        max_tokens = self._get_model_context_window()
-        self._token_budget = TokenBudget(max_tokens=max_tokens)
+        # Token budget
+        self._token_budget = TokenBudget(max_tokens=128_000)
+        self._refresh_token_budget()
 
         # Provider setup
         from agent.core.ai import ai_service
@@ -527,6 +531,15 @@ class ConsoleApp(App):
         self._session_start_time = time.monotonic()
         logger.info("console.session.start", extra={"session_id": self._session.id})
 
+    def _refresh_token_budget(self) -> None:
+        """Recalculate and update the token budget for the current model."""
+        if not self._token_budget:
+            return
+        new_max = self._get_model_context_window()
+        if self._token_budget.max_tokens != new_max:
+            self._token_budget.max_tokens = new_max
+            self._update_status_bar()
+
     def _write_system(self, text: str) -> None:
         """Write a system message to the chat output."""
         log = self.query_one("#chat-output", SelectionLog)
@@ -554,9 +567,13 @@ class ConsoleApp(App):
         self._streaming_text += text
         stream = self.query_one("#assistant-stream", Static)
         stream.update(self._streaming_text)
-        # Auto-scroll the main log to keep the stream in view if it grows
-        log = self.query_one("#chat-output", SelectionLog)
-        log.scroll_end(animate=False)
+
+        # Throttle scroll_end to avoid flooding the event loop
+        now = time.time()
+        if not hasattr(self, "_last_scroll_time") or now - self._last_scroll_time > 0.1:
+            log = self.query_one("#chat-output", SelectionLog)
+            log.scroll_end(animate=False)
+            self._last_scroll_time = now
 
     def _write_final_answer(self, text: str) -> None:
         """Render the complete AI response as a single block in the log."""
@@ -750,6 +767,9 @@ class ConsoleApp(App):
             self._write_system("[dim]New conversation started.[/dim]")
             self._update_status_bar()
 
+        elif cmd == "copy":
+            self.action_copy()
+
         elif cmd == "conversations":
             sessions = self._store.list_sessions()
             if not sessions:
@@ -826,6 +846,7 @@ class ConsoleApp(App):
             log = self.query_one("#chat-output", SelectionLog)
             log.clear()
             self._replay_history()
+            self._refresh_token_budget()
             self._update_status_bar()
             logger.info(
                 "console.session.switch",
@@ -920,6 +941,7 @@ class ConsoleApp(App):
                                 self._write_system(
                                     f"[green]✓ Provider switched to: {chosen}[/green]"
                                 )
+                                self._refresh_token_budget()
                             except Exception as e:
                                 from rich.markup import escape as _esc
                                 self._write_system(f"[red]Error: {_esc(str(e))}[/red]")
@@ -982,6 +1004,7 @@ class ConsoleApp(App):
                         self._write_system(
                             f"[green]✓ Model set to: {query}[/green]"
                         )
+                    self._refresh_token_budget()
                 except Exception:
                     # Fallback: set directly
                     if self._session:
@@ -1007,6 +1030,7 @@ class ConsoleApp(App):
                                 self._write_system(
                                     f"[green]✓ Model set to: {chosen}[/green]"
                                 )
+                                self._refresh_token_budget()
                                 self._update_status_bar()
                         self.push_screen(
                             PickerModal("Select Model", items),
@@ -1167,9 +1191,13 @@ class ConsoleApp(App):
     def _write_tool_output(self, line: str) -> None:
         """Display a real-time line of tool output in the exec panel."""
         from rich.markup import escape
-        exec_log = self.query_one("#exec-output", SelectionLog)
-        exec_log.display = True
-        exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
+        
+        def _update():
+            exec_log = self.query_one("#exec-output", SelectionLog)
+            exec_log.display = True
+            exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
+            
+        self.call_from_thread(_update)
 
     # ── Search ──────────────────────────────────────────────────────
 
@@ -1486,6 +1514,9 @@ class ConsoleApp(App):
             self._write_system(
                 f"[bold cyan]🤖 Switched to {display} ({provider})[/bold cyan]"
             )
+
+            # Refresh token budget for the new model
+            self._refresh_token_budget()
         else:
             self._write_system(
                 f"[red]Provider '{provider}' is not configured.[/red]"
@@ -1526,15 +1557,20 @@ class ConsoleApp(App):
         if len(self.screen_stack) > 1:
             self.pop_screen()
 
+    def action_copy(self) -> None:
+        """Copy the entire chat history to the system clipboard."""
+        import subprocess
+        full_text = "\n".join(self._chat_text)
+        try:
+            process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+            process.communicate(full_text.encode('utf-8'))
+            self.notify("Chat copied to clipboard", title="Copy Success")
+        except Exception as e:
+            self.notify(f"Could not copy: {e}", severity="error")
+
     def action_copy_or_quit(self) -> None:
-        """Ctrl+C: Show quit hint (copy is handled natively by Textual when text is selected)."""
-        for _key, active_binding in self.active_bindings.items():
-            if active_binding.binding.action in ("quit", "app.quit"):
-                self.notify(
-                    f"Press [b]{_key}[/b] to quit the app",
-                    title="Do you want to quit?",
-                )
-                return
+        """Ctrl+C: Standard interrupt behavior (Quit)."""
+        self.action_quit()
 
     @staticmethod
     def _fuzzy_match(query: str, candidates: list[str]) -> str | None:

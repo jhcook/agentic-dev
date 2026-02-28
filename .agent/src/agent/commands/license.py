@@ -28,7 +28,7 @@ def apply_license_to_file(filepath: Path) -> bool:
     if not filepath.exists() or not filepath.is_file():
         return False
         
-    if not (filepath.suffix in [".py", ".yaml", ".yml"]):
+    if filepath.suffix not in [".py", ".yaml", ".yml"]:
         return False
 
     target_header = get_full_license_header().strip()

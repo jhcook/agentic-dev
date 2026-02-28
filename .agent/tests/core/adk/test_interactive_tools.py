@@ -18,9 +18,6 @@ Verifies edit_file, run_command, find_files, and grep_search
 tool functions including security boundary enforcement.
 """
 
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 

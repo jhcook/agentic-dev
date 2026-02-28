@@ -625,7 +625,6 @@ class AIService:
         self._ensure_initialized()
         provider = self.provider or "gemini"
         model_used = model or self.models.get(provider)
-        from agent.core.config import config as _cfg
 
         timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
 
@@ -884,9 +883,9 @@ class AIService:
                     # Context Limit / Payload Too Large
                     if "too large" in err or "413" in err or "context length" in err:
                         console.print(
-                            f"[red]❌ GH Models Context Limit Exceeded. "
-                            f"The prompt is too large for the 'gh' provider (approx 8k tokens). "
-                            f"Please use Gemini or OpenAI for larger tasks.[/red]"
+                            "[red]❌ GH Models Context Limit Exceeded. "
+                            "The prompt is too large for the 'gh' provider (approx 8k tokens). "
+                            "Please use Gemini or OpenAI for larger tasks.[/red]"
                         )
                         # Do not retry context errors, they won't succeed
                         raise Exception("GH Context Limit Exceeded")

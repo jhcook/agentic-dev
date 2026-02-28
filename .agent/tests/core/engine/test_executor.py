@@ -13,10 +13,9 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 from agent.core.engine.executor import AgentExecutor, MaxStepsExceeded
-from agent.core.engine.typedefs import AgentAction, AgentFinish, AgentStep
 from agent.core.mcp.client import Tool
 
 @pytest.mark.anyio

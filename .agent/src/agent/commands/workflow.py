@@ -18,7 +18,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.prompt import Prompt
 
 from agent.commands.check import preflight  # Verify import works or move core logic
 from agent.core.utils import infer_story_id
@@ -120,8 +119,8 @@ def pr(
                  generated = ai_service.complete(sys_prompt, user_prompt)
                  if generated:
                      summary = generated.strip()
-        except Exception as e:
-             console.print(f"[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
+        except Exception:
+             console.print("[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
              content = typer.edit(text=commit_msg)
              if content:
                  summary = content.strip()
@@ -213,8 +212,8 @@ def commit(
                  generated = ai_service.complete(sys_prompt, user_prompt)
                  if generated:
                      message = generated.strip().strip('"').strip("'")
-        except Exception as e:
-             console.print(f"[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
+        except Exception:
+             console.print("[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
 
     if is_interactive and not yes:
         message = typer.edit(text=message or "")

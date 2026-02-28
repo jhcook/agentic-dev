@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import json
-import pytest
 from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 from agent.commands.mcp import app

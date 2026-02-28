@@ -15,7 +15,6 @@
 import asyncio
 import json
 import logging
-import sys
 from typing import Optional
 
 import typer
@@ -28,7 +27,6 @@ from agent.core.secrets import get_secret, get_secret_manager, SecretManager
 from opentelemetry import trace
 import subprocess
 import shutil
-from pathlib import Path
 from rich.prompt import Confirm
 
 
@@ -75,7 +73,6 @@ def _get_github_token() -> str:
     # We try this BEFORE prompting for unlock, because if gh is logged in,
     # we don't want to block automation/user flow.
     import subprocess
-    import shutil
     
     if shutil.which("gh"):
         try:

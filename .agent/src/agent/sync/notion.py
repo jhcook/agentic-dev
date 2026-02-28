@@ -21,7 +21,6 @@ import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-import typer
 from rich.prompt import Confirm
 
 from agent.core.config import config

@@ -15,7 +15,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from backend.voice.tools.interactive_shell import start_interactive_shell, send_shell_input
-from backend.voice.process_manager import ProcessLifecycleManager
 
 @pytest.fixture
 def mock_lifecycle():

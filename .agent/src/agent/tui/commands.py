@@ -22,7 +22,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import yaml
 
@@ -55,7 +55,7 @@ class ParsedInput:
 # Built-in commands that are handled by the TUI directly
 BUILTIN_COMMANDS = {
     "help", "quit", "new", "conversations", "history", "switch", "delete",
-    "clear", "provider", "model", "rename", "search", "tools",
+    "clear", "provider", "model", "rename", "search", "tools", "copy",
 }
 
 # Command aliases (alias -> canonical name)
@@ -249,8 +249,8 @@ def format_help_text(
         "  /model [name]     Set model override",
         "  /tools            Show available agentic tools",
         "  /search <query>   Search output (n=next, r=reverse)",
-        "  /copy             Copy chat to clipboard (or Ctrl+Y)",
-        "  /quit             Exit the console",
+        "  /copy             Copy chat to clipboard (Ctrl+Y)",
+        "  /quit             Exit the console (Ctrl+C or Ctrl+Q)",
         "",
         "╭─── Workflows ───╮",
         "",

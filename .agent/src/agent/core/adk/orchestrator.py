@@ -31,7 +31,6 @@ import asyncio
 import logging
 import re
 import time
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from google.adk.agents import LlmAgent
@@ -282,7 +281,6 @@ async def _orchestrate_async(
         _validate_finding_against_source,
         _validate_references,
     )
-    import re as _re
 
     _all_valid_refs = []
     _all_invalid_refs = []

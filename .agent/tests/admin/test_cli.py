@@ -31,7 +31,6 @@ def test_start_success(process_manager, tmp_path):
     (tmp_path / ".agent" / "logs").mkdir(parents=True)
 
     # Patch config paths to use tmp_path
-    from agent.core.config import config as real_config
     with patch("subprocess.Popen") as mock_popen, \
          patch("agent.commands.admin.open", new_callable=MagicMock), \
          patch.object(process_manager, "_get_pids", return_value=None), \

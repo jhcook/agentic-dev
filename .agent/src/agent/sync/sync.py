@@ -347,7 +347,6 @@ def push_safe(timeout: int = 2, verbose: bool = False, artifact_id: str = None):
     Designed for secondary targets (like Notion) that should not block the CLI.
     Swallows errors and enforces a strict timeout.
     """
-    import signal
     import threading
 
     def _target():

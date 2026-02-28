@@ -16,8 +16,6 @@ import typer
 
 from agent.sync import sync as sync_ops
 from agent.core.auth.decorators import with_creds
-from agent.core.notion.client import NotionClient
-from agent.sync.janitor import NotionJanitor
 import logging
 
 logger = logging.getLogger(__name__)

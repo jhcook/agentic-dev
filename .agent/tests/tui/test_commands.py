@@ -14,8 +14,6 @@
 
 """Tests for console command parser (INFRA-087)."""
 
-import tempfile
-from pathlib import Path
 
 import pytest
 import yaml

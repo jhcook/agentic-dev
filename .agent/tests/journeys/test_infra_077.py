@@ -21,7 +21,6 @@ from agent.sync.cli import app as sync_app
 
 runner = CliRunner()
 
-import sys
 
 @pytest.mark.journey("INFRA-077")
 @patch("agent.core.secrets.get_secret")

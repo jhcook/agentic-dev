@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from agent.sync.notebooklm import _sync_notebook, extract_uuid, ensure_notebooklm_sync
-import asyncio
+from agent.sync.notebooklm import _sync_notebook, extract_uuid
 
 def test_extract_uuid():
     """Test UUID extraction from text."""

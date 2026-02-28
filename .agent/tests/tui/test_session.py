@@ -15,13 +15,10 @@
 """Tests for SessionStore and TokenBudget (INFRA-087)."""
 
 import os
-import stat
-import tempfile
-from pathlib import Path
 
 import pytest
 
-from agent.tui.session import ConversationSession, Message, SessionStore, TokenBudget
+from agent.tui.session import Message, SessionStore, TokenBudget
 
 
 @pytest.fixture

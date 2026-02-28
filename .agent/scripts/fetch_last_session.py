@@ -51,7 +51,7 @@ def main():
             with open(last_file, 'r') as f:
                 print(f.read())
             sys.exit(0)
-        except Exception as e:
+        except Exception:
             pass
             
     # 2. Fallback to API checks

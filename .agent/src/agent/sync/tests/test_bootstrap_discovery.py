@@ -14,7 +14,6 @@
 
 """Tests for NotionBootstrap database discovery logic."""
 
-import json
 import pytest
 from unittest.mock import patch, MagicMock
 

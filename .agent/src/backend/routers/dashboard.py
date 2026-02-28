@@ -14,7 +14,7 @@
 
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
-from backend.routers.governance import scan_artifacts, Artifact
+from backend.routers.governance import scan_artifacts
 from typing import Any
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])

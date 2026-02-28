@@ -14,7 +14,6 @@
 
 """Conversation session persistence and token budget management (INFRA-087)."""
 
-import json
 import logging
 import os
 import sqlite3
@@ -22,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

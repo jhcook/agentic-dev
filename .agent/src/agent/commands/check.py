@@ -15,7 +15,7 @@
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from agent.core.logger import get_logger
 
@@ -29,7 +29,7 @@ import os
 from agent.core.ai.prompts import generate_impact_prompt
 from agent.core.config import config
 from agent.core.context import context_loader
-from agent.core.governance import convene_council_full, _extract_references, _validate_references
+from agent.core.governance import convene_council_full
 from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.fixer import InteractiveFixer
 
@@ -855,13 +855,13 @@ def preflight(
                                                      text=True
                                                  )
                                                  if vr.returncode != 0:
-                                                     console.print(f"[red]❌ Verification Failed:[/red]")
+                                                     console.print("[red]❌ Verification Failed:[/red]")
                                                      console.print(vr.stdout + vr.stderr)
                                                      return False
                                                  return True
 
                                              if fixer.verify_fix(verification_callback):
-                                                 console.print(f"[bold green]✅ Test Passed![/bold green]")
+                                                 console.print("[bold green]✅ Test Passed![/bold green]")
                                                  # Fix verified. We should re-run the main task loop to ensure everything is clean,
                                                  # or at least mark this specific test run as passed?
                                                  # Problem: The main `res` object still holds the failure.
@@ -1177,7 +1177,7 @@ def preflight(
                     lines = []
                     lines.append("VERDICT: BLOCK")
                     if summary:
-                        lines.append(f"SUMMARY:")
+                        lines.append("SUMMARY:")
                         lines.append(f"{summary}")
                     if findings:
                         lines.append("FINDINGS:")

@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 # Setup Path to import Agent Core
 
@@ -31,7 +31,6 @@ SRC_DIR = AGENT_DIR / "src"
 sys.path.append(str(SRC_DIR))
 
 from agent.core.mcp.client import MCPClient
-from agent.core.config import config
 
 # Logging
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -131,7 +130,6 @@ class NotionSchemaManager:
     async def _validate_parent_is_page(self) -> bool:
         """Verifies that self.page_id refers to a Page, not a Database."""
         import urllib.request
-        from agent.core.net_utils import check_ssl_error
 
         # 1. Check if it is a DATABASE (which is invalid for parenting databases)
         url_db = f"https://api.notion.com/v1/databases/{self.page_id}"

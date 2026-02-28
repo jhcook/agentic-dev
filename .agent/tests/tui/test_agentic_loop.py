@@ -18,9 +18,8 @@ Verifies provider function-calling detection and the async run_agentic_loop
 bridge to AgentExecutor.
 """
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

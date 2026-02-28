@@ -215,8 +215,8 @@ Generate the journey YAML now.
                     edited_content = typer.edit(text=ai_content)
                     if edited_content:
                         content = edited_content
-        except Exception as e:
-            console.print(f"[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
+        except Exception:
+            console.print("[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
             edited_content = typer.edit(text=content)
             if edited_content:
                 content = edited_content
@@ -842,7 +842,7 @@ def backfill_tests(
     # Summary metrics
     total = len(eligible)
     if not offline:
-        console.print(f"\n[bold]Summary:[/bold]")
+        console.print("\n[bold]Summary:[/bold]")
         console.print(f"  Total processed: {total}")
         console.print(f"  Written:         {written}")
         console.print(f"  AI successes:    {ai_successes}")

@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import json
 import logging
 import re
-from pathlib import Path
 
 from agent.core.config import config
 from agent.core.mcp.client import MCPClient
@@ -97,7 +95,7 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                                 logger.error(f"Failed to extract notebook ID from response: {result_text}")
                             return "FAILED"
                     except Exception as e:
-                        logger.warning(f"NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
+                        logger.warning("NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
                         logger.debug(f"Details: {e}")
                         return "FAILED"
                         

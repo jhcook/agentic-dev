@@ -15,11 +15,8 @@
 
 import subprocess
 import atexit
-import signal
-import weakref
 import logging
 import threading
-from typing import Set
 
 logger = logging.getLogger(__name__)
 

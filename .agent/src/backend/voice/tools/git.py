@@ -307,7 +307,6 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
         
         # Background reader
         def read_output():
-            import threading
             import re
             
             pr_url = None
