@@ -54,6 +54,7 @@ from agent.commands import (
     voice,
     workflow,
     query,
+    review_chat as review_chat_cmd,
 )
 
 app = typer.Typer()
@@ -75,7 +76,6 @@ def cli(
     if version:
         try:
             import sys
-            import os
             from pathlib import Path
 
             if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -137,6 +137,7 @@ app.command(name="new-runbook")(with_creds(runbook.new_runbook))
 app.command(name="new-journey")(journey.new_journey)
 app.command(name="validate-journey")(journey.validate_journey)
 app.command(name="review-voice")(with_creds(voice.review_voice))
+app.command(name="review-chat")(review_chat_cmd.review_chat)
 
 app.command(name="new-adr")(adr.new_adr)
 

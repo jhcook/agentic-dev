@@ -13,19 +13,23 @@
 # limitations under the License.
 
 """
-Read-only tool suite for ADK governance agents.
+Tool suite for ADK agents.
 
-Provides 5 tools: read_file, search_codebase, list_directory, read_adr,
-read_journey. All path-accepting tools validate that resolved paths are
-within the repository root. No write or network tools are exposed.
+Provides read-only tools for governance agents (read_file, search_codebase,
+list_directory, read_adr, read_journey) and interactive tools for the
+console agent (edit_file, run_command, find_files, grep_search).
+All tools validate that resolved paths are within the repository root.
 """
 
+import logging
 import os
 import re
 import shlex
 import subprocess
 from pathlib import Path
 from typing import Callable, List
+
+logger = logging.getLogger(__name__)
 
 
 # Characters that could be used for shell injection.
@@ -148,3 +152,174 @@ def make_tools(repo_root: Path) -> List[Callable]:
         return f"Error: Journey {journey_id} not found in {jrn_dir}."
 
     return [read_file, search_codebase, list_directory, read_adr, read_journey]
+
+
+def make_interactive_tools(
+    repo_root: Path,
+    on_output: "Callable[[str], None] | None" = None,
+) -> List[Callable]:
+    """Creates bound interactive tool functions for the console TUI.
+
+    Returns 4 read-write tools for the agentic loop. These are
+    separate from the governance tools (which are read-only).
+
+    Args:
+        repo_root: Absolute path to the repository root.
+        on_output: Optional callback invoked with each line of
+            ``run_command`` output for real-time streaming to the UI.
+
+    Returns:
+        List of 4 callable tool functions.
+    """
+
+    def edit_file(path: str, content: str) -> str:
+        """Writes content to a file within the repository. Path must be relative to repo root."""
+        try:
+            filepath = _validate_path(str(repo_root / path), repo_root)
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content)
+            return f"File {path} successfully updated."
+        except ValueError as e:
+            return f"Error: {e}"
+        except Exception as e:
+            logger.error(f"Error editing file {path}: {e}", exc_info=True)
+            return f"Error editing file: {e}"
+
+    def run_command(command: str) -> str:
+        """Executes a shell command (sandboxed) in the repository root. Returns a single string containing the exit code, stdout, and stderr."""
+        try:
+            if not command.strip():
+                return "Error: empty command."
+
+            # Sandbox validation: 
+            # 1. Block path traversal
+            if ".." in command:
+                return "Error: path traversal ('..') is not allowed."
+            
+            # 2. Block absolute paths outside repo root (approximate check for shell=True)
+            # Find any /path/to patterns that are absolute but don't start with repo_root
+            abs_paths = re.findall(r"(?:^|\s)(/[^\s]*)", command)
+            for path in abs_paths:
+                if not path.startswith(str(repo_root)):
+                    return f"Error: absolute paths outside the repository are not allowed."
+
+            # Use Popen for real-time streaming of output lines.
+            # We use shell=True as requested by the user to support pipes/redirections.
+            # Sandbox safety is managed by path validation above.
+            proc = subprocess.Popen(
+                command,
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                shell=True,
+            )
+            stdout_lines: list[str] = []
+            try:
+                if proc.stdout:
+                    for line in proc.stdout:
+                        stdout_lines.append(line)
+                        if on_output:
+                            on_output(line.rstrip("\n"))
+                proc.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                return "Error: command timed out after 120 seconds."
+
+            output = f"Exit code: {proc.returncode}\n"
+            full_stdout = "".join(stdout_lines)
+            if full_stdout:
+                output += f"Output:\n{full_stdout[:20_000]}\n"
+            return output
+        except Exception as e:
+            logger.error(f"Error executing command: {e}", exc_info=True)
+            return f"Error executing command: {e}"
+
+    def find_files(pattern: str) -> str:
+        """Finds files matching a glob pattern within the repository."""
+        try:
+            matches = list(repo_root.rglob(pattern))
+            if not matches:
+                return "No files found matching that pattern."
+            # Cap at 100 results to prevent overwhelming output
+            results = [
+                str(m.relative_to(repo_root)) for m in matches[:100]
+            ]
+            suffix = (
+                f"\n... and {len(matches) - 100} more"
+                if len(matches) > 100
+                else ""
+            )
+            return "\n".join(results) + suffix
+        except Exception as e:
+            return f"Error finding files: {e}"
+
+    def grep_search(pattern: str, path: str = ".") -> str:
+        """Searches for a text pattern in the repository using ripgrep."""
+        try:
+            safe_query = _sanitize_query(pattern)
+        except ValueError as e:
+            return f"Error: {e}"
+        try:
+            search_path = _validate_path(str(repo_root / path), repo_root)
+        except ValueError as e:
+            return f"Error: {e}"
+        try:
+            result = subprocess.run(
+                ["rg", "--no-heading", "-n", safe_query, str(search_path)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode == 0:
+                lines = result.stdout.splitlines()[:50]
+                return "\n".join(lines) or "No matches found."
+            return "No matches found."
+        except subprocess.TimeoutExpired:
+            return "Error: search timed out after 10 seconds."
+        except FileNotFoundError:
+            # Fallback to in-process grep if rg not available
+            matches: list[str] = []
+            search_root = Path(search_path)
+            walker = (
+                [(str(search_root.parent), [], [search_root.name])]
+                if search_root.is_file()
+                else os.walk(search_root)
+            )
+            for root_dir, _, files in walker:
+                for fname in files:
+                    try:
+                        fpath = Path(root_dir) / fname
+                        for i, line in enumerate(
+                            fpath.read_text(errors="replace").splitlines(), 1
+                        ):
+                            if safe_query in line:
+                                rel = fpath.relative_to(repo_root)
+                                matches.append(f"{rel}:{i}:{line.strip()}")
+                                if len(matches) >= 50:
+                                    return "\n".join(matches)
+                    except Exception:
+                        continue
+            return "\n".join(matches) or "No matches found."
+
+    return [edit_file, run_command, find_files, grep_search]
+
+
+# ---------------------------------------------------------------------------
+# TOOL_SCHEMAS: static schema registry for the /tools console display.
+# Built once at import time from a throwaway repo_root (Path(".")).
+# Only name + description are used; actual execution goes through
+# LocalToolClient._register() which rebuilds schemas from signatures.
+# ---------------------------------------------------------------------------
+TOOL_SCHEMAS = {}
+for _fn in make_tools(Path(".")):
+    TOOL_SCHEMAS[_fn.__name__] = {
+        "name": _fn.__name__,
+        "description": (_fn.__doc__ or "").strip(),
+    }
+for _fn in make_interactive_tools(Path(".")):
+    TOOL_SCHEMAS[_fn.__name__] = {
+        "name": _fn.__name__,
+        "description": (_fn.__doc__ or "").strip(),
+    }

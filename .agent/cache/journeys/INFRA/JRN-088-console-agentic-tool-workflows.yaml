@@ -1,0 +1,227 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+id: JRN-088
+title: Console Agentic Tool Workflows
+state: COMMITTED
+schema_version: 1
+priority: high
+tags:
+- infra
+- cli
+- tui
+- agentic
+actor: developer using Terminal Console TUI
+description: >
+  A developer uses the Terminal Console TUI to leverage agentic tools for
+  code interaction, file manipulation, and executing shell commands. The
+  agentic loop iteratively processes tool calls until the AI completes the
+  task. Commands are sandboxed to the repository context.
+preconditions:
+- Agent CLI is installed and configured
+- AI provider is configured and supports function calling
+- Terminal Console TUI is running (INFRA-087)
+auth_context:
+  level: authenticated
+  permissions: []
+steps:
+- id: 1
+  action: Developer enters a task prompt in the Console TUI chat panel
+  system_response: >
+    TUI submits the prompt to the agentic loop. The agent analyses the
+    task and selects the appropriate tool(s) from the registry.
+  assertions:
+  - Task is submitted to the agentic loop
+  - TUI displays a working indicator while the agent processes
+- id: 2
+  action: Agent calls the read_file tool to inspect relevant source code
+  system_response: >
+    The file content is read from the repository and returned to the
+    agent for analysis. The file path is validated to be within the
+    repository root.
+  assertions:
+  - File content is returned to the agent
+  - Path is validated as within the repository root
+  - File content is displayed in the chat panel
+- id: 3
+  action: Agent calls the edit_file tool to modify source code
+  system_response: >
+    The specified file is modified and saved. The agent confirms the
+    change in the chat panel.
+  assertions:
+  - File is modified and saved correctly
+  - Path is validated as within the repository root
+  - Confirmation message is displayed in the chat panel
+- id: 4
+  action: Agent calls the run_command tool to execute a shell command
+  system_response: >
+    The command is executed within the repository context. stdout and
+    stderr are streamed in real-time to the chat panel.
+  assertions:
+  - Command executes within the repository sandbox
+  - stdout and stderr are displayed in real-time in the chat panel
+  - Exit code is reported to the agent
+- id: 5
+  action: Agent calls find_files or grep_search to locate relevant code
+  system_response: >
+    Matching files or search results are returned to the agent for
+    further processing.
+  assertions:
+  - Search is scoped to the repository root
+  - Results are returned to the agent and displayed in the chat panel
+- id: 6
+  action: Agent completes multi-step task via iterative tool calls
+  system_response: >
+    The agentic loop continues processing tool calls until the AI
+    determines the task is complete, then presents a final summary.
+  assertions:
+  - Agent iteratively processes tool calls until task completion
+  - Final summary is displayed in the chat panel
+  - No tool calls occur after the agent signals completion
+- id: 8
+  action: Developer sends a regular chat message (not a workflow or role)
+  system_response: >
+    TUI routes the message through simple text streaming, NOT the
+    agentic ReAct loop. The response streams token-by-token.
+  assertions:
+  - Message is routed to _do_simple_stream, not _do_agentic_stream
+  - Response streams incrementally to the chat panel
+  - No tool calling infrastructure is invoked
+- id: 9
+  action: Agent executes a long-running command via run_command
+  system_response: >
+    Each line of stdout is streamed to the chat panel in real-time
+    via the on_output callback, so the user sees progress.
+  assertions:
+  - Output lines appear incrementally during execution
+  - Lines are prefixed with a dim pipe character for visual distinction
+  - User is not left staring at a blank screen
+- id: 10
+  action: Developer uses ↑/↓ arrow keys to navigate command history
+  system_response: >
+    The input box cycles through previously submitted commands,
+    similar to Unix shell history.
+  assertions:
+  - Up arrow recalls the previous command
+  - Down arrow moves forward through history
+  - Current input is stashed and restored when exiting history
+- id: 11
+  action: Developer types /search <query> to find text in output
+  system_response: >
+    The output panel is searched for the query. Matches are
+    highlighted, and n/r keys navigate between them.
+  assertions:
+  - Match count is displayed in the status bar
+  - n moves to next match, r moves to previous
+  - Search only activates when input box is not focused
+- id: 7
+  action: Developer selects a different model from the sidebar Models panel or uses /provider or /model commands
+  system_response: >
+    The TUI switches the active provider and model. A confirmation
+    message is displayed in the chat panel. Subsequent AI calls use
+    the newly selected model. The current session state is updated,
+    and new sessions will inherit these settings.
+  assertions:
+  - Provider is switched to match the selected model
+  - Model override is applied to ai_service
+  - Active session state is synchronized with the new provider/model
+  - Confirmation message displays new model and provider
+- id: 12
+  action: Developer switches between existing sessions via /switch or /history
+  system_response: >
+    The TUI restores the requested session. The global ai_service provider
+    and model are synchronized with the session's persisted settings.
+  assertions:
+  - Global provider/model matches the restored session settings
+  - TUI status bar reflects the restored provider/model
+error_paths:
+- trigger_step: 1
+  condition: AI provider does not support function calling
+  system_response: >
+    TUI displays a clear warning that the current provider does not
+    support function calling. The user is informed of limited
+    functionality and advised to switch providers.
+  assertions:
+  - Warning message clearly names the current provider
+  - User is advised which providers support function calling
+  severity: expected
+- trigger_step: 4
+  condition: Command attempts to access files outside the repository
+  system_response: >
+    The sandbox prevents execution. An error message is displayed
+    explaining the command was blocked for security reasons.
+  assertions:
+  - Command is blocked before execution
+  - Error message explains the security restriction
+  severity: expected
+- trigger_step: 2
+  condition: Tool call fails or returns an error
+  system_response: >
+    The error message is returned to the agent within the ReAct loop.
+    The agent analyzes the error and attempts to resolve it (e.g., by
+    correcting a path or using a different tool). The error is logged
+    in the chat panel for transparency.
+  assertions:
+  - Error is reported to the agent as an observation
+  - Agent attempts to recover from the error in the next thought step
+  - Error is displayed in the chat panel
+  severity: expected
+edge_cases:
+- scenario: Large file read that exceeds context window
+  expected: Agent truncates content and informs the user
+  severity: warning
+- scenario: Command produces very large stdout output
+  expected: Output is streamed but truncated after a reasonable limit
+  severity: warning
+- scenario: Concurrent tool calls from the agent
+  expected: Tools execute sequentially to avoid race conditions
+  severity: warning
+data_state:
+  data_classification: internal
+  inputs: []
+  persistent: []
+linked_stories:
+- INFRA-088
+- INFRA-087
+linked_adrs:
+- ADR-028
+- ADR-002
+- ADR-039
+- ADR-040
+depends_on: []
+implementation:
+  routes: []
+  files:
+  - .agent/src/agent/tui/app.py
+  - .agent/src/agent/tui/agentic.py
+  - .agent/src/agent/tui/commands.py
+  - .agent/src/agent/tui/session.py
+  - .agent/src/agent/core/adk/tools.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/engine/parser.py
+  - .agent/src/agent/commands/console.py
+  - .agent/docs/console.md
+  - .agent/adrs/EXC-003-shell-execution-for-agentic-tools.md
+  tests:
+  - .agent/tests/tui/test_stream_routing.py
+  - .agent/tests/tui/test_streaming_agentic.py
+  - .agent/tests/tui/test_agentic_loop.py
+  - .agent/tests/tui/test_app.py
+  - .agent/tests/tui/test_stream.py
+  - .agent/tests/tui/test_commands.py
+  - .agent/tests/tui/test_model_selector.py
+  - .agent/tests/tui/test_session.py
+  - .agent/tests/core/adk/test_interactive_tools.py
+  - .agent/tests/core/engine/test_executor.py
+  - .agent/tests/core/engine/test_parser.py

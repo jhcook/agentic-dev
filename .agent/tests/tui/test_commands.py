@@ -201,3 +201,46 @@ class TestFormatHelp:
         assert "/quit" in text
         assert "/commit" in text
         assert "@architect" in text
+
+    def test_format_help_contains_copy(self):
+        """Verify /copy command appears in help text."""
+        text = format_help_text({}, {})
+        assert "/copy" in text
+        assert "clipboard" in text.lower() or "Ctrl+Y" in text
+
+
+class TestFuzzyMatch:
+    """Unit tests for ConsoleApp._fuzzy_match static method."""
+
+    @pytest.fixture(autouse=True)
+    def _import_app(self):
+        """Import ConsoleApp with mocked dependencies."""
+        from unittest.mock import patch, MagicMock
+        mock_ai = MagicMock()
+        mock_ai.provider = "gemini"
+        mock_ai.models = {}
+        with patch("agent.core.ai.ai_service", mock_ai), \
+             patch("agent.tui.session.SessionStore", MagicMock()), \
+             patch("agent.tui.commands.discover_workflows", return_value={}), \
+             patch("agent.tui.commands.discover_roles", return_value={}):
+            from agent.tui.app import ConsoleApp
+            self.fuzzy = ConsoleApp._fuzzy_match
+
+    def test_exact_match(self):
+        assert self.fuzzy("gemini", ["vertex", "gemini", "openai"]) == "gemini"
+
+    def test_prefix_match(self):
+        assert self.fuzzy("gem", ["vertex", "gemini", "openai"]) == "gemini"
+
+    def test_substring_match(self):
+        assert self.fuzzy("mini", ["vertex", "gemini", "openai"]) == "gemini"
+
+    def test_word_overlap_match(self):
+        candidates = ["gemini-2.5-pro", "gemini-2.5-flash", "gpt-4o"]
+        assert self.fuzzy("gemini pro", candidates) == "gemini-2.5-pro"
+
+    def test_no_match(self):
+        assert self.fuzzy("xyz", ["gemini", "vertex"]) is None
+
+    def test_case_insensitive(self):
+        assert self.fuzzy("GEMINI", ["vertex", "gemini", "openai"]) == "gemini"

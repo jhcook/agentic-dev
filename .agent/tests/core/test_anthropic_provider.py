@@ -101,7 +101,7 @@ def test_fallback_to_anthropic(ai_service_with_anthropic):
     """Test that fallback chain reaches anthropic when other providers fail."""
     ai_service_with_anthropic.provider = 'gh'
     
-    def side_effect(provider, system, user, model=None):
+    def side_effect(provider, system, user, model=None, **kwargs):
         if provider in ["gh", "gemini", "openai"]:
             raise Exception(f"{provider} Failed")
         if provider == "anthropic":

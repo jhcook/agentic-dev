@@ -39,7 +39,31 @@ Screen {
 
 #chat-output {
     width: 100%;
-    height: 100%;
+    height: 1fr;
+    scrollbar-size: 1 1;
+    padding: 0 1;
+}
+
+#chat-output:focus {
+    border: vkey $accent;
+}
+
+#assistant-stream {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    color: $text-muted;
+    background: $surface;
+}
+
+#exec-output {
+    display: none;
+    width: 100%;
+    height: auto;
+    max-height: 12;
+    min-height: 3;
+    border-top: solid $accent;
+    background: $surface-darken-1;
     scrollbar-size: 1 1;
     padding: 0 1;
 }
@@ -79,10 +103,36 @@ Screen {
     background: $secondary;
 }
 
-#workflow-list, #role-list {
+#model-panel {
     height: 1fr;
+    border: round $secondary;
+    background: $surface;
+}
+
+#model-panel > Static {
+    color: $text;
+    text-style: bold;
     padding: 0 1;
+    background: $secondary;
+}
+
+#workflow-list, #role-list, #model-list {
+    height: 1fr;
     scrollbar-size: 1 1;
+}
+
+#workflow-list ListItem, #role-list ListItem, #model-list ListItem {
+    padding: 0 1;
+    width: 100%;
+}
+
+#workflow-list Label, #role-list Label, #model-list Label {
+    width: 100%;
+    overflow: hidden;
+}
+
+#model-list ListItem.active-model {
+    background: $primary 20%;
 }
 
 /* ─── Bottom: Status + Input ─── */

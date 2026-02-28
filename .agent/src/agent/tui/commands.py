@@ -55,7 +55,7 @@ class ParsedInput:
 # Built-in commands that are handled by the TUI directly
 BUILTIN_COMMANDS = {
     "help", "quit", "new", "conversations", "history", "switch", "delete",
-    "clear", "provider", "model", "rename",
+    "clear", "provider", "model", "rename", "search", "tools",
 }
 
 # Command aliases (alias -> canonical name)
@@ -247,6 +247,9 @@ def format_help_text(
         "  /clear            Clear the chat display",
         "  /provider [name]  Show/switch AI provider",
         "  /model [name]     Set model override",
+        "  /tools            Show available agentic tools",
+        "  /search <query>   Search output (n=next, r=reverse)",
+        "  /copy             Copy chat to clipboard (or Ctrl+Y)",
         "  /quit             Exit the console",
         "",
         "╭─── Workflows ───╮",
@@ -260,5 +263,5 @@ def format_help_text(
         lines.append(f"  @{name:<16} {desc}")
 
     lines.append("")
-    lines.append("  Tab   Switch panels  │  ↑↓  Navigate  │  Enter  Select")
+    lines.append("  Tab   Switch panels  │  ↑↓  History  │  n/r  Search nav")
     return "\n".join(lines)
