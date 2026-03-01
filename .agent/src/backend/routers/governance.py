@@ -29,6 +29,7 @@ BASE_DIR = Path(__file__).resolve().parents[4]
 CACHE_DIR = BASE_DIR / ".agent" / "cache"
 RULES_DIR = BASE_DIR / ".agent" / "rules"
 ADR_DIR = BASE_DIR / ".agent" / "adrs"
+LOG_DIR = BASE_DIR / ".agent" / "logs"
 
 class Artifact(BaseModel):
     id: str         # Logical ID (WEB-005)
@@ -79,8 +80,8 @@ def scan_artifacts() -> List[Artifact]:
             
             status = status_match.group(1).upper() if status_match else "UNKNOWN"
             
-            # Extract ID from filename (WEB-005-...)
-            id_match = re.match(r'([A-Z]+-\d+|ADR-\d+)', path.name)
+            # Extract ID from filename (WEB-005-... or governance-WEB-005-...)
+            id_match = re.search(r'([A-Z]+-\d+|ADR-\d+)', path.name)
             art_id = id_match.group(1) if id_match else path.stem
             
             # Generate Unique ID for Graph/ReactFlow
@@ -110,6 +111,10 @@ def scan_artifacts() -> List[Artifact]:
     # ADRs
     if ADR_DIR.exists():
         for f in ADR_DIR.rglob("*.md"): process_file(f, "adr")
+    
+    # Preflight Logs
+    if LOG_DIR.exists():
+        for f in LOG_DIR.rglob("*.md"): process_file(f, "preflight")
         
     # Post-process: Implicit Links & Validating Links to UIDs
     # We need to map logical connections (Story WEB-005 -> Plan WEB-005)

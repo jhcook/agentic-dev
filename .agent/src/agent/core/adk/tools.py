@@ -253,13 +253,19 @@ def make_interactive_tools(
                 stderr=subprocess.STDOUT,
                 text=True,
                 shell=True,
+                bufsize=1,  # Line buffering for real-time streaming
             )
             
+            output_captured = []
             if proc.stdout:
                 for line in proc.stdout:
+                    stripped_line = line.rstrip("\n")
+                    output_captured.append(stripped_line)
+                    if len(output_captured) > 50:
+                        output_captured.pop(0)
                     if on_output:
                         # QA FIX: Stream output to the UI callback as it arrives.
-                        on_output(line.rstrip("\n"))
+                        on_output(stripped_line)
             
             proc.wait(timeout=120)
 
@@ -269,13 +275,18 @@ def make_interactive_tools(
             return "Error: Command timed out after 120 seconds and was terminated."
         except FileNotFoundError:
             # This can happen if the first element of 'args' is not a valid executable.
-            logger.error(f"Command not found: {args[0]}")
-            return f"Error: Command not found: '{args[0]}'. Please ensure it is installed and in your PATH."
+            # Fix: args is not defined here if shell=True is used, but command is.
+            return f"Error: Command not found: '{command.split()[0]}'. Please ensure it is installed and in your PATH."
         except Exception as e:
             logger.error(f"Error executing command '{command}': {e}", exc_info=True)
             return f"Error during command execution: {e}"
 
         logger.info(f"'run_command' completed with exit code {proc.returncode}.")
+        
+        if proc.returncode != 0:
+            error_tail = "\n".join(output_captured)
+            return f"Command failed with exit code {proc.returncode}.\n\nLast 50 lines of output:\n{error_tail}"
+
         # COMPLIANCE FIX: Return a simple summary instead of the full output.
         # This prevents potentially large/sensitive data from being sent to the LLM.
         return f"Command finished with exit code {proc.returncode}. Output was streamed to the user."

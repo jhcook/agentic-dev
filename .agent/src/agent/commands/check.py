@@ -903,6 +903,10 @@ def preflight(
             console.print("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]")
             with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
                 try:
+                    def _progress(msg: str):
+                        # Ensure we print with a newline for the TUI to consume
+                        console.print(f"[dim]  - {msg}[/dim]")
+
                     result = convene_council_full(
                         story_id=story_id,
                         story_content=story_content,
@@ -913,7 +917,7 @@ def preflight(
                         council_identifier="preflight",
                         adrs_content=adrs_content,
                         thorough=thorough,
-                        progress_callback=None # Silence individual role progress to reduce noise
+                        progress_callback=_progress,
                     )
                 except Exception as e:
                     console.print(f"\n[bold red]❌ Governance Panel Failed:[/bold red] {e}")

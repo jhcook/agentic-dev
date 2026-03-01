@@ -37,6 +37,7 @@ from textual.widgets import (
     ListItem,
     ListView,
     OptionList,
+    RichLog,
     Static,
 )
 from textual.containers import VerticalScroll
@@ -497,6 +498,7 @@ class ConsoleApp(App):
 
         # Enable text selection
         self._chat_log.can_focus = True
+        self._exec_log.can_focus = True
 
         # Session store
         self._store = SessionStore()
@@ -609,8 +611,7 @@ class ConsoleApp(App):
 
     def _write_system(self, text: str) -> None:
         """Display system message."""
-        from rich.markup import escape
-        self._chat_log.write(escape(text))
+        self._chat_log.write(text)
         self._chat_text.append(text)
 
     def _write_user(self, text: str) -> None:
@@ -1318,7 +1319,7 @@ class ConsoleApp(App):
         
         def _update():
             self._exec_log.display = True
-            self._exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
+            self._exec_log.write(f"[dim]{escape(line)}[/dim]")
 
         try:
             self.call_from_thread(_update)

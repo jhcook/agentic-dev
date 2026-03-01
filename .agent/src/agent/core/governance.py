@@ -1329,6 +1329,9 @@ def convene_council_full(
             progress_callback(f"🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks)...")
 
         for i, chunk in enumerate(diff_chunks):
+            if len(diff_chunks) > 1 and progress_callback:
+                progress_callback(f"  - Analyzing chunk {i+1}/{len(diff_chunks)}...")
+            
             if mode == "consultative":
                     system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, ADRs, Diff."
                     if _available_refs_line:
