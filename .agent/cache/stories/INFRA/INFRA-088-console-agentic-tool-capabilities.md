@@ -2,7 +2,7 @@
 
 ## State
 
-DONE
+COMMITTED
 
 ## Problem Statement
 
