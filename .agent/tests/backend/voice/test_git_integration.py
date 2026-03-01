@@ -15,7 +15,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from backend.voice.tools.git import get_git_status, get_git_diff
-from backend.voice.events import EventBus
 
 @pytest.fixture
 def mock_subprocess_run():

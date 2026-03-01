@@ -341,7 +341,7 @@ def configure_api_keys() -> None:
             if not migrated:
                 if service_name == "vertex":
                     if typer.confirm(f"\nDo you want to configure {display_name}?", default=False):
-                        typer.secho(f"\n[INFO] For setup instructions, see: docs/getting_started.md", dim=True)
+                        typer.secho("\n[INFO] For setup instructions, see: docs/getting_started.md", dim=True)
                         typer.echo(f"{display_name} (Google Cloud Project ID):")  # no-preflight-check
                         try:
                             value = typer.prompt("Project ID")
@@ -631,7 +631,7 @@ def configure_voice_settings() -> None:
                 # Security: Validate region
                 import re
                 if not re.match(r"^[a-z0-9-]+$", region):
-                     typer.secho(f"[ERROR] Invalid region format. Must be alphanumeric/hyphens only.", fg=typer.colors.RED)
+                     typer.secho("[ERROR] Invalid region format. Must be alphanumeric/hyphens only.", fg=typer.colors.RED)
                 else:
                     try:
                         # Enforce secure storage for KEY and REGION
@@ -671,7 +671,7 @@ def configure_voice_settings() -> None:
                             
                         # Store the raw JSON string in secrets manager
                         manager.set_secret("google", "application_credentials_json", json_content)  # no-preflight-check
-                        typer.secho(f"[OK] Google Service Account imported to Secret Manager.", fg=typer.colors.GREEN)
+                        typer.secho("[OK] Google Service Account imported to Secret Manager.", fg=typer.colors.GREEN)
                         
                         if typer.confirm("Delete local JSON file now (Recommended)?", default=True):
                             try:

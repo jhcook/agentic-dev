@@ -62,7 +62,6 @@ class AIServiceModelAdapter(BaseLlm):
     def __init__(self):
         # BaseLlm is Pydantic and requires `model: str`.
         # Pull the configured model name from ai_service / config.
-        from agent.core.config import config
         # We don't know the provider until _sync_complete looks at ai_service,
         # but BaseLlm requires a string model immediately on init.
         # Delay true model resolution until the API call.

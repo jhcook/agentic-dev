@@ -18,7 +18,6 @@ os.environ['NPY_ALLOW_PICKLE'] = '1'
 
 import logging
 import asyncio
-import numpy as np
 import scipy.signal
 import soundfile as sf
 import io

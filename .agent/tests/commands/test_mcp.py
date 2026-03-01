@@ -15,9 +15,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from agent.commands.mcp import _get_github_token
-from agent.core.secrets import get_secret_manager
 from typer import Exit
-import os
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):

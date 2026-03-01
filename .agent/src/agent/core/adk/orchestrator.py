@@ -31,7 +31,6 @@ import asyncio
 import logging
 import re
 import time
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from google.adk.agents import LlmAgent
@@ -282,7 +281,6 @@ async def _orchestrate_async(
         _validate_finding_against_source,
         _validate_references,
     )
-    import re as _re
 
     _all_valid_refs = []
     _all_invalid_refs = []
@@ -335,7 +333,16 @@ async def _orchestrate_async(
         _ai_validated = _ai_total - _ai_filtered
 
         # ── Reference validation ──
-        role_refs = sorted(set(parsed.get("references", [])))
+        # The AI outputs full reference lines (e.g. "ADR-028 (Typer Sync CLI)").
+        # Extract just the clean ADR-NNN/JRN-NNN/EXC-NNN IDs before validation,
+        # matching the native governance path behaviour.
+        from agent.core.governance import _extract_references
+        _raw_refs = parsed.get("references", [])
+        role_refs = sorted(set(
+            ref_id
+            for raw_line in _raw_refs
+            for ref_id in _extract_references(raw_line)
+        ))
         from pathlib import Path as _Path
         valid_refs, invalid_refs = _validate_references(
             role_refs, config.adrs_dir,

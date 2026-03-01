@@ -20,7 +20,6 @@ from agent.core.config import config as agent_config
 import subprocess
 import threading
 import time
-import re
 from agent.core.utils import sanitize_id
 
 

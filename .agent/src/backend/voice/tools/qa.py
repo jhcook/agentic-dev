@@ -18,7 +18,6 @@ import os
 import threading
 import time
 import logging
-import shlex
 from opentelemetry import trace
 from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
@@ -250,8 +249,6 @@ def run_preflight(story_id: str = None, interactive: bool = True, config: Runnab
             
             # PTY Implementation to force line buffering and merge stdout/stderr
             import pty
-            import tty
-            import termios
             
             master_fd, slave_fd = pty.openpty()
             

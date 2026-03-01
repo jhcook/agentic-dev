@@ -14,7 +14,6 @@
 
 
 import pytest
-import asyncio
 from backend.voice.buffer import SentenceBuffer
 
 async def list_to_stream(items: list):

@@ -14,7 +14,6 @@
 
 import pytest
 import threading
-import time
 from backend.voice.events import EventBus
 from collections import defaultdict
 

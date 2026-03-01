@@ -78,5 +78,5 @@ The architectural decision.
 
     # Auto-Sync to Providers (Priority Sync)
     from agent.sync.sync import push_safe
-    console.print(f"[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
+    console.print("[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
     push_safe(timeout=2, verbose=True)

@@ -28,7 +28,7 @@
 # limitations under the License.
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import json
 from pathlib import Path
 import tempfile

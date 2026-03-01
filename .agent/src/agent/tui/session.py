@@ -14,7 +14,6 @@
 
 """Conversation session persistence and token budget management (INFRA-087)."""
 
-import json
 import logging
 import os
 import sqlite3
@@ -22,9 +21,19 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+MessageRole = Literal["user", "assistant"]
+
+
+@dataclass
+class Message:
+    """A single message in a conversation."""
+
+    role: MessageRole
+    content: str
 
 
 @dataclass
@@ -37,7 +46,7 @@ class ConversationSession:
     updated_at: datetime
     provider: str
     model: Optional[str] = None
-    messages: List[Dict[str, str]] = field(default_factory=list)
+    messages: List[Message] = field(default_factory=list)
 
 
 class SessionStore:
@@ -123,7 +132,7 @@ class SessionStore:
             return None
 
         messages = [
-            {"role": r["role"], "content": r["content"]}
+            Message(role=r["role"], content=r["content"])
             for r in self._conn.execute(
                 "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id",
                 (session_id,),
@@ -140,7 +149,23 @@ class SessionStore:
         )
 
     def get_latest_session(self) -> Optional[ConversationSession]:
-        """Get the most recently updated session."""
+        """Get the most recently updated session that has messages.
+
+        Prefers sessions with actual conversation content. Falls back to
+        the most recent empty session only if none have messages.
+        """
+        # First try: session with messages (active conversation)
+        row = self._conn.execute(
+            """SELECT s.id FROM sessions s
+               JOIN messages m ON m.session_id = s.id
+               GROUP BY s.id
+               HAVING COUNT(m.id) > 0
+               ORDER BY s.updated_at DESC LIMIT 1"""
+        ).fetchone()
+        if row:
+            return self.get_session(row["id"])
+
+        # Fallback: any session (may be empty)
         row = self._conn.execute(
             "SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1"
         ).fetchone()
@@ -172,7 +197,7 @@ class SessionStore:
             )
         return sessions
 
-    def add_message(self, session_id: str, role: str, content: str) -> None:
+    def add_message(self, session_id: str, role: MessageRole, content: str) -> None:
         """Append a message to a session."""
         now = datetime.now(timezone.utc).isoformat()
         self._conn.execute(
@@ -225,9 +250,9 @@ class TokenBudget:
     def build_context(
         self,
         system_prompt: str,
-        messages: List[Dict[str, str]],
+        messages: List[Message],
         provider: str = "gemini",
-    ) -> Tuple[str, List[Dict[str, str]]]:
+    ) -> Tuple[str, List[Message]]:
         """Build a pruned context that fits within the token budget.
 
         Args:
@@ -257,7 +282,7 @@ class TokenBudget:
 
         # Count tokens for each message
         msg_tokens = [
-            token_manager.count_tokens(m.get("content", ""), provider=provider)
+            token_manager.count_tokens(m.content or "", provider=provider)
             for m in messages
         ]
 

@@ -15,6 +15,72 @@
   - FIFO token budget pruning to stay within context window limits.
   - Install with: `pip install 'agent[console]'`.
 
+- **Console Agentic Tool Capabilities** (INFRA-088):
+  - Agentic tool-calling loop with native function calling for Gemini, Vertex, OpenAI, and Anthropic.
+  - `LocalToolClient` adapter exposes 9 local tools (5 read-only + 4 interactive) to the `AgentExecutor` without requiring an MCP server.
+  - Interactive tools: `read_file`, `edit_file`, `run_command`, `find_files`, `grep_search`.
+  - Read-only tools: `search_codebase`, `list_directory`, `read_adr`, `read_journey`.
+  - Non-tool-calling providers (Ollama, GH CLI) fall back to simple `stream_complete` text streaming.
+  - `--model` CLI flag: `agent console --model gemini-2.5-flash` to override the default model.
+  - **Model Selector Panel** in the sidebar — curated list of preferred models across all configured providers. Click to switch provider and model mid-conversation.
+  - `run_command` sandboxing: path traversal, absolute paths outside repo, and dangerous commands are blocked.
+  - Disconnect recovery, max-iteration limits, and structured error handling for tool failures.
+  - See ADR-040 for architecture details.
+
+- **Console UX Enhancements** (INFRA-088):
+  - **Command history**: ↑/↓ arrow keys navigate previously submitted commands, with stash/restore of current input.
+  - **`/search <query>`**: Case-insensitive text search in the output panel. `n` and `r` keys navigate between matches.
+  - **`/tools`**: List available agentic tools.
+  - **Real-time command output**: `run_command` output streams line-by-line to the chat panel via `on_output` callback (visible during `/preflight`, etc.).
+  - **Text width fix**: Markdown output now wraps correctly within the chat container instead of overflowing to terminal width.
+  - **`/copy`**: Copy full chat content to clipboard. Also available via Ctrl+Y keyboard shortcut.
+  - **`/provider` fuzzy matching**: `/provider gem` matches `gemini`. No args opens a scrollable picker modal.
+  - **`/model` fuzzy matching**: `/model gemini pro` matches `gemini-2.5-pro`. No args opens a scrollable picker. Matching priority: exact → prefix → substring → word overlap.
+  - **Model propagation**: Selected model is explicitly passed through `AgentExecutor` to `llm.complete()`, bypassing smart routing.
+
+### Fixed
+
+- **ReAct JSON parser hardening** (INFRA-088):
+  - Replaced fragile regex with brace-counting `_extract_json()` helper for reliable nested JSON extraction.
+  - Implemented 3-strategy parsing: Action marker → code fences → any-JSON block.
+  - Fixes `/preflight` immediately passing without execution (was silently falling back to `AgentFinish`).
+
+- **Token budget session destruction** (INFRA-088):
+  - Console was using `query.yaml` `max_context_tokens: 8192` (designed for `agent query`, not interactive console). After 8192 tokens, sessions would crash or lose all history.
+  - Added `_get_model_context_window()` that reads per-model `context_window` from `router.yaml` (Gemini 2.5 Pro: 2M, Flash: 1M, GPT-4o: 128K, Claude: 200K).
+  - Default raised from 8192 to 128,000 tokens.
+  - Added `ValueError` catch around `build_context()` so budget overflow falls back to the latest message instead of crashing the worker thread.
+
+- **Console blank screen on launch** (INFRA-088):
+  - `get_latest_session()` now prefers sessions with messages over empty orphan sessions.
+  - Welcome message displays when the loaded session has no conversation history.
+  - Assistant responses render as Markdown blocks instead of fragmented per-token lines.
+
+- **Console streaming architecture** (INFRA-088):
+  - `_do_stream` uses `@work(thread=True)` for correct Textual threading model (`call_from_thread` requires a separate OS thread).
+  - Replaced `MCPClient` (MCP server connection) with `LocalToolClient` (local Python tools) for console tool execution.
+  - Error logging now includes `exc_info=True` for full tracebacks.
+
+- **Console stream routing regression** (INFRA-088):
+  - Regular chat was incorrectly routed through the agentic ReAct loop for all function-calling providers. Fixed with `use_tools` flag: only workflow and role invocations use the agentic path.
+  - `on_output` callback was not wired to `run_agentic_loop`, causing `/preflight` to appear frozen. Now streams real-time command output.
+  - Replaced `asyncio.run()` with `asyncio.new_event_loop()` to avoid conflicting with Textual's event loop.
+  - 10 new regression tests in `test_stream_routing.py` covering routing, retry preservation, command history, and search.
+
+- **ReAct parser resilience** (INFRA-088, EXC-004):
+  - `json.loads()` rejected LLM-generated single-quoted Python dicts (e.g., `{'path': 'file.py'}`), silently breaking the agentic loop at step 1.
+  - Added `ast.literal_eval` as a safe fallback parser in `_extract_json()`. `json.loads` remains the primary parser; the fallback handles single-quoted keys/values and Python booleans (`True`/`False`/`None`).
+  - Updated brace-counting to correctly handle single-quoted strings during JSON extraction.
+
+- **Agentic continuation state** (INFRA-088):
+  - Follow-up messages after `/workflow` or `@role` invocations were incorrectly routed through simple streaming (no tools). Added `_agentic_mode` state to `ConsoleApp` to maintain the agentic loop for subsequent messages.
+  - `/new` command and agentic stream completion reset `_agentic_mode` to `False`.
+
+- **Deep dive analysis** (INFRA-088):
+  - Comprehensive codebase analysis across ~4,300 lines identified 8 dead/redundant code items, 4 optimizations, and 10 enhancement candidates. Root cause of the parser bug traced to `executor.py:_build_context()` using `str(dict)` instead of `json.dumps()`.
+
+### Added
+
 - **Preflight INCONCLUSIVE Detection**:
   - `agent preflight` now detects when all governance agents fail (e.g. expired credentials) and reports `INCONCLUSIVE` with a provider-specific remediation hint instead of falsely reporting `✅ Passed`.
 
@@ -74,7 +140,7 @@
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.
   - Externalized security patterns via `.agent/etc/security_patterns.yaml`.
-  - Configurable test command via `test_command` in `agent.yaml` (default: `make test`).
+  - Configurable test command via `test_command` in `agent.yaml` (default: `pytest .agent/tests`).
   - `--skip-tests` and `--skip-security` flags with timestamped audit logging.
   - Structured `[PHASE]` output with PASSED/BLOCKED verdict and timing.
   - Auto-stages all modified files (implementation, story, runbook) after governance gates pass.

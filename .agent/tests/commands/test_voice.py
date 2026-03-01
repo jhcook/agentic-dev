@@ -15,10 +15,8 @@
 """Unit tests for INFRA-072: agent review-voice command."""
 
 import json
-from unittest.mock import MagicMock, patch, PropertyMock
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from agent.main import app

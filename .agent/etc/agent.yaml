@@ -7,7 +7,7 @@ agent:
   provider: vertex
   test_command: "PYTHONPATH=.agent/src .venv/bin/pytest .agent/tests"
   models:
-    gemini: models/gemini-pro-latest
+    gemini: models/gemini-3-pro-preview
     vertex: gemini-2.5-pro
   github:
     tool: mcp

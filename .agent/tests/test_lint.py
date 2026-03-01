@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import subprocess
 from agent.commands.lint import run_markdownlint
 

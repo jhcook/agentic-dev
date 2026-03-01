@@ -14,8 +14,7 @@
 
 """Integration tests for INFRA-060 panel reference anchoring in convene_council_full."""
 
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 

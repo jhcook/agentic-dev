@@ -17,7 +17,6 @@
 from unittest.mock import patch
 
 import pytest
-from rich.console import Console
 from typer.testing import CliRunner
 
 from agent.commands.query import grep_fallback

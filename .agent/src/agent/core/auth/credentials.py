@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import os
-from typing import List
 
-from agent.core.config import config, LLM_PROVIDER
+from agent.core.config import LLM_PROVIDER
 from agent.core.secrets import get_secret_manager
 from agent.core.auth.errors import MissingCredentialsError
 import logging

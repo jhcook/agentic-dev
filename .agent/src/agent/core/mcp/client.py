@@ -16,7 +16,6 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
@@ -98,7 +97,7 @@ class MCPClient:
                         await asyncio.wait_for(session.initialize(), timeout=timeout_sec)
                     except asyncio.TimeoutError:
                         logger.error(f"MCP session initialization timed out after {timeout_sec} seconds.")
-                        raise RuntimeError(f"Session initialization timed out. The server might be unreachable.")
+                        raise RuntimeError("Session initialization timed out. The server might be unreachable.")
                     yield session
 
     async def call_tool(self, name: str, arguments: Dict[str, Any], session: Optional[ClientSession] = None) -> CallToolResult:
@@ -142,7 +141,6 @@ class MCPClient:
         """
         Request context from the active MCP service (e.g., NotebookLM).
         """
-        from agent.core.config import config
         from agent.db.client import get_all_artifacts_content
         from opentelemetry import trace
         

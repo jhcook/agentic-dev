@@ -19,7 +19,6 @@ Ensures that local status (e.g. APPROVED) is preserved during sync pulls
 even when Notion returns DRAFT, provided the content body is identical.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from textwrap import dedent

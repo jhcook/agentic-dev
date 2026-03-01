@@ -29,6 +29,11 @@ def console(
         "--provider",
         help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="Override the default model for the selected provider",
+    ),
 ) -> None:
     """Interactive terminal console with persistent conversations."""
     try:
@@ -48,5 +53,13 @@ def console(
             typer.echo(f"Error setting provider: {e}")
             raise typer.Exit(1)
 
-    app = ConsoleApp(provider=provider)
-    app.run()
+    import os
+    try:
+        app = ConsoleApp(provider=provider, model=model)
+        app.run()
+    finally:
+        # Force-exit to terminate any lingering worker threads that may be
+        # stuck in blocking I/O (e.g. waiting for an AI provider response).
+        # We use os._exit(0) in finally to ensure a clean prompt return
+        # even if a KeyboardInterrupt (Ctrl+C) occurred mid-shutdown.
+        os._exit(0)

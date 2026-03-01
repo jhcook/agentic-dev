@@ -15,7 +15,6 @@
 from unittest.mock import patch, PropertyMock
 
 import pytest
-from rich.console import Console
 
 from agent.core.governance import convene_council_full
 
