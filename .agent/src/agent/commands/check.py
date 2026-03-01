@@ -194,86 +194,7 @@ def validate_story(
             
     if missing:
         if interactive:
-            console.print(f"[bold yellow]⚠️  Story schema validation failed for {story_id}. Launching Interactive Repair...[/bold yellow]")
-            fixer = InteractiveFixer()
-            
-            # Context for fixer
-            context = {
-                "story_id": story_id,
-                "missing_sections": missing,
-                "file_path": str(found_file)
-            }
-            
-            options = fixer.analyze_failure("story_schema", context)
-            
-            # --- UI LAYER FOR INTERACTIVE FIXER ---
-            chosen_opt = None
-            if not options:
-                console.print("[yellow]No fix options available.[/yellow]")
-            else:
-                is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
-                
-                if is_voice:
-                    console.print("\nFound the following fix options:")
-                    for i, opt in enumerate(options):
-                        title = scrub_sensitive_data(opt.get('title', 'Unknown'))
-                        desc = scrub_sensitive_data(opt.get('description', ''))
-                        console.print(f"Option {i+1}: {title}. {desc}")
-                else:
-                    console.print("\n[bold cyan]🔧 Fix Options:[/bold cyan]")
-                    for i, opt in enumerate(options):
-                        title = scrub_sensitive_data(opt.get('title', 'Unknown'))
-                        desc = scrub_sensitive_data(opt.get('description', ''))
-                        console.print(f"[bold]{i+1}. {title}[/bold]")
-                        console.print(f"   {desc}")
-                    
-                if is_voice:
-                    # Flush output buffer with newline so readline() catches it immediately
-                    console.print("Select an option (or say quit):")
-                    choice = Prompt.ask("", default="1")
-                else:
-                    choice = Prompt.ask("Select an option (or 'q' to quit)", default="1")
-                
-                if choice.lower() != 'q':
-                    try:
-                        idx = int(choice) - 1
-                        if 0 <= idx < len(options):
-                            chosen_opt = options[idx]
-                    except ValueError:
-                        pass
-            
-            if chosen_opt:
-                 # Preview diff
-                 new_to_write = chosen_opt.get("patched_content", "")
-                 safe_preview = scrub_sensitive_data(new_to_write[:500])
-                 console.print(Panel(safe_preview + "...", title="Preview (First 500 chars)"))
-                 
-                 if Confirm.ask("Apply this change?"):
-                    if fixer.apply_fix(chosen_opt, found_file):
-                        console.print(f"[green]✅ Applied fix to {found_file.name}[/green]")
-                        
-                        # Verify
-                        def check():
-                            console.print("[dim]🔄 Verifying fix...[/dim]")
-                            # lightweight re-check
-                            c = found_file.read_text(errors="ignore")
-                            is_valid = all(f"## {s}" in c for s in required_sections)
-                            if is_valid:
-                                console.print("[bold green]✅ Verification Passed![/bold green]")
-                            else:
-                                console.print("[bold red]❌ Verification Failed.[/bold red]")
-                            return is_valid
-                            
-                        # Run verify loop (auto-revert on failure logic is in Core)
-                        # We just need to report success to caller
-                        if fixer.verify_fix(check):
-                            return True
-                        else:
-                             # Core fixer should have auto-reverted if verify failed
-                             console.print("[yellow]⏪ Fix was reverted due to verification failure.[/yellow]")
-                    else:
-                        console.print("[red]❌ Failed to apply fix.[/red]")
-                        
+            console.print("[yellow]Agentic Repair is currently disabled pending security compliance (approval flows).[/yellow]")
             
         if not interactive:
             console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
@@ -424,9 +345,13 @@ def preflight(
             import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
             from rich.status import Status
+            console.print("[dim]Synchronizing NotebookLM Context...[/dim]")
             with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
                 def _update_notebooklm_status_2(msg: str):
                     _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                    # For non-interactive/piped environments (like agent console)
+                    if not console.is_terminal:
+                        console.print(f"  [dim]• {msg}[/dim]")
                 asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status_2))
         except Exception as e:
             logger.debug(f"Could not sync with NotebookLM: {e}")
@@ -768,132 +693,7 @@ def preflight(
                     tests_passed = False
                     
                     if interactive:
-                        console.print(f"\n[bold yellow]🔧 Interactive Repair available for {task['name']} failure...[/bold yellow]")
-                        
-                        # Heuristic: Try to determine the failing file from the command or output
-                        # We know 'cmd' often ends with the file path if it was specific
-                        target_file = None
-                        
-                        # 1. Parsing output is most reliable to find specific failure
-                        # 1. Parsing output is most reliable to find specific failure
-                        if res.stdout:
-                             import re
-                             # Remove ANSI color codes for cleaner regex
-                             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                             clean_stdout = ansi_escape.sub('', res.stdout)
-                             
-                             # Match `FAILED tests/core/test_foo.py::test_bar`
-                             matches = re.findall(r"FAILED\s+(.+?)::", clean_stdout)
-                             # Also match `ERROR collecting tests/core/test_foo.py`
-                             matches_collect = re.findall(r"ERROR collecting\s+(.+)", clean_stdout)
-                             matches.extend(matches_collect)
-                             
-                             for m in reversed(matches):
-                                 fpath = m.strip().split(" ")[0] # Handle cases where there might be trailing text
-                                 possible = task['cwd'] / fpath
-                                 if possible.exists():
-                                     target_file = possible
-                                     break
-                                     
-                        # 2. Fallback: Check if command explicitly targeted a single file
-                        if not target_file:
-                             last_arg = task['cmd'][-1]
-                             if last_arg.endswith('.py') and (task['cwd'] / last_arg).exists():
-                                 target_file = task['cwd'] / last_arg
-                        
-                        if target_file:
-                             console.print(f"[dim]Detected failing test file: {target_file}[/dim]")
-                             fixer = InteractiveFixer()
-                             
-                             fix_context = {
-                                 "file_path": str(target_file),
-                                 "test_output": (res.stdout or "") + "\n" + (res.stderr or ""),
-                                 "content": target_file.read_text(errors="ignore")
-                             }
-                             
-                             options = fixer.analyze_failure("test_failure", fix_context)
-                             
-                             # --- UI Loop (Duplicated from validate_story, candidate for refactoring to Fixer class UI method) ---
-                             while True:
-                                 chosen_opt = None
-                                 if not options:
-                                     console.print("[yellow]No automated fixes available.[/yellow]")
-                                     break
-                                 else:
-                                     console.print("\n[bold cyan]🔧 Test Fix Options:[/bold cyan]")
-                                     for i, opt in enumerate(options):
-                                         console.print(f"[bold]{i+1}. {opt.get('title')}[/bold]")
-                                         console.print(f"   {opt.get('description')}")
-                                         
-                                     choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
-                                     if choice.lower() == 'q':
-                                         break
-
-                                     try:
-                                         idx = int(choice) - 1
-                                         if 0 <= idx < len(options):
-                                             chosen_opt = options[idx]
-                                     except Exception:
-                                         pass
-                                 
-                                 if chosen_opt:
-                                     if fixer.apply_fix(chosen_opt, target_file):
-                                         console.print(f"[green]✅ Applied fix to {target_file.name}[/green]")
-                                         # Optional: Re-run verification?
-                                         if sorted_cmd := Confirm.ask("Re-run test to verify?", default=True):
-                                             # Re-run verify logic using the specific target file for speed
-                                             # Fix: Use the same python executable as the task
-                                             # task['cmd'][0] is the python executable used for the main test run.
-                                             python_exe = task['cmd'][0]
-                                             verify_cmd = [python_exe, "-m", "pytest", str(target_file)]
-                                             
-                                             def verification_callback():
-                                                 console.print(f"[dim]Running: {' '.join(verify_cmd)}[/dim]")
-                                                 vr = subprocess.run(
-                                                     verify_cmd, 
-                                                     capture_output=True, 
-                                                     text=True
-                                                 )
-                                                 if vr.returncode != 0:
-                                                     console.print("[red]❌ Verification Failed:[/red]")
-                                                     console.print(vr.stdout + vr.stderr)
-                                                     return False
-                                                 return True
-
-                                             if fixer.verify_fix(verification_callback):
-                                                 console.print("[bold green]✅ Test Passed![/bold green]")
-                                                 # Fix verified. We should re-run the main task loop to ensure everything is clean,
-                                                 # or at least mark this specific test run as passed?
-                                                 # Problem: The main `res` object still holds the failure.
-                                                 # We need to signal that we recovered.
-                                                 
-                                                 # Option 1: Retry the *original* command (the full test suite or this specific task)
-                                                 console.print("[green]🔄 Re-running full test task to confirm system state...[/green]")
-                                                 retry_res = subprocess.run(
-                                                    task['cmd'], 
-                                                    cwd=task['cwd'], 
-                                                    check=False,
-                                                    capture_output=True,
-                                                    text=True
-                                                 )
-                                                 if retry_res.returncode == 0:
-                                                     tests_passed = True
-                                                     console.print(f"[green]✅ {task['name']} PASSED (after fix)[/green]")
-                                                     break # Exit the fix loop AND the failure block, proceeding to next task
-                                                 else:
-                                                     # If it still fails, loop again? Or give up?
-                                                     # For now, let's just update `res` and loop again if we wanted to be robust,
-                                                     # but to avoid infinite loops, let's just report the new result.
-                                                     console.print(f"[red]❌ {task['name']} still failing after fix.[/red]")
-                                                     # Update the capture output for the next iteration of analysis?
-                                                     # For now, we fall through to failure.
-                                                     pass
-                                                 
-                                                 break # Exit the fix loop
-                                             else:
-                                                 console.print("[yellow]⚠️ Fix failed verification and was reverted. Please try another option.[/yellow]")
-                        else:
-                            console.print("[dim]Could not automatically identify a single test file to fix.[/dim]")
+                        console.print("\\n[bold yellow]Agentic Repair is currently disabled for security compliance.[/bold yellow]")
 
                     if not tests_passed and not ignore_tests:
                         break # Stop on first failure if not ignoring
@@ -1100,6 +900,7 @@ def preflight(
                         break
                 story_content = scrub_sensitive_data(story_content)
 
+            console.print("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]")
             with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
                 try:
                     result = convene_council_full(
@@ -1199,66 +1000,60 @@ def preflight(
             # --- Interactive repair ---
             fix_applied = False
             if interactive and blocking_findings:
-                console.print("\n[bold yellow]🔧 Interactive Repair Available for Blocking Findings...[/bold yellow]")
+                console.print("\n[bold yellow]🔧 Initiating Agentic Repair for Blocking Findings...[/bold yellow]")
                 
                 target_file_path = None
-                for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-                    if file_path.name.startswith(story_id):
-                        target_file_path = file_path
-                        break
+                if story_id:
+                    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
+                        if file_path.name.startswith(story_id):
+                            target_file_path = file_path
+                            break
+                            
+                # Use run_agentic_loop instead of InteractiveFixer
+                import asyncio
+                from agent.tui.agentic import run_agentic_loop
+                from agent.core.config import config as app_config
+                from agent.core.ai import ai_service as app_ai_service
                 
-                if target_file_path:
-                    fixer = InteractiveFixer()
-                    context = {
-                        "story_id": story_id,
-                        "findings": blocking_findings,
-                        "file_path": str(target_file_path)
-                    }
+                system_prompt = (
+                    "You are an expert developer resolving preflight governance failures. "
+                    "You must read the findings, examine the story or codebase, formulate a solution, "
+                    "and apply it using your tools. Use `patch_file` or `edit_file` to fix issues. "
+                    "When you are done, describe what you fixed in your Final Answer."
+                )
+                
+                context_str = f"Story ID: {story_id}\nTarget File: {target_file_path}\n\n" if target_file_path else ""
+                user_prompt = f"Fix the following blocking findings:\n{context_str}" + "\n".join(blocking_findings)
+                
+                def on_thought(thought: str, step: int):
+                    console.print(f"[dim cyan]🤔 Thought:[/dim cyan] [dim]{thought.strip()}[/dim]")
                     
-                    try:
-                        options = fixer.analyze_failure("governance_rejection", context)
-                    except Exception as e:
-                        console.print(f"[yellow]⚠️  Automated fix generation failed: {e}[/yellow]")
-                        options = []
+                def on_tool_call(tool: str, args: dict, step: int):
+                    console.print(f"[dim magenta]🛠️  Action:[/dim magenta] [bold]{tool}[/bold] [dim]{args}[/dim]")
                     
-                    chosen_opt = None
-                    if not options:
-                       console.print("[yellow]No automated fix options generated.[/yellow]")
-                    else:
-                       is_voice = os.getenv("AGENT_VOICE_MODE") == "1"
-                       if is_voice:
-                            console.print("\nFound the following fix options:")
-                            for i, opt in enumerate(options):
-                                console.print(f"Option {i+1}: {opt.get('title', 'Option')}. {opt.get('description', '')}")
-                       else:
-                           console.print("\n[bold cyan]Choose a fix option to apply:[/bold cyan]")
-                           for i, opt in enumerate(options):
-                               console.print(f"[bold]{i+1}. {opt.get('title', 'Option')}[/bold]")
-                               console.print(f"   {opt.get('description', '')}")
-                       
-                       if is_voice:
-                           console.print("Select option (or say quit):")
-                           choice = Prompt.ask("", default="q")
-                       else:
-                           choice = Prompt.ask("Select option (or 'q' to ignore)", default="q")
-                       if choice.lower() != 'q':
-                           try:
-                               idx = int(choice) - 1
-                               if 0 <= idx < len(options):
-                                   chosen_opt = options[idx]
-                           except Exception:
-                               pass
-                               
-                    if chosen_opt:
-                        if fixer.apply_fix(chosen_opt, target_file_path):
-                            console.print("[bold green]✅ Fix applied successfully.[/bold green]")
-                            # Re-stage the modified file so the next diff picks it up
-                            subprocess.run(["git", "add", str(target_file_path)], capture_output=True, text=True)
-                            fix_applied = True
-                            console.print("[bold cyan]🔄 Re-running governance checks to verify fix...[/bold cyan]")
-                            continue  # Loop back to re-run governance council
-                        else:
-                            console.print("[red]❌ Failed to apply fix.[/red]")
+                try:
+                    console.print(f"[dim]Starting AgentExecutor loop...[/dim]")
+                    final_answer = asyncio.run(run_agentic_loop(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        messages=[],
+                        repo_root=app_config.repo_root,
+                        provider=app_ai_service.provider,
+                        model=app_ai_service.models.get(app_ai_service.provider),
+                        on_thought=on_thought,
+                        on_tool_call=on_tool_call,
+                    ))
+                    console.print(f"\n[bold green]✅ Repair Completed. Agent said:[/bold green]\n{final_answer}")
+                    
+                    # Re-stage all modified files
+                    subprocess.run(["git", "add", "-u"], capture_output=True, text=True)
+                    
+                    fix_applied = True
+                    console.print("[bold cyan]🔄 Re-running governance checks to verify fix...[/bold cyan]")
+                    continue
+                    
+                except Exception as e:
+                    console.print(f"[yellow]⚠️  Agentic repair failed: {e}[/yellow]")
 
             # If we reach here without a fix applied, break out — no point retrying
             break
@@ -1705,6 +1500,7 @@ def panel(
     instructions_content = scrub_sensitive_data(instructions_content)
 
 
+    console.print("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]")
     with console.status("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]"):
         try:
             result = convene_council_full(

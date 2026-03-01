@@ -329,6 +329,10 @@ def authenticate_server(
                 return
 
             if auto:
+                logger.error("Auto cookie extraction (--auto) is disabled pending a full GDPR compliance review.")
+                logger.error("Please use the standard interactive method or supply cookies via --file.")
+                raise typer.Exit(code=1)
+                
                 with tracer.start_as_current_span("notebooklm.auto_extract"):
                     consent = Confirm.ask(
                         "[bold yellow]WARNING (GDPR Informed Consent):[/bold yellow]\n"
@@ -405,7 +409,19 @@ print(json.dumps({
                         )
                         
                         try:
-                            output = json.loads(result.stdout.strip())
+                            stdout_str = result.stdout.strip()
+                            json_str = stdout_str
+                            
+                            # Extract just the JSON object from stdout in case there's preceding text
+                            start = stdout_str.find('{')
+                            end = stdout_str.rfind('}')
+                            if start != -1 and end != -1 and end > start:
+                                json_str = stdout_str[start:end+1]
+                                
+                            if not json_str:
+                                raise json.JSONDecodeError("Empty extracted JSON output", stdout_str, 0)
+                                
+                            output = json.loads(json_str)
                             if output.get("status") == "success":
                                 cookies = output.get("cookies", {})
                                 browser = output.get("browser", "unknown")

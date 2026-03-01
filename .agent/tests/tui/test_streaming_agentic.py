@@ -56,7 +56,7 @@ class TestAgentExecutorEventsViaLoop:
             on_thought=on_thought,
         )
 
-        on_thought.assert_called_once_with("I should read the file.")
+        on_thought.assert_called_once_with("I should read the file.", 1)
 
     @pytest.mark.asyncio
     @patch("agent.tui.agentic.LocalToolClient")
@@ -86,8 +86,8 @@ class TestAgentExecutorEventsViaLoop:
             messages=[],
             repo_root=Path("/tmp"),
             provider="openai",
-            on_tool_call=lambda n, a: calls.append((n, a)),
-            on_tool_result=lambda n, r: results.append((n, r)),
+            on_tool_call=lambda n, a, s: calls.append((n, a)),
+            on_tool_result=lambda n, r, s: results.append((n, r)),
         )
 
         assert result == "Found foo in a.py"

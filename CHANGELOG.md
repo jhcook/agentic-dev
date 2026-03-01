@@ -51,7 +51,6 @@
   - Default raised from 8192 to 128,000 tokens.
   - Added `ValueError` catch around `build_context()` so budget overflow falls back to the latest message instead of crashing the worker thread.
 
-
 - **Console blank screen on launch** (INFRA-088):
   - `get_latest_session()` now prefers sessions with messages over empty orphan sessions.
   - Welcome message displays when the loaded session has no conversation history.
@@ -67,6 +66,18 @@
   - `on_output` callback was not wired to `run_agentic_loop`, causing `/preflight` to appear frozen. Now streams real-time command output.
   - Replaced `asyncio.run()` with `asyncio.new_event_loop()` to avoid conflicting with Textual's event loop.
   - 10 new regression tests in `test_stream_routing.py` covering routing, retry preservation, command history, and search.
+
+- **ReAct parser resilience** (INFRA-088, EXC-004):
+  - `json.loads()` rejected LLM-generated single-quoted Python dicts (e.g., `{'path': 'file.py'}`), silently breaking the agentic loop at step 1.
+  - Added `ast.literal_eval` as a safe fallback parser in `_extract_json()`. `json.loads` remains the primary parser; the fallback handles single-quoted keys/values and Python booleans (`True`/`False`/`None`).
+  - Updated brace-counting to correctly handle single-quoted strings during JSON extraction.
+
+- **Agentic continuation state** (INFRA-088):
+  - Follow-up messages after `/workflow` or `@role` invocations were incorrectly routed through simple streaming (no tools). Added `_agentic_mode` state to `ConsoleApp` to maintain the agentic loop for subsequent messages.
+  - `/new` command and agentic stream completion reset `_agentic_mode` to `False`.
+
+- **Deep dive analysis** (INFRA-088):
+  - Comprehensive codebase analysis across ~4,300 lines identified 8 dead/redundant code items, 4 optimizations, and 10 enhancement candidates. Root cause of the parser bug traced to `executor.py:_build_context()` using `str(dict)` instead of `json.dumps()`.
 
 ### Added
 
@@ -129,7 +140,7 @@
   - `agent implement --apply` now runs security scan, QA validation, and documentation check after code is applied.
   - New composable `gates.py` module with `run_security_scan()`, `run_qa_gate()`, `run_docs_check()`.
   - Externalized security patterns via `.agent/etc/security_patterns.yaml`.
-  - Configurable test command via `test_command` in `agent.yaml` (default: `make test`).
+  - Configurable test command via `test_command` in `agent.yaml` (default: `pytest .agent/tests`).
   - `--skip-tests` and `--skip-security` flags with timestamped audit logging.
   - Structured `[PHASE]` output with PASSED/BLOCKED verdict and timing.
   - Auto-stages all modified files (implementation, story, runbook) after governance gates pass.

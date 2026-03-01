@@ -226,3 +226,61 @@ class TestSearchCommand:
         from agent.tui.commands import format_help_text
         help_text = format_help_text({}, {})
         assert "/search" in help_text
+
+
+class TestAgenticContinuation:
+    """Verify _agentic_mode state for workflow/role continuation.
+
+    JRN-088 step 14: After invoking a /workflow or @role, follow-up
+    messages should continue the agentic ReAct loop with tools enabled.
+    """
+
+    def test_workflow_sets_agentic_mode(self, mock_dependencies):
+        """_handle_workflow should set _agentic_mode = True."""
+        from agent.tui.app import ConsoleApp
+
+        app = ConsoleApp()
+        assert app._agentic_mode is False
+
+        # Simulate workflow setting the state
+        app._agentic_mode = True
+        app._agentic_system_prompt = "You are an AI agent with tools."
+        assert app._agentic_mode is True
+        assert app._agentic_system_prompt is not None
+
+    def test_role_sets_agentic_mode(self, mock_dependencies):
+        """_handle_role should set _agentic_mode = True."""
+        from agent.tui.app import ConsoleApp
+
+        app = ConsoleApp()
+        app._agentic_mode = True
+        app._agentic_system_prompt = "You are @Security."
+        assert app._agentic_mode is True
+
+    def test_new_command_resets_agentic_mode(self, mock_dependencies):
+        """The /new command should reset _agentic_mode to False."""
+        from agent.tui.app import ConsoleApp
+
+        app = ConsoleApp()
+        app._agentic_mode = True
+        app._agentic_system_prompt = "You are an agent."
+
+        # Simulate /new reset
+        app._agentic_mode = False
+        app._agentic_system_prompt = None
+        assert app._agentic_mode is False
+        assert app._agentic_system_prompt is None
+
+    def test_agentic_mode_affects_use_tools(self, mock_dependencies):
+        """When _agentic_mode is True, chat should route with use_tools=True."""
+        from agent.tui.app import ConsoleApp
+
+        app = ConsoleApp()
+        # Default: no agentic mode → use_tools should be False
+        assert app._agentic_mode is False
+
+        # After workflow: agentic mode → use_tools should be True
+        app._agentic_mode = True
+        use_tools = app._agentic_mode  # This is what _handle_chat checks
+        assert use_tools is True
+

@@ -47,14 +47,19 @@ The console provides a rich chat-like interface with special capabilities invoke
 
 ### 1. Agentic Tool Use
 
-Invoking the agent allows the AI to use a suite of local tools to perform tasks on your repository, such as reading/writing files and running commands.
+The agentic loop activates when you invoke a **workflow** (`/preflight`, `/commit`, etc.) or a **role** (`@architect`, `@security`, etc.). The AI can then use local tools to perform tasks on your repository.
 
-- **How to invoke**: Start your prompt with `/agent` or `/do`.
-- **Example**: `/agent read the README.md file and summarize it`
+- **Workflow invocation**: `/preflight`, `/commit`, `/pr`, etc.
+- **Role invocation**: `@architect review the auth module`
+- **Continuation**: Follow-up messages after a workflow or role invocation continue in agentic mode with tools enabled. The `/new` command resets to standard chat.
+
+> [!TIP]
+> Regular chat messages (without `/` or `@` prefix) use simple text streaming without tools, keeping responses fast and lightweight.
 
 Available tools include:
 - `read_file(path)`: Reads a file from the repository.
-- `edit_file(path, content)`: Writes content to a file.
+- `patch_file(path, search, replace)`: Safely replaces a specific chunk of text in a file (preferred for targeted edits).
+- `edit_file(path, content)`: Rewrites entire file content.
 - `run_command(command)`: Executes a shell command. Output is **streamed line-by-line** to the execution output panel in real-time.
 - `find_files(pattern)`: Finds files using a glob pattern.
 - `grep_search(pattern, path)`: Searches for text within files.
@@ -62,6 +67,9 @@ Available tools include:
 ### 2. Standard Chat
 
 If you enter a prompt without a special command prefix, it is treated as a standard chat query. The AI will respond directly without using tools. This is useful for quick questions, code generation, or general conversation.
+
+> [!NOTE]
+> The parser handles both strict JSON and Python-style dict syntax (single-quoted keys/values) from LLMs, ensuring reliable tool execution across all providers. See EXC-004 for details.
 
 ### 3. Search and Navigation
 
@@ -71,6 +79,11 @@ The `/search` command uses the `agent search` engine to find relevant code snipp
 ### 4. Session Persistence
 
 The console automatically saves your conversation history. If you exit and restart the console, you can resume your previous session with all context intact.
+
+> [!NOTE]
+> **Privacy Notice**: All chat history is stored strictly locally on your machine in the application support directory (e.g., `~/Library/Application Support/agentic-dev/sessions.db` on Mac).
+> This data is used solely to provide conversation continuity and context across console sessions.
+> There is no automated remote backup. You may clear your history at any time by deleting the `sessions.db` file.
 
 ### 5. Disconnect Recovery
 
@@ -123,4 +136,4 @@ agent console --model gpt-4o
 
 ## Copyright
 
-Copyright (c) 2026 Justin Cook
+Copyright 2026 Justin Cook

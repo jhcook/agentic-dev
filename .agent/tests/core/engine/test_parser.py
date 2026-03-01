@@ -85,6 +85,14 @@ class TestParserCodeFenceStrategy:
         assert isinstance(result, AgentAction)
         assert result.tool == "run_command"
 
+    def test_code_fence_empty_json(self):
+        """Empty code fence should be warned and ignored, falling back to Finish."""
+        parser = ReActJsonParser()
+        llm_output = "Thought: I have no tools to run.\n\n```json\n\n```"
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentFinish)
+
+
 
 class TestParserNestedJSON:
     """Tests for correct handling of nested JSON objects via brace-counting."""
@@ -190,3 +198,149 @@ class TestExtractJSON:
         result = ReActJsonParser._extract_json(text, 0)
         assert result is not None
         assert result["tool"] == "test"
+
+
+class TestParserSingleQuoteFallback:
+    """Tests for ast.literal_eval fallback when LLMs emit Python dict syntax.
+
+    EXC-004: LLMs (particularly Gemini) frequently emit tool_input with
+    single-quoted keys/values. json.loads() rejects these, so the parser
+    falls back to ast.literal_eval which safely handles Python literals.
+    """
+
+    def test_single_quoted_action(self):
+        """Single-quoted dict from LLM should be parsed via ast.literal_eval."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Thought: I need to read the file.\n"
+            "Action: {\n"
+            "  'tool': 'read_file',\n"
+            "  'tool_input': {'path': 'README.md'}\n"
+            "}"
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "read_file"
+        assert result.tool_input == {"path": "README.md"}
+
+    def test_python_booleans_in_tool_input(self):
+        """Python True/False/None should be handled by ast.literal_eval."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Action: {\n"
+            "  'tool': 'edit_file',\n"
+            "  'tool_input': {'path': 'x.py', 'create': True, 'backup': False, 'meta': None}\n"
+            "}"
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "edit_file"
+        assert result.tool_input["create"] is True
+        assert result.tool_input["backup"] is False
+        assert result.tool_input["meta"] is None
+
+    def test_nested_single_quoted_input(self):
+        """Nested single-quoted dicts should be parsed correctly."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Thought: Running a command.\n"
+            "Action: {'tool': 'run_command', 'tool_input': {'command': 'uv run pytest', 'opts': {'verbose': True}}}"
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "run_command"
+        assert result.tool_input["opts"]["verbose"] is True
+
+    def test_extract_json_single_quotes(self):
+        """_extract_json should handle single-quoted strings via fallback."""
+        text = "{'tool': 'test', 'tool_input': {'key': 'value'}}"
+        result = ReActJsonParser._extract_json(text, 0)
+        assert result is not None
+        assert result["tool"] == "test"
+        assert result["tool_input"]["key"] == "value"
+
+    def test_single_quoted_brace_counting(self):
+        """Brace counting should handle single-quoted strings correctly."""
+        text = "{'tool': 'test', 'tool_input': {'msg': 'use {brackets} here'}}"
+        result = ReActJsonParser._extract_json(text, 0)
+        assert result is not None
+        assert result["tool_input"]["msg"] == "use {brackets} here"
+
+    def test_double_quoted_json_still_preferred(self):
+        """Standard double-quoted JSON should still work (json.loads path)."""
+        parser = ReActJsonParser()
+        llm_output = 'Action: {"tool": "read_file", "tool_input": {"path": "test.py"}}'
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "read_file"
+        assert result.tool_input == {"path": "test.py"}
+
+
+class TestParserYamlFallback:
+    """Tests for YAML-style action parsing (Strategy 4).
+
+    LLMs sometimes emit tool calls in YAML format instead of JSON.
+    The parser should handle these gracefully.
+    """
+
+    def test_yaml_indented_action(self):
+        """YAML-style indented key: value pairs."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Thought: I need to read the file.\n"
+            "Action:\n"
+            "  tool: read_file\n"
+            "  tool_input:\n"
+            "    path: .agent/tui/app.py\n"
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "read_file"
+        assert result.tool_input["path"] == ".agent/tui/app.py"
+
+    def test_yaml_with_inline_json_input(self):
+        """YAML tool name with JSON tool_input."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Thought: Running command.\n"
+            "Action:\n"
+            '  tool: run_command\n'
+            '  tool_input: {"command": "ls -la"}\n'
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "run_command"
+        assert result.tool_input["command"] == "ls -la"
+
+    def test_yaml_quoted_values(self):
+        """YAML with quoted string values."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "Action:\n"
+            '  tool: read_file\n'
+            '  tool_input:\n'
+            '    path: "README.md"\n'
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction)
+        assert result.tool == "read_file"
+        assert result.tool_input["path"] == "README.md"
+
+    def test_real_session_stall_format(self):
+        """Reproduce the exact format from the stalling session transcript."""
+        parser = ReActJsonParser()
+        llm_output = (
+            "The user is asking for a status update. My previous action was "
+            "to read `.agent/tui/app.py` to add a `/clear-history` command.\n"
+            "Action:\n"
+            "  tool: read_file\n"
+            "  tool_input:\n"
+            "    path: .agent/tui/app.py\n"
+        )
+        result = parser.parse(llm_output)
+        assert isinstance(result, AgentAction), (
+            f"Expected AgentAction but got AgentFinish: {result}"
+        )
+        assert result.tool == "read_file"
+        assert result.tool_input["path"] == ".agent/tui/app.py"
+

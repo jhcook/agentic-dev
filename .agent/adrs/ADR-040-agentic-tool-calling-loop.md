@@ -1,17 +1,3 @@
-# Copyright 2026 Justin Cook
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 # ADR-040: Agentic Tool-Calling Loop Architecture
 
 ## Status
@@ -20,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-02-27
+2026-02-27 (Updated 2026-03-01)
 
 ## Context
 
@@ -82,6 +68,34 @@ tool results are transmitted to external AI providers for processing.
 - Security boundary enforced at the application layer (not OS-level sandboxing)
 - New providers can be added by implementing a provider-specific loop function
 - The fallback to plain completion ensures all providers remain functional
+
+## Addendum: ReAct Parser Resilience (2026-03-01)
+
+### Context
+
+The text-based ReAct parser (`parser.py`) uses regex and JSON extraction to parse
+`Thought:` / `Action:` / `Observation:` sequences from LLM output. A critical bug
+was discovered where `json.loads()` rejected single-quoted Python dicts emitted by
+LLMs (particularly Gemini). The root cause was `executor.py:_build_context()` using
+`str(dict)` to format `tool_input` in history context.
+
+### Decision
+
+1. **Parser fallback**: Add `ast.literal_eval` as a fallback when `json.loads()` fails
+   (see EXC-004 for security justification).
+2. **Brace counting**: Updated to handle single-quoted strings during JSON extraction.
+3. **Root cause fix** (proposed): Use `json.dumps()` in `_build_context()` to produce
+   valid JSON in history, preventing LLMs from learning single-quote syntax.
+
+### Agentic Continuation State
+
+Follow-up messages after `/workflow` or `@role` invocations were incorrectly routed
+through simple text streaming (no tools). Two state fields were added to `ConsoleApp`:
+
+- `_agentic_mode: bool` — set `True` by `_handle_workflow()` and `_handle_role()`
+- `_agentic_system_prompt: str | None` — stores the augmented system prompt
+
+`_handle_chat()` checks `_agentic_mode` and routes accordingly. Reset on `/new`.
 
 ## Copyright
 

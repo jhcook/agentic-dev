@@ -12,9 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 id: JRN-088
 title: Console Agentic Tool Workflows
-state: COMMITTED
+state: DONE
 schema_version: 1
 priority: high
 tags:
@@ -145,6 +159,28 @@ steps:
   assertions:
   - Global provider/model matches the restored session settings
   - TUI status bar reflects the restored provider/model
+- id: 13
+  action: Agent generates a tool_input using Python dict syntax (single-quoted keys/values)
+  system_response: >
+    The ReAct parser attempts json.loads() first. When it fails,
+    the parser falls back to ast.literal_eval which safely parses
+    Python dict literals. The tool call proceeds normally.
+  assertions:
+  - json.loads is attempted first (strict JSON preferred)
+  - ast.literal_eval handles single-quoted dicts as fallback
+  - Tool call is dispatched correctly with parsed arguments
+  - No code injection is possible via ast.literal_eval
+- id: 14
+  action: Developer sends a follow-up message after a /workflow or @role invocation
+  system_response: >
+    The TUI detects _agentic_mode is active and routes the follow-up
+    message through the agentic ReAct loop with tools enabled, using
+    the stored system prompt from the original workflow/role invocation.
+  assertions:
+  - Follow-up is routed through _do_agentic_stream, not _do_simple_stream
+  - System prompt from original workflow/role is preserved
+  - Tools remain available for the follow-up message
+  - /new command resets _agentic_mode to false
 error_paths:
 - trigger_step: 1
   condition: AI provider does not support function calling
@@ -177,6 +213,17 @@ error_paths:
   - Agent attempts to recover from the error in the next thought step
   - Error is displayed in the chat panel
   severity: expected
+- trigger_step: 13
+  condition: LLM output contains malformed JSON that both json.loads and ast.literal_eval cannot parse
+  system_response: >
+    The parser falls back to AgentFinish, treating the raw output as
+    the final answer. The user sees the unprocessed LLM output in the
+    chat panel. The agentic loop does not enter an infinite retry.
+  assertions:
+  - Parser does not crash or hang
+  - Raw output is surfaced to the user as the final answer
+  - Error is logged for debugging
+  severity: expected
 edge_cases:
 - scenario: Large file read that exceeds context window
   expected: Agent truncates content and informs the user
@@ -199,6 +246,8 @@ linked_adrs:
 - ADR-002
 - ADR-039
 - ADR-040
+- EXC-003
+- EXC-004
 depends_on: []
 implementation:
   routes: []

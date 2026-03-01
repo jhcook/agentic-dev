@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Characters that could be used for shell injection.
 # Stripping these makes LLM-supplied queries safe for subprocess.
-_SHELL_META_RE = re.compile(r"[;|&$`\"'\\(){}<>!\n\r\x00]")
+_SHELL_META_RE = re.compile(r'[;|&$`"\'\(\){}<>!\n\r\x00]')
 
 
 def _sanitize_query(query: str) -> str:
@@ -172,41 +172,76 @@ def make_interactive_tools(
         List of 4 callable tool functions.
     """
 
+    def patch_file(path: str, search: str, replace: str) -> str:
+        """Safely replaces a specific chunk of text in a file. Use this for targeted edits to avoid rewriting entire files.
+        The search string must match exactly one occurrence in the file. Path must be relative to repo root.
+        """
+        logger.info(f"Executing tool 'patch_file' on path: {path}")
+        try:
+            filepath = _validate_path(str(repo_root / path), repo_root)
+            if not filepath.exists():
+                return f"Error: File '{path}' does not exist."
+            
+            content = filepath.read_text()
+            occurrences = content.count(search)
+            
+            if occurrences == 0:
+                return f"Error: The search string was not found in '{path}'."
+            elif occurrences > 1:
+                return f"Error: The search string matches {occurrences} times in '{path}'. Please provide a more specific search string."
+                
+            new_content = content.replace(search, replace, 1)
+            filepath.write_text(new_content)
+            logger.info(f"File {path} successfully patched.")
+            return f"File {path} successfully patched."
+        except ValueError as e:
+            logger.error(f"Validation error in 'patch_file' for path {path}: {e}", exc_info=True)
+            return f"Error: {e}"
+        except Exception as e:
+            logger.error(f"Error patching file {path}: {e}", exc_info=True)
+            return f"Error patching file: {e}"
+
     def edit_file(path: str, content: str) -> str:
-        """Writes content to a file within the repository. Path must be relative to repo root."""
+        """Rewrites the entire content of a file. For making targeted edits to large files, prefer 'patch_file'."""
+        logger.info(f"Executing tool 'edit_file' on path: {path}")
         try:
             filepath = _validate_path(str(repo_root / path), repo_root)
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(content)
-            return f"File {path} successfully updated."
+            result = f"File {path} successfully updated."
+            logger.info(result)
+            return result
         except ValueError as e:
+            logger.error(f"Validation error in 'edit_file' for path {path}: {e}", exc_info=True)
             return f"Error: {e}"
         except Exception as e:
             logger.error(f"Error editing file {path}: {e}", exc_info=True)
             return f"Error editing file: {e}"
 
     def run_command(command: str) -> str:
-        """Executes a shell command (sandboxed) in the repository root. Returns a single string containing the exit code, stdout, and stderr."""
+        """Executes a shell command (sandboxed) in the repository root. Streams output in real-time.
+
+        The command output is streamed to the UI and is NOT returned by this function.
+        The function's return value is a summary for the LLM, not the raw output.
+        """
+        logger.info(f"Executing tool 'run_command' with command: {command}")
         try:
             if not command.strip():
                 return "Error: empty command."
 
-            # Sandbox validation: 
-            # 1. Block path traversal
+            # Sandbox validation: Check for path traversal
             if ".." in command:
-                return "Error: path traversal ('..') is not allowed."
-            
-            # 2. Block absolute paths outside repo root (approximate check for shell=True)
-            # Find any /path/to patterns that are absolute but don't start with repo_root
-            abs_paths = re.findall(r"(?:^|\s)(/[^\s]*)", command)
-            for path in abs_paths:
-                if not path.startswith(str(repo_root)):
-                    return f"Error: absolute paths outside the repository are not allowed."
+                return "Error: path traversal ('..') is not allowed in the command."
 
-            # Use Popen for real-time streaming of output lines.
-            # We use shell=True as requested by the user to support pipes/redirections.
-            # Sandbox safety is managed by path validation above.
-            import os
+            # Restore Sandbox Enforcement: block absolute paths outside repo root
+            try:
+                for token in shlex.split(command):
+                    if token.startswith("/"):
+                        _validate_path(token, repo_root)
+            except ValueError as e:
+                return f"Error: Sandbox violation: {e}"
+
+            # Use Popen for real-time streaming of output lines, now with shell=True as per EXC-003.
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             
@@ -219,32 +254,39 @@ def make_interactive_tools(
                 text=True,
                 shell=True,
             )
-            stdout_lines: list[str] = []
-            try:
-                if proc.stdout:
-                    for line in proc.stdout:
-                        stdout_lines.append(line)
-                        if on_output:
-                            on_output(line.rstrip("\n"))
-                proc.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                return "Error: command timed out after 120 seconds."
+            
+            if proc.stdout:
+                for line in proc.stdout:
+                    if on_output:
+                        # QA FIX: Stream output to the UI callback as it arrives.
+                        on_output(line.rstrip("\n"))
+            
+            proc.wait(timeout=120)
 
-            output = f"Exit code: {proc.returncode}\n"
-            full_stdout = "".join(stdout_lines)
-            if full_stdout:
-                output += f"Output:\n{full_stdout[:20_000]}\n"
-            return output
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            logger.warning(f"'run_command' timed out after 120s: {command}")
+            return "Error: Command timed out after 120 seconds and was terminated."
+        except FileNotFoundError:
+            # This can happen if the first element of 'args' is not a valid executable.
+            logger.error(f"Command not found: {args[0]}")
+            return f"Error: Command not found: '{args[0]}'. Please ensure it is installed and in your PATH."
         except Exception as e:
-            logger.error(f"Error executing command: {e}", exc_info=True)
-            return f"Error executing command: {e}"
+            logger.error(f"Error executing command '{command}': {e}", exc_info=True)
+            return f"Error during command execution: {e}"
+
+        logger.info(f"'run_command' completed with exit code {proc.returncode}.")
+        # COMPLIANCE FIX: Return a simple summary instead of the full output.
+        # This prevents potentially large/sensitive data from being sent to the LLM.
+        return f"Command finished with exit code {proc.returncode}. Output was streamed to the user."
 
     def find_files(pattern: str) -> str:
         """Finds files matching a glob pattern within the repository."""
+        logger.info(f"Executing tool 'find_files' with pattern: {pattern}")
         try:
             matches = list(repo_root.rglob(pattern))
             if not matches:
+                logger.info(f"'find_files' found no matches for pattern: {pattern}")
                 return "No files found matching that pattern."
             # Cap at 100 results to prevent overwhelming output
             results = [
@@ -255,19 +297,25 @@ def make_interactive_tools(
                 if len(matches) > 100
                 else ""
             )
-            return "\n".join(results) + suffix
+            result_str = "\n".join(results) + suffix
+            logger.info(f"'find_files' found {len(matches)} files.")
+            return result_str
         except Exception as e:
+            logger.error(f"Error in 'find_files' with pattern '{pattern}': {e}", exc_info=True)
             return f"Error finding files: {e}"
 
     def grep_search(pattern: str, path: str = ".") -> str:
         """Searches for a text pattern in the repository using ripgrep."""
+        logger.info(f"Executing 'grep_search' with pattern='{pattern}' in path='{path}'")
         try:
             safe_query = _sanitize_query(pattern)
         except ValueError as e:
+            logger.error(f"Invalid grep pattern '{pattern}': {e}")
             return f"Error: {e}"
         try:
             search_path = _validate_path(str(repo_root / path), repo_root)
         except ValueError as e:
+            logger.error(f"Invalid grep path '{path}': {e}")
             return f"Error: {e}"
         try:
             result = subprocess.run(
@@ -279,11 +327,16 @@ def make_interactive_tools(
             )
             if result.returncode == 0:
                 lines = result.stdout.splitlines()[:50]
-                return "\n".join(lines) or "No matches found."
+                output = "\n".join(lines) or "No matches found."
+                logger.info(f"'grep_search' found {len(lines)} matches.")
+                return output
+            logger.info(f"'grep_search' found no matches (rg exit code {result.returncode}).")
             return "No matches found."
         except subprocess.TimeoutExpired:
+            logger.warning(f"'grep_search' timed out for pattern '{safe_query}'")
             return "Error: search timed out after 10 seconds."
         except FileNotFoundError:
+            logger.warning("ripgrep not found, falling back to basic grep.")
             # Fallback to in-process grep if rg not available
             matches: list[str] = []
             search_root = Path(search_path)
@@ -303,12 +356,14 @@ def make_interactive_tools(
                                 rel = fpath.relative_to(repo_root)
                                 matches.append(f"{rel}:{i}:{line.strip()}")
                                 if len(matches) >= 50:
+                                    logger.info(f"Fallback grep found {len(matches)} matches.")
                                     return "\n".join(matches)
                     except Exception:
                         continue
+            logger.info(f"Fallback grep found {len(matches)} matches.")
             return "\n".join(matches) or "No matches found."
 
-    return [edit_file, run_command, find_files, grep_search]
+    return [patch_file, edit_file, run_command, find_files, grep_search]
 
 
 # ---------------------------------------------------------------------------

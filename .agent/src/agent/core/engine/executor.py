@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import asyncio
+import json
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
@@ -140,6 +141,7 @@ class AgentExecutor:
                             system_prompt=full_system_prompt,
                             user_prompt=conversation_context,
                             model=self.model,
+                            stop_sequences=["\nObservation:"],
                         )
                         think_span.set_attribute("llm_response", llm_response)
                     except Exception as e:
@@ -168,6 +170,36 @@ class AgentExecutor:
                 elif isinstance(parsed_result, AgentAction):
                     action = parsed_result
                     logger.info(f"Agent Action: {action.tool}({action.tool_input})")
+
+                    # Loop detection: if the agent attempts the exact same
+                    # tool + input as the previous step, inject a hint instead
+                    # of re-executing. This breaks infinite read-file loops.
+                    if history:
+                        prev = history[-1]
+                        if (prev.action.tool == action.tool
+                                and prev.action.tool_input == action.tool_input):
+                            logger.info(
+                                f"Loop detected: {action.tool} called with "
+                                f"identical input twice consecutively."
+                            )
+                            hint = (
+                                f"Loop Detected: You already called "
+                                f"{action.tool} with these exact arguments "
+                                f"in the previous step. The result was:\n"
+                                f"{prev.observation[:500]}\n\n"
+                                f"Use this result to proceed. Do NOT repeat "
+                                f"the same tool call. Either process this "
+                                f"output, try a different tool, or provide "
+                                f"your Final Answer."
+                            )
+                            yield {"type": "thought", "content": "[Loop detected — reusing previous result]"}
+                            step = AgentStep(
+                                action=action,
+                                observation=hint,
+                            )
+                            history.append(step)
+                            continue
+
                     yield {
                         "type": "tool_call", 
                         "tool": action.tool, 
@@ -234,22 +266,34 @@ class AgentExecutor:
 You have access to the following tools:
 {tool_desc}
 
-Use the following format:
+IMPORTANT: You MUST follow this EXACT format. Do NOT deviate.
 
-Thought: you should always think about what to do
+Thought: [your reasoning about what to do next]
 Action: {
   "tool": "tool_name",
-  "tool_input": { ... }
+  "tool_input": { "key": "value" }
 }
-Observation: the result of the action
-... (this Thought/Action/Observation can repeat N times)
+Observation: [the result of the action will appear here]
+
+This Thought/Action/Observation cycle repeats until you have the answer.
+When you have the final answer:
+
 Thought: I now know the final answer
 Action: {
-  "tool": "Final Answer", 
-  "tool_input": "the final answer to the original input question"
+  "tool": "Final Answer",
+  "tool_input": "your final answer here"
 }
 
-If no tool is needed, just reply with the Final Answer.
+CRITICAL RULES:
+1. Action MUST be a JSON object with curly braces { }. NEVER use YAML or plain text.
+2. Use double quotes for ALL keys and string values. NEVER single quotes.
+3. Do NOT narrate what you are about to do. Just output Thought and Action.
+4. Do NOT say "I will now read the file" — just call the tool.
+5. After each Observation, immediately continue with the next Thought.
+6. If no tool is needed, go straight to Final Answer.
+7. **BANNED PHRASES**: Never say "Check the logs", "See the terminal output", "Review the UI results", or "The output is visible above". If you need information from a tool, you MUST call it and summarize the observation yourself.
+8. **ACTION-FIRST**: You MUST call a tool to verify any state you claim to have changed. Never assume a command succeeded without seeing the output.
+9. **GROUNDING**: Your Thoughts and Final Answer must be strictly grounded in the Observations. Do not hallucinate data that wasn't returned by a tool.
 """.replace("{tool_desc}", tool_desc)
 
         return f"{base_prompt}\n\n{react_instructions}"
@@ -261,8 +305,13 @@ If no tool is needed, just reply with the Final Answer.
         for step in history:
             # We reconstruct the thought process from the action's log
             context += f"Thought: {step.action.log}\n"
-            context += f"Action: {{\n  \"tool\": \"{step.action.tool}\",\n  \"tool_input\": {step.action.tool_input}\n}}\n"
-            context += f"Observation: {step.observation}\n" # observation is now a string
+            # Use json.dumps to produce valid JSON (not Python str() which
+            # emits single-quoted dicts that poison LLM context)
+            tool_input_json = json.dumps(step.action.tool_input) if isinstance(
+                step.action.tool_input, dict
+            ) else json.dumps(str(step.action.tool_input))
+            context += f'Action: {{\n  "tool": "{step.action.tool}",\n  "tool_input": {tool_input_json}\n}}\n'
+            context += f"Observation: {step.observation}\n"
         
-        context += "Thought:" # Nudge the LLM to continue thinking
+        context += "Thought:"  # Nudge the LLM to continue thinking
         return context

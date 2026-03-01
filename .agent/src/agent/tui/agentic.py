@@ -22,6 +22,7 @@ It uses a LocalToolClient to provide local Python tools
 instead of an MCP server connection.
 """
 
+from opentelemetry import trace
 import asyncio
 import inspect
 import logging
@@ -33,6 +34,7 @@ from agent.core.ai import ai_service
 from agent.core.engine.executor import AgentExecutor
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 FUNCTION_CALLING_PROVIDERS = {"gemini", "vertex", "openai", "anthropic"}
 
@@ -66,8 +68,15 @@ class LocalToolClient:
     This wraps make_tools() + make_interactive_tools() from agent.core.adk.tools.
     """
 
-    def __init__(self, repo_root: Path, on_output: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self, 
+        repo_root: Path, 
+        on_output: Optional[Callable[[str], None]] = None,
+        on_tool_approval: Optional[Callable[[str, str], Any]] = None,
+    ):
         from agent.core.adk.tools import make_tools, make_interactive_tools
+
+        self.on_tool_approval = on_tool_approval
 
         self._dispatch: Dict[str, Callable] = {}
         self._tool_metadata: List[_Tool] = []
@@ -142,6 +151,21 @@ class LocalToolClient:
                     # Specific fix for "input" key
                     arguments = {pname: arguments["input"]}
 
+            if name == "run_command":
+                cmd_str = arguments.get("command", "")
+                if self.on_tool_approval:
+                    approved = await self.on_tool_approval(name, cmd_str)
+                    if not approved:
+                        return _ToolResult(content="Error: User denied permission to execute command.")
+                else:
+                    # Fallback for non-TUI usage
+                    from rich.prompt import Confirm
+                    from rich.console import Console
+                    c = Console()
+                    c.print(f"\n[bold yellow]⚠️  Agent wants to execute:[/bold yellow] [cyan]{cmd_str}[/cyan]")
+                    if not Confirm.ask("[bold red]Allow execution?[/bold red]", default=False):
+                        return _ToolResult(content="Error: User denied permission to execute command.")
+
             result = await asyncio.to_thread(fn, **arguments)
             return _ToolResult(content=str(result))
         except Exception as e:
@@ -156,12 +180,13 @@ async def run_agentic_loop(
     repo_root: Path,
     provider: str,
     model: Optional[str] = None,
-    on_thought: Optional[Callable[[str], None]] = None,
-    on_tool_call: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-    on_tool_result: Optional[Callable[[str, str], None]] = None,
+    on_thought: Optional[Callable[[str, int], None]] = None,
+    on_tool_call: Optional[Callable[[str, Dict[str, Any], int], None]] = None,
+    on_tool_result: Optional[Callable[[str, str, int], None]] = None,
     on_final_answer: Optional[Callable[[str], None]] = None,
     on_error: Optional[Callable[[str], None]] = None,
     on_output: Optional[Callable[[str], None]] = None,
+    on_tool_approval: Optional[Callable[[str, str], Any]] = None,
 ) -> str:
     """
     Run the agentic loop using AgentExecutor with local tools.
@@ -179,87 +204,98 @@ async def run_agentic_loop(
         on_final_answer: Callback for the final answer.
         on_error: Callback for any errors.
         on_output: Callback for streaming run_command output.
+        on_tool_approval: Async callback to prompt user for permission to execute a tool.
 
     Returns:
         The final answer from the agent.
     """
-    # 1. Configure the AI service
-    if ai_service.provider != provider:
-        ai_service.set_provider(provider)
-    if model:
-        ai_service.models[provider] = model
+    with tracer.start_as_current_span("agent.run_agentic_loop"):
+        # 1. Configure the AI service
+        if ai_service.provider != provider:
+            ai_service.set_provider(provider)
+        if model:
+            ai_service.models[provider] = model
 
-    # 2. Create a local tool client (no MCP server needed)
-    tool_client = LocalToolClient(repo_root=repo_root, on_output=on_output)
+        # 2. Create a local tool client (no MCP server needed)
+        tool_client = LocalToolClient(
+            repo_root=repo_root, 
+            on_output=on_output,
+            on_tool_approval=on_tool_approval
+        )
 
-    # 3. Create the executor with local tools
-    executor = AgentExecutor(
-        llm=ai_service,
-        mcp_client=tool_client,
-        system_prompt=system_prompt,
-        model=model,
-    )
+        # 3. Create the executor with local tools
+        executor = AgentExecutor(
+            llm=ai_service,
+            mcp_client=tool_client,
+            system_prompt=system_prompt,
+            model=model,
+        )
 
-    # 4. Build context from conversation history
-    history_str = "\n".join(
-        f"{msg['role']}: {msg['content']}" for msg in messages
-    )
-    full_user_prompt = (
-        f"Previous conversation:\n{history_str}\n\nNew task: {user_prompt}"
-        if messages
-        else user_prompt
-    )
+        # 4. Build context from conversation history
+        history_str = "\n".join(
+            f"{msg['role']}: {msg['content']}" for msg in messages
+        )
+        full_user_prompt = (
+            f"Previous conversation:\n{history_str}\n\nNew task: {user_prompt}"
+            if messages
+            else user_prompt
+        )
 
-    final_answer = ""
+        final_answer = ""
+        step = 1
 
-    # 5. Run the executor and handle streamed events
-    try:
-        async for event in executor.run(user_prompt=full_user_prompt):
-            event_type = event.get("type")
+        # 5. Run the executor and handle streamed events
+        try:
+            async for event in executor.run(user_prompt=full_user_prompt):
+                event_type = event.get("type")
 
-            if event_type == "thought":
-                if on_thought and "content" in event:
-                    on_thought(str(event["content"]))
+                if event_type == "thought":
+                    if on_thought and "content" in event:
+                        on_thought(str(event["content"]), step)
 
-            elif event_type == "tool_call":
-                if on_tool_call and "tool" in event and "input" in event:
-                    tool_input = event["input"]
-                    # Align UI display with smart mapping logic
-                    fn = tool_client._dispatch.get(event["tool"])
-                    if fn:
-                        sig = inspect.signature(fn)
-                        params = list(sig.parameters.keys())
-                        if isinstance(tool_input, str) and len(params) == 1:
-                            tool_input = {params[0]: tool_input}
-                        elif isinstance(tool_input, dict) and len(params) == 1:
-                            pname = params[0]
-                            if pname not in tool_input and len(tool_input) == 1:
-                                tool_input = {pname: next(iter(tool_input.values()))}
-                            elif "input" in tool_input and pname != "input":
-                                tool_input = {pname: tool_input["input"]}
-                    
-                    args = tool_input if isinstance(tool_input, dict) else {"input": str(tool_input)}
-                    on_tool_call(event["tool"], args)
+                elif event_type == "tool_call":
+                    if on_tool_call and "tool" in event and "input" in event:
+                        tool_input = event["input"]
+                        # Align UI display with smart mapping logic
+                        fn = tool_client._dispatch.get(event["tool"])
+                        if fn:
+                            sig = inspect.signature(fn)
+                            params = list(sig.parameters.keys())
+                            if isinstance(tool_input, str) and len(params) == 1:
+                                tool_input = {params[0]: tool_input}
+                            elif isinstance(tool_input, dict) and len(params) == 1:
+                                pname = params[0]
+                                if pname not in tool_input and len(tool_input) == 1:
+                                    tool_input = {pname: next(iter(tool_input.values()))}
+                                elif "input" in tool_input and pname != "input":
+                                    tool_input = {pname: tool_input["input"]}
+                        
+                        args = tool_input if isinstance(tool_input, dict) else {"input": str(tool_input)}
+                        on_tool_call(event["tool"], args, step)
 
-            elif event_type == "tool_result":
-                if on_tool_result and "tool" in event and "output" in event:
-                    on_tool_result(event["tool"], str(event["output"]))
+                elif event_type == "tool_result":
+                    if on_tool_result and "tool" in event and "output" in event:
+                        on_tool_result(event["tool"], str(event["output"]), step)
+                    step += 1
 
-            elif event_type == "final_answer":
-                if "content" in event:
-                    final_answer = str(event["content"])
-                    if on_final_answer:
-                        on_final_answer(final_answer)
-                break
+                elif event_type == "final_answer":
+                    if "content" in event:
+                        final_answer = str(event["content"])
+                        if on_final_answer:
+                            on_final_answer(final_answer)
+                    break
 
-            elif event_type == "error":
-                if on_error and "content" in event:
-                    on_error(str(event["content"]))
-                break
+                elif event_type == "error":
+                    if on_error and "content" in event:
+                        on_error(str(event["content"]))
+                    break
 
-    except Exception as e:
-        logger.error(f"AgentExecutor failed: {e}", exc_info=True)
-        if on_error:
-            on_error(f"An unexpected error occurred: {e}")
+        except Exception as e:
+            import traceback
+            with open('/tmp/executor_error.log', 'w') as f:
+                traceback.print_exc(file=f)
+            logger.error(f"AgentExecutor failed: {e}", exc_info=True)
+            if on_error:
+                on_error(f"An unexpected error occurred: {e}")
 
-    return final_answer
+        return final_answer

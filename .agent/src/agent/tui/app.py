@@ -117,13 +117,10 @@ def _build_system_prompt() -> str:
         "1. **Workflow Priority**: For any message starting with `/` (e.g., `/commit`, `/story`), you MUST first use `read_file` to retrieve the corresponding workflow definition from `.agent/workflows/[command].md`.\n"
         "2. **Strict Adherence**: Follow the steps in the workflow precisely. Assumptions lead to regressions.\n"
         "3. **Role Adoption**: If the workflow specifies a role (e.g., @Architect, @Security), adopt that persona's priorities and checks.\n\n"
-        "## Tool Creation\n"
-        "You are **self-evolving**. If you lack a tool, build one:\n"
-        "1. Write the tool function with `edit_file` to "
-        "`.agent/src/agent/core/adk/tools.py`.\n"
-        "2. Add it to `TOOL_SCHEMAS` and `TOOL_FUNCTIONS` in the same file.\n"
-        "3. It will be available in the next agentic invocation.\n"
-        "4. **Restricted Modules**: Avoid `subprocess`, `os.system`, `exec`, "
+        "## Agent Development & Logic Gate\n"
+        "- **Logic Gate**: Do NOT modify files within `.agent/src/` unless the user's explicit intent is to 'Develop the Agent'. Otherwise, consider your own source code read-only.\n"
+        "- If you are explicitly developing the agent and lack a tool, you may build one by adding it to `.agent/src/agent/core/adk/tools.py`.\n"
+        "- **Restricted Modules**: Avoid `subprocess`, `os.system`, `exec`, "
         "`eval` unless absolutely necessary — use `run_command` instead.\n\n"
         "## Environment Management\n"
         "- Use tools for repo manipulation.\n"
@@ -132,6 +129,8 @@ def _build_system_prompt() -> str:
         "- Always verify repo state with `run_command('git status')` before "
         "and after significant changes.\n"
         "- Proactively check git branches and status when context is missing.\n\n"
+        "## Atomic File Operations\n"
+        "- When making targeted changes to existing files, use `patch_file` to safely replace specific chunks instead of reading and rewriting the entire file with `edit_file`. This saves tokens and reduces errors.\n\n"
     )
 
     # Add license header instructions if template exists
@@ -149,8 +148,14 @@ def _build_system_prompt() -> str:
                         "The template lives at `.agent/templates/license_header.txt`. You can also call `agent.core.utils.get_full_license_header(prefix)` programmatically to get the formatted header for any comment style.\n\n"
             "## Interaction Style\n"
             "- **Assertive & Neutral**: Use a professional, engineering-focused tone. \n"
-            "- **Action-Oriented**: Focus on state changes and verification.\n"
+            "- **Action-Oriented**: Focus on state changes and verification. If your thought process determines a tool is needed, you MUST call that tool before responding to the user.\n"
+            "- **Assertion of Observations**: You MUST output a specific observation to the user after every tool call. Do not just say you ran a command; summarize the findings (e.g., '0 files staged').\n"
+            "- **Precondition Enforcement**: For commands like `/preflight` and other workflows, strictly validate prerequisites (like having staged files) BEFORE beginning the main logic. Do not try to bypass or hallucinate past environmental blockers.\n"
             "- **Minimalist**: Use the smallest possible tool calls to achieve the goal.\n"
+            "- **Mandatory State Verification**: Before reporting the success or failure of a file modification or system state change, you MUST verify the result using a tool (e.g., `read_file`, `run_command` with `git status` or `ls`). Never assume an operation succeeded based on internal logic alone.\n"
+            "- **Context Refresh on Error**: If the user reports the system or panel is stuck or broken, trigger a Self-Correction routine: read the last files you touched and check the repository state to re-anchor your context.\n"
+            "- **Redundancy Filter**: Do not repeat discovery commands (like `ls` or `git status`) within a 3-turn window unless a write-action or file modification has occurred in the interim. Use your context memory.\n"
+            "- **Troubleshooting Protocol**: If a user mentions a 'stack trace', 'crash', or 'Service Failure', prioritize checking standard log locations immediately (e.g., `.agent/logs`, `stderr.log`, or `/var/log`) rather than guessing.\n"
         )
 
     return prompt
@@ -260,6 +265,54 @@ class DisconnectModal(ModalScreen[str]):
         }
         self.dismiss(action_map.get(event.button.id, "cancel"))
 
+
+class ConfirmToolModal(ModalScreen[str]):
+    """Modal to confirm tool execution (e.g., run_command)."""
+
+    DEFAULT_CSS = """
+    ConfirmToolModal {
+        align: center middle;
+    }
+    #tool-confirm-dialog {
+        width: 60;
+        height: auto;
+        border: thick $warning;
+        background: $surface;
+        padding: 1 2;
+    }
+    #tool-confirm-actions {
+        layout: horizontal;
+        align: center middle;
+        height: 3;
+    }
+    #tool-confirm-actions Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, tool_name: str, details: str) -> None:
+        super().__init__()
+        self._tool_name = tool_name
+        self._details = details
+
+    def compose(self) -> ComposeResult:
+        with Container(id="tool-confirm-dialog"):
+            yield Static(
+                f"[bold yellow]⚠ Agent wants to execute {self._tool_name}[/bold yellow]\n\n"
+                f"[cyan]{self._details}[/cyan]\n"
+            )
+            with Horizontal(id="tool-confirm-actions"):
+                yield Button("Allow", variant="success", id="btn-tool-yes")
+                yield Button("Allow Session", variant="warning", id="btn-tool-session")
+                yield Button("Deny", variant="error", id="btn-tool-no")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-tool-yes":
+            self.dismiss("yes")
+        elif event.button.id == "btn-tool-session":
+            self.dismiss("session")
+        else:
+            self.dismiss("no")
 
 class ConfirmDeleteModal(ModalScreen[bool]):
     """Modal to confirm conversation deletion."""
@@ -395,9 +448,17 @@ class ConsoleApp(App):
         self._search_matches: list[Any] = []  # SelectionLog widgets
         self._search_match_index: int = -1
 
+        # Agentic continuation state: when True, follow-up chat messages
+        # continue through the agentic ReAct loop with tools enabled.
+        self._agentic_mode: bool = False
+        self._agentic_system_prompt: str = ""
+
         # Plain text buffer for copy-to-clipboard
         self._chat_text: list[str] = []
         self._streaming_text = ""
+
+        # Security: Global tool approval for the current session
+        self._tools_approved_for_session = False
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main-area"):
@@ -427,9 +488,15 @@ class ConsoleApp(App):
         """Initialize state on application mount."""
         from agent.core.config import config
 
+        # Cache key widgets for robust access (fixes NoMatches query errors during modals)
+        self._chat_log = self.query_one("#chat-output", SelectionLog)
+        self._exec_log = self.query_one("#exec-output", SelectionLog)
+        self._stream_widget = self.query_one("#assistant-stream", Static)
+        self._status_bar = self.query_one("#status-bar", Static)
+        self._input_box = self.query_one("#input-box", Input)
+
         # Enable text selection
-        log = self.query_one("#chat-output", SelectionLog)
-        log.can_focus = True
+        self._chat_log.can_focus = True
 
         # Session store
         self._store = SessionStore()
@@ -541,38 +608,34 @@ class ConsoleApp(App):
             self._update_status_bar()
 
     def _write_system(self, text: str) -> None:
-        """Write a system message to the chat output."""
-        log = self.query_one("#chat-output", SelectionLog)
-        log.write(text)
+        """Display system message."""
+        from rich.markup import escape
+        self._chat_log.write(escape(text))
         self._chat_text.append(text)
 
     def _write_user(self, text: str) -> None:
-        """Write a user message to the chat output."""
-        log = self.query_one("#chat-output", SelectionLog)
-        log.write(f"\n[bold green]You:[/bold green] {text}")
+        """Display user's message."""
+        from rich.markup import escape
+        self._chat_log.write(f"\n[bold green]You:[/bold green] {escape(text)}")
         self._chat_text.append(f"You: {text}")
 
     def _write_assistant_start(self) -> None:
         """Initialize assistant response display."""
-        log = self.query_one("#chat-output", SelectionLog)
-        log.write("\nAssistant:", scroll_end=True)
+        self._chat_log.write("\nAssistant:", scroll_end=True)
         # Clear and prepare the streaming widget
-        stream = self.query_one("#assistant-stream", Static)
-        stream.update("")
-        stream.display = True
+        self._stream_widget.update("")
+        self._stream_widget.display = True
         self._streaming_text = ""
 
     def _write_chunk(self, text: str) -> None:
         """Update the active streaming widget with new token."""
         self._streaming_text += text
-        stream = self.query_one("#assistant-stream", Static)
-        stream.update(self._streaming_text)
+        self._stream_widget.update(self._streaming_text)
 
         # Throttle scroll_end to avoid flooding the event loop
         now = time.time()
         if not hasattr(self, "_last_scroll_time") or now - self._last_scroll_time > 0.1:
-            log = self.query_one("#chat-output", SelectionLog)
-            log.scroll_end(animate=False)
+            self._chat_log.scroll_end(animate=False)
             self._last_scroll_time = now
 
     def _write_final_answer(self, text: str) -> None:
@@ -594,6 +657,14 @@ class ConsoleApp(App):
             exec_log = self.query_one("#exec-output", SelectionLog)
             exec_log.display = False
             exec_log.clear()
+        except Exception:
+            pass
+
+    def _show_exec_panel(self) -> None:
+        """Show and clear the execution output panel for a new agentic run."""
+        try:
+            self._exec_log.clear()
+            self._exec_log.display = True
         except Exception:
             pass
 
@@ -624,7 +695,7 @@ class ConsoleApp(App):
 
     def _update_status_bar(self) -> None:
         """Update the bottom status bar with provider/model/tokens."""
-        status = self.query_one("#status-bar", Static)
+        status = self._status_bar
         provider = "none"
         model = "auto"
         try:
@@ -762,6 +833,8 @@ class ConsoleApp(App):
 
         elif cmd == "new":
             self._new_session()
+            self._agentic_mode = False
+            self._agentic_system_prompt = ""
             log = self.query_one("#chat-output", SelectionLog)
             log.clear()
             self._write_system("[dim]New conversation started.[/dim]")
@@ -1088,11 +1161,30 @@ class ConsoleApp(App):
 
         user_msg = parsed.args or f"Execute the {parsed.workflow_name} workflow."
 
+        if parsed.workflow_name == "preflight":
+            import subprocess
+            try:
+                staged = subprocess.check_output(["git", "diff", "--cached", "--name-only"]).strip()
+                if not staged:
+                    self._write_system("[red]Error: Cannot run /preflight without staged files. Please git add your changes first.[/red]")
+                    return
+            except Exception:
+                pass
+
         augmented_system = (
             f"{_get_system_prompt()}\n\n"
             f"The user is invoking the '{parsed.workflow_name}' workflow. "
             f"Here are the workflow instructions:\n\n{wf_content}"
         )
+
+        if parsed.workflow_name == "preflight":
+            augmented_system += (
+                "\n\n## Preflight Error Recovery\n"
+                "If the `agent preflight` command reports a 'BLOCK' or fails, you MUST:\n"
+                "1. Proactively use `run_command` or dedicated search tools to retrieve full failure details from logs/reports.\n"
+                "2. Summarize the EXACT reasons for failure to the user.\n"
+                "3. NEVER tell the user to 'check the UI' or 'review the output'. YOU must read the output and provide the analysis yourself."
+            )
 
         self._store.add_message(self._session.id, "user", parsed.raw)
         if len(self._session.messages) == 0:
@@ -1100,6 +1192,10 @@ class ConsoleApp(App):
             self._session.title = parsed.raw[:60]
 
         self._session.messages.append(Message(role="user", content=parsed.raw))
+
+        # Enable agentic continuation for follow-up messages
+        self._agentic_mode = True
+        self._agentic_system_prompt = augmented_system
 
         await self._stream_response(augmented_system, user_msg, use_tools=True)
 
@@ -1133,10 +1229,19 @@ class ConsoleApp(App):
 
         self._session.messages.append(Message(role="user", content=parsed.raw))
 
+        # Enable agentic continuation for follow-up messages
+        self._agentic_mode = True
+        self._agentic_system_prompt = augmented_system
+
         await self._stream_response(augmented_system, user_msg, use_tools=True)
 
     async def _handle_chat(self, raw: str) -> None:
-        """Handle a plain chat message."""
+        """Handle a plain chat message.
+
+        If the conversation is in agentic mode (a workflow or role was
+        recently invoked), this continues through the agentic ReAct loop
+        with tools enabled so follow-up messages can execute tools.
+        """
         self._write_user(raw)
 
         self._store.add_message(self._session.id, "user", raw)
@@ -1146,36 +1251,55 @@ class ConsoleApp(App):
 
         self._session.messages.append(Message(role="user", content=raw))
 
-        await self._stream_response(_get_system_prompt(), raw)
+        if self._agentic_mode:
+            # Continue through agentic loop with the workflow/role context
+            await self._stream_response(
+                self._agentic_system_prompt, raw, use_tools=True
+            )
+        else:
+            await self._stream_response(_get_system_prompt(), raw)
 
-    def _write_thought(self, thought: str) -> None:
+    def _write_thought(self, thought: str, step: int) -> None:
         """Display agent's thought process."""
-        log = self.query_one("#chat-output", SelectionLog)
-        log.write(
-            "\n[dim]🤔 Thinking...[/dim]",
+        import re
+        from rich.markup import escape
+        
+        # Clean the thought of typical ReAct garbage
+        cleaned = re.sub(r'```json.*?```', '', thought, flags=re.DOTALL|re.IGNORECASE)
+        cleaned = re.sub(r'\{.*?\}', '', cleaned, flags=re.DOTALL) # Basic JSON object stripping if outside blocks
+        cleaned = cleaned.replace("Thought:", "").replace("Action:", "").replace("Action Input:", "").strip()
+        
+        if not cleaned:
+            cleaned = "Thinking..."
+            
+        # Add a subtle step indicator
+        prefix = f"[dim]Step {step}[/dim] 🤔" if step > 1 else "🤔"
+        
+        self._chat_log.write(
+            f"\n[dim]{prefix} {escape(cleaned)}[/dim]",
             scroll_end=True,
         )
 
-    def _write_tool_call(self, name: str, arguments: Dict[str, Any]) -> None:
+    def _write_tool_call(self, name: str, arguments: Dict[str, Any], step: int) -> None:
         """Display a tool call notification in the exec panel."""
         from rich.markup import escape
-        exec_log = self.query_one("#exec-output", SelectionLog)
-        exec_log.display = True
-        exec_log.clear()
+        self._exec_log.display = True
+        # Separator between tool calls for readability (don't clear previous output)
+        if self._exec_log.children:
+            self._exec_log.write("─" * 40, scroll_end=True)
         args_str = ", ".join(f"{k}={v!r}" for k, v in arguments.items())
-        exec_log.write(
-            f"🔧 [bold]{escape(name)}[/bold]({escape(args_str)})",
+        self._exec_log.write(
+            f"[bold blue]Step {step}[/bold blue] 🔧 [bold]{escape(name)}[/bold]({escape(args_str)})",
             scroll_end=True,
         )
 
-    def _write_tool_result(self, name: str, result: str) -> None:
+    def _write_tool_result(self, name: str, result: str, step: int) -> None:
         """Display a tool result summary in the exec panel."""
         from rich.markup import escape
-        exec_log = self.query_one("#exec-output", SelectionLog)
         
         # Display the full result
-        exec_log.write(
-            f"[green]✓[/green] [dim]{escape(name)}[/dim]:\n{escape(result)}",
+        self._exec_log.write(
+            f"[green]✓[/green] [dim]{escape(name)} (Step {step})[/dim]:\n{escape(result)}",
             scroll_end=True,
         )
 
@@ -1193,11 +1317,14 @@ class ConsoleApp(App):
         from rich.markup import escape
         
         def _update():
-            exec_log = self.query_one("#exec-output", SelectionLog)
-            exec_log.display = True
-            exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
-            
-        self.call_from_thread(_update)
+            self._exec_log.display = True
+            self._exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
+
+        try:
+            self.call_from_thread(_update)
+        except RuntimeError:
+            # Already on the main thread (not in a worker thread)
+            _update()
 
     # ── Search ──────────────────────────────────────────────────────
 
@@ -1406,6 +1533,9 @@ class ConsoleApp(App):
             {"role": m.role, "content": m.content} for m in pruned_messages
         ]
 
+        # Initialize the exec panel at the start of the agentic run
+        self._show_exec_panel()
+
         full_response = ""
         try:
             full_response = await run_agentic_loop(
@@ -1418,8 +1548,10 @@ class ConsoleApp(App):
                 on_thought=self._write_thought,
                 on_tool_call=self._write_tool_call,
                 on_tool_result=self._write_tool_result,
+                on_final_answer=lambda text: self._write_chunk(text),
                 on_error=self._write_error,
                 on_output=self._write_tool_output,
+                on_tool_approval=self._ask_tool_approval,
             )
         except Exception as e:
             logger.error(
@@ -1433,6 +1565,36 @@ class ConsoleApp(App):
             return None
 
         return full_response
+
+    async def _ask_tool_approval(self, tool_name: str, details: str) -> bool:
+        """Present an async modal dialog to approve dangerous tools."""
+        if self._tools_approved_for_session:
+            return True
+            
+        result = await self.push_screen_wait(ConfirmToolModal(tool_name, details))
+        
+        if result == "session":
+            self._tools_approved_for_session = True
+            return True
+        return result == "yes"
+
+    async def push_screen_wait(self, screen: ModalScreen) -> Any:
+        """Push a screen and wait for it to be dismissed, returning the result.
+        
+        Args:
+            screen: The screen to push.
+            
+        Returns:
+            The value passed to self.dismiss() in the modal.
+        """
+        future: asyncio.Future[Any] = asyncio.Future()
+        
+        def on_dismiss(result: Any) -> None:
+            if not future.done():
+                future.set_result(result)
+                
+        self.push_screen(screen, callback=on_dismiss)
+        return await future
 
 
     def _show_disconnect_modal(self, error_msg: str) -> None:

@@ -162,6 +162,7 @@ SOURCE CODE OUTLINES:
 Generate the runbook now.
 """
 
+    console.print("[bold green]🤖 Panel is discussing...[/bold green]")
     with console.status("[bold green]🤖 Panel is discussing...[/bold green]"):
         content = ai_service.complete(system_prompt, user_prompt)
         

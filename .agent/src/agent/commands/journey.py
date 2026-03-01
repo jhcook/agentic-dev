@@ -199,6 +199,7 @@ EXISTING JOURNEYS (for context, avoid duplication):
 Generate the journey YAML now.
 """
 
+            console.print("[bold green]🤖 AI is designing the journey...[/bold green]")
             with console.status("[bold green]🤖 AI is designing the journey...[/bold green]"):
                 ai_content = ai_service.complete(system_prompt, user_prompt)
 

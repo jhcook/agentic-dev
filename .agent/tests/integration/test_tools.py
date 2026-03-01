@@ -78,8 +78,8 @@ from langchain_core.tools import tool
 
 @tool
 def my_integration_test_tool() -> str:
-    \"\"\"Returns success.\"\"\"
-    return "SUCCESS"
+    """Returns success."""
+    return \"SUCCESS\"
 """
     
     # 1. Create
@@ -102,8 +102,8 @@ def my_integration_test_tool() -> str:
     # 4. Security Scan (Dirty)
     dirty_path = os.path.join(custom_dir, "dirty.py")
     with open(dirty_path, "w") as f:
-        f.write("api_key = 'sk-12345678901234567890'")
-        f.write("\nemail = 'test@example.com'")
+        f.write("api_key = '[REDACTED_SECRET]'")
+        f.write("\nemail = '[REDACTED_EMAIL]'")
         
     scan_res_dirty = scan_file_for_secrets.invoke({"file_path": dirty_path})
     assert "Potential API Key found" in scan_res_dirty
@@ -114,3 +114,25 @@ def test_package_listing():
     res = get_installed_packages.invoke({})
     assert len(res) > 0
     assert "==" in res
+
+def test_patch_file():
+    """Test the patch_file tool."""
+    # Create a temporary file
+    test_file_path = "test_file.txt"
+    with open(test_file_path, "w") as f:
+        f.write("This is an initial test file.\n")
+
+    # Patch the file
+    from agent.core.adk.tools import make_interactive_tools
+    tools = make_interactive_tools(repo_root=Path("."))
+    patch_file_tool = tools[0]
+    result = patch_file_tool(path=test_file_path, search="initial", replace="patched")
+    assert "successfully patched" in result
+
+    # Verify the file content
+    with open(test_file_path, "r") as f:
+        content = f.read()
+    assert "This is an patched test file.\n" == content
+
+    # Clean up the temporary file
+    os.remove(test_file_path)

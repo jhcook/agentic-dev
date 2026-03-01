@@ -131,7 +131,7 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                 for file_path in files_to_sync:
                     try:
                         mtime = file_path.stat().st_mtime
-                        file_key = str(file_path.relative_to(config.repo_root))
+                        file_key = str(file_path.resolve().relative_to(config.repo_root.resolve()))
                         
                         if file_key in synced_files and synced_files[file_key] >= mtime:
                             # Skip if not modified

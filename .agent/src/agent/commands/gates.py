@@ -118,11 +118,11 @@ def run_security_scan(
     )
 
 
-def run_qa_gate(test_command: str = "make test") -> GateResult:
+def run_qa_gate(test_command: str = "pytest .agent/tests") -> GateResult:
     """Execute the configured test command as a QA gate.
 
     Args:
-        test_command: Shell command to run tests (default: ``make test``).
+        test_command: Shell command to run tests (default: ``pytest .agent/tests``).
 
     Returns:
         GateResult with pass/fail based on exit code.

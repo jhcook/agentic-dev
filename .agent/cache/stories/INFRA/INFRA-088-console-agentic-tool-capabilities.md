@@ -2,7 +2,7 @@
 
 ## State
 
-COMMITTED
+DONE
 
 ## Problem Statement
 
@@ -34,6 +34,11 @@ As a developer using the Terminal Console, I want the console agent to be able t
 - [x] **Scenario 15**: The `use_tools` flag is preserved during disconnect recovery retries, ensuring the correct streaming path is maintained.
 - [x] **Scenario 16**: When the `/provider` or `/model` command is used, the active session is updated, and subsequently created sessions inherit these settings.
 - [x] **Scenario 17**: ReAct "thoughts" displayed in the TUI are cleaned of raw JSON, `Action:`, and `Thought:` prefixes, providing a human-readable stream.
+- [x] **Scenario 18**: ReAct parser handles Python-dict syntax (single-quoted keys/values) from LLM output via `ast.literal_eval` fallback, preventing tool execution failures.
+- [x] **Scenario 19**: ReAct parser handles YAML-style tool inputs (frequently emitted by some models) via a robust fallback regex matching `tool:` and `tool_input:` blocks.
+- [x] **Scenario 20**: The Agentic Execution Panel displays agent progress by clearly demarcating 'Step N' for each thought, tool call, and tool result.
+- [x] **Scenario 21**: After invoking a `/workflow` or `@role`, follow-up messages continue the agentic ReAct loop with tools enabled, rather than falling back to simple streaming.
+- [x] **Scenario 22**: Deep dive analysis completed — 8 dead/redundant code items, 4 optimizations, and 10 enhancement proposals identified and documented.
 
 ## Non-Functional Requirements
 
@@ -46,7 +51,9 @@ As a developer using the Terminal Console, I want the console agent to be able t
 
 - ADR-028 (Typer Synchronous CLI Architecture)
 - ADR-002 (Security Controls)
+- ADR-040 (Agentic Tool-Calling Loop Architecture)
 - EXC-003 (Shell Execution for Agentic Tools)
+- EXC-004 (Python ast.literal_eval Fallback in ReAct Parser)
 
 ## Linked Journeys
 
@@ -57,22 +64,29 @@ As a developer using the Terminal Console, I want the console agent to be able t
 
 Components touched:
 - Agentic loop
-- Tool/Function calling registry
+- Tool/Function calling registry (`read_file`, `patch_file`, `run_command`, etc.)
 - File system interaction components
 - Shell command execution
 - Chat panel display
 - Provider management
 - Session Persistence
+- User Documentation (`docs/console.md`)
 
 Workflows affected:
 - Code modification and testing
 - Code exploration
 - Automated code generation tasks
+- **New Workflow**: Agentic continuation for multi-turn role and workflow tasks.
 
 Risks identified:
 - Security vulnerabilities due to unrestricted command execution.
 - Performance degradation due to inefficient tool implementations.
 - Incompatibilities with certain AI providers.
+
+### User Impact
+
+- **`patch_file` tool**: Provides a safer, more precise way to edit files compared to rewriting the entire file with `edit_file`.
+- **Agentic Continuation**: Enables multi-turn conversations where the agent can continue to use tools, making complex, iterative tasks possible.
 
 ## Test Strategy
 
@@ -81,8 +95,32 @@ Risks identified:
 - End-to-end tests for complex workflows involving multiple tool calls.
 - **Regression tests for stream routing** (`test_stream_routing.py`) — 10 tests verifying simple vs agentic path selection, `use_tools` flag propagation, retry preservation, command history, and /search registration.
 - **Session Synchronization Tests** (`test_session.py`, `test_commands.py`) — verifying that `/provider` and `/model` update the persistent session.
+- **ReAct parser tests** (`test_parser.py`) — verifying single-quoted dict parsing, `ast.literal_eval` fallback, and brace-counting with quoted strings.
 - Security audits to identify potential vulnerabilities.
 - Performance tests to measure tool call latency and command execution time.
+
+## Deep Dive Findings (2026-03-01)
+
+### Root Cause Analysis
+
+- **Parser Bug**: `executor.py:_build_context()` uses `str(dict)` to format `tool_input` in ReAct history, producing single-quoted Python dicts. The LLM learns this format and reproduces it, causing `json.loads()` to fail. Fix: `ast.literal_eval` fallback in parser + `json.dumps()` in `_build_context`.
+- **Agentic Continuation**: Follow-up messages after workflows/roles fell through to simple streaming. Fix: `_agentic_mode` state flag in `ConsoleApp`.
+
+### Code Quality Items Identified
+
+- Duplicate `search_codebase` / `grep_search` tools
+- `TOOL_SCHEMAS` built at import time with `Path(".")`
+- Dead `msg_count` query in `session.py`
+- N+1 session list queries
+- Token budget default (8192) too small for modern models
+- `MCPClient.get_context()` is NotebookLM-specific in generic class
+
+### Enhancement Candidates
+
+- Native function calling (bypass ReAct text parsing for Gemini/OpenAI/Anthropic)
+- Multi-turn agentic memory across messages
+- Tool approval flow for destructive operations
+- `/export` command, tab autocomplete, session tagging
 
 ## Rollback Plan
 

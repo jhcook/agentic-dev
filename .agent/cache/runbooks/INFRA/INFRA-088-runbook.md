@@ -2,7 +2,7 @@
 
 ## State
 
-ACCEPTED
+DONE
 
 ## Goal Description
 
@@ -28,9 +28,22 @@ Enable the Terminal Console TUI to leverage agentic workflows, allowing for comp
 
 ## Targeted Refactors & Cleanups (INFRA-043)
 
-- [ ] Convert prints to logger in `src/agent/tui/commands.py` and `src/agent/tui/app.py`
-- [ ] Standardize error handling in `src/agent/core/adk/tools.py` to provide more informative messages.
-- [ ] Implement `EXC-003` to allow `shell=True` for agentic tools while maintaining sandbox boundaries.
+- [x] Convert prints to logger in `src/agent/tui/commands.py` and `src/agent/tui/app.py`
+- [x] Standardize error handling in `src/agent/core/adk/tools.py` to provide more informative messages.
+- [x] Implement `EXC-003` to allow `shell=True` for agentic tools while maintaining sandbox boundaries.
+- [x] **EXC-004**: Add `ast.literal_eval` fallback in ReAct parser for LLM-generated single-quoted dicts.
+- [x] Add `_agentic_mode` state to `ConsoleApp` for workflow/role continuation.
+- [x] Add robust YAML-style action parser to `ReActJsonParser` to recover from malformed responses.
+- [x] Add agent progress visualization (Step Counter) to the execution panel and chat logs.
+
+### Deep Dive Optimizations (Proposed)
+
+- [ ] Fix `_build_context` in `executor.py` to use `json.dumps()` instead of `str()` (root cause of parser bug).
+- [ ] Remove duplicate `search_codebase` tool (redundant with `grep_search`).
+- [ ] Remove dead `msg_count` query in `session.py`.
+- [ ] Scale `TokenBudget` default by model context window.
+- [ ] Fix N+1 session list queries with JOIN.
+- [ ] Extract `MCPClient.get_context()` to `NotebookLMClient` subclass.
 
 ## Implementation Steps
 
@@ -78,6 +91,7 @@ def grep_search(pattern: str, filepath: str) -> str:
         return result.stdout
     except Exception as e:
         return f"Error during grep search: {e}"
+
 ```
 
 #### MODIFY `src/agent/core/adk/tools.py`
@@ -134,6 +148,7 @@ async def execute_tool(tool_name: str, arguments: dict) -> str:
 - Modify the console TUI to handle the real-time output from the `run_command` tool. Display `stdout` and `stderr` in the chat panel.
 - Add support for graceful degradation when function calling is not available.
 - Add message to indicate if tools are unavailable due to provider limitations.
+
 ```python
 # Example (Illustrative - may require adaptation)
     def display_message(self, message: str):
@@ -145,6 +160,7 @@ async def execute_tool(tool_name: str, arguments: dict) -> str:
 
 #### MODIFY `src/agent/core/ai/llm_service.py`
 - Add provider check if it supports function calling
+
 ```python
     def supports_function_calling(self) -> bool:
         """
@@ -160,6 +176,7 @@ async def execute_tool(tool_name: str, arguments: dict) -> str:
 #### MODIFY `src/agent/commands/console.py`
 - Add logic to initiate the agent loop in the TUI.
 - Display a message if the current provider does not support function calling.
+
 ```python
 import typer
 from rich.console import Console
@@ -226,6 +243,17 @@ def console():
 #### MODIFY `src/agent/core/engine/parser.py`
 - Clean `AgentAction.log` of raw JSON and internal prefixes.
 - Ensure `AgentFinish` returns cleaned output matching the log.
+- **Add `ast.literal_eval` fallback** in `_extract_json()` for single-quoted Python dicts.
+- **Update brace-counting** to correctly handle single-quoted strings.
+
+### `src/agent/tui/app.py` (Agentic Continuation)
+
+#### MODIFY `src/agent/tui/app.py`
+- Add `_agentic_mode: bool` and `_agentic_system_prompt: str | None` state fields to `ConsoleApp`.
+- In `_handle_workflow()`: set `_agentic_mode = True` and store the augmented system prompt.
+- In `_handle_role()`: set `_agentic_mode = True` and store the system prompt.
+- In `_handle_chat()`: check `_agentic_mode` — if true, route through `_stream_response` with `use_tools=True`.
+- Reset `_agentic_mode = False` on `/new` command and after agentic stream completion.
 
 ## Verification Plan
 

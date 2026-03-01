@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import json
 import re
 import logging
@@ -54,10 +55,18 @@ class ReActJsonParser(BaseParser):
         if action_data is None:
             action_data = self._try_any_json_block(text)
 
+        # Strategy 4: YAML-style action (tool: name / tool_input: ...)
+        if action_data is None:
+            action_data = self._try_yaml_action(text)
+
         if action_data:
             tool = action_data.get("tool")
             tool_input = action_data.get("tool_input")
             if tool and tool_input is not None:
+                if isinstance(tool, dict):
+                    tool = tool.get("name") or str(tool)
+                elif not isinstance(tool, str):
+                    tool = str(tool)
                 # Extract the thought text (everything before the Action)
                 # If "Action:" is present, take everything before it.
                 # Otherwise, use a regex to find the start of the JSON block we parsed.
@@ -125,16 +134,105 @@ class ReActJsonParser(BaseParser):
                     return data
         return None
 
+    def _try_yaml_action(self, text: str) -> dict | None:
+        """Parse YAML-style actions that LLMs sometimes produce.
+
+        Handles formats like:
+            Action:
+              tool: read_file
+              tool_input:
+                path: .agent/tui/app.py
+
+        Or inline:
+            Action:
+              tool: read_file
+              tool_input: {"path": "app.py"}
+        """
+        # Look for 'tool:' and 'tool_input:' patterns
+        tool_match = re.search(
+            r'(?:Action:.*?)?\btool:\s*(["\']?)([\w_]+)\1\s*$',
+            text, re.MULTILINE
+        )
+        if not tool_match:
+            return None
+
+        tool_name = tool_match.group(2)
+
+        # Now find tool_input — it could be inline JSON or YAML-style
+        input_match = re.search(
+            r'tool_input:\s*(.+)',
+            text[tool_match.end():], re.DOTALL
+        )
+        if not input_match:
+            return None
+
+        input_text = input_match.group(1).strip()
+
+        # Try parsing as JSON first
+        try:
+            tool_input = json.loads(input_text.split('\n')[0] if '{' in input_text.split('\n')[0] else input_text)
+            return {"tool": tool_name, "tool_input": tool_input}
+        except (json.JSONDecodeError, IndexError):
+            pass
+
+        # Try ast.literal_eval
+        try:
+            result = ast.literal_eval(input_text.split('\n')[0] if '{' in input_text.split('\n')[0] else input_text)
+            if isinstance(result, dict):
+                return {"tool": tool_name, "tool_input": result}
+        except (ValueError, SyntaxError):
+            pass
+
+        # Parse YAML-style indented key: value pairs
+        tool_input = {}
+        for line in input_text.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            kv_match = re.match(r'([\w_]+):\s*(.+)', line)
+            if kv_match:
+                key = kv_match.group(1)
+                val = kv_match.group(2).strip()
+                # Strip surrounding quotes
+                if (val.startswith('"') and val.endswith('"')) or \
+                   (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                # Try to parse booleans/numbers
+                if val.lower() == 'true':
+                    val = True
+                elif val.lower() == 'false':
+                    val = False
+                elif val.lower() == 'none' or val.lower() == 'null':
+                    val = None
+                tool_input[key] = val
+            else:
+                break  # Stop at non-key-value lines
+
+        if tool_input:
+            logger.info(f"Parsed YAML-style action: {tool_name}({tool_input})")
+            return {"tool": tool_name, "tool_input": tool_input}
+
+        return None
+
     @staticmethod
     def _extract_json(text: str, start: int) -> dict | None:
-        """Extract a JSON object from text starting at `start` using brace counting."""
-        # Find the opening brace
+        """Extract a JSON object from text starting at `start` using brace counting.
+
+        Handles both strict JSON (double-quoted) and Python dict syntax
+        (single-quoted) that LLMs commonly output. Also handles nested
+        extra braces (e.g., {{ ... }}).
+        """
+        # Find the first opening brace
         idx = text.find('{', start)
         if idx < 0:
             return None
+            
         depth = 0
         in_string = False
+        string_char = None
         escape = False
+        first_brace_idx = idx
+        
         for i in range(idx, len(text)):
             ch = text[i]
             if escape:
@@ -143,20 +241,49 @@ class ReActJsonParser(BaseParser):
             if ch == '\\' and in_string:
                 escape = True
                 continue
-            if ch == '"' and not escape:
-                in_string = not in_string
+            if ch in ('"', "'") and not escape:
+                if in_string:
+                    if ch == string_char:
+                        in_string = False
+                        string_char = None
+                else:
+                    in_string = True
+                    string_char = ch
                 continue
+                
             if in_string:
                 continue
+                
             if ch == '{':
                 depth += 1
             elif ch == '}':
                 depth -= 1
                 if depth == 0:
-                    try:
-                        return json.loads(text[idx:i + 1])
-                    except json.JSONDecodeError:
-                        return None
+                    raw = text[first_brace_idx:i + 1]
+                    
+                    # Robust extraction: try parsing 'raw', but if it fails, 
+                    # check if it's wrapped in extra braces (like {{...}})
+                    # and strip them.
+                    candidates = [raw]
+                    # If it looks like {{...}}, add stripped version
+                    while raw.startswith('{{') and raw.endswith('}}'):
+                        raw = raw[1:-1].strip()
+                        candidates.append(raw)
+                    
+                    for candidate in candidates:
+                        # Try strict JSON first
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            pass
+                        # Fallback: Python dict syntax (single quotes, True/False/None)
+                        try:
+                            result = ast.literal_eval(candidate)
+                            if isinstance(result, dict):
+                                return result
+                        except (ValueError, SyntaxError, TypeError):
+                            pass
+                    return None
         return None
 
 class ReActRegexParser(BaseParser):
