@@ -1266,6 +1266,8 @@ class ConsoleApp(App):
                 self._agentic_system_prompt, raw, use_tools=True
             )
         else:
+            # User changed subject — hide the exec panel from any previous run
+            self._hide_exec_panel()
             await self._stream_response(_get_system_prompt(), raw)
 
     def _write_thought(self, thought: str, step: int) -> None:
