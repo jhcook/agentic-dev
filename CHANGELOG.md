@@ -4,6 +4,17 @@
 
 ### Added
 
+- **VS Code Extension** (INFRA-079 to INFRA-086):
+  - **Sidebar Artifact Browser**: View and open stories, journeys, ADRs, and runbooks directly from the VS Code sidebar (INFRA-079).
+  - **Command Palette Integration**: Access agentic workflows like `/implement`, `/preflight`, `/story` via the `>` menu (INFRA-080).
+  - **Agentic Chat Panel**: A dedicated webview panel for AI-driven development, supporting all console features including tool use and streaming (INFRA-081).
+  - **Code Action Integration**: AI-powered "Implement" and "Fix" code actions on diagnostics and selected code blocks (INFRA-082).
+  - **Automated Governance**: Run `/preflight` checks automatically before `git commit` and view results as diagnostics (INFRA-083).
+  - **State Synchronization**: Keeps local story/runbook files in sync with the extension's view (INFRA-084).
+  - **Configuration UI**: Manage `agent.yaml` settings through a graphical interface (INFRA-085).
+  - **Onboarding and Setup**: Simplified setup process with automatic dependency checks (INFRA-086).
+  - See ADR-036 and ADR-037 for architecture.
+
 - **Terminal Console TUI** (INFRA-087):
   - New `agent console` command launches an interactive terminal UI for AI-assisted development.
   - Textual-based layout with chat panel, workflow sidebar, and role sidebar.

@@ -34,7 +34,7 @@ LOG_DIR = BASE_DIR / ".agent" / "logs"
 class Artifact(BaseModel):
     id: str         # Logical ID (WEB-005)
     uid: str        # Unique ID for Graph (WEB-005-story)
-    type: str  # story, plan, runbook, adr
+    type: Literal["story", "plan", "runbook", "adr", "preflight"]
     title: str
     status: str
     path: str

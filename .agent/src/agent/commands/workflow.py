@@ -229,7 +229,11 @@ def commit(
     if runbook_id:
         full_message += f"\n\nRunbook: {runbook_id}"
         
-    subprocess.run(["git", "commit", "-m", full_message])
+    try:
+        subprocess.run(["git", "commit", "-m", full_message], check=True)
+    except subprocess.CalledProcessError:
+        console.print("[bold red]❌ Failed to commit. Are there any staged changes?[/bold red]")
+        raise typer.Exit(code=1)
     
     # Update Story State to COMMITTED
     from agent.commands.utils import update_story_state

@@ -187,12 +187,21 @@ class AIService:
             logging.debug(
                 "Vertex AI client: project=%s, location=%s", project, location
             )
-            return genai.Client(
-                vertexai=True,
-                project=project,
-                location=location,
-                http_options=http_options,
-            )
+            try:
+                return genai.Client(
+                    vertexai=True,
+                    project=project,
+                    location=location,
+                    http_options=http_options,
+                )
+            except Exception as e:
+                # Provide a helpful hint if it's an ADC auth issue
+                if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
+                    raise RuntimeError(
+                        f"Vertex AI authentication missing ({e}).\n\n"
+                        "Please exit and run:\n  gcloud auth application-default login"
+                    ) from e
+                raise
 
         raise ValueError(f"Unsupported genai provider: {provider}")
 
@@ -461,7 +470,8 @@ class AIService:
         user_prompt: str,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        stop_sequences: Optional[List[str]] = None
+        stop_sequences: Optional[List[str]] = None,
+        auto_fallback: bool = False
     ) -> str:
         """
         Sends a completion request with automatic fallback.
@@ -473,6 +483,7 @@ class AIService:
             temperature: Optional float controlling response randomness.
                 Use 0.0 for deterministic output (e.g. governance checks).
                 If None, uses each provider's default.
+            auto_fallback: Whether to automatically switch providers on failure.
         """
         self._ensure_initialized()
         
@@ -583,12 +594,16 @@ class AIService:
                     f"Provider {current_p} failed: {e}",
                     extra={"provider": current_p, "error": str(e)}
                 )
+                logging.warning(
+                    f"Provider {current_p} failed: {e}. Falling back.",
+                    extra={"provider": current_p, "error": str(e)}
+                )
                 
                 # If we are forced or using a specific model, we might still
                 # want to fallback unless explicitly disallowed
                 # but typically a forced provider should probably not fallback
                 # unless we want maximum reliability.
-                if self.try_switch_provider(current_p):
+                if auto_fallback and self.try_switch_provider(current_p):
                     new_p = self.provider
                     console.print(
                         f"[yellow]⚠️ Provider {current_p} failed. "
@@ -598,7 +613,7 @@ class AIService:
                     continue
                 else:
                     console.print(
-                        f"[bold red]❌ All AI providers failed. "
+                        f"[bold red]❌ AI provider {current_p} failed. "
                         f"Last error: {e}[/bold red]"
                     )
                     raise e

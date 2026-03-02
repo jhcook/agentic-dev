@@ -70,30 +70,30 @@ agent_errors_counter = meter.create_counter(
     description="Counts the number of errors an agent encounters.",
 )
 
-class MaxStepsExceeded(Exception):
-    pass
-
 class AgentExecutor:
     """
     Executes an agent loop (ReAct) using an AIService for reasoning 
-    and MCPClient for tool execution.
+    and MCPClient for tool execution. The loop continues indefinitely until the
+    agent determines it has a final answer.
     """
     def __init__(
         self, 
         llm: AIService, 
         mcp_client: MCPClient,
         parser: Optional[BaseParser] = None,
-        max_steps: int = 10,
+        
         system_prompt: str = "You are a helpful AI assistant.",
         allowed_tools: Optional[List[str]] = None,
         model: Optional[str] = None,
+        max_steps: int = 100,
     ):
         self.llm = llm
         self.mcp = mcp_client
         self.parser = parser or ReActJsonParser()
-        self.max_steps = max_steps
+        
         self.system_prompt = system_prompt
         self.model = model
+        self.max_steps = max_steps
         self.allowed_tools = allowed_tools
 
     async def run(self, user_prompt: str) -> AsyncGenerator[AgentEvent, None]:
@@ -142,12 +142,14 @@ class AgentExecutor:
                             user_prompt=conversation_context,
                             model=self.model,
                             stop_sequences=["\nObservation:"],
+                            auto_fallback=False
+
                         )
                         think_span.set_attribute("llm_response", llm_response)
                     except Exception as e:
                         logger.error(f"LLM Error: {e}")
                         agent_errors_counter.add(1, {"error.type": "llm"})
-                        yield {"type": "error", "content": "Error: AI Service failed."}
+                        yield {"type": "error", "content": f"AI Service failed: {e}"}
                         return
                 
                 # 2. PARSE
@@ -255,8 +257,8 @@ class AgentExecutor:
                     )
                     history.append(step)
                     
-            yield {"type": "error", "content": f"Agent exceeded {self.max_steps} steps."}
-            raise MaxStepsExceeded(f"Agent exceeded {self.max_steps} steps.")
+            
+            
 
     def _construct_system_prompt(self, base_prompt: str, tools: List[Tool]) -> str:
         """Inject tool definitions into system prompt."""
