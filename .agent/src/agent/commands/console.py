@@ -29,6 +29,11 @@ def console(
         "--provider",
         help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="Override the default model for the selected provider",
+    ),
 ) -> None:
     """Interactive terminal console with persistent conversations."""
     try:
@@ -48,5 +53,5 @@ def console(
             typer.echo(f"Error setting provider: {e}")
             raise typer.Exit(1)
 
-    app = ConsoleApp(provider=provider)
+    app = ConsoleApp(provider=provider, model=model)
     app.run()

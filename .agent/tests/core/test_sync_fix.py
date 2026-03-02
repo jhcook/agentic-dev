@@ -19,8 +19,7 @@ Verifies that the sync engine correctly strips locally-inserted headers (e.g. ##
 to prevent duplication when re-syncing from Notion.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 from agent.sync.notion import NotionSync
 

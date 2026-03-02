@@ -13,10 +13,9 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 from agent.core.engine.executor import AgentExecutor, MaxStepsExceeded
-from agent.core.engine.typedefs import AgentAction, AgentFinish, AgentStep
 from agent.core.mcp.client import Tool
 
 @pytest.mark.anyio
@@ -49,9 +48,15 @@ Action: { "tool": "Final Answer", "tool_input": "The answer is bar" }"""
     
     executor = AgentExecutor(llm=mock_llm, mcp_client=mock_mcp, max_steps=5)
     
-    final_answer = await executor.run("What is foo?")
+    # run() is an async generator — collect events
+    events = []
+    async for event in executor.run("What is foo?"):
+        events.append(event)
     
-    assert final_answer == "The answer is bar"
+    # Find the final answer event
+    final = [e for e in events if e.get("type") == "final_answer"]
+    assert len(final) == 1
+    assert final[0]["content"] == "The answer is bar"
     assert mock_llm.complete.call_count == 2
     mock_mcp.call_tool.assert_called_with("search", {"query": "foo"})
 
@@ -61,11 +66,38 @@ async def test_max_steps_exceeded():
     mock_mcp = AsyncMock()
     mock_mcp.list_tools.return_value = []
     
-    # Always return action
+    # Always return action (never finishes)
     mock_llm.complete.return_value = 'Action: { "tool": "loop", "tool_input": {} }'
     mock_mcp.call_tool.return_value = "looping"
     
     executor = AgentExecutor(llm=mock_llm, mcp_client=mock_mcp, max_steps=2)
     
     with pytest.raises(MaxStepsExceeded):
-        await executor.run("Go")
+        async for _ in executor.run("Go"):
+            pass
+
+
+@pytest.mark.anyio
+async def test_model_propagation():
+    """Verify the model parameter is forwarded to llm.complete()."""
+    mock_llm = MagicMock()
+    mock_mcp = AsyncMock()
+    mock_mcp.list_tools.return_value = []
+
+    # Immediate finish so we only need one LLM call
+    mock_llm.complete.return_value = 'The answer is done.'
+
+    executor = AgentExecutor(
+        llm=mock_llm, mcp_client=mock_mcp, max_steps=5, model="gemini-2.5-pro"
+    )
+
+    async for _ in executor.run("Hello"):
+        pass
+
+    # Verify model= was passed in the complete call
+    call_kwargs = mock_llm.complete.call_args
+    assert call_kwargs is not None
+    # Check keyword arg 'model'
+    assert "model" in call_kwargs.kwargs or (
+        len(call_kwargs.args) > 1 and call_kwargs.args[1] == "gemini-2.5-pro"
+    ), f"model not propagated: {call_kwargs}"

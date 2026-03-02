@@ -33,7 +33,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 
 import yaml
-from rich.console import Console # Keeping global import for type hint compat where Console is passed elsewhere, but removing usages here
 
 from agent.core.ai import ai_service
 from agent.core.config import config
@@ -521,7 +520,6 @@ def _validate_finding_against_source(
     - sync method claimed to need await (checks actual def vs async def)
     - lazy in-function import flagged as "direct import"
     """
-    from pathlib import Path
 
     finding_lower = finding.lower()
 
@@ -1331,6 +1329,9 @@ def convene_council_full(
             progress_callback(f"🤖 @{role_name} is reviewing ({len(diff_chunks)} chunks)...")
 
         for i, chunk in enumerate(diff_chunks):
+            if len(diff_chunks) > 1 and progress_callback:
+                progress_callback(f"  - Analyzing chunk {i+1}/{len(diff_chunks)}...")
+            
             if mode == "consultative":
                     system_prompt = f"You are {role_name}. Focus: {focus_area}. Task: Expert consultation. Input: Story, Rules, ADRs, Diff."
                     if _available_refs_line:
@@ -1595,15 +1596,15 @@ def convene_council_full(
             overall_verdict = "BLOCK"
             if progress_callback:
                 progress_callback(f"❌ @{role_name}: BLOCK")
-            report += f"**Verdict**: ❌ BLOCK\n\n"
+            report += "**Verdict**: ❌ BLOCK\n\n"
         elif mode == "consultative":
                 if progress_callback:
                     progress_callback(f"ℹ️  @{role_name}: CONSULTED")
-                report += f"**Verdict**: ℹ️ ADVICE\n\n"
+                report += "**Verdict**: ℹ️ ADVICE\n\n"
         else:
             if progress_callback:
                 progress_callback(f"✅ @{role_name}: PASS")
-            report += f"**Verdict**: ✅ PASS\n\n"
+            report += "**Verdict**: ✅ PASS\n\n"
 
         if role_summary:
             report += f"**Summary**: {role_summary}\n\n"
@@ -1640,7 +1641,7 @@ def convene_council_full(
     _hallucination_rate = round(len(_unique_invalid) / _total_refs, 2) if _total_refs > 0 else 0.0
 
     report += "\n## Reference Validation\n\n"
-    report += f"| Metric | Value |\n|---|---|\n"
+    report += "| Metric | Value |\n|---|---|\n"
     report += f"| Total References | {_total_refs} |\n"
     report += f"| Valid | {len(_unique_valid)} |\n"
     report += f"| Invalid | {len(_unique_invalid)} |\n"

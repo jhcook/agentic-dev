@@ -15,7 +15,6 @@
 from langchain_core.tools import tool
 import os
 import glob
-from agent.core.config import config
 
 @tool
 def list_adrs() -> str:

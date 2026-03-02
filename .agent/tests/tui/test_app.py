@@ -19,7 +19,7 @@ and verify command dispatch and UI state without a real terminal.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -56,22 +56,21 @@ class TestConsoleAppHeadless:
     @pytest.mark.asyncio
     async def test_app_launches(self, mock_dependencies):
         """Verify the app launches and mounts core widgets."""
-        from agent.tui.app import ConsoleApp
-        from textual.widgets import RichLog, Input, Footer
+        from agent.tui.app import ConsoleApp, SelectionLog
+        from textual.widgets import Input
 
         app = ConsoleApp(provider="gemini")
         async with app.run_test(size=(120, 40)) as pilot:
             assert app.is_running
             # Verify core widgets are mounted
-            assert app.query_one("#chat-output", RichLog) is not None
+            assert app.query_one("#chat-output", SelectionLog) is not None
             assert app.query_one("#input-box", Input) is not None
             assert app.query_one("#status-bar") is not None
 
     @pytest.mark.asyncio
     async def test_help_command(self, mock_dependencies):
         """Verify /help command produces help text in the chat pane."""
-        from agent.tui.app import ConsoleApp
-        from textual.widgets import RichLog
+        from agent.tui.app import ConsoleApp, SelectionLog
 
         app = ConsoleApp(provider="gemini")
         async with app.run_test(size=(120, 40)) as pilot:
@@ -79,14 +78,13 @@ class TestConsoleAppHeadless:
             await pilot.pause()
 
             # Verify help content was written to the chat output
-            chat = app.query_one("#chat-output", RichLog)
-            assert len(chat.lines) > 0, "Help command should produce output"
+            chat = app.query_one("#chat-output", SelectionLog)
+            assert len(chat.children) > 0, "Help command should produce output"
 
     @pytest.mark.asyncio
     async def test_clear_command(self, mock_dependencies):
         """Verify /clear command clears the chat output."""
-        from agent.tui.app import ConsoleApp
-        from textual.widgets import RichLog
+        from agent.tui.app import ConsoleApp, SelectionLog
 
         app = ConsoleApp(provider="gemini")
         async with app.run_test(size=(120, 40)) as pilot:
@@ -94,7 +92,7 @@ class TestConsoleAppHeadless:
             await pilot.pause()
 
             # After clear, chat output should have fewer lines than welcome
-            chat = app.query_one("#chat-output", RichLog)
+            chat = app.query_one("#chat-output", SelectionLog)
             assert chat is not None
 
     @pytest.mark.asyncio
@@ -112,8 +110,7 @@ class TestConsoleAppHeadless:
     @pytest.mark.asyncio
     async def test_conversations_command(self, mock_dependencies):
         """Verify /conversations lists sessions in the chat output."""
-        from agent.tui.app import ConsoleApp
-        from textual.widgets import RichLog
+        from agent.tui.app import ConsoleApp, SelectionLog
 
         mock_dependencies["store"].list_sessions.return_value = [
             MagicMock(id="s1", title="First chat", messages=[]),
@@ -129,8 +126,8 @@ class TestConsoleAppHeadless:
             await pilot.pause()
 
             # Verify the conversations command produced output
-            chat = app.query_one("#chat-output", RichLog)
-            assert len(chat.lines) > 0, "Conversations command should list sessions"
+            chat = app.query_one("#chat-output", SelectionLog)
+            assert len(chat.children) > 0, "Conversations command should list sessions"
 
     @pytest.mark.asyncio
     async def test_quit_command(self, mock_dependencies):

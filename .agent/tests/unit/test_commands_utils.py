@@ -14,7 +14,6 @@
 
 """Tests for agent.commands.utils (update_story_state)."""
 
-import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

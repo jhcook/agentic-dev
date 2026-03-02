@@ -15,13 +15,10 @@
 """Tests for SessionStore and TokenBudget (INFRA-087)."""
 
 import os
-import stat
-import tempfile
-from pathlib import Path
 
 import pytest
 
-from agent.tui.session import ConversationSession, SessionStore, TokenBudget
+from agent.tui.session import Message, SessionStore, TokenBudget
 
 
 @pytest.fixture
@@ -99,13 +96,43 @@ class TestSessionStore:
         store.add_message(session.id, "assistant", "Hi there!")
         retrieved = store.get_session(session.id)
         assert len(retrieved.messages) == 2
-        assert retrieved.messages[0] == {"role": "user", "content": "Hello"}
-        assert retrieved.messages[1] == {"role": "assistant", "content": "Hi there!"}
+        assert retrieved.messages[0] == Message(role="user", content="Hello")
+        assert retrieved.messages[1] == Message(role="assistant", content="Hi there!")
 
     def test_get_latest_session(self, store):
-        s1 = store.create_session()
-        s2 = store.create_session()
+        s1 = store.create_session(provider="a")
+        s2 = store.create_session(provider="b")
         store.add_message(s2.id, "user", "latest")
+        latest = store.get_latest_session()
+        assert latest.id == s2.id
+
+    def test_get_latest_session_prefers_messages(self, store):
+        """@QA: get_latest_session should prefer sessions with messages
+        over empty sessions, even if the empty one is more recent."""
+        old = store.create_session(provider="gemini")
+        store.add_message(old.id, "user", "hello")
+        store.add_message(old.id, "assistant", "hi")
+        # Create a newer empty session (simulates blank-screen bug)
+        _empty = store.create_session(provider="gemini")
+        # Should return the older session that has messages
+        latest = store.get_latest_session()
+        assert latest.id == old.id
+        assert len(latest.messages) == 2
+
+    def test_get_latest_session_fallback_to_empty(self, store):
+        """@QA: When no sessions have messages, fall back to most recent."""
+        s1 = store.create_session(provider="a")
+        s2 = store.create_session(provider="b")
+        latest = store.get_latest_session()
+        assert latest.id == s2.id
+        assert len(latest.messages) == 0
+
+    def test_get_latest_session_multiple_with_messages(self, store):
+        """@QA: When multiple sessions have messages, return the most recent."""
+        s1 = store.create_session(provider="a")
+        store.add_message(s1.id, "user", "older")
+        s2 = store.create_session(provider="b")
+        store.add_message(s2.id, "user", "newer")
         latest = store.get_latest_session()
         assert latest.id == s2.id
 
@@ -127,8 +154,8 @@ class TestTokenBudget:
         budget = TokenBudget(max_tokens=100000)
         system = "You are helpful."
         messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi"},
+            Message(role="user", content="Hello"),
+            Message(role="assistant", content="Hi"),
         ]
         sys_out, msgs_out = budget.build_context(system, messages, provider="gemini")
         assert sys_out == system
@@ -139,23 +166,23 @@ class TestTokenBudget:
         system = "System."
         # Create enough messages to exceed budget
         messages = [
-            {"role": "user", "content": "message " * 20},
-            {"role": "assistant", "content": "response " * 20},
-            {"role": "user", "content": "recent"},
-            {"role": "assistant", "content": "latest"},
+            Message(role="user", content="message " * 20),
+            Message(role="assistant", content="response " * 20),
+            Message(role="user", content="recent"),
+            Message(role="assistant", content="latest"),
         ]
         _, msgs_out = budget.build_context(system, messages, provider="gemini")
         # Should have pruned older messages, keeping at least the last 2
         assert len(msgs_out) <= len(messages)
         assert len(msgs_out) >= 2
         # Last message should be preserved
-        assert msgs_out[-1]["content"] == "latest"
+        assert msgs_out[-1].content == "latest"
 
     def test_single_message_no_pruning(self):
         """@QA: Single message should never be pruned."""
         budget = TokenBudget(max_tokens=100000)
         system = "System."
-        messages = [{"role": "user", "content": "Hello"}]
+        messages = [Message(role="user", content="Hello")]
         _, msgs_out = budget.build_context(system, messages, provider="gemini")
         assert len(msgs_out) == 1
 
@@ -163,7 +190,7 @@ class TestTokenBudget:
         """@QA: Should raise ValueError if system prompt alone exceeds budget."""
         budget = TokenBudget(max_tokens=5)
         system = "A very long system prompt that definitely exceeds five tokens"
-        messages = [{"role": "user", "content": "Hi"}]
+        messages = [Message(role="user", content="Hi")]
         with pytest.raises(ValueError, match="System prompt alone"):
             budget.build_context(system, messages, provider="gemini")
 
@@ -171,7 +198,7 @@ class TestTokenBudget:
         """@QA: Edge case — messages fit exactly within budget."""
         budget = TokenBudget(max_tokens=10000)
         system = "Short."
-        messages = [{"role": "user", "content": "Hello"}]
+        messages = [Message(role="user", content="Hello")]
         sys_out, msgs_out = budget.build_context(system, messages, provider="gemini")
         assert len(msgs_out) == 1
 

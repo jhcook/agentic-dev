@@ -17,7 +17,6 @@ from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 import subprocess
 import re
-import shlex
 import os
 from typing import Optional
 

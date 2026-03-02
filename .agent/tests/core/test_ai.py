@@ -25,7 +25,6 @@ import pytest
 from agent.core.ai import AIService
 
 
-from agent.core.secrets import get_secret_manager
 
 @pytest.fixture(autouse=True)
 def mock_secret_manager():

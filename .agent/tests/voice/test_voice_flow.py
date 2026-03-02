@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.speech.interfaces import STTProvider, TTSProvider
@@ -43,7 +43,6 @@ client = TestClient(app)
 @pytest.mark.asyncio
 async def test_websocket_with_langgraph():
     """Test WebSocket flow with mocked LangGraph agent."""
-    from fastapi.testclient import TestClient
     
     # Mock agent to return controlled response
     mock_agent = MagicMock()

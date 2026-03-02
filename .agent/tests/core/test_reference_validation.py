@@ -14,10 +14,7 @@
 
 """Unit tests for INFRA-060 reference extraction and validation."""
 
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from agent.core.governance import (
     _extract_references,

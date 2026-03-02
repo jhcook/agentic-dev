@@ -14,7 +14,6 @@
 
 import logging
 import asyncio
-from typing import Optional
 
 try:
     import azure.cognitiveservices.speech as speechsdk

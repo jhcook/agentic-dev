@@ -53,7 +53,7 @@ def create_tool(file_path: str, code: str) -> str:
         if os.path.commonpath([base_dir, target_path]) != base_dir:
              return f"Error: Security violation. Tools can only be created in {custom_dir}."
     except ValueError:
-         return f"Error: Security violation. Invalid path."
+         return "Error: Security violation. Invalid path."
         
     # Syntax Validation
     try:

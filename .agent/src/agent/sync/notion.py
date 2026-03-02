@@ -21,7 +21,6 @@ import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-import typer
 from rich.prompt import Confirm
 
 from agent.core.config import config
@@ -79,45 +78,47 @@ class NotionSync:
             
         logger.debug("Notion sync state is present: %s", self.state)
 
-    def pull(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None):
+    def pull(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None, silent: bool = False):
         """Pulls content from Notion to local cache."""
         if not self.client:
             return
         # 1. Stories
         if not artifact_type or artifact_type.lower() == "story":
-            self._pull_category("Stories", config.stories_dir, "Stories", force, artifact_id)
+            self._pull_category("Stories", config.stories_dir, "Stories", force, artifact_id, silent)
         
         # 2. Plans
         if not artifact_type or artifact_type.lower() == "plan":
-            self._pull_category("Plans", config.plans_dir, "Plans", force, artifact_id)
+            self._pull_category("Plans", config.plans_dir, "Plans", force, artifact_id, silent)
         
         # 3. ADRs
         if not artifact_type or artifact_type.lower() == "adr":
-            self._pull_category("ADRs", config.adrs_dir, "ADRs", force, artifact_id)
+            self._pull_category("ADRs", config.adrs_dir, "ADRs", force, artifact_id, silent)
 
-    def push(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None):
+    def push(self, force: bool = False, artifact_id: Optional[str] = None, artifact_type: Optional[str] = None, silent: bool = False):
         """Pushes local content to Notion."""
         if not self.client:
             return
         # 1. Stories
         if not artifact_type or artifact_type.lower() == "story":
-            self._push_category("Stories", config.stories_dir, "Stories", force, artifact_id)
+            self._push_category("Stories", config.stories_dir, "Stories", force, artifact_id, silent)
         
         # 2. Plans
         if not artifact_type or artifact_type.lower() == "plan":
-            self._push_category("Plans", config.plans_dir, "Plans", force, artifact_id)
+            self._push_category("Plans", config.plans_dir, "Plans", force, artifact_id, silent)
         
         # 3. ADRs
         if not artifact_type or artifact_type.lower() == "adr":
-            self._push_category("ADRs", config.adrs_dir, "ADRs", force, artifact_id)
+            self._push_category("ADRs", config.adrs_dir, "ADRs", force, artifact_id, silent)
 
     # --- Pull Implementation ---
 
-    def _pull_category(self, db_key: str, base_dir: Path, category_name: str, force: bool, artifact_id: Optional[str] = None):
+    def _pull_category(self, db_key: str, base_dir: Path, category_name: str, force: bool, artifact_id: Optional[str] = None, silent: bool = False):
         db_id = self.state.get(db_key)
         
         # Helper to retry after init
         def _try_init():
+             if silent:
+                 return None
              if Confirm.ask(f"[bold yellow]Notion Database for {category_name} is missing. Run 'agent sync init' to discover existing databases or create new ones?[/bold yellow]"):
                 from agent.sync.bootstrap import NotionBootstrap
                 NotionBootstrap().run()
@@ -126,10 +127,12 @@ class NotionSync:
              return None
 
         if not db_id:
-            logger.warning(f"Database ID for {db_key} not found.")
+            if not silent:
+                logger.warning(f"Database ID for {db_key} not found.")
             db_id = _try_init()
             if not db_id:
-                logger.warning("Skipping pull.")
+                if not silent:
+                    logger.warning("Skipping pull.")
                 return
 
         logger.info(f"Querying {category_name} from Notion...")
@@ -340,17 +343,19 @@ class NotionSync:
 
     # --- Push Implementation ---
 
-    def _push_category(self, db_key: str, dir_path: Path, category_name: str, force: bool, artifact_id: Optional[str] = None):
+    def _push_category(self, db_key: str, dir_path: Path, category_name: str, force: bool, artifact_id: Optional[str] = None, silent: bool = False):
         db_id = self.state.get(db_key)
         if not db_id:
-            logger.warning(f"Database ID for {db_key} not found in state. Skipping push.")
+            if not silent:
+                logger.warning(f"Database ID for {db_key} not found in state. Skipping push.")
             return
 
         artifacts = self._scan_artifacts(dir_path, category_name)
         if artifact_id:
             artifacts = [a for a in artifacts if a["id"] == artifact_id]
 
-        logger.info(f"Syncing {len(artifacts)} {category_name} to Notion...")
+        if not silent:
+            logger.info(f"Syncing {len(artifacts)} {category_name} to Notion...")
 
         updated = 0
         created = 0
@@ -368,7 +373,7 @@ class NotionSync:
                 if results:
                     # Update
                     page_id = results[0]["id"]
-                    if self._update_page(page_id, art, force):
+                    if self._update_page(page_id, art, force, silent):
                         updated += 1
                 else:
                     # Create
@@ -377,9 +382,10 @@ class NotionSync:
             except Exception as e:
                 logger.error(f"Failed to sync {art['id']}: {e}")
 
-        logger.info(f"Finished pushing {category_name}: {created} created, {updated} updated.")
+        if not silent:
+            logger.info(f"Finished pushing {category_name}: {created} created, {updated} updated.")
 
-    def _update_page(self, page_id: str, art: Dict[str, Any], force: bool) -> bool:
+    def _update_page(self, page_id: str, art: Dict[str, Any], force: bool, silent: bool = False) -> bool:
         # 1. Safety Check: Verify Title matches to prevent accidental ID collision
         # We must fetch the page properties first
         remote_page = self.client.retrieve_page(page_id)
@@ -396,7 +402,8 @@ class NotionSync:
         if norm_remote != norm_local:
             if not force:
                 # Only warn — since we matched by ID, this is a title update, not a collision
-                logger.info(f"[{art['id']}] Title will be updated: '{remote_title}' -> '{local_title}'")
+                if not silent:
+                    logger.info(f"[{art['id']}] Title will be updated: '{remote_title}' -> '{local_title}'")
         
         # 2. Update Metadata (including Title now!)
         props = {
@@ -410,7 +417,8 @@ class NotionSync:
         remote_status_name = remote_select.get("name") if remote_select else None
 
         if remote_status_name != art["status"]:
-            logger.info(f"[{art['id']}] Updating status: {remote_status_name} -> {art['status']}")
+            if not silent:
+                logger.info(f"[{art['id']}] Updating status: {remote_status_name} -> {art['status']}")
             
         self.client.update_page_properties(page_id, props)
 
@@ -422,10 +430,12 @@ class NotionSync:
         
         if not remote_blocks:
             should_update = True
-            logger.info(f"[{art['id']}] Remote is empty. Pushing content...")
+            if not silent:
+                logger.info(f"[{art['id']}] Remote is empty. Pushing content...")
         
         elif force:
-            logger.info(f"[{art['id']}] Force update requested.")
+            if not silent:
+                logger.info(f"[{art['id']}] Force update requested.")
             should_update = True
             
         else:
@@ -441,13 +451,17 @@ class NotionSync:
                 diff_text = "".join(list(diff))
                 logger.debug(f"Normalization Diff for {art['id']}:\n{diff_text}")
 
-                should_update = Confirm.ask(
-                    f"[bold red]Conflict detected for {art['id']}[/bold red]. Local content differs from Remote.\n"
-                    f"Overwrite [bold]REMOTE[/bold] Notion page with local content?",
-                    default=True
-                )
-                if not should_update:
-                     logger.info(f"Skipping {art['id']} (User chose to keep remote).")
+                if silent:
+                    logger.info(f"Skipping {art['id']} (Conflict detected in silent mode).")
+                    should_update = False
+                else:
+                    should_update = Confirm.ask(
+                        f"[bold red]Conflict detected for {art['id']}[/bold red]. Local content differs from Remote.\n"
+                        f"Overwrite [bold]REMOTE[/bold] Notion page with local content?",
+                        default=True
+                    )
+                    if not should_update:
+                         logger.info(f"Skipping {art['id']} (User chose to keep remote).")
             else:
                 # Content matches
                 pass

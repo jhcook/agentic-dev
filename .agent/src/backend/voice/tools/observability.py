@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from langchain_core.tools import tool
-import os
 from agent.core.config import config as agent_config
 import subprocess
 

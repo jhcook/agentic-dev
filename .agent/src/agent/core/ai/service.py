@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import re
 import os
 import subprocess
 import sys
@@ -187,12 +188,21 @@ class AIService:
             logging.debug(
                 "Vertex AI client: project=%s, location=%s", project, location
             )
-            return genai.Client(
-                vertexai=True,
-                project=project,
-                location=location,
-                http_options=http_options,
-            )
+            try:
+                return genai.Client(
+                    vertexai=True,
+                    project=project,
+                    location=location,
+                    http_options=http_options,
+                )
+            except Exception as e:
+                # Provide a helpful hint if it's an ADC auth issue
+                if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
+                    raise RuntimeError(
+                        f"Vertex AI authentication missing ({e}).\n\n"
+                        "Please exit and run:\n  gcloud auth application-default login"
+                    ) from e
+                raise
 
         raise ValueError(f"Unsupported genai provider: {provider}")
 
@@ -460,7 +470,9 @@ class AIService:
         system_prompt: str,
         user_prompt: str,
         model: Optional[str] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        stop_sequences: Optional[List[str]] = None,
+        auto_fallback: bool = False
     ) -> str:
         """
         Sends a completion request with automatic fallback.
@@ -472,6 +484,7 @@ class AIService:
             temperature: Optional float controlling response randomness.
                 Use 0.0 for deterministic output (e.g. governance checks).
                 If None, uses each provider's default.
+            auto_fallback: Whether to automatically switch providers on failure.
         """
         self._ensure_initialized()
         
@@ -534,13 +547,32 @@ class AIService:
                         extra={"provider": current_p, "model": model_to_use}
                     )
                     
-                    content = self._try_complete(
-                        current_p,
-                        system_prompt,
-                        user_prompt,
-                        model_to_use if current_p == provider_to_use else None,
-                        temperature=temperature
-                    )
+                    content = None
+                    last_inner_exception = None
+                    for attempt in range(3):
+                        try:
+                            content = self._try_complete(
+                                current_p,
+                                system_prompt,
+                                user_prompt,
+                                model_to_use if current_p == provider_to_use else None,
+                                temperature=temperature,
+                                stop_sequences=stop_sequences
+                            )
+                            break
+                        except Exception as inner_ex:
+                            last_inner_exception = inner_ex
+                            ex_str = str(inner_ex)
+                            # Retry on known transient network/connection errors
+                            if any(msg in ex_str for msg in ["Connection reset", "RemoteDisconnected", "EOF occurred", "Connection aborted"]):
+                                if attempt < 2:
+                                    logging.warning(f"Connection error with {current_p}: {inner_ex}. Retrying in 2 seconds (Attempt {attempt + 1}/3)...")
+                                    time.sleep(2)
+                                    continue
+                            raise inner_ex
+                    else:
+                        if last_inner_exception:
+                            raise last_inner_exception
                 
                 duration = time.time() - start_time
                 if content:
@@ -563,12 +595,16 @@ class AIService:
                     f"Provider {current_p} failed: {e}",
                     extra={"provider": current_p, "error": str(e)}
                 )
+                logging.warning(
+                    f"Provider {current_p} failed: {e}. Falling back.",
+                    extra={"provider": current_p, "error": str(e)}
+                )
                 
                 # If we are forced or using a specific model, we might still
                 # want to fallback unless explicitly disallowed
                 # but typically a forced provider should probably not fallback
                 # unless we want maximum reliability.
-                if self.try_switch_provider(current_p):
+                if auto_fallback and self.try_switch_provider(current_p):
                     new_p = self.provider
                     console.print(
                         f"[yellow]⚠️ Provider {current_p} failed. "
@@ -578,7 +614,7 @@ class AIService:
                     continue
                 else:
                     console.print(
-                        f"[bold red]❌ All AI providers failed. "
+                        f"[bold red]❌ AI provider {current_p} failed. "
                         f"Last error: {e}[/bold red]"
                     )
                     raise e
@@ -603,6 +639,7 @@ class AIService:
         user_prompt: str,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
+        stop_sequences: Optional[List[str]] = None,
     ) -> Generator[str, None, None]:
         """
         Generator that yields text chunks from an AI provider.
@@ -625,7 +662,6 @@ class AIService:
         self._ensure_initialized()
         provider = self.provider or "gemini"
         model_used = model or self.models.get(provider)
-        from agent.core.config import config as _cfg
 
         timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
 
@@ -662,13 +698,24 @@ class AIService:
                 }
                 if temperature is not None:
                     gen_config_kwargs["temperature"] = temperature
+                if stop_sequences:
+                    gen_config_kwargs["stop_sequences"] = stop_sequences
                 config = types.GenerateContentConfig(**gen_config_kwargs)
 
-                for chunk in client.models.generate_content_stream(
-                    model=model_used, contents=user_prompt, config=config
-                ):
-                    if chunk.text:
-                        yield chunk.text
+                try:
+                    for chunk in client.models.generate_content_stream(
+                        model=model_used, contents=user_prompt, config=config
+                    ):
+                        if chunk.text:
+                            yield chunk.text
+                except ValueError as e:
+                    # @Robustness: Handle ReAct text output being misinterpreted as a function call.
+                    extracted_text = self._handle_malformed_func_call_error(e)
+                    if extracted_text:
+                        yield extracted_text
+                    else:
+                        # If it's not the error we're looking for, re-raise it.
+                        raise e
 
             elif provider == "anthropic":
                 client = self.clients["anthropic"]
@@ -680,6 +727,8 @@ class AIService:
                 }
                 if temperature is not None:
                     stream_kwargs["temperature"] = temperature
+                if stop_sequences:
+                    stream_kwargs["stop_sequences"] = stop_sequences
                 with client.messages.stream(**stream_kwargs) as stream:
                     for text in stream.text_stream:
                         yield text
@@ -696,6 +745,8 @@ class AIService:
                 }
                 if temperature is not None:
                     create_kwargs["temperature"] = temperature
+                if stop_sequences:
+                    create_kwargs["stop"] = stop_sequences
                 response = client.chat.completions.create(**create_kwargs)
                 for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
@@ -704,7 +755,7 @@ class AIService:
             elif provider == "gh":
                 # GH CLI does not support streaming; yield full response as one chunk
                 result = self.complete(
-                    system_prompt, user_prompt, model=model, temperature=temperature
+                    system_prompt, user_prompt, model=model, temperature=temperature, stop_sequences=stop_sequences
                 )
                 if result:
                     yield result
@@ -807,13 +858,42 @@ class AIService:
             
         return models
 
+    def _handle_malformed_func_call_error(self, error: ValueError) -> str:
+        """
+        Robustly extracts the AI's textual response from a google-genai
+        MALFORMED_FUNCTION_CALL ValueError.
+
+        This error occurs when the model tries to call a function but emits
+        a ReAct-style `Action:` block instead of a valid JSON tool call.
+        We want to capture that text.
+
+        Args:
+            error: The ValueError raised by the google-genai library.
+
+        Returns:
+            The extracted text content, or an empty string if not found.
+        """
+        error_str = str(error)
+        # Use a regex to find the content after "MALFORMED_FUNCTION_CALL:"
+        # This is more robust than splitting on the string.
+        match = re.search(r"MALFORMED_FUNCTION_CALL:\s*(.*)", error_str, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # Fallback for older/different error message formats
+        if "Action:" in error_str:
+            parts = error_str.split("Action:", 1)
+            if len(parts) > 1:
+                return "Action:" + parts[1]
+        return ""
+
     def _try_complete(
         self,
         provider: str,
         system_prompt: str,
         user_prompt: str,
         model: Optional[str] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        stop_sequences: Optional[List[str]] = None
     ) -> str:
         model_used = model or self.models.get(provider)
         from agent.core.config import config as _cfg
@@ -835,6 +915,8 @@ class AIService:
                     }
                     if temperature is not None:
                         gen_config_kwargs["temperature"] = temperature
+                    if stop_sequences:
+                        gen_config_kwargs["stop_sequences"] = stop_sequences
                     config = types.GenerateContentConfig(**gen_config_kwargs)
                     response_stream = bg_client.models.generate_content_stream(
                         model=model_used,
@@ -845,9 +927,19 @@ class AIService:
                     full_text = ""
                     # Streaming keeps the connection alive,
                     # preventing 60s/120s idle timeouts
-                    for chunk in response_stream:
-                        if chunk.text:
-                            full_text += chunk.text
+                    try:
+                        for chunk in response_stream:
+                            if chunk.text:
+                                full_text += chunk.text
+                    except ValueError as e:
+                        # @Robustness: Handle ReAct text output being misinterpreted
+                        # as a function call by the google-genai library.
+                        extracted_text = self._handle_malformed_func_call_error(e)
+                        if extracted_text:
+                            full_text += extracted_text
+                        else:
+                            # If it's not the error we're looking for, re-raise it.
+                            raise e
                             
                     return full_text.strip()
 
@@ -862,6 +954,8 @@ class AIService:
                     }
                     if temperature is not None:
                         create_kwargs["temperature"] = temperature
+                    if stop_sequences:
+                        create_kwargs["stop"] = stop_sequences
                     response = client.chat.completions.create(**create_kwargs)
                     if response.choices:
                         return response.choices[0].message.content.strip()
@@ -884,9 +978,9 @@ class AIService:
                     # Context Limit / Payload Too Large
                     if "too large" in err or "413" in err or "context length" in err:
                         console.print(
-                            f"[red]❌ GH Models Context Limit Exceeded. "
-                            f"The prompt is too large for the 'gh' provider (approx 8k tokens). "
-                            f"Please use Gemini or OpenAI for larger tasks.[/red]"
+                            "[red]❌ GH Models Context Limit Exceeded. "
+                            "The prompt is too large for the 'gh' provider (approx 8k tokens). "
+                            "Please use Gemini or OpenAI for larger tasks.[/red]"
                         )
                         # Do not retry context errors, they won't succeed
                         raise Exception("GH Context Limit Exceeded")
@@ -944,6 +1038,8 @@ class AIService:
                     }
                     if temperature is not None:
                         stream_kwargs["temperature"] = temperature
+                    if stop_sequences:
+                        stream_kwargs["stop_sequences"] = stop_sequences
                     with client.messages.stream(**stream_kwargs) as stream:
                         for text in stream.text_stream:
                             full_text += text
@@ -961,6 +1057,8 @@ class AIService:
                     }
                     if temperature is not None:
                         ollama_kwargs["temperature"] = temperature
+                    if stop_sequences:
+                        ollama_kwargs["stop"] = stop_sequences
                     response = client.chat.completions.create(**ollama_kwargs)
                     if response.choices:
                         content = response.choices[0].message.content
@@ -1026,27 +1124,33 @@ class AIService:
                          if attempt < rate_limit_max - 1:
                              # Base 5s, then 10s, 20s, up to 60s
                              wait_time = min(5 * (2 ** attempt), 60)
-                             console.print(
+                             msg = (
                                  f"[yellow]⚠️ Rate limit ({provider}). "
                                  f"Backoff retry {attempt+1}/{rate_limit_max} "
                                  f"in {wait_time}s...[/yellow]"
                              )
+                             console.print(msg)
+                             logging.warning(f"Rate limit ({provider}). Backoff retry {attempt+1}/{rate_limit_max} in {wait_time}s")
                              time.sleep(wait_time)
                              continue
                          else:
-                             console.print(
+                             msg = (
                                  f"[yellow]⚠️ Rate limit ({provider}). "
                                  f"Exhausted {rate_limit_max} retries, "
                                  f"switching providers...[/yellow]"
                              )
+                             console.print(msg)
+                             logging.error(f"Rate limit ({provider}). Exhausted {rate_limit_max} retries.")
                              raise e
                     
                     wait_time = (attempt + 1) * 2
-                    console.print(
+                    msg = (
                         f"[yellow]⚠️ AI Provider error: {e}. "
                         f"Retrying ({attempt+1}/{max_retries}) "
                         f"in {wait_time}s...[/yellow]"
                     )
+                    console.print(msg)
+                    logging.warning(f"AI Provider error: {e}. Retrying ({attempt+1}/{max_retries}) in {wait_time}s")
                     time.sleep(wait_time)
                     continue
                 else:

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 import subprocess
 from pathlib import Path
@@ -27,11 +26,6 @@ sys.path.append(str(Path.cwd() / "src"))
 
 from agent.commands.onboard import (
     onboard,
-    app as onboard_app,
-    check_dependencies,
-    configure_api_keys,
-    ensure_agent_directory,
-    ensure_gitignore,
 )
 
 runner = CliRunner()

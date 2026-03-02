@@ -18,7 +18,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.prompt import Prompt
 
 from agent.commands.check import preflight  # Verify import works or move core logic
 from agent.core.utils import infer_story_id
@@ -120,8 +119,8 @@ def pr(
                  generated = ai_service.complete(sys_prompt, user_prompt)
                  if generated:
                      summary = generated.strip()
-        except Exception as e:
-             console.print(f"[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
+        except Exception:
+             console.print("[yellow]⚠️  AI PR summary generation failed (offline or error). Falling back to manual input.[/yellow]")
              content = typer.edit(text=commit_msg)
              if content:
                  summary = content.strip()
@@ -213,13 +212,17 @@ def commit(
                  generated = ai_service.complete(sys_prompt, user_prompt)
                  if generated:
                      message = generated.strip().strip('"').strip("'")
-        except Exception as e:
-             console.print(f"[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
+        except Exception:
+             console.print("[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
 
     if is_interactive and not yes:
-        message = typer.edit(text=message or "")
-        if message:
-            message = message.strip()
+        import sys
+        if sys.stdin.isatty():
+            message = typer.edit(text=message or "")
+            if message:
+                message = message.strip()
+        else:
+            console.print("[dim]🤖 Non-interactive environment detected, skipping editor prompt.[/dim]")
     
     if not message:
          console.print("[bold red]❌ Commit message is required.[/bold red]")
@@ -230,7 +233,11 @@ def commit(
     if runbook_id:
         full_message += f"\n\nRunbook: {runbook_id}"
         
-    subprocess.run(["git", "commit", "-m", full_message])
+    try:
+        subprocess.run(["git", "commit", "-m", full_message], check=True)
+    except subprocess.CalledProcessError:
+        console.print("[bold red]❌ Failed to commit. Are there any staged changes?[/bold red]")
+        raise typer.Exit(code=1)
     
     # Update Story State to COMMITTED
     from agent.commands.utils import update_story_state

@@ -14,7 +14,6 @@
 
 
 import pytest
-import asyncio
 import time
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock

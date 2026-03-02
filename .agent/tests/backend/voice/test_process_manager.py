@@ -14,9 +14,8 @@
 
 import pytest
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from backend.voice.process_manager import ProcessLifecycleManager
-import threading
 
 @pytest.fixture(autouse=True)
 def cleanup_manager():

@@ -24,8 +24,7 @@ These tests guard against regressions where:
 
 import os
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
-from typing import Callable
+from unittest.mock import patch, MagicMock
 
 from agent.core.auth.credentials import validate_credentials
 from agent.core.auth.errors import MissingCredentialsError
@@ -232,7 +231,6 @@ class TestCLICredentialRegistration:
         If this test fails, it means someone re-added with_creds to preflight
         in main.py, which will break CI environments without API keys.
         """
-        import agent.commands.check as check_module
         import agent.main as main_module
 
         # Read main.py source directly to check registration
@@ -329,7 +327,6 @@ class TestPreflightWithoutCreds:
         if none are available.
         """
         from agent.commands.check import preflight
-        import typer
 
         with patch("agent.commands.check.validate_story", return_value=True), \
              patch("agent.commands.check.subprocess") as mock_subprocess, \

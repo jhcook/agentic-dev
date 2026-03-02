@@ -131,7 +131,6 @@ class TestListModelsCommand:
     def test_list_models_pretty_output(self, mock_init, mock_get_models, capsys):
         """Test pretty table output for list-models command."""
         from typer.testing import CliRunner
-        from agent.main import app
         
         mock_get_models.return_value = [
             {"id": "gemini-pro", "name": "Gemini Pro"},
@@ -149,7 +148,6 @@ class TestListModelsCommand:
     def test_list_models_json_output(self, mock_init, mock_get_models):
         """Test JSON output for list-models command."""
         from typer.testing import CliRunner
-        from agent.main import app
         
         mock_get_models.return_value = [
             {"id": "gemini-pro", "name": "Gemini Pro"}

@@ -119,7 +119,6 @@ def test_match_story_command(mock_complete, mock_deps):
         
         # files is an argument, not option
         # Set NO_COLOR to suppress ansi codes for clean matching
-        import os
         result = runner.invoke(app, ["match-story", "file1.py file2.py"], env={"NO_COLOR": "1"})
         
         if result.exit_code != 0:

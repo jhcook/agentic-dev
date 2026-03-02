@@ -14,7 +14,6 @@
 
 import pytest
 import asyncio
-import sys
 from unittest.mock import MagicMock, AsyncMock, patch
 from backend.voice.orchestrator import VoiceOrchestrator
 # Copyright 2026 Justin Cook

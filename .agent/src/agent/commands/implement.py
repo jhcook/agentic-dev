@@ -631,6 +631,7 @@ ARCHITECTURAL DECISIONS (ADRs):
         context_size = len(system_prompt) + len(user_prompt)
         logging.info(f"AI Full Context Attempt | Context size: ~{context_size} chars")
 
+        console.print("[bold green]🤖 AI is coding (Full Context)...[/bold green]")
         with console.status("[bold green]🤖 AI is coding (Full Context)...[/bold green]"):
              full_content = ai_service.complete(system_prompt, user_prompt, model=model)
              if not full_content:
@@ -714,6 +715,7 @@ ARCHITECTURAL DECISIONS (ADRs):
 
             chunk_result = None
             try:
+                console.print(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]")
                 with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
                     chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt, model=model)
             except Exception as e:
@@ -791,10 +793,10 @@ ARCHITECTURAL DECISIONS (ADRs):
                     (config.etc_dir / "agent.yaml").read_text()
                 )
                 test_cmd = agent_cfg.get("agent", {}).get(
-                    "test_command", "make test"
+                    "test_command", "pytest .agent/tests"
                 )
             except Exception:
-                test_cmd = "make test"
+                test_cmd = "pytest .agent/tests"
             qa_result = gates.run_qa_gate(test_cmd)
             gate_results.append(qa_result)
             status = "PASSED" if qa_result.passed else "BLOCKED"

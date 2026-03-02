@@ -20,7 +20,7 @@ Covers:
 """
 import os
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -228,8 +228,11 @@ class TestVertexDefaultPriority:
         svc._set_default_provider()
         assert svc.provider == "vertex"
 
-    def test_gemini_preferred_over_vertex_by_default(self):
+    @patch("agent.core.config.config")
+    def test_gemini_preferred_over_vertex_by_default(self, mock_config):
         """Without config override, gemini has higher priority than vertex."""
+        mock_config.load_yaml.return_value = {"agent": {}}
+        mock_config.get_value.return_value = None
         svc = self._make_service({
             "gemini": MagicMock(),
             "vertex": MagicMock(),

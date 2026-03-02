@@ -65,7 +65,7 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
 
     # --- File I/O with error handling ----------------------------------------
     try:
-        content = story_file.read_text()
+        content = story_file.read_text(encoding="utf-8")
     except OSError as exc:
         logger.error("Failed to read story file %s: %s", story_file, exc)
         console.print(f"[red]❌ Could not read {story_file}: {exc}[/red]")
@@ -87,7 +87,7 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
     )
 
     try:
-        story_file.write_text(new_content)
+        story_file.write_text(new_content, encoding="utf-8")
     except OSError as exc:
         logger.error("Failed to write story file %s: %s", story_file, exc)
         console.print(f"[red]❌ Could not write {story_file}: {exc}[/red]")

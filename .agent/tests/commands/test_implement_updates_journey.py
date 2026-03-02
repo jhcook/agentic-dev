@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import yaml
-from unittest.mock import patch, PropertyMock
-from pathlib import Path
+from unittest.mock import patch
 from agent.commands.implement import implement
 import typer
 from typer.testing import CliRunner

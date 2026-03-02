@@ -15,7 +15,6 @@
 """Unit tests for agent.db.journey_index (INFRA-059)."""
 
 import sqlite3
-import time
 from pathlib import Path
 from unittest.mock import patch
 

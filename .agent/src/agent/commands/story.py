@@ -104,8 +104,8 @@ def new_story(
                 generated = ai_service.complete(sys_prompt, user_prompt)
                 if generated:
                     content = generated
-            except Exception as e:
-                console.print(f"[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
+            except Exception:
+                console.print("[yellow]⚠️  AI generation failed. Falling back to manual input.[/yellow]")
                 edited_content = typer.edit(text=content)
                 if edited_content:
                     content = edited_content
@@ -160,6 +160,6 @@ How do we revert safely?
 
     # Auto-Sync to Providers (Priority Sync)
     from agent.sync.sync import push_safe
-    console.print(f"[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
+    console.print("[dim]Syncing to configured providers (Notion/Supabase)...[/dim]")
     push_safe(timeout=2, verbose=True, artifact_id=story_id)
 

@@ -17,7 +17,7 @@ import os
 # Adjust path to import agent modules
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 from typer.testing import CliRunner
 
@@ -162,18 +162,21 @@ def test_pr_workflow_inferred(mock_branch, mock_journey_index, mock_sync, mock_c
     
     # Mock Popen for tests
     process_mock = MagicMock()
-    process_mock.stdout.readline.side_effect = ["test output\n", ""]
+    process_mock.stdout.readline.return_value = ""
     process_mock.poll.return_value = 0
     process_mock.returncode = 0
     mock_popen.return_value = process_mock
     
     # We also need to mock validate_story inside preflight or it will fail
     with patch("agent.commands.check.validate_story") as mock_validate, \
+         patch("agent.commands.check.convene_council_full", return_value={"verdict": "PASS"}) as mock_gov, \
+         patch("agent.core.mcp.client.MCPClient.get_context", new_callable=AsyncMock, return_value="mock context"), \
          patch("agent.commands.check.validate_linked_journeys", return_value={"passed": True, "journey_ids": ["JRN-001"], "error": None}), \
          patch("agent.commands.workflow.validate_credentials"), \
          patch("agent.core.ai.ai_service.complete", return_value="AI PR Summary"), \
          patch("agent.commands.workflow.typer.edit", return_value="Manual PR Summary"):
-        result = runner.invoke(app, ["pr"])
+        # simulate quiet/non-interactive inputs if necessary, although PR just waits
+        result = runner.invoke(app, ["pr"], input="")
         
     assert result.exit_code == 0
     out = clean_out(result.stdout)
@@ -216,20 +219,23 @@ def test_preflight_inference(mock_branch, mock_journey_index, mock_sync, mock_ru
     
     # Mock standard input reading (if the council asks for confirmation and read_console is used)
     process_mock = MagicMock()
-    process_mock.stdout.readline.side_side_effect = ["test output\n", ""]
+    process_mock.stdout.readline.return_value = ""
     process_mock.poll.return_value = 0
     process_mock.returncode = 0
     mock_popen.return_value = process_mock
     
     # Needs to mock validate_story to pass
     with patch("agent.commands.check.validate_story") as mock_validate, \
+         patch("agent.commands.check.convene_council_full", return_value={"verdict": "PASS"}) as mock_gov, \
          patch("agent.sync.notion.NotionSync") as mock_sync_class, \
+         patch("agent.core.mcp.client.MCPClient.get_context", new_callable=AsyncMock, return_value="mock context"), \
          patch("agent.commands.check.validate_linked_journeys", return_value={"passed": True, "journey_ids": ["JRN-001"], "error": None}):
         
         mock_sync_instance = MagicMock()
         mock_sync_class.return_value = mock_sync_instance
         
-        result = runner.invoke(app, ["preflight"])
+        # We simulate the user quitting the preflight prompts if any exist
+        result = runner.invoke(app, ["preflight"], input="q\n")
         
     assert result.exit_code == 0
     out = clean_out(result.stdout)

@@ -10,6 +10,7 @@ Read our core philosophy on how `agentic-dev` approaches AI-assisted engineering
 - [Credential Security in the Agentic Workflow: Safety Meets Absolute Convenience](docs/credential-security.md)
 - [Eradicating Developer Toil: The Magic of the Agentic CLI](docs/developer-experience.md)
 - [Admin and Voice: Visibility and Feedback Loops](docs/admin-and-voice.md)
+- [Agentic Console: Real-time AI Programming Interface](.agent/docs/console.md)
 
 ## What It Does
 

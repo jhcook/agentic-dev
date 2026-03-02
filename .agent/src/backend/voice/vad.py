@@ -18,7 +18,6 @@ import hashlib
 import time
 import requests
 import numpy as np
-from typing import Optional
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)

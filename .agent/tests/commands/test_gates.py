@@ -133,15 +133,15 @@ class TestRunQaGate:
         assert result.passed is False
 
     def test_default_command(self):
-        """Verify default test command is 'make test'."""
+        """Verify default test command is 'pytest .agent/tests'."""
         # We just check the function accepts no args
-        # (don't actually run make test here)
+        # (don't actually run pytest here)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value.returncode = 0
             result = run_qa_gate()
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert call_args[0][0] == "make test"
+            assert call_args[0][0] == "pytest .agent/tests"
 
 
 # ── Docs Check ────────────────────────────────────────────────

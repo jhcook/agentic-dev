@@ -14,7 +14,7 @@
 
 
 import re
-from typing import AsyncGenerator, List 
+from typing import AsyncGenerator 
 
 class SentenceBuffer:
     """

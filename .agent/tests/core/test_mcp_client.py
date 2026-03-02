@@ -15,7 +15,6 @@
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 import unittest
-import pytest
 
 # Mock mcp dependency if not installed
 try:
