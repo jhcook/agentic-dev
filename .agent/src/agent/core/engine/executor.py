@@ -142,8 +142,7 @@ class AgentExecutor:
                             user_prompt=conversation_context,
                             model=self.model,
                             stop_sequences=["\nObservation:"],
-                            auto_fallback=False
-
+                            auto_fallback=True
                         )
                         think_span.set_attribute("llm_response", llm_response)
                     except Exception as e:
@@ -295,12 +294,18 @@ CRITICAL RULES:
 6. If no tool is needed, go straight to Final Answer.
 7. **BANNED PHRASES**: Never say "Check the logs", "See the terminal output", "Review the UI results", or "The output is visible above". If you need information from a tool, you MUST call it and summarize the observation yourself.
 8. **ACTION-FIRST**: You MUST call a tool to verify any state you claim to have changed. Never assume a command succeeded without seeing the output.
-9. **GROUNDING**: Your Thoughts and Final Answer must be strictly grounded in the Observations. Do not hallucinate data that wasn't returned by a tool.
+9. **GROUNDING & NO HALLUCINATION**: Your Thoughts and Final Answer must be strictly grounded in the Observations. Do not hallucinate data that wasn't returned by a tool. Never fabricate the output of a command. If you have not executed a tool in the current turn, do not claim to know the exit code or specific output of that tool.
 """.replace("{tool_desc}", tool_desc)
 
         return f"{base_prompt}\n\n{react_instructions}"
 
     def _build_context(self, user_input: str, history: List[AgentStep]) -> str:
+        context = {
+            "user_input": user_input,
+            "history": history
+        }
+        context_str = json.dumps({"user_input": user_input, "history": [step._asdict() for step in history]})
+        return context_str
         """Concatenate history for ReAct style context."""
         context = f"Question: {user_input}\n"
         

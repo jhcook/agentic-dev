@@ -216,9 +216,13 @@ def commit(
              console.print("[yellow]⚠️  AI commit message generation failed. Falling back to manual input.[/yellow]")
 
     if is_interactive and not yes:
-        message = typer.edit(text=message or "")
-        if message:
-            message = message.strip()
+        import sys
+        if sys.stdin.isatty():
+            message = typer.edit(text=message or "")
+            if message:
+                message = message.strip()
+        else:
+            console.print("[dim]🤖 Non-interactive environment detected, skipping editor prompt.[/dim]")
     
     if not message:
          console.print("[bold red]❌ Commit message is required.[/bold red]")

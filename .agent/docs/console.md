@@ -1,26 +1,30 @@
 # Console Documentation
 
-This document outlines the usage and features of the agentic-dev console.
+This document outlines the usage and features of the `agentic-dev` console.
 
-## Features
+## Key Features
 
-* Agentic capabilities: The console now supports agentic workflows, allowing for more complex and automated tasks. Agentic mode is activated by using the `@role` command or the `/workflow` command. This triggers a continuous loop where the agent uses available tools to achieve a specified goal.
-* CLI arguments:
-  * `--model`: Specifies the language model to use for the console. Example: `agent console --model gpt-4`. This allows you to choose different language models for the agent's reasoning.
-* In-console commands:
-  * `/search <query>`: Searches the codebase for the specified query.
-  * `/provider <provider>`: Sets the language model provider. Example: `/provider vertexai`
-  * `/model <model>`: Sets the language model. Example: `/model gpt-4`
-* UI improvements: Command history: The console now has command history, which you can navigate using the up and down arrow keys. This allows you to easily recall and reuse previous commands. The UI also features a panel that displays the agent's current thought process and actions during agentic workflows.
-* Error handling guidance: Vertex AI authentication: If you encounter authentication issues with Vertex AI, ensure that you have correctly configured your `gcloud` settings and have the necessary permissions. See the project documentation for detailed steps.
-* New agentic tools: The following tools are now available within the agentic workflow:
-  * `read_file`: Reads the content of a file. Usage: `read_file(path="path/to/file")`
-  * `edit_file`: Rewrites the entire content of a file. Use with caution. Usage: `edit_file(path="path/to/file", content="new file content")`
-  * `patch_file`: Safely replaces a specific chunk of text in a file. Usage: `patch_file(path="path/to/file", search="text to replace", replace="replacement text")`
-  * `run_command`: Executes a shell command within the repository. Usage: `run_command(command="command to execute")`
-  * `find_files`: Finds files matching a glob pattern. Usage: `find_files(pattern="*.py")`
-  * `grep_search`: Searches for a text pattern in the repository. Usage: `grep_search(pattern="pattern to search", path="path/to/search")`
-* Continuous agentic mode: Activated by `@role` or `/workflow`, this mode allows the agent to continuously execute tasks until a final answer is reached. The UI features a panel that shows the agent's current thought process and actions.
+*   **Agentic Mode**: Triggered by invoking a role (`@<role>`) or a workflow (`/<workflow>`), the agent enters a continuous loop, using a suite of tools to achieve a specified goal until it reaches a final answer. The UI provides a real-time view of the agent's thoughts and actions.
+*   **Agentic Continuation**: After an initial workflow or role-based task is complete, the agent remains in a tool-using mode, allowing for follow-up commands and iterative development without needing to re-invoke a role.
+*   **Model & Provider Switching**: Easily switch between different LLM providers (e.g., `openai`, `vertexai`) and models (e.g., `gpt-4o`, `gemini-1.5-pro-latest`) on the fly using in-console commands.
+
+## UI Interactions
+
+*   **Command History**: Navigate your input history using the `Up` and `Down` arrow keys.
+*   **Model Switching**: Click on a model name in the sidebar's "Models" panel to quickly switch the active LLM.
+
+## Slash Commands
+
+The console supports several commands for controlling its behavior:
+
+*   `/search <query>`: Performs a quick, read-only search of the console's output panel.
+*   `/provider <name>`: Sets the active LLM provider. Example: `/provider openai`
+*   `/model <name>`: Sets the active LLM. The model must be compatible with the current provider. Example: `/model gpt-4o`
+*   `/<workflow>`: Executes a predefined workflow. Workflows are defined in `.agent/workflows/`. Example: `/commit`
+
+## Agentic Tools
+
+The agent has access to a variety of tools to interact with the repository. For a complete and detailed list, please see the official [Tool Documentation](./agent_tools.md).
 
 ## Data Handling and Privacy
 
@@ -28,7 +32,7 @@ By using the agentic features of this console, you acknowledge and agree that da
 
 ## Troubleshooting
 
-* Vertex AI Authentication Issues: Ensure that you have correctly configured your gcloud settings and have the necessary permissions.  See the project documentation for detailed steps and required roles. If you are still encountering issues, try running the following command: `gcloud auth application-default login`.
+*   **Vertex AI Authentication Issues**: Ensure you have correctly configured your `gcloud` settings and have the necessary permissions. If you still encounter issues, try running `gcloud auth application-default login`.
 
 ## Copyright
 

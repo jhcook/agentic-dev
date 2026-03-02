@@ -53,13 +53,5 @@ def console(
             typer.echo(f"Error setting provider: {e}")
             raise typer.Exit(1)
 
-    import os
-    try:
-        app = ConsoleApp(provider=provider, model=model)
-        app.run()
-    finally:
-        # Force-exit to terminate any lingering worker threads that may be
-        # stuck in blocking I/O (e.g. waiting for an AI provider response).
-        # We use os._exit(0) in finally to ensure a clean prompt return
-        # even if a KeyboardInterrupt (Ctrl+C) occurred mid-shutdown.
-        os._exit(0)
+    app = ConsoleApp(provider=provider, model=model)
+    app.run()

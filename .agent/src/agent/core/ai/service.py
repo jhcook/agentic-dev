@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import re
 import os
 import subprocess
 import sys
@@ -701,11 +702,20 @@ class AIService:
                     gen_config_kwargs["stop_sequences"] = stop_sequences
                 config = types.GenerateContentConfig(**gen_config_kwargs)
 
-                for chunk in client.models.generate_content_stream(
-                    model=model_used, contents=user_prompt, config=config
-                ):
-                    if chunk.text:
-                        yield chunk.text
+                try:
+                    for chunk in client.models.generate_content_stream(
+                        model=model_used, contents=user_prompt, config=config
+                    ):
+                        if chunk.text:
+                            yield chunk.text
+                except ValueError as e:
+                    # @Robustness: Handle ReAct text output being misinterpreted as a function call.
+                    extracted_text = self._handle_malformed_func_call_error(e)
+                    if extracted_text:
+                        yield extracted_text
+                    else:
+                        # If it's not the error we're looking for, re-raise it.
+                        raise e
 
             elif provider == "anthropic":
                 client = self.clients["anthropic"]
@@ -848,6 +858,34 @@ class AIService:
             
         return models
 
+    def _handle_malformed_func_call_error(self, error: ValueError) -> str:
+        """
+        Robustly extracts the AI's textual response from a google-genai
+        MALFORMED_FUNCTION_CALL ValueError.
+
+        This error occurs when the model tries to call a function but emits
+        a ReAct-style `Action:` block instead of a valid JSON tool call.
+        We want to capture that text.
+
+        Args:
+            error: The ValueError raised by the google-genai library.
+
+        Returns:
+            The extracted text content, or an empty string if not found.
+        """
+        error_str = str(error)
+        # Use a regex to find the content after "MALFORMED_FUNCTION_CALL:"
+        # This is more robust than splitting on the string.
+        match = re.search(r"MALFORMED_FUNCTION_CALL:\s*(.*)", error_str, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # Fallback for older/different error message formats
+        if "Action:" in error_str:
+            parts = error_str.split("Action:", 1)
+            if len(parts) > 1:
+                return "Action:" + parts[1]
+        return ""
+
     def _try_complete(
         self,
         provider: str,
@@ -889,9 +927,19 @@ class AIService:
                     full_text = ""
                     # Streaming keeps the connection alive,
                     # preventing 60s/120s idle timeouts
-                    for chunk in response_stream:
-                        if chunk.text:
-                            full_text += chunk.text
+                    try:
+                        for chunk in response_stream:
+                            if chunk.text:
+                                full_text += chunk.text
+                    except ValueError as e:
+                        # @Robustness: Handle ReAct text output being misinterpreted
+                        # as a function call by the google-genai library.
+                        extracted_text = self._handle_malformed_func_call_error(e)
+                        if extracted_text:
+                            full_text += extracted_text
+                        else:
+                            # If it's not the error we're looking for, re-raise it.
+                            raise e
                             
                     return full_text.strip()
 

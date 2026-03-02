@@ -93,12 +93,11 @@ def _build_system_prompt() -> str:
         "2. **Think Before Acting**: Use the ReAct format to `Thought:` about what to do, then use an `Action:`.\n"
         "3. **Direct Answers**: When providing the Final Answer, be direct and assertive. No filler. Do not narrate your actions (e.g., avoid \"I will now...\", \"I have...\").\n"
         "4. **No Apologies**: If an error is pointed out, acknowledge it briefly and provide the correction. Do not apologize.\n"
-        "5. **Infer Context**: If asked about the current state, proactively "
-        "check git branches, logs, or status files without asking permission.\n"
+        "5. **Search First Logic**: For any state-dependent request or workflow command (like `/preflight`), you MUST execute a discovery tool (`run_command` with `git status` or `ls`) before your first Thought block ends to establish context.\n"
         "6. **Technical Output**: All technical lists (files, git status, logs) "
         "MUST be inside markdown code blocks.\n"
-        "7. **Never Guess**: When asked about code, read the file first.\n"
-        "8. Assume the role of Engineering Lead, Developer, or Release "
+        "7. **Never Guess**: When asked about code, read the file first. Never fabricate the output of a command. If you have not executed a tool in the current turn, do not claim to know the exit code or specific output of that tool.\n"
+        "8. **Perform the user's tasks** using the available tools unless the task is purely informational. Assume the role of Engineering Lead, Developer, or Release "
         "Coordinator as needed.\n\n"
         "## Project Layout\n"
         "```\n"
@@ -110,9 +109,10 @@ def _build_system_prompt() -> str:
         "│   ├── etc/             # Config (agent.yaml, agents.yaml)\n"
         "│   ├── cache/           # Stories, runbooks, journeys\n"
         "│   ├── adrs/            # Architecture Decision Records\n"
-        "│   └── docs/            # Project documentation\n"
+        "│   ├── docs/            # Project documentation\n"
+        "\n"
         "├── CHANGELOG.md\n"
-                "└── README.md\n"
+        "└── README.md\n"
         "```\n\n"
         "## Slash Commands & Workflows\n"
         "1. **Workflow Priority**: For any message starting with `/` (e.g., `/commit`, `/story`), you MUST first use `read_file` to retrieve the corresponding workflow definition from `.agent/workflows/[command].md`.\n"
@@ -130,8 +130,12 @@ def _build_system_prompt() -> str:
         "- Always verify repo state with `run_command('git status')` before "
         "and after significant changes.\n"
         "- Proactively check git branches and status when context is missing.\n\n"
-        "## Atomic File Operations\n"
-        "- When making targeted changes to existing files, use `patch_file` to safely replace specific chunks instead of reading and rewriting the entire file with `edit_file`. This saves tokens and reduces errors.\n\n"
+        "## File Operations\n"
+        "- Use `patch_file` for targeted edits to existing files (safer, saves tokens).\n"
+        "- Use `edit_file` to overwrite an entire file.\n"
+        "- Use `create_file` for new files (errors if file already exists).\n"
+        "- Use `delete_file` to remove files (uses `git rm` for tracked files).\n"
+        "- All file-modifying tools automatically stage changes with `git add`.\n\n"
     )
 
     # Add license header instructions if template exists
@@ -650,19 +654,23 @@ class ConsoleApp(App):
         log = self.query_one("#chat-output", SelectionLog)
         # Render the full response as Markdown to the persistent log
         log.write(Markdown(text), scroll_end=True)
-        self._hide_exec_panel()
+        # Don't hide the exec panel here — keep it visible so users
+        # can review agent thoughts, tool calls, and results.
 
     def _hide_exec_panel(self) -> None:
-        """Hide and clear the execution output panel."""
+        """Hide the execution output panel (preserves content)."""
         try:
             exec_log = self.query_one("#exec-output", SelectionLog)
             exec_log.display = False
-            exec_log.clear()
         except Exception:
             pass
 
     def _show_exec_panel(self) -> None:
-        """Show and clear the execution output panel for a new agentic run."""
+        """Show the execution output panel for an agentic run.
+        
+        Clears previous content at the start of a new run so the panel
+        shows only the current execution trace.
+        """
         try:
             self._exec_log.clear()
             self._exec_log.display = True
@@ -1261,23 +1269,23 @@ class ConsoleApp(App):
             await self._stream_response(_get_system_prompt(), raw)
 
     def _write_thought(self, thought: str, step: int) -> None:
-        """Display agent's thought process."""
+        """Display agent's thought process in the execution panel."""
         import re
         from rich.markup import escape
         
         # Clean the thought of typical ReAct garbage
         cleaned = re.sub(r'```json.*?```', '', thought, flags=re.DOTALL|re.IGNORECASE)
-        cleaned = re.sub(r'\{.*?\}', '', cleaned, flags=re.DOTALL) # Basic JSON object stripping if outside blocks
+        cleaned = re.sub(r'\{.*?\}', '', cleaned, flags=re.DOTALL)
         cleaned = cleaned.replace("Thought:", "").replace("Action:", "").replace("Action Input:", "").strip()
         
         if not cleaned:
             cleaned = "Thinking..."
             
-        # Add a subtle step indicator
-        prefix = f"[dim]Step {step}[/dim] 🤔" if step > 1 else "🤔"
+        prefix = f"[bold blue]Step {step}[/bold blue]" if step > 1 else "[bold blue]Step 1[/bold blue]"
         
-        self._chat_log.write(
-            f"\n[dim]{prefix} {escape(cleaned)}[/dim]",
+        self._exec_log.display = True
+        self._exec_log.write(
+            f"{prefix} 🤔 [dim]{escape(cleaned)}[/dim]",
             scroll_end=True,
         )
 
@@ -1319,7 +1327,7 @@ class ConsoleApp(App):
         
         def _update():
             self._exec_log.display = True
-            self._exec_log.write(f"[dim]{escape(line)}[/dim]")
+            self._exec_log.write(f"[dim]{escape(line)}[/dim]", scroll_end=True)
 
         try:
             self.call_from_thread(_update)
@@ -1437,11 +1445,15 @@ class ConsoleApp(App):
                 system_prompt, user_prompt, provider, model
             )
 
-        # Always hide the exec panel when streaming is done
-        try:
-            self._hide_exec_panel()
-        except Exception:
-            pass
+        # Don't hide exec panel after agentic runs — keep it visible
+        # so the user can review agent thoughts, tool calls, and results.
+        # It will be cleared at the start of the NEXT agentic run.
+        # Only hide for non-agentic (simple chat) streams.
+        if not use_tools:
+            try:
+                self._hide_exec_panel()
+            except Exception:
+                pass
 
         if full_response is None:
             return  # Error was handled inside the method
@@ -1734,6 +1746,29 @@ class ConsoleApp(App):
     def action_copy_or_quit(self) -> None:
         """Ctrl+C: Standard interrupt behavior (Quit)."""
         self.action_quit()
+
+    def action_quit(self) -> None:
+        """Force clean exit without waiting for blocking threads."""
+        import os
+        import threading
+        import time
+
+        # Run unmount logic (saves state, closes DB) manually just in case
+        try:
+            self.on_unmount()
+        except Exception:
+            pass
+
+        # Tell textual to exit gracefully if possible
+        self.exit()
+
+        # If textual hangs waiting for the executor, force kill it after 200ms
+        def _hard_exit():
+            time.sleep(0.2)
+            logging.shutdown()
+        os._exit(0)
+            
+        threading.Thread(target=_hard_exit, daemon=True).start()
 
     @staticmethod
     def _fuzzy_match(query: str, candidates: list[str]) -> str | None:

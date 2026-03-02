@@ -26,15 +26,25 @@ import os
 import re
 import shlex
 import subprocess
+import threading
+import time
+import uuid
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Dict, TypedDict, Optional
 
 logger = logging.getLogger(__name__)
+
+class BackgroundProcessState(TypedDict):
+    proc: subprocess.Popen
+    command: str
+    output_buffer: List[str]
+
+_BACKGROUND_PROCESSES: Dict[str, BackgroundProcessState] = {}
 
 
 # Characters that could be used for shell injection.
 # Stripping these makes LLM-supplied queries safe for subprocess.
-_SHELL_META_RE = re.compile(r'[;|&$`"\'\(\){}<>!\n\r\x00]')
+_SHELL_META_RE = re.compile("[;|&$`\"'\\(\\\\){}<>!\n\r\x00]")
 
 
 def _sanitize_query(query: str) -> str:
@@ -66,6 +76,17 @@ def _validate_path(path: str, repo_root: Path) -> Path:
     return resolved
 
 
+def _stage_file(filepath: Path, repo_root: Path) -> None:
+    """Stage a file for git (best-effort, never raises)."""
+    try:
+        subprocess.run(
+            ["git", "add", str(filepath)],
+            cwd=str(repo_root), capture_output=True, timeout=5, check=False,
+        )
+    except Exception:
+        pass  # Non-critical — don't break tool on staging failure
+
+
 def make_tools(repo_root: Path) -> List[Callable]:
     """Creates bound tool functions with repo_root pre-filled.
 
@@ -80,11 +101,23 @@ def make_tools(repo_root: Path) -> List[Callable]:
     """
 
     def read_file(path: str) -> str:
-        """Reads a file from the repository. Path must be relative to repo root."""
+        """Reads a file from the repository, capped at 2000 lines. Path must be relative to repo root."""
         filepath = _validate_path(str(repo_root / path), repo_root)
         if not filepath.is_file():
             return f"Error: '{path}' is not a file or does not exist."
-        return filepath.read_text(errors="replace")[:50_000]  # Cap output
+        try:
+            with filepath.open('r', errors="replace") as f:
+                lines = [next(f) for _ in range(2000)]
+                content = "".join(lines)
+                # Check if there are more lines
+                try:
+                    next(f)
+                    content += "\n... (file truncated at 2000 lines)"
+                except StopIteration:
+                    pass # File is less than 2000 lines
+            return content
+        except Exception as e:
+            return f"Error reading file {path}: {e}"
 
     def search_codebase(query: str) -> str:
         """Searches the codebase for a query using ripgrep. Returns up to 50 matches."""
@@ -94,7 +127,7 @@ def make_tools(repo_root: Path) -> List[Callable]:
             return f"Error: {e}"
         try:
             result = subprocess.run(
-                ["rg", "--no-heading", "-n", safe_query, str(repo_root)],
+                ["rg", "--no-heading", "-n", "--hidden", safe_query, str(repo_root)],
                 capture_output=True, text=True, timeout=10, check=False,
             )
             if result.returncode == 0:
@@ -192,8 +225,9 @@ def make_interactive_tools(
                 
             new_content = content.replace(search, replace, 1)
             filepath.write_text(new_content)
-            logger.info(f"File {path} successfully patched.")
-            return f"File {path} successfully patched."
+            _stage_file(filepath, repo_root)
+            logger.info(f"File {path} successfully patched and staged.")
+            return f"File {path} successfully patched and staged."
         except ValueError as e:
             logger.error(f"Validation error in 'patch_file' for path {path}: {e}", exc_info=True)
             return f"Error: {e}"
@@ -208,7 +242,8 @@ def make_interactive_tools(
             filepath = _validate_path(str(repo_root / path), repo_root)
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(content)
-            result = f"File {path} successfully updated."
+            _stage_file(filepath, repo_root)
+            result = f"File {path} successfully updated and staged."
             logger.info(result)
             return result
         except ValueError as e:
@@ -218,9 +253,70 @@ def make_interactive_tools(
             logger.error(f"Error editing file {path}: {e}", exc_info=True)
             return f"Error editing file: {e}"
 
-    def run_command(command: str) -> str:
+    def create_file(path: str, content: str = "") -> str:
+        """Creates a new file with the given content. Path must be relative to repo root."""
+        logger.info(f"Executing tool 'create_file' on path: {path}")
+        try:
+            filepath = _validate_path(str(repo_root / path), repo_root)
+            if filepath.exists():
+                return f"Error: File '{path}' already exists. Use edit_file or patch_file to modify it."
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content)
+            _stage_file(filepath, repo_root)
+            result = f"File {path} successfully created and staged."
+            logger.info(result)
+            return result
+        except ValueError as e:
+            logger.error(f"Validation error in 'create_file' for path {path}: {e}", exc_info=True)
+            return f"Error: {e}"
+        except Exception as e:
+            logger.error(f"Error creating file {path}: {e}", exc_info=True)
+            return f"Error creating file: {e}"
+
+    def delete_file(path: str) -> str:
+        """Deletes a file from the repository. Path must be relative to repo root."""
+        logger.info(f"Executing tool 'delete_file' on path: {path}")
+        try:
+            filepath = _validate_path(str(repo_root / path), repo_root)
+            if not filepath.is_file():
+                return f"Error: File '{path}' does not exist or is a directory."
+
+            # Check if the file is tracked by Git
+            is_tracked_proc = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", str(filepath)],
+                cwd=str(repo_root), capture_output=True, text=True, timeout=5
+            )
+            is_tracked = is_tracked_proc.returncode == 0
+
+            if is_tracked:
+                # If tracked, use `git rm` to remove and stage the deletion
+                subprocess.run(
+                    ["git", "rm", str(filepath)],
+                    cwd=str(repo_root), capture_output=True, text=True, timeout=5, check=True
+                )
+                result = f"File {path} successfully deleted and deletion staged."
+            else:
+                # If not tracked, just delete the file. No staging needed.
+                os.remove(filepath)
+                result = f"File {path} successfully deleted."
+
+            logger.info(result)
+            return result
+        except ValueError as e:
+            logger.error(f"Validation error in 'delete_file' for path {path}: {e}", exc_info=True)
+            return f"Error: {e}"
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr if e.stderr else "Unknown git error"
+            logger.error(f"Error running git command for {path}: {error_message}", exc_info=True)
+            return f"Error staging deletion: {error_message}"
+        except Exception as e:
+            logger.error(f"Error deleting file {path}: {e}", exc_info=True)
+            return f"Error deleting file: {e}"
+
+    def run_command(command: str, background: bool = False) -> str:
         """Executes a shell command (sandboxed) in the repository root. Streams output in real-time.
 
+        If background=True, the command runs in the background and a command_id is returned.
         The command output is streamed to the UI and is NOT returned by this function.
         The function's return value is a summary for the LLM, not the raw output.
         """
@@ -245,26 +341,53 @@ def make_interactive_tools(
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             
+            # SECURITY FIX: Use shell=False and shlex.split to prevent shell injection.
+            # This is the approach recommended by the security audit.
+            args = shlex.split(command)
             proc = subprocess.Popen(
-                command,
+                args,
                 cwd=str(repo_root),
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE if background else None,
                 text=True,
-                shell=True,
+                shell=False,
                 bufsize=1,  # Line buffering for real-time streaming
             )
             
+            if background:
+                cmd_id = str(uuid.uuid4())
+                state: BackgroundProcessState = {
+                    "proc": proc,
+                    "command": command,
+                    "output_buffer": []
+                }
+                _BACKGROUND_PROCESSES[cmd_id] = state
+                
+                def _read_output():
+                    if proc.stdout:
+                        # Use readline() instead of iterator for unbuffered reads
+                        for line in iter(proc.stdout.readline, ''):
+                            stripped_line = line.rstrip("\n")
+                            state["output_buffer"].append(stripped_line)
+                            if len(state["output_buffer"]) > 200:
+                                state["output_buffer"].pop(0)
+                            if on_output:
+                                on_output(stripped_line)
+                
+                threading.Thread(target=_read_output, daemon=True).start()
+                return f"Command started in background with ID: {cmd_id}. Use check_command_status and send_command_input to interact."
+            
             output_captured = []
             if proc.stdout:
-                for line in proc.stdout:
+                # Use readline() instead of iterator for unbuffered reads
+                for line in iter(proc.stdout.readline, ''):
                     stripped_line = line.rstrip("\n")
                     output_captured.append(stripped_line)
                     if len(output_captured) > 50:
                         output_captured.pop(0)
                     if on_output:
-                        # QA FIX: Stream output to the UI callback as it arrives.
                         on_output(stripped_line)
             
             proc.wait(timeout=120)
@@ -290,6 +413,49 @@ def make_interactive_tools(
         # COMPLIANCE FIX: Return a simple summary instead of the full output.
         # This prevents potentially large/sensitive data from being sent to the LLM.
         return f"Command finished with exit code {proc.returncode}. Output was streamed to the user."
+
+    def send_command_input(command_id: str, input_text: str) -> str:
+        """Sends input text to a background command's stdin."""
+        state = _BACKGROUND_PROCESSES.get(command_id)
+        if not state:
+            return f"Error: No background process found with ID {command_id}"
+        
+        proc = state["proc"]
+        if proc.poll() is not None:
+            return f"Error: Command has already exited with code {proc.returncode}"
+            
+        try:
+            if proc.stdin:
+                if not input_text.endswith('\n'):
+                    input_text += '\n'
+                proc.stdin.write(input_text)
+                proc.stdin.flush()
+                # Wait briefly for process to react
+                # The peek() method on a file-like object does not accept any keyword arguments.
+                # try:
+
+                # except TimeoutError:
+                #     pass
+                return "Input sent successfully. Use check_command_status to see new output."
+            else:
+                return "Error: Process stdin is not available."
+        except Exception as e:
+            logger.error(f"Error sending input to {command_id}: {e}", exc_info=True)
+            return f"Error sending input: {e}"
+
+    def check_command_status(command_id: str) -> str:
+        """Checks the status and recent output of a background command."""
+        state = _BACKGROUND_PROCESSES.get(command_id)
+        if not state:
+            return f"Error: No background process found with ID {command_id}"
+            
+        proc = state["proc"]
+        status = "Running" if proc.poll() is None else f"Exited with code {proc.returncode}"
+        output = "\\n".join(state["output_buffer"][-50:])
+        result = f"Status: {status}\\n\\nRecent Output:\\n{output}"
+        if "Exited with code" in status:
+            del _BACKGROUND_PROCESSES[command_id]
+        return result
 
     def find_files(pattern: str) -> str:
         """Finds files matching a glob pattern within the repository."""
@@ -374,7 +540,7 @@ def make_interactive_tools(
             logger.info(f"Fallback grep found {len(matches)} matches.")
             return "\n".join(matches) or "No matches found."
 
-    return [patch_file, edit_file, run_command, find_files, grep_search]
+    return [patch_file, edit_file, create_file, delete_file, run_command, send_command_input, check_command_status, find_files, grep_search]
 
 
 # ---------------------------------------------------------------------------
