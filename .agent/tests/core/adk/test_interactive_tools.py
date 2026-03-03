@@ -20,6 +20,7 @@ tool functions including security boundary enforcement.
 
 
 import pytest
+import unittest.mock
 
 from agent.core.adk.tools import make_interactive_tools
 
@@ -71,11 +72,11 @@ class TestRunCommand:
     def test_captures_stdout(self, tools):
         result = tools["run_command"]("echo hello")
         assert "hello" in result
-        assert "Exit code: 0" in result
+        assert "exit code 0" in result
 
     def test_captures_stderr(self, tools):
         result = tools["run_command"]("ls nonexistent_path_xyz")
-        assert "Exit code:" in result
+        assert "exit code" in result
         # Should have non-zero exit code or stderr
 
     def test_cwd_is_repo_root(self, tools, repo_root):
@@ -86,7 +87,7 @@ class TestRunCommand:
         # This should timeout (30s) — use a shorter sleep to not slow tests
         # Just verify the command runs without crashing
         result = tools["run_command"]("echo fast")
-        assert "Exit code: 0" in result
+        assert "exit code 0" in result
 
     def test_invalid_command(self, tools):
         result = tools["run_command"]("")
@@ -125,3 +126,22 @@ class TestGrepSearch:
     def test_empty_query_rejected(self, tools):
         result = tools["grep_search"]("")
         assert "Error" in result
+
+
+class TestMatchStory:
+    """Tests for the match_story tool."""
+
+    def test_matches_story(self, tools, repo_root):
+        # match_story internally calls run_command which calls subprocess.
+        # We create a dummy 'agent' script that outputs a story ID.
+        import stat
+        agent_script = repo_root / "agent"
+        agent_script.write_text("#!/bin/sh\necho 'INFRA-123: Found story'\n")
+        agent_script.chmod(agent_script.stat().st_mode | stat.S_IEXEC)
+
+        import os
+        env = os.environ.copy()
+        env["PATH"] = str(repo_root) + ":" + env.get("PATH", "")
+        with unittest.mock.patch.dict(os.environ, {"PATH": env["PATH"]}):
+            result = tools["match_story"]("test query")
+        assert "INFRA-123" in result

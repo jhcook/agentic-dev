@@ -157,10 +157,17 @@ def _build_system_prompt() -> str:
             "- **Assertion of Observations**: You MUST output a specific observation to the user after every tool call. Do not just say you ran a command; summarize the findings (e.g., '0 files staged').\n"
             "- **Precondition Enforcement**: For commands like `/preflight` and other workflows, strictly validate prerequisites (like having staged files) BEFORE beginning the main logic. Do not try to bypass or hallucinate past environmental blockers.\n"
             "- **Minimalist**: Use the smallest possible tool calls to achieve the goal.\n"
+            "- **Command Batching**: Always batch operations into single commands when possible. For example, use `git add file1 file2 file3` instead of calling `run_command` once per file. Multiple arguments to a single command are always preferred over multiple tool calls.\n"
             "- **Mandatory State Verification**: Before reporting the success or failure of a file modification or system state change, you MUST verify the result using a tool (e.g., `read_file`, `run_command` with `git status` or `ls`). Never assume an operation succeeded based on internal logic alone.\n"
             "- **Context Refresh on Error**: If the user reports the system or panel is stuck or broken, trigger a Self-Correction routine: read the last files you touched and check the repository state to re-anchor your context.\n"
             "- **Redundancy Filter**: Do not repeat discovery commands (like `ls` or `git status`) within a 3-turn window unless a write-action or file modification has occurred in the interim. Use your context memory.\n"
             "- **Troubleshooting Protocol**: If a user mentions a 'stack trace', 'crash', or 'Service Failure', prioritize checking standard log locations immediately (e.g., `.agent/logs`, `stderr.log`, or `/var/log`) rather than guessing.\n"
+            "- **Forced Output Reporting**: Every tool execution MUST be followed by a text summary of its result to the user. Do NOT execute a tool twice without explaining the result of the first attempt. If a command produced no output, say so explicitly.\n"
+            "- **Frustration Detection**: When the user uses aggressive punctuation (???, !!!), profanity, or repeats the same request, prioritize a text-based status update or acknowledgment BEFORE executing another tool. Briefly explain what you're doing and why.\n"
+            "- **Stuck Agent Escape**: If you have called the same tool or category of tools 3+ times without providing an answer, STOP calling tools and provide a Final Answer with whatever information you have so far, along with an explanation of any issues encountered.\n"
+            "- **Mandatory State Discovery**: NEVER report on environment state (modified files, git status, branch, env vars) without calling a discovery tool FIRST in the current turn. Do not rely on stale or memorized context for environment-dependent answers.\n"
+            "- **Graceful Tool Failure**: If a non-essential file, template, or dependency is missing, proceed with the user's primary request using a sensible default instead of surfacing the raw error. Only stop if the CORE task is impossible.\n"
+            "- **Intent Persistence**: Keep the user's original goal as your primary focus. If a tool returns an error or unexpected result, ask yourself: 'Does this block the user's actual request?' If not, work around it and complete the task.\n"
         )
 
     return prompt
@@ -1266,9 +1273,11 @@ class ConsoleApp(App):
                 self._agentic_system_prompt, raw, use_tools=True
             )
         else:
-            # User changed subject — hide the exec panel from any previous run
-            self._hide_exec_panel()
-            await self._stream_response(_get_system_prompt(), raw)
+            # Plain chat — still enable tools so the agent can execute
+            # commands, read files, etc. when the user asks questions
+            # about repo state. Without this, the agent outputs raw
+            # ReAct "Action:" text instead of actually calling tools.
+            await self._stream_response(_get_system_prompt(), raw, use_tools=True)
 
     def _write_thought(self, thought: str, step: int) -> None:
         """Display agent's thought process in the execution panel."""
@@ -1514,14 +1523,22 @@ class ConsoleApp(App):
             full_response = await asyncio.to_thread(_iterate_sync)
             
         except Exception as e:
-            logger.error(
-                "Streaming error: %s",
-                str(e),
-                extra={"error": str(e), "provider": provider},
-                exc_info=True,
-            )
+            error_str = str(e)
+            # Auth errors are common (expired tokens) — log cleanly, not as a stack trace
+            if "reauthentication" in error_str.lower() or "RefreshError" in type(e).__name__:
+                logger.warning(
+                    "Auth expired: %s. Run `gcloud auth application-default login` to fix.",
+                    error_str,
+                )
+            else:
+                logger.error(
+                    "Streaming error: %s",
+                    error_str,
+                    extra={"error": error_str, "provider": provider},
+                    exc_info=True,
+                )
             self._partial_response = full_response
-            self._show_disconnect_modal(str(e))
+            self._show_disconnect_modal(error_str)
             return None
 
         return full_response
@@ -1569,14 +1586,21 @@ class ConsoleApp(App):
                 on_tool_approval=self._ask_tool_approval,
             )
         except Exception as e:
-            logger.error(
-                "Agentic loop error: %s",
-                str(e),
-                extra={"error": str(e), "provider": provider},
-                exc_info=True,
-            )
+            error_str = str(e)
+            if "reauthentication" in error_str.lower() or "RefreshError" in type(e).__name__:
+                logger.warning(
+                    "Auth expired: %s. Run `gcloud auth application-default login` to fix.",
+                    error_str,
+                )
+            else:
+                logger.error(
+                    "Agentic loop error: %s",
+                    error_str,
+                    extra={"error": error_str, "provider": provider},
+                    exc_info=True,
+                )
             self._partial_response = full_response
-            self._show_disconnect_modal(str(e))
+            self._show_disconnect_modal(error_str)
             return None
 
         return full_response
@@ -1752,6 +1776,7 @@ class ConsoleApp(App):
     def action_quit(self) -> None:
         """Force clean exit without waiting for blocking threads."""
         import os
+        import sys
         import threading
         import time
 
@@ -1764,11 +1789,25 @@ class ConsoleApp(App):
         # Tell textual to exit gracefully if possible
         self.exit()
 
-        # If textual hangs waiting for the executor, force kill it after 200ms
+        # If textual hangs waiting for the executor, force kill it after 500ms.
+        # We must restore the terminal first — os._exit bypasses Textual's
+        # cleanup, which leaves the terminal in alt-screen mode and spews
+        # raw ANSI escape codes into the parent shell.
         def _hard_exit():
-            time.sleep(0.2)
+            time.sleep(0.5)
+            # Restore terminal state before hard exit
+            try:
+                fd = sys.stdout.fileno()
+                if os.isatty(fd):
+                    # Exit alternate screen buffer, show cursor, reset attributes
+                    sys.stdout.write("\033[?1049l\033[?25h\033[0m")
+                    sys.stdout.flush()
+                    # Restore terminal to sane mode via stty
+                    os.system("stty sane 2>/dev/null")
+            except Exception:
+                pass
             logging.shutdown()
-        os._exit(0)
+            os._exit(0)
             
         threading.Thread(target=_hard_exit, daemon=True).start()
 

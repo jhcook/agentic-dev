@@ -29,14 +29,19 @@ WORKFLOW:
     - Otherwise, stage your changes: `git add -A` (or selectively stage specific files).
     - Preflight only reviews **staged** changes.
 
-1. **Run Preflight CLI**
+1. **Resolve Story ID**
+    - Check if the user provided, e.g., /preflight INFRA-088
+    - Check the current branch name: `git branch --show-current`
+    - If the branch name contains a story ID pattern (e.g., `INFRA-088-some-feature`), extract it.
+    - If the branch is `main`, `master`, `develop`, or does NOT contain a story ID:
+      - Run `agent match-story` to auto-detect the story ID from staged changes.
+      - If `match-story` returns a story ID, use it with `--story <STORY_ID>`.
+      - If `match-story` cannot find a story ID, **notify the user** with:
+        `"Cannot determine Story ID. Please specify with: agent preflight --story <STORY_ID>"`
+        and **stop** — do NOT run preflight without a story ID.
+
+2. **Run Preflight CLI**
     - Execute the following command to run the automated preflight checks and AI governance review:
-
-    ```bash
-    agent preflight
-    ```
-
-    - If you are running this for a specific story, use:
 
     ```bash
     agent preflight --story <STORY_ID>
@@ -45,25 +50,25 @@ WORKFLOW:
     - For the highest accuracy (fewer false positives), use `--thorough`:
 
     ```bash
-    agent preflight --thorough
+    agent preflight --story <STORY_ID> --thorough
     ```
 
     > **Note**: `--thorough` adds full-file context and post-processing validation.
     > It uses more tokens but significantly reduces false BLOCK verdicts.
 
-2. **Review Output**
+3. **Review Output**
     - The command will output a report.
     - If the result is `BLOCK`, you must address the findings.
     - If the result is `PASS`, you may proceed.
 
-3. **Governance Rules**
+4. **Governance Rules**
     - The CLI automatically enforces all rules, including:
         - Global Compliance (GDPR, SOC2)
         - Role-specific constraints (@Security, @Architect, etc.)
         - Architectural Decision Records (ADRs) and Exceptions (EXC)
         - Journey Gate: stories must have real linked journeys (not placeholder `JRN-XXX`)
 
-4. **False Positive Prevention**
+5. **False Positive Prevention**
     - The system includes 8 built-in suppression rules and expanded diff context (±10 lines).
     - If you suspect a false positive, re-run with `--thorough` for AST-based validation.
     - See [ADR-005](../adrs/ADR-005-ai-driven-governance-preflight.md) for details.

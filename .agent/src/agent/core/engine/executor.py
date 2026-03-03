@@ -27,6 +27,16 @@ from agent.core.security import scrub_sensitive_data
 
 from typing import TypedDict, Union, Literal
 
+class MaxStepsExceeded(Exception):
+    """Raised when the agent exceeds the maximum allowed steps without finishing."""
+    pass
+
+# Stale-progress threshold: after this many consecutive tool calls without
+# a Final Answer, inject a forced-answer observation to break loops.
+# Set high enough to allow multi-step tasks (e.g. staging 4 files) but
+# low enough to catch genuine loops quickly.
+STALE_PROGRESS_THRESHOLD = 6
+
 class ThoughtEvent(TypedDict):
     type: Literal["thought"]
     content: str
@@ -125,6 +135,9 @@ class AgentExecutor:
             
             current_input = user_prompt
             
+            # Track consecutive tool calls without a Final Answer
+            consecutive_tool_calls = 0
+
             while steps_taken < self.max_steps:
                 steps_taken += 1
                 agent_steps_counter.add(1)
@@ -164,6 +177,7 @@ class AgentExecutor:
                 
                 if isinstance(parsed_result, AgentFinish):
                     logger.info("Agent decided to Finish.")
+                    consecutive_tool_calls = 0
                     final_output = parsed_result.return_values.get("output", "")
                     yield {"type": "final_answer", "content": final_output}
                     return
@@ -171,6 +185,19 @@ class AgentExecutor:
                 elif isinstance(parsed_result, AgentAction):
                     action = parsed_result
                     logger.info(f"Agent Action: {action.tool}({action.tool_input})")
+
+                    # Final Answer MUST be checked first, before any guards.
+                    # Otherwise loop detection / stale-progress intercept it
+                    # and the agent can never finish.
+                    if action.tool == "Final Answer":
+                        output = action.tool_input
+                        if isinstance(output, dict):
+                            if "answer" in output:
+                                output = output["answer"]
+                            elif "text" in output:
+                                output = output["text"]
+                        yield {"type": "final_answer", "content": str(output)}
+                        return
 
                     # Loop detection: if the agent attempts the exact same
                     # tool + input as the previous step, inject a hint instead
@@ -199,7 +226,57 @@ class AgentExecutor:
                                 observation=hint,
                             )
                             history.append(step)
+                            consecutive_tool_calls += 1
                             continue
+
+                    # Stale-progress guard: if the agent has made too many
+                    # consecutive tool calls without producing a Final Answer,
+                    # force-terminate with a synthetic answer.
+                    consecutive_tool_calls += 1
+                    if consecutive_tool_calls > STALE_PROGRESS_THRESHOLD:
+                        # The hint was already issued but the LLM ignored it.
+                        # Force-terminate by synthesizing a Final Answer from
+                        # the last observation the agent received.
+                        logger.warning(
+                            "Force-terminating: %d tool calls without Final Answer",
+                            consecutive_tool_calls,
+                        )
+                        # Build a best-effort answer from the most recent observation
+                        last_obs = ""
+                        for step in reversed(history):
+                            obs = step.observation
+                            if isinstance(obs, str) and obs.strip() and not obs.startswith("STALE PROGRESS") and not obs.startswith("Loop Detected"):
+                                last_obs = obs.strip()
+                                break
+                        if last_obs:
+                            forced = last_obs[:2000]
+                        else:
+                            forced = "I was unable to complete this task after multiple attempts. Please try rephrasing your request."
+                        yield {"type": "thought", "content": "[Force-terminating — providing answer from previous results]"}
+                        yield {"type": "final_answer", "content": forced}
+                        return
+
+                    elif consecutive_tool_calls == STALE_PROGRESS_THRESHOLD:
+                        # First time hitting the threshold — inject a hint
+                        # asking the agent to wrap up with a Final Answer.
+                        logger.warning(
+                            "Stale progress: %d tool calls without Final Answer",
+                            consecutive_tool_calls,
+                        )
+                        hint = (
+                            f"STALE PROGRESS: You have executed {consecutive_tool_calls} "
+                            f"tool calls without providing a Final Answer to the user. "
+                            f"You MUST now provide a Final Answer summarizing what you "
+                            f"found so far. Do NOT call another tool. Use the information "
+                            f"from your previous Observations to answer the user's question."
+                        )
+                        yield {"type": "thought", "content": "[Stale progress — forcing answer]"}
+                        step = AgentStep(
+                            action=action,
+                            observation=hint,
+                        )
+                        history.append(step)
+                        continue
 
                     yield {
                         "type": "tool_call", 
@@ -207,18 +284,6 @@ class AgentExecutor:
                         "input": action.tool_input,
                         "log": action.log,
                     }
-
-                    
-                    # Special Case: Final Answer in ReAct
-                    if action.tool == "Final Answer":
-                         output = action.tool_input
-                         if isinstance(output, dict):
-                             if "answer" in output:
-                                 output = output["answer"]
-                             elif "text" in output:
-                                 output = output["text"]
-                         yield {"type": "final_answer", "content": str(output)}
-                         return
 
                     # 3. ACT
                     with tracer.start_as_current_span("agent.act") as act_span:
@@ -255,9 +320,12 @@ class AgentExecutor:
                         observation=scrubbed_observation
                     )
                     history.append(step)
-                    
-            
-            
+
+            # If we exit the loop without a Final Answer, raise
+            raise MaxStepsExceeded(
+                f"Agent exceeded {self.max_steps} steps without producing a Final Answer."
+            )
+
 
     def _construct_system_prompt(self, base_prompt: str, tools: List[Tool]) -> str:
         """Inject tool definitions into system prompt."""
@@ -295,30 +363,16 @@ CRITICAL RULES:
 7. **BANNED PHRASES**: Never say "Check the logs", "See the terminal output", "Review the UI results", or "The output is visible above". If you need information from a tool, you MUST call it and summarize the observation yourself.
 8. **ACTION-FIRST**: You MUST call a tool to verify any state you claim to have changed. Never assume a command succeeded without seeing the output.
 9. **GROUNDING & NO HALLUCINATION**: Your Thoughts and Final Answer must be strictly grounded in the Observations. Do not hallucinate data that wasn't returned by a tool. Never fabricate the output of a command. If you have not executed a tool in the current turn, do not claim to know the exit code or specific output of that tool.
+10. **MANDATORY OUTPUT REPORTING**: After EVERY tool call, your next Thought MUST include a summary of what the tool returned. Never skip the Observation phase. If a tool returned no output or an error, say so explicitly. Do NOT execute a tool twice without explaining the result of the first attempt.
 """.replace("{tool_desc}", tool_desc)
 
         return f"{base_prompt}\n\n{react_instructions}"
 
     def _build_context(self, user_input: str, history: List[AgentStep]) -> str:
-        context = {
+        from dataclasses import asdict
+        context_str = json.dumps({
             "user_input": user_input,
-            "history": history
-        }
-        context_str = json.dumps({"user_input": user_input, "history": [step._asdict() for step in history]})
+            "history": [asdict(step) for step in history],
+        })
         return context_str
-        """Concatenate history for ReAct style context."""
-        context = f"Question: {user_input}\n"
-        
-        for step in history:
-            # We reconstruct the thought process from the action's log
-            context += f"Thought: {step.action.log}\n"
-            # Use json.dumps to produce valid JSON (not Python str() which
-            # emits single-quoted dicts that poison LLM context)
-            tool_input_json = json.dumps(step.action.tool_input) if isinstance(
-                step.action.tool_input, dict
-            ) else json.dumps(str(step.action.tool_input))
-            context += f'Action: {{\n  "tool": "{step.action.tool}",\n  "tool_input": {tool_input_json}\n}}\n'
-            context += f"Observation: {step.observation}\n"
-        
-        context += "Thought:"  # Nudge the LLM to continue thinking
-        return context
+

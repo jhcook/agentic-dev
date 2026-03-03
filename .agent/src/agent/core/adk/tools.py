@@ -107,14 +107,16 @@ def make_tools(repo_root: Path) -> List[Callable]:
             return f"Error: '{path}' is not a file or does not exist."
         try:
             with filepath.open('r', errors="replace") as f:
-                lines = [next(f) for _ in range(2000)]
+                lines = []
+                truncated = False
+                for i, line in enumerate(f):
+                    if i >= 2000:
+                        truncated = True
+                        break
+                    lines.append(line)
                 content = "".join(lines)
-                # Check if there are more lines
-                try:
-                    next(f)
+                if truncated:
                     content += "\n... (file truncated at 2000 lines)"
-                except StopIteration:
-                    pass # File is less than 2000 lines
             return content
         except Exception as e:
             return f"Error reading file {path}: {e}"
@@ -406,13 +408,13 @@ def make_interactive_tools(
 
         logger.info(f"'run_command' completed with exit code {proc.returncode}.")
         
+        # COMPLIANCE FIX: Do not return raw command output to the LLM.
+        # The user can see the full output in the TUI; the LLM only needs
+        # to know if the command succeeded or failed.
         if proc.returncode != 0:
-            error_tail = "\n".join(output_captured)
-            return f"Command failed with exit code {proc.returncode}.\n\nLast 50 lines of output:\n{error_tail}"
-
-        # COMPLIANCE FIX: Return a simple summary instead of the full output.
-        # This prevents potentially large/sensitive data from being sent to the LLM.
-        return f"Command finished with exit code {proc.returncode}. Output was streamed to the user."
+            # The full output is already streamed to the UI, so just send the summary.
+            return f"Command failed with exit code {proc.returncode}."
+        return f"Command finished with exit code {proc.returncode}."
 
     def send_command_input(command_id: str, input_text: str) -> str:
         """Sends input text to a background command's stdin."""
@@ -540,7 +542,25 @@ def make_interactive_tools(
             logger.info(f"Fallback grep found {len(matches)} matches.")
             return "\n".join(matches) or "No matches found."
 
-    return [patch_file, edit_file, create_file, delete_file, run_command, send_command_input, check_command_status, find_files, grep_search]
+    def match_story(query: str) -> str:
+        """Matches a query to a story and returns the story ID (e.g., INFRA-089)."""
+        logger.info(f"Executing tool 'match_story' with query: {query}")
+        try:
+            result = run_command(f"agent match-story '{query}'")
+            # Extract the story ID from the result
+            match = re.search(r'INFRA-\d+', result)
+            if match:
+                story_id = match.group(0)
+                logger.info(f"'match_story' found story ID: {story_id}")
+                return story_id
+            else:
+                logger.info(f"'match_story' did not find a story ID.")
+                return "No story ID found."
+        except Exception as e:
+            logger.error(f"Error executing 'agent match-story' with query '{query}': {e}", exc_info=True)
+            return f"Error matching story: {e}"
+
+    return [patch_file, edit_file, create_file, delete_file, run_command, send_command_input, check_command_status, find_files, grep_search, match_story]
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +575,10 @@ for _fn in make_tools(Path(".")):
         "name": _fn.__name__,
         "description": (_fn.__doc__ or "").strip(),
     }
+TOOL_SCHEMAS['match_story'] = {
+    'name': 'match_story',
+    'description': 'Matches a query to a story and returns the story ID (e.g., INFRA-089).'
+}
 for _fn in make_interactive_tools(Path(".")):
     TOOL_SCHEMAS[_fn.__name__] = {
         "name": _fn.__name__,
