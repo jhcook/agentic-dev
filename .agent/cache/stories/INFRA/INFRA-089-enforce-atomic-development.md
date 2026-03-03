@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -40,7 +40,7 @@ The `/implement` command enforces atomicity during code generation:
 
 **B. Small-Step Loop:** Max 30 lines edit distance per step before pausing to test and commit. Prevents context-stuffing spirals.
 
-**C. Circuit Breaker:** Cumulative LOC tracker. 350 LOC → warn. 400 LOC → stop, audit-log, request follow-up Story.
+**C. Circuit Breaker:** Cumulative LOC tracker. 200 LOC → warn. 400 LOC → stop, audit-log, request follow-up Story.
 
 ### Layer 4 — Commit Atomicity Checks
 Static checks run at commit time:
@@ -56,13 +56,20 @@ Final verification in the governance pipeline:
 - `check_pr_size`: PASS ≤400 LOC / REJECT >400 LOC on `git diff --cached`.
 - `check_domain_isolation`: FAIL if PR touches both `core/` and `addons/`.
 
+### Exceptions — Acceptable Large PRs
+The following scenarios bypass or raise the LOC threshold:
+
+- **Automated Changes**: Large-scale dependency updates or automated refactoring (e.g., tool-driven library updates across the repo). Detectable by commit message prefix `chore(deps):` or `refactor(auto):`.
+- **Deletions**: PRs that are net-negative (more deletions than additions) are exempt. Removing dead code has lower cognitive load than adding new code.
+- **Data/Asset Updates**: Changes to JSON schema definitions, configuration files, or large asset commits (images, fixtures). Detectable by file extension (`.json`, `.yaml`, `.png`, etc.).
+
 ## Acceptance Criteria
 
 - [ ] **AC-1 (Forecast)**: Over-budget Story → Plan with child Stories generated, exit 2.
 - [ ] **AC-2 (SPLIT_REQUEST)**: SPLIT_REQUEST JSON detected → parsed, saved, exit 2.
 - [ ] **AC-3 (Save Points)**: Each Runbook step triggers test → green → auto-commit.
 - [ ] **AC-4 (Small-Step)**: Max 30 lines edit distance per step enforced.
-- [ ] **AC-5 (Circuit Breaker)**: 350 LOC warn, 400 LOC stop.
+- [ ] **AC-5 (Circuit Breaker)**: 200 LOC warn, 400 LOC stop.
 - [ ] **AC-6 (20/100 Rule)**: >20 lines/file or >100 total → warn.
 - [ ] **AC-7 (And Test)**: Compound commit messages → warn.
 - [ ] **AC-8 (Conventional Commit)**: Multi-type prefix → reject.
