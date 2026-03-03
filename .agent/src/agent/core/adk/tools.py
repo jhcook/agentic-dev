@@ -22,6 +22,8 @@ All tools validate that resolved paths are within the repository root.
 """
 
 import logging
+
+from agent.core.utils import scrub_sensitive_data
 import os
 import re
 import shlex
@@ -407,14 +409,14 @@ def make_interactive_tools(
             return f"Error during command execution: {e}"
 
         logger.info(f"'run_command' completed with exit code {proc.returncode}.")
-        
-        # COMPLIANCE FIX: Do not return raw command output to the LLM.
-        # The user can see the full output in the TUI; the LLM only needs
-        # to know if the command succeeded or failed.
+
+        # Return captured output so the LLM can reason about command results.
+        # COMPLIANCE: scrub PII/secrets before returning to the LLM.
+        # See DPIA in INFRA-042 for risk assessment and GDPR justification.
+        output_text = scrub_sensitive_data("\n".join(output_captured[-50:]))
         if proc.returncode != 0:
-            # The full output is already streamed to the UI, so just send the summary.
-            return f"Command failed with exit code {proc.returncode}."
-        return f"Command finished with exit code {proc.returncode}."
+            return f"Command failed (exit code {proc.returncode}):\n{output_text}"
+        return output_text if output_text else f"Command finished with exit code {proc.returncode}."
 
     def send_command_input(command_id: str, input_text: str) -> str:
         """Sends input text to a background command's stdin."""

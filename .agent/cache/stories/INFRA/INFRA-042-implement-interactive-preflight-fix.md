@@ -38,6 +38,33 @@ As a Developer, I want an interactive "fix" mode for the `env -u VIRTUAL_ENV uv 
 - **Transparency**: The user must always explicitly approve a change (Human-in-the-loop).
 - **Resilience**: The tool handles failed fixes gracefully by reverting to the previous state.
 
+## Data Protection Impact Assessment (DPIA) — `run_command` Output
+
+**Data Flow**: The `run_command` tool returns the last 50 lines of command
+stdout to the LLM so it can reason about results (e.g., parse test failures,
+verify file contents, read git status).
+
+**Mitigation**: All output is passed through `scrub_sensitive_data()`
+(`agent.core.utils`) before return, which redacts:
+- Email addresses → `[REDACTED:EMAIL]`
+- IPv4 addresses → `[REDACTED:IP]`
+- OpenAI / GitHub / Google API keys → `[REDACTED:*_KEY]`
+- PEM private keys → `[REDACTED:PRIVATE_KEY]`
+
+**Justification (Art. 6(1)(f) GDPR — Legitimate Interest)**:
+- The tool runs **locally on the developer's own machine**; no user data
+  from external parties is processed.
+- Without output visibility the LLM cannot fulfil its core purpose
+  (agentic tool use, multi-step reasoning).
+- The developer explicitly invokes commands and can inspect output in
+  the TUI before it is sent.
+
+**Residual Risk**: Regex-based scrubbing may miss novel PII patterns.
+Accepted given the local-only, developer-initiated context.
+
+**Test Coverage**: `test_scrubs_sensitive_output` in
+`tests/core/adk/test_interactive_tools.py` validates redaction.
+
 ## Impact Analysis Summary
 
 - **Components**: `agent/commands/check.py`, `agent/core/ai`, `agent/core/utils.py`.
@@ -64,7 +91,15 @@ As a Developer, I want an interactive "fix" mode for the `env -u VIRTUAL_ENV uv 
   - Voice Agent Integration verification (testing strict voice flow).
   - "Break a test" scenario to verify non-schema failure handling.
 
+## Linked Journeys
+
+- JRN-036: Implement Interactive Preflight Repair
+
 ## Rollback Plan
 
 - Revert changes to `agent/commands/check.py` and delete `agent/core/fixer.py`.
 - Remove `InteractiveFixer` references from any other tools.
+
+## Copyright
+
+Copyright 2026 Justin Cook

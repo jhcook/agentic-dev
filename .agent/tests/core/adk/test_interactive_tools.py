@@ -72,7 +72,6 @@ class TestRunCommand:
     def test_captures_stdout(self, tools):
         result = tools["run_command"]("echo hello")
         assert "hello" in result
-        assert "exit code 0" in result
 
     def test_captures_stderr(self, tools):
         result = tools["run_command"]("ls nonexistent_path_xyz")
@@ -84,14 +83,20 @@ class TestRunCommand:
         assert str(repo_root) in result
 
     def test_timeout(self, tools):
-        # This should timeout (30s) — use a shorter sleep to not slow tests
         # Just verify the command runs without crashing
         result = tools["run_command"]("echo fast")
-        assert "exit code 0" in result
+        assert "fast" in result
 
     def test_invalid_command(self, tools):
         result = tools["run_command"]("")
         assert "Error" in result
+
+    def test_scrubs_sensitive_output(self, tools):
+        """Verify run_command scrubs PII/secrets before returning output."""
+        result = tools["run_command"]("echo 'contact user@example.com key sk-abc12345678901234567890'")
+        assert "user@example.com" not in result
+        assert "sk-abc12345678901234567890" not in result
+        assert "REDACTED" in result
 
 
 class TestFindFiles:
