@@ -40,7 +40,11 @@ The `/implement` command enforces atomicity during code generation:
 
 **B. Small-Step Loop:** Max 30 lines edit distance per step before pausing to test and commit. Prevents context-stuffing spirals.
 
-**C. Circuit Breaker:** Cumulative LOC tracker. 200 LOC → warn. 400 LOC → stop, audit-log, request follow-up Story.
+**C. Circuit Breaker:** Cumulative LOC tracker. 200 LOC → warn. 400 LOC → stop with graceful overflow:
+1. Commit partial work (save-point guarantees it's green).
+2. Auto-generate a **follow-up Story** with the next available ID from the remaining unprocessed Runbook steps.
+3. If no Plan exists, create one linking the original and follow-up Stories. If a Plan exists, append the follow-up.
+4. Print guidance: what was completed, what remains, next command to run.
 
 ### Layer 4 — Commit Atomicity Checks
 Static checks run at commit time:
