@@ -765,7 +765,7 @@ ARCHITECTURAL DECISIONS (ADRs):
 
         # Gate 1: Security Scan
         if skip_security:
-            gates.log_skip_audit("Security scan")
+            gates.log_skip_audit("Security scan", story_id)
             console.print(f"⚠️  [AUDIT] Security gate skipped at {datetime.now().isoformat()}")
         else:
             sec_result = gates.run_security_scan(
@@ -784,7 +784,7 @@ ARCHITECTURAL DECISIONS (ADRs):
 
         # Gate 2: QA Validation
         if skip_tests:
-            gates.log_skip_audit("QA tests")
+            gates.log_skip_audit("QA tests", story_id)
             console.print(f"⚠️  [AUDIT] Tests skipped at {datetime.now().isoformat()}")
         else:
             import yaml as _yaml

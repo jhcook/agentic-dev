@@ -231,14 +231,23 @@ def run_docs_check(filepaths: List[Path]) -> GateResult:
     )
 
 
-def log_skip_audit(gate_name: str) -> None:
+def log_skip_audit(gate_name: str, resource_id: str = "") -> None:
     """Log a timestamped audit entry when a governance gate is skipped.
 
     Args:
         gate_name: Human-readable name of the skipped gate.
+        resource_id: Identifier for the resource being bypassed (e.g. story ID).
     """
-    timestamp = datetime.now().isoformat()
-    logger.warning("[AUDIT] %s skipped at %s", gate_name, timestamp)
+    import getpass
+
+    audit_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "user": getpass.getuser(),
+        "gate": gate_name,
+        "resource": resource_id,
+        "action": "BYPASS",
+    }
+    logger.warning("[AUDIT] gate_bypass %s", audit_entry)
 
 
 # ── Commit Atomicity Gates (INFRA-091) ────────────────────────
