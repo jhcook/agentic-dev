@@ -49,6 +49,14 @@
   - **`/model` fuzzy matching**: `/model gemini pro` matches `gemini-2.5-pro`. No args opens a scrollable picker. Matching priority: exact → prefix → substring → word overlap.
   - **Model propagation**: Selected model is explicitly passed through `AgentExecutor` to `llm.complete()`, bypassing smart routing.
 
+- **Static Commit Atomicity Checks (foundational)** (INFRA-091):
+  - New composable gate functions in `gates.py` (not yet wired into workflows — integration in INFRA-092+):
+  - `check_commit_size`: Warns if a single file exceeds 20 lines or total exceeds 100 lines changed (configurable).
+  - `check_commit_message`: Validates conventional commit prefix and detects compound `" and "` messages (subject-line only).
+  - `check_domain_isolation`: Fails if a changeset mixes `core/` and `addons/` domains.
+  - OpenTelemetry tracing spans and structured logging on all gate functions.
+  - 18 unit tests covering all gate functions, including binary file handling and multi-line message edge cases.
+
 ### Fixed
 
 - **ReAct JSON parser hardening** (INFRA-088):

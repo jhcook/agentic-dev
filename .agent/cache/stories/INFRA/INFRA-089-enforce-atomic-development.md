@@ -2,7 +2,17 @@
 
 ## State
 
-COMMITTED
+DECOMPOSED
+
+## Decomposition
+
+This story exceeded the 400 LOC atomic threshold (~600+ LOC estimated). See [INFRA-089-plan.md](file:///Users/jcook/repo/agentic-dev/.agent/cache/plans/INFRA/INFRA-089-plan.md) for the 5 child stories:
+
+- **INFRA-091** — Static Commit Atomicity Checks (Layer 4)
+- **INFRA-092** — Post-Apply PR Size Gate (Layer 5)
+- **INFRA-093** — Forecast Gate for Runbook Generation (Layer 1)
+- **INFRA-094** — SPLIT_REQUEST Fallback (Layer 2)
+- **INFRA-095** — Micro-Commit Loop and Circuit Breaker (Layer 3)
 
 ## Problem Statement
 
@@ -94,7 +104,8 @@ The following scenarios bypass or raise the LOC threshold:
 
 ## Linked Journeys
 
-- N/A
+- JRN-064 — Forecast-Gated Story Decomposition
+- JRN-065 — Circuit Breaker During Implementation
 
 ## Impact Analysis Summary
 

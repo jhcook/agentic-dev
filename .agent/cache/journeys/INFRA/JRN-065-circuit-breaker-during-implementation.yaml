@@ -1,0 +1,189 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+id: JRN-065
+title: Circuit Breaker During Implementation
+state: COMMITTED
+schema_version: 1
+priority: high
+tags:
+- infra
+- cli
+- atomicity
+- governance
+
+actor: developer using agent CLI
+description: |
+  A developer runs `/implement` on a Runbook. The micro-commit loop enforces
+  atomic save points (Layer 3), and when cumulative LOC reaches the circuit
+  breaker threshold, partial work is committed, a follow-up story is
+  auto-generated, and the developer receives clear guidance on what was
+  completed and what remains.
+
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+- A Runbook exists with multiple steps that will exceed 400 LOC cumulatively
+- Tests are runnable in the project
+
+auth_context:
+  level: authenticated
+  permissions: []
+
+steps:
+- id: 1
+  action: Developer runs `agent implement INFRA-XXX`
+  system_response: |
+    CLI begins the micro-commit implement loop. For each Runbook step:
+    generate code, apply changes, run tests, and auto-commit on green.
+  assertions:
+  - Implementation loop starts and processes steps sequentially
+  - Cumulative LOC counter is initialised at 0
+
+- id: 2
+  action: Agent completes Runbook step 1 — code generated and tests pass
+  system_response: |
+    Changes are auto-committed as an atomic save point. Commit message
+    follows conventional commit format and describes a single logical unit.
+    Cumulative LOC counter is updated.
+  assertions:
+  - A git commit is created with a conventional commit message
+  - Commit contains ≤30 lines edit distance (Small-Step limit)
+  - Cumulative LOC counter reflects the lines changed
+  - Tests pass before commit is created (green state guaranteed)
+
+- id: 3
+  action: Agent processes subsequent steps — cumulative LOC reaches 200
+  system_response: CLI displays a warning that the 200 LOC soft limit has been reached
+  assertions:
+  - Warning message is displayed to the developer
+  - Warning includes current cumulative LOC count
+  - Implementation continues (soft limit, not a stop)
+
+- id: 4
+  action: Agent processes the next step — cumulative LOC exceeds 400
+  system_response: |
+    Circuit breaker fires. The CLI:
+    1. Commits the current partial work (save-point guarantees green state)
+    2. Auto-generates a follow-up story with the next available ID
+    3. Links the follow-up story to the remaining unprocessed Runbook steps
+    4. If no Plan exists, creates one linking original and follow-up stories
+    5. Prints a summary of what was completed and what remains
+  assertions:
+  - Final atomic commit is created (partial work is green)
+  - Follow-up story file is created in `.agent/cache/stories/`
+  - Follow-up story references the remaining Runbook steps
+  - A Plan file exists linking the original and follow-up stories
+  - CLI exits with code 0 (graceful stop, not an error)
+
+- id: 5
+  action: Developer reviews the output and runs `agent implement INFRA-XXX-a` for the follow-up
+  system_response: |
+    CLI begins a new implementation loop for the follow-up story,
+    starting with a fresh cumulative LOC counter.
+  assertions:
+  - Follow-up story is implementable independently
+  - New implementation loop starts with LOC counter at 0
+  - The remaining Runbook steps from the original are covered
+
+error_paths:
+- trigger_step: 2
+  condition: Tests fail after code generation (red state)
+  system_response: |
+    Agent attempts to fix the failing tests. If fix succeeds, the
+    save point is created. If fix fails after retries, implementation
+    pauses with an error and partial work is NOT committed.
+  assertions:
+  - No commit is created on red state
+  - Error message identifies which tests failed
+  - Developer can manually intervene and resume
+  severity: expected
+
+- trigger_step: 2
+  condition: A single step exceeds the 30-line Small-Step limit
+  system_response: |
+    CLI pauses the step, commits the partial edit (if green), and
+    splits the remaining work within that step into a sub-step.
+  assertions:
+  - No single commit exceeds 30 lines edit distance
+  - Step splitting is logged
+  severity: expected
+
+- trigger_step: 4
+  condition: Circuit breaker fires but no tests exist to verify green state
+  system_response: |
+    CLI warns that green state cannot be verified and asks the developer
+    for confirmation before committing.
+  assertions:
+  - Warning is displayed about unverifiable state
+  - Developer must explicitly confirm the commit
+  severity: warning
+
+edge_cases:
+- scenario: Runbook completes within the 400 LOC limit
+  expected: |
+    All steps complete normally. No circuit breaker fires. No follow-up
+    story is created. CLI exits with code 0 and a success summary.
+  severity: warning
+
+- scenario: Circuit breaker fires mid-step (not at a step boundary)
+  expected: |
+    Current step is completed and committed before stopping. The LOC
+    slightly exceeds 400 but atomicity of the current step is preserved.
+  severity: warning
+
+- scenario: Follow-up story ID conflicts with an existing story
+  expected: |
+    CLI auto-increments to find the next available story ID. No overwrite
+    of existing stories.
+  severity: warning
+
+- scenario: Developer runs commit checks (Layer 4) on save-point commits
+  expected: |
+    Save-point commits pass the 20/100 Rule and conventional commit lint.
+    The "And" test passes because each commit is a single logical unit.
+  severity: warning
+
+data_state:
+  data_classification: internal
+  inputs:
+  - Runbook YAML file
+  - Project source files
+  persistent:
+  - Git commits (save points)
+  - Follow-up story file in .agent/cache/stories/
+  - Plan file in .agent/cache/plans/ (if created)
+  - Audit log entries for circuit breaker and save-point events
+
+linked_stories:
+- INFRA-089
+linked_adrs:
+- ADR-005
+depends_on:
+- JRN-064
+
+implementation:
+  routes: []
+  files: []
+  tests: []
+
+test_hints:
+  framework: pytest
+  type: integration
+  fixtures:
+  - name: multi_step_runbook
+    factory: RunbookFactory
+  - name: project_with_tests
+    factory: ProjectFactory
+  cleanup: true

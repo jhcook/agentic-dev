@@ -1,0 +1,151 @@
+# Copyright 2026 Justin Cook
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+id: JRN-064
+title: Forecast-Gated Story Decomposition
+state: COMMITTED
+schema_version: 1
+priority: high
+tags:
+- infra
+- cli
+- atomicity
+- governance
+
+actor: developer using agent CLI
+description: |
+  A developer requests a Runbook for a large story. The Forecast Gate (Layer 1)
+  detects the story exceeds complexity thresholds (>400 LOC, >8 steps, or >4 files)
+  and produces a Plan with decomposed child stories instead of a Runbook. If the
+  forecast passes but the Runbook Agent itself detects an over-limit plan, a
+  SPLIT_REQUEST fallback (Layer 2) intercepts and saves decomposition suggestions.
+
+preconditions:
+- Agent CLI is installed and configured
+- Developer is in a project directory with .agent/ initialized
+- A COMMITTED story exists that exceeds complexity thresholds
+
+auth_context:
+  level: authenticated
+  permissions: []
+
+steps:
+- id: 1
+  action: Developer runs `agent new-runbook INFRA-XXX` for a large story
+  system_response: |
+    CLI invokes the Forecast Gate. A lightweight AI call estimates the story's
+    complexity score based on step count, context width, and verb intensity.
+  assertions:
+  - Forecast Gate executes before any Runbook generation begins
+  - Complexity score is calculated and logged with structured fields (step_count, context_width, verb_intensity, estimated_loc)
+
+- id: 2
+  action: Forecast Gate determines the story is over-budget (>400 LOC estimated)
+  system_response: |
+    Instead of generating a Runbook, the CLI generates a Plan containing
+    decomposed child stories. Each child story targets a single logical unit
+    within the original scope.
+  assertions:
+  - No Runbook file is created
+  - A Plan file is created in `.agent/cache/plans/`
+  - The Plan contains at least 2 child story references
+  - Each child story is scoped to ≤400 LOC estimated
+  - CLI exits with code 2
+
+- id: 3
+  action: Developer reviews the generated Plan
+  system_response: CLI displays the Plan summary, listing each child story with its scope and estimated LOC
+  assertions:
+  - Plan output is human-readable
+  - Each child story has a title, scope description, and LOC estimate
+  - Developer can identify which child story to implement first
+
+- id: 4
+  action: Developer runs `agent new-runbook INFRA-XXX-a` for a child story from the Plan
+  system_response: |
+    CLI runs the Forecast Gate on the child story. The child is within budget,
+    so a Runbook is generated normally.
+  assertions:
+  - Forecast Gate passes (complexity within thresholds)
+  - Runbook file is created in `.agent/cache/runbooks/`
+  - CLI exits with code 0
+
+error_paths:
+- trigger_step: 1
+  condition: Story file does not exist or is not in COMMITTED state
+  system_response: CLI displays an error indicating the story is missing or not ready
+  assertions:
+  - Error message names the story ID and expected state
+  - No forecast or runbook generation is attempted
+  severity: expected
+
+- trigger_step: 2
+  condition: Forecast passes but Runbook Agent detects over-limit during generation (SPLIT_REQUEST)
+  system_response: |
+    The Runbook Agent emits a SPLIT_REQUEST JSON instead of a Runbook.
+    The framework parses the SPLIT_REQUEST, saves decomposition suggestions
+    to `.agent/cache/split_requests/`, and exits with code 2.
+  assertions:
+  - SPLIT_REQUEST JSON is parsed without error
+  - Suggestions are saved to `.agent/cache/split_requests/INFRA-XXX.json`
+  - CLI exits with code 2
+  - Developer sees a message explaining the split and where to find suggestions
+  severity: expected
+
+edge_cases:
+- scenario: Developer uses `--skip-forecast` flag to bypass the gate
+  expected: |
+    Forecast Gate is skipped, runbook generation proceeds normally,
+    and the bypass is logged with audit fields (user, timestamp, story_id)
+  severity: warning
+
+- scenario: Forecast estimate disagrees with actual Runbook complexity
+  expected: |
+    Layer 2 (SPLIT_REQUEST) catches the discrepancy. The system still
+    prevents an oversized Runbook from being produced.
+  severity: warning
+
+- scenario: Story is exactly at the threshold boundary (e.g. 400 LOC estimated)
+  expected: Threshold is inclusive — 400 LOC passes, 401 LOC triggers decomposition
+  severity: warning
+
+data_state:
+  data_classification: internal
+  inputs:
+  - Story YAML file
+  persistent:
+  - Plan file in .agent/cache/plans/
+  - Split request JSON in .agent/cache/split_requests/ (Layer 2 only)
+  - Audit log entries
+
+linked_stories:
+- INFRA-089
+linked_adrs:
+- ADR-005
+depends_on: []
+
+implementation:
+  routes: []
+  files: []
+  tests: []
+
+test_hints:
+  framework: pytest
+  type: integration
+  fixtures:
+  - name: over_budget_story
+    factory: StoryFactory
+  - name: within_budget_story
+    factory: StoryFactory
+  cleanup: true
