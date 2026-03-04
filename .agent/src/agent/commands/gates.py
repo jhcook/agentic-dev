@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from opentelemetry import trace
 
@@ -428,3 +428,126 @@ def _check_domain_isolation_impl(span: trace.Span, filepaths: List[Path]) -> Gat
         elapsed_seconds=elapsed,
         details="Single domain.",
     )
+
+
+# ── PR Size Gate (INFRA-092) ─────────────────────────────────
+
+def check_pr_size(threshold: int = 400, commit_message: Optional[str] = None) -> GateResult:
+    """Enforce a line-of-code limit on staged changes.
+
+    Serves as a circuit breaker to prevent context stuffing in AI governance.
+    Exempts:
+    - Net-negative changes (more deletions than additions)
+    - Automated chores/refactors via commit message prefix
+    - Non-code assets (images, locks, configs)
+
+    Args:
+        threshold: Maximum allowed lines of code additions.
+        commit_message: Commit message to check for bypass prefixes.
+
+    Returns:
+        GateResult with pass/fail and details.
+    """
+    with tracer.start_as_current_span("gate.pr_size") as span:
+        return _check_pr_size_impl(span, threshold, commit_message)
+
+
+def _check_pr_size_impl(span: trace.Span, threshold: int, commit_message: Optional[str]) -> GateResult:
+    start = time.time()
+
+    # Bypass by prefix
+    if commit_message and (
+        commit_message.startswith("chore(deps):")
+        or commit_message.startswith("refactor(auto):")
+    ):
+        elapsed = time.time() - start
+        span.set_attribute("gate.passed", True)
+        span.set_attribute("gate.bypass", "prefix")
+        return GateResult(
+            name="PR Size", passed=True,
+            elapsed_seconds=elapsed,
+            details=f"Bypassed via commit prefix: {commit_message.split(':')[0]}",
+        )
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--numstat"],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        if result.returncode != 0:
+            elapsed = time.time() - start
+            return GateResult(
+                name="PR Size", passed=True,
+                elapsed_seconds=elapsed,
+                details="Skipped — git diff failed.",
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        elapsed = time.time() - start
+        return GateResult(
+            name="PR Size", passed=True,
+            elapsed_seconds=elapsed,
+            details="Skipped — git not available.",
+        )
+
+    total_additions = 0
+    total_deletions = 0
+    excluded_ext = {
+        '.json', '.yaml', '.yml', '.png', '.jpg', '.jpeg', '.svg', '.lock',
+        '.md', '.txt', '.ttf', '.otf', '.mp4', '.mov', '.snap', '.csv', '.gif',
+    }
+
+    for line in result.stdout.strip().splitlines():
+        parts = line.split('\t')
+        if len(parts) < 3:
+            continue
+        adds, dels, path = parts[0], parts[1], parts[2]
+        if adds == '-' or dels == '-':
+            continue
+        if any(path.endswith(ext) for ext in excluded_ext):
+            continue
+        try:
+            total_additions += int(adds)
+            total_deletions += int(dels)
+        except ValueError:
+            continue
+
+    span.set_attribute("gate.total_additions", total_additions)
+    span.set_attribute("gate.total_deletions", total_deletions)
+    span.set_attribute("gate.threshold", threshold)
+
+    elapsed = time.time() - start
+
+    if total_deletions > total_additions:
+        decision = "pass_net_negative"
+        span.set_attribute("gate.passed", True)
+        span.set_attribute("gate.bypass", "net_negative")
+        result = GateResult(
+            name="PR Size", passed=True,
+            elapsed_seconds=elapsed,
+            details=f"Net-negative change (+{total_additions}/-{total_deletions})",
+        )
+    elif total_additions > threshold:
+        decision = "fail"
+        span.set_attribute("gate.passed", False)
+        result = GateResult(
+            name="PR Size", passed=False,
+            elapsed_seconds=elapsed,
+            details=(
+                f"PR size exceeds {threshold} lines (Found: {total_additions}). "
+                "Split the PR or use 'refactor(auto):' prefix."
+            ),
+        )
+    else:
+        decision = "pass"
+        span.set_attribute("gate.passed", True)
+        result = GateResult(
+            name="PR Size", passed=True,
+            elapsed_seconds=elapsed,
+            details=f"PR size OK: {total_additions} additions (limit {threshold})",
+        )
+
+    logger.info(
+        "gate=pr_size total_additions=%d total_deletions=%d threshold=%d decision=%s",
+        total_additions, total_deletions, threshold, decision,
+    )
+    return result
