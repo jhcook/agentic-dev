@@ -16,12 +16,15 @@
 
 import logging
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent.commands.gates import (
     GateResult,
+    check_commit_message,
+    check_commit_size,
+    check_domain_isolation,
     log_skip_audit,
     run_docs_check,
     run_qa_gate,
@@ -227,3 +230,140 @@ class TestLogSkipAudit:
             log_skip_audit("QA tests")
         # ISO format includes 'T' separator
         assert "T" in caplog.text
+
+
+# ── Commit Atomicity Gates (INFRA-091) ────────────────────────
+
+
+class TestCheckCommitSize:
+    """Tests for the check_commit_size gate function."""
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_under_limit(self, mock_run):
+        """Under-limit commit passes with total line count in details."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="5\t0\tfile.py\n")
+        result = check_commit_size()
+        assert result.passed is True
+        assert "Total: 5 lines" in result.details
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_over_per_file_limit(self, mock_run):
+        """Single file exceeding per-file limit triggers warning with filename."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="25\t0\tlarge_file.py\n"
+        )
+        result = check_commit_size(max_per_file=20)
+        assert result.passed is False
+        assert "large_file.py: 25 lines (limit 20)" in result.details
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_over_total_limit(self, mock_run):
+        """Total lines exceeding threshold triggers warning with total count."""
+        output = "\n".join([f"15\t0\tfile{i}.py" for i in range(10)])
+        mock_run.return_value = MagicMock(returncode=0, stdout=output)
+        result = check_commit_size(max_total=100)
+        assert result.passed is False
+        assert "Total: 150 lines (limit 100)" in result.details
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_empty_changeset(self, mock_run):
+        """Empty changeset passes with zero total."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        result = check_commit_size()
+        assert result.passed is True
+        assert "Total: 0 lines" in result.details
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_binary_file_skipped(self, mock_run):
+        """Binary files (shown as - - in numstat) are gracefully skipped."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="-\t-\timage.png\n5\t0\tcode.py\n"
+        )
+        result = check_commit_size()
+        assert result.passed is True
+        assert "Total: 5 lines" in result.details
+
+    @patch("agent.commands.gates.subprocess.run")
+    def test_git_not_available(self, mock_run):
+        """Graceful degradation when git is not available."""
+        mock_run.side_effect = FileNotFoundError()
+        result = check_commit_size()
+        assert result.passed is True
+        assert "Skipped" in result.details
+
+
+class TestCheckCommitMessage:
+    """Tests for the check_commit_message gate function."""
+
+    def test_valid_single_type(self):
+        """Valid conventional commit with scope passes."""
+        result = check_commit_message("feat(cli): add new flag")
+        assert result.passed is True
+
+    def test_compound_and_message(self):
+        """Commit message with 'and' joining two actions fails."""
+        result = check_commit_message("feat: add logging and update tests")
+        assert result.passed is False
+        assert 'contains " and "' in result.details
+
+    def test_missing_prefix(self):
+        """Message without conventional commit prefix fails."""
+        result = check_commit_message("did some stuff")
+        assert result.passed is False
+        assert "Missing conventional prefix" in result.details
+
+    def test_empty_message(self):
+        """Empty commit message fails."""
+        result = check_commit_message("")
+        assert result.passed is False
+        assert "Empty commit message" in result.details
+
+    def test_word_containing_and(self):
+        """Words containing 'and' (e.g. 'command') do not trigger false positive."""
+        result = check_commit_message("fix: handle command error")
+        assert result.passed is True
+
+    def test_scoped_prefix(self):
+        """Scoped conventional prefix (e.g. refactor(core):) is valid."""
+        result = check_commit_message("refactor(core): extract helper")
+        assert result.passed is True
+
+    def test_and_in_body_line_ignored(self):
+        """'and' in multi-line body (line 2+) is exempt — only subject checked."""
+        message = "feat: add logging\n\nThis updates and improves tracing"
+        result = check_commit_message(message)
+        assert result.passed is True
+
+
+class TestCheckDomainIsolation:
+    """Tests for the check_domain_isolation gate function."""
+
+    def test_core_only(self):
+        """Core-only changeset passes domain isolation."""
+        paths = [Path("src/core/main.py"), Path("src/core/utils.py")]
+        result = check_domain_isolation(paths)
+        assert result.passed is True
+
+    def test_addons_only(self):
+        """Addons-only changeset passes domain isolation."""
+        paths = [Path("src/addons/plugin.py"), Path("src/addons/data.json")]
+        result = check_domain_isolation(paths)
+        assert result.passed is True
+
+    def test_mixed_domains(self):
+        """Mixed core and addons changeset fails domain isolation."""
+        paths = [Path("src/core/main.py"), Path("src/addons/plugin.py")]
+        result = check_domain_isolation(paths)
+        assert result.passed is False
+        assert "touches both core/ and addons/" in result.details
+
+    def test_no_domain_paths(self):
+        """Paths without core/ or addons/ components pass."""
+        paths = [Path("README.md"), Path("LICENSE")]
+        result = check_domain_isolation(paths)
+        assert result.passed is True
+
+    def test_empty_paths(self):
+        """Empty file list passes."""
+        result = check_domain_isolation([])
+        assert result.passed is True

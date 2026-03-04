@@ -28,9 +28,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+from opentelemetry import trace
+
 from agent.core.logger import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 @dataclass
@@ -236,3 +239,192 @@ def log_skip_audit(gate_name: str) -> None:
     """
     timestamp = datetime.now().isoformat()
     logger.warning("[AUDIT] %s skipped at %s", gate_name, timestamp)
+
+
+# ── Commit Atomicity Gates (INFRA-091) ────────────────────────
+
+CONVENTIONAL_PREFIXES = {
+    "feat", "fix", "refactor", "chore", "docs",
+    "test", "ci", "style", "perf", "build",
+}
+
+
+def check_commit_size(max_per_file: int = 20, max_total: int = 100) -> GateResult:
+    """Check staged changes against per-file and total line count thresholds.
+
+    Warns if any single file has more than max_per_file lines changed,
+    or if the total across all files exceeds max_total.
+
+    Args:
+        max_per_file: Maximum lines changed per file before warning.
+        max_total: Maximum total lines changed before warning.
+
+    Returns:
+        GateResult with pass/fail and details of any threshold violations.
+    """
+    with tracer.start_as_current_span("gate.commit_size") as span:
+        return _check_commit_size_impl(span, max_per_file, max_total)
+
+
+def _check_commit_size_impl(span: trace.Span, max_per_file: int, max_total: int) -> GateResult:
+    start = time.time()
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--numstat"],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+        if result.returncode != 0:
+            elapsed = time.time() - start
+            return GateResult(
+                name="Commit Size",
+                passed=True,
+                elapsed_seconds=elapsed,
+                details="Skipped — git diff failed.",
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        elapsed = time.time() - start
+        return GateResult(
+            name="Commit Size", passed=True,
+            elapsed_seconds=elapsed, details="Skipped — git not available.",
+        )
+
+    violations: List[str] = []
+    total_changed = 0
+    max_file_changed = 0
+
+    for line in result.stdout.strip().splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        # Binary files show '-' for additions/deletions
+        try:
+            additions = int(parts[0])
+            deletions = int(parts[1])
+        except ValueError:
+            continue
+        filename = parts[2]
+        file_changed = additions + deletions
+        total_changed += file_changed
+        max_file_changed = max(max_file_changed, file_changed)
+
+        if file_changed > max_per_file:
+            violations.append(f"{filename}: {file_changed} lines (limit {max_per_file})")
+
+    if total_changed > max_total:
+        violations.append(f"Total: {total_changed} lines (limit {max_total})")
+
+    elapsed = time.time() - start
+    logger.info(
+        "gate=commit_size max_file_count=%d total=%d passed=%s",
+        max_file_changed, total_changed, not bool(violations),
+    )
+    span.set_attribute("gate.passed", not bool(violations))
+    span.set_attribute("gate.total_changed", total_changed)
+    if violations:
+        return GateResult(
+            name="Commit Size", passed=False,
+            elapsed_seconds=elapsed, details="; ".join(violations),
+        )
+    return GateResult(
+        name="Commit Size", passed=True,
+        elapsed_seconds=elapsed,
+        details=f"Total: {total_changed} lines — within limits.",
+    )
+
+
+def check_commit_message(message: str) -> GateResult:
+    """Validate commit message for conventional format and single-purpose.
+
+    Checks:
+    1. Message starts with a valid conventional commit prefix.
+    2. Message body does not contain ' and ' joining distinct actions.
+
+    Args:
+        message: The full commit message string.
+
+    Returns:
+        GateResult with pass/fail and details.
+    """
+    with tracer.start_as_current_span("gate.commit_message") as span:
+        return _check_commit_message_impl(span, message)
+
+
+def _check_commit_message_impl(span: trace.Span, message: str) -> GateResult:
+    start = time.time()
+    if not message.strip():
+        elapsed = time.time() - start
+        return GateResult(
+            name="Commit Message", passed=False,
+            elapsed_seconds=elapsed, details="Empty commit message.",
+        )
+
+    violations: List[str] = []
+    first_line = message.strip().splitlines()[0]
+
+    # 1. Conventional commit prefix
+    prefix_match = re.match(r"^(\w+)(?:\([^)]*\))?:", first_line)
+    if not prefix_match or prefix_match.group(1) not in CONVENTIONAL_PREFIXES:
+        violations.append(
+            f"Missing conventional prefix. Expected one of: "
+            f"{', '.join(sorted(CONVENTIONAL_PREFIXES))}"
+        )
+
+    # 2. "And" test — check subject line only (body text is exempt)
+    colon_idx = first_line.find(":")
+    body = first_line[colon_idx + 1:] if colon_idx != -1 else first_line
+    if " and " in body.lower():
+        violations.append('Compound message — contains " and " (split into separate commits)')
+
+    elapsed = time.time() - start
+    logger.info(
+        "gate=commit_message passed=%s violations=%d",
+        not bool(violations), len(violations),
+    )
+    span.set_attribute("gate.passed", not bool(violations))
+    if violations:
+        return GateResult(
+            name="Commit Message", passed=False,
+            elapsed_seconds=elapsed, details="; ".join(violations),
+        )
+    return GateResult(
+        name="Commit Message", passed=True,
+        elapsed_seconds=elapsed, details="Valid conventional commit.",
+    )
+
+
+def check_domain_isolation(filepaths: List[Path]) -> GateResult:
+    """Verify that a changeset does not mix core/ and addons/ domains.
+
+    Args:
+        filepaths: List of file paths in the changeset.
+
+    Returns:
+        GateResult — FAIL if both core/ and addons/ are touched.
+    """
+    with tracer.start_as_current_span("gate.domain_isolation") as span:
+        return _check_domain_isolation_impl(span, filepaths)
+
+
+def _check_domain_isolation_impl(span: trace.Span, filepaths: List[Path]) -> GateResult:
+    start = time.time()
+    has_core = any("core" in p.parts for p in filepaths)
+    has_addons = any("addons" in p.parts for p in filepaths)
+
+    elapsed = time.time() - start
+    passed = not (has_core and has_addons)
+    logger.info(
+        "gate=domain_isolation has_core=%s has_addons=%s passed=%s",
+        has_core, has_addons, passed,
+    )
+    span.set_attribute("gate.passed", passed)
+    if has_core and has_addons:
+        return GateResult(
+            name="Domain Isolation", passed=False,
+            elapsed_seconds=elapsed,
+            details="Changeset touches both core/ and addons/ — split into separate commits.",
+        )
+    return GateResult(
+        name="Domain Isolation", passed=True,
+        elapsed_seconds=elapsed,
+        details="Single domain.",
+    )
