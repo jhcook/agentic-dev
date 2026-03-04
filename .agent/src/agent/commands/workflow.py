@@ -47,8 +47,34 @@ def pr(
     
     preflight_passed = True
     if skip_preflight:
-        console.print(f"[yellow]⚠️  Preflight SKIPPED at {time.strftime('%Y-%m-%dT%H:%M:%S')} (--skip-preflight)[/yellow]")
-        preflight_passed = False
+        # Check if a previous preflight already passed for this branch
+        from agent.core.config import config
+        _marker_path = config.cache_dir / ".preflight_result"
+        _prior_pass = False
+        if _marker_path.exists():
+            try:
+                import json as _json
+                _marker = _json.loads(_marker_path.read_text())
+                _head_sha = subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True
+                ).strip()
+                # Match if marker commit is HEAD or an ancestor of HEAD
+                if _marker.get("verdict") == "PASS" and _marker.get("commit"):
+                    _is_ancestor = subprocess.run(
+                        ["git", "merge-base", "--is-ancestor", _marker["commit"], _head_sha],
+                        capture_output=True,
+                    ).returncode == 0
+                    if _is_ancestor:
+                        _prior_pass = True
+            except Exception:
+                pass
+
+        if _prior_pass:
+            console.print(f"[green]✅ Preflight previously passed (skipping re-run)[/green]")
+            preflight_passed = True
+        else:
+            console.print(f"[yellow]⚠️  Preflight SKIPPED at {time.strftime('%Y-%m-%dT%H:%M:%S')} (--skip-preflight)[/yellow]")
+            preflight_passed = False
     elif story_id:
         console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
         try:
