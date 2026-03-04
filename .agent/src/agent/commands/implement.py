@@ -820,6 +820,20 @@ ARCHITECTURAL DECISIONS (ADRs):
         if docs_result.details:
             console.print(f"    [dim]{docs_result.details}[/dim]")
 
+        # Gate 4: PR Size Check (INFRA-092)
+        pr_size_result = gates.check_pr_size(
+            commit_message=story_title if story_title else None,
+        )
+        gate_results.append(pr_size_result)
+        status = "PASSED" if pr_size_result.passed else "BLOCKED"
+        color = "green" if pr_size_result.passed else "red"
+        console.print(
+            f"  [{color}][PHASE] {pr_size_result.name} ... {status}"
+            f" ({pr_size_result.elapsed_seconds:.2f}s)[/{color}]"
+        )
+        if pr_size_result.details:
+            console.print(f"    [dim]{pr_size_result.details}[/dim]")
+
         # Structured Verdict
         all_passed = all(r.passed for r in gate_results)
         if all_passed:

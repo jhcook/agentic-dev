@@ -57,6 +57,13 @@
   - OpenTelemetry tracing spans and structured logging on all gate functions.
   - 18 unit tests covering all gate functions, including binary file handling and multi-line message edge cases.
 
+- **PR Size Gate** (INFRA-092):
+  - `check_pr_size`: Rejects PRs exceeding 400 LOC of code additions.
+  - Automatic exemptions: net-negative diffs, `chore(deps):` and `refactor(auto):` prefixes.
+  - Non-code asset filtering (JSON, YAML, images, fonts, locks, snapshots, etc.).
+  - OpenTelemetry tracing span `gate.pr_size` and structured logging.
+  - 7 unit tests covering threshold, bypasses, exclusions, and error handling.
+
 ### Fixed
 
 - **ReAct JSON parser hardening** (INFRA-088):
