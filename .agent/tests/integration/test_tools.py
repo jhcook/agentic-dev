@@ -29,6 +29,7 @@
 
 import pytest
 import os
+from pathlib import Path
 from backend.voice.tools.create_tool import create_tool
 from backend.voice.tools.read_tool_source import read_tool_source
 from backend.voice.tools.security import scan_file_for_secrets
@@ -73,14 +74,14 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     os.makedirs(custom_dir, exist_ok=True)
     
     abs_path = os.path.join(custom_dir, filename)
-    code = """
-from langchain_core.tools import tool
-
-@tool
-def my_integration_test_tool() -> str:
-    """Returns success."""
-    return \"SUCCESS\"
-"""
+    code = (
+        "from langchain_core.tools import tool\n"
+        "\n"
+        "@tool\n"
+        "def my_integration_test_tool() -> str:\n"
+        '    """Returns success."""\n'
+        '    return "SUCCESS"\n'
+    )
     
     # 1. Create
     print(f"Creating tool at {abs_path}")

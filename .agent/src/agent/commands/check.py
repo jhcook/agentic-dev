@@ -43,14 +43,16 @@ def check_journey_coverage(
     """Check journey → test coverage for COMMITTED/ACCEPTED journeys.
 
     Returns:
-        Dict with keys: passed (bool), total, linked, missing, warnings (list[str])
+        Dict with keys: passed (bool), total, linked, missing,
+        warnings (list[str]), missing_ids (list[str])
     """
     import yaml  # ADR-025: local import
 
     root = repo_root or config.repo_root
     journeys_dir = root / ".agent" / "cache" / "journeys"
     result: Dict[str, Any] = {
-        "passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": [],
+        "passed": True, "total": 0, "linked": 0, "missing": 0,
+        "warnings": [], "missing_ids": [],
     }
 
     if not journeys_dir.exists():
@@ -76,7 +78,9 @@ def check_journey_coverage(
 
             if not tests:
                 result["missing"] += 1
+                result["missing_ids"].append(jid)
                 result["warnings"].append(f"{jid}: No tests linked")
+                result["passed"] = False
                 continue
 
             all_exist = True
@@ -94,6 +98,8 @@ def check_journey_coverage(
                 result["linked"] += 1
             else:
                 result["missing"] += 1
+                result["missing_ids"].append(jid)
+                result["passed"] = False
 
     return result
 
@@ -738,7 +744,7 @@ def preflight(
         console.print("[green]✅ ADR Enforcement passed.[/green]")
         json_report["adr_enforcement"] = "PASS"
 
-    # 1.8 Journey Coverage Check (Phase 1: Warning — INFRA-058)
+    # 1.8 Journey Coverage Check (Phase 2: Blocking for story-linked journeys)
     console.print("\n[bold blue]📋 Checking Journey Test Coverage...[/bold blue]")
     coverage_result = check_journey_coverage()
     json_report["journey_coverage"] = coverage_result
@@ -750,6 +756,25 @@ def preflight(
         )
         for w in coverage_result["warnings"][:10]:  # Cap output
             console.print(f"  [yellow]• {w}[/yellow]")
+
+        # Block if any journey linked to THIS story has missing tests
+        story_journey_ids = set(journey_gate.get("journey_ids", []))
+        missing_ids = set(coverage_result.get("missing_ids", []))
+        blocked_journeys = story_journey_ids & missing_ids
+
+        if blocked_journeys:
+            msg = (
+                f"Journey Test Coverage FAILED — story-linked journey(s) "
+                f"{', '.join(sorted(blocked_journeys))} have no tests. "
+                f"Add tests to implementation.tests in each journey YAML."
+            )
+            console.print(f"[bold red]❌ {msg}[/bold red]")
+            json_report["overall_verdict"] = "BLOCK"
+            if report_file:
+                import json
+                json_report["error"] = msg
+                report_file.write_text(json.dumps(json_report, indent=2))
+            raise typer.Exit(code=1)
     else:
         console.print("[green]✅ Journey Coverage: All linked.[/green]")
 
