@@ -6,7 +6,9 @@ COMMITTED
 
 ## Problem Statement
 
-Even when the Forecast Gate passes, the Runbook Agent may generate an over-limit runbook that degrades implementation quality. There is no secondary defence to catch discrepancies between the heuristic forecast and the actual AI-generated plan. This is Layer 2 of the INFRA-089 defence-in-depth strategy.
+Even when the Forecast Gate (INFRA-093) passes, the Runbook Agent may generate an over-limit runbook that degrades implementation quality. There is no secondary defence to catch discrepancies between the heuristic forecast and the actual AI-generated plan. This is Layer 2a of the INFRA-089 defence-in-depth strategy.
+
+See also: **INFRA-096** (Safe Implementation Apply) which addresses the Layer 2b companion problem — destructive file overwrites during implementation.
 
 ## User Story
 
@@ -32,6 +34,11 @@ As a **developer using the agentic-dev framework**, I want **a SPLIT_REQUEST fal
 ## Linked Journeys
 
 - JRN-064 — Forecast-Gated Story Decomposition (error path: SPLIT_REQUEST)
+
+## Related Stories
+
+- INFRA-093 — Forecast Gate for Runbook Generation (Layer 1 — heuristic pre-check)
+- INFRA-096 — Safe Implementation Apply (Layer 2b — diff-based apply, source context injection)
 
 ## Impact Analysis Summary
 

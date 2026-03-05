@@ -17,8 +17,9 @@ As a **developer using the agentic-dev framework**, I want **a forecast gate tha
 - [ ] **AC-1 (Complexity Score)**: `score_story_complexity` calculates step count, context width, verb intensity, and estimated LOC from story content.
 - [ ] **AC-2 (Forecast Gate)**: Over-budget story (>400 LOC, >8 steps, or >4 files) → Plan generated, exit code 2.
 - [ ] **AC-3 (Plan Output)**: Plan file created in `.agent/cache/plans/` with child story references, each scoped to ≤400 LOC.
-- [ ] **AC-4 (Skip Flag)**: `--skip-forecast` bypasses the gate with `log_skip_audit` and structured audit fields.
+- [ ] **AC-4 (Skip Flag)**: `--skip-forecast` bypasses the gate with `log_skip_audit` and structured audit fields (user identity via `getpass.getuser()`, resource ID, timestamp, action).
 - [ ] **AC-5 (Under Budget)**: Under-limit story proceeds to normal runbook generation.
+- [ ] **AC-6 (Audit Enrichment)**: `log_skip_audit` signature expanded to `(gate_name, resource_id)` with structured dict logging; existing callers in `implement.py` updated.
 
 ## Non-Functional Requirements
 

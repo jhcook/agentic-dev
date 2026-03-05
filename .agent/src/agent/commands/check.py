@@ -1120,6 +1120,22 @@ def preflight(
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
+    # Write preflight result marker for downstream consumers (e.g. `agent pr`)
+    try:
+        import json as _json
+        _marker_path = config.cache_dir / ".preflight_result"
+        _head_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
+        _marker_path.write_text(_json.dumps({
+            "story_id": story_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "commit": _head_sha,
+            "verdict": "PASS",
+        }, indent=2))
+    except Exception:
+        pass  # Best-effort, non-critical
+
     if report_file:
          import json
          # Ensure we have a verdict if we skipped AI or it passed

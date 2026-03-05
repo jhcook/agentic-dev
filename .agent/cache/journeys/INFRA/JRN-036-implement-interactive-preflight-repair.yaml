@@ -103,9 +103,9 @@ implementation:
   - .agent/src/backend/voice/tools/registry.py
   tests:
   - .agent/src/agent/core/ai/tests/test_service.py
-  - .agent/src/agent/core/tests/test_fixer.py
+  - .agent/tests/core/test_fixer.py
   - .agent/src/agent/core/tests/test_security.py
-  - .agent/src/agent/core/tests/test_utils_json.py
+  - .agent/tests/core/test_utils_json.py
   - .agent/tests/admin/test_cli.py
   - .agent/tests/backend/voice/test_fix_story.py
   - .agent/tests/backend/voice/test_git_integration.py
