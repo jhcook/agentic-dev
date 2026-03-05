@@ -15,6 +15,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import json
 import re
 
 import typer
@@ -36,6 +37,21 @@ logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 app = typer.Typer()
 console = Console()
+
+# Complexity Gatekeeper directive injected into the runbook system prompt (INFRA-094)
+SPLIT_REQUEST_DIRECTIVE = (
+    "COMPLEXITY GATEKEEPER DIRECTIVE:\n"
+    "If, during runbook generation, you determine that the implementation plan would exceed "
+    "ANY of these thresholds:\n"
+    "- More than 400 lines of code changed\n"
+    "- More than 8 implementation steps\n"
+    "- More than 4 files modified\n\n"
+    "Then you MUST NOT generate a runbook. Instead, emit ONLY a JSON block with this exact structure:\n\n"
+    '{"SPLIT_REQUEST": true, "reason": "<one-sentence explanation>", '
+    '"suggestions": ["<child story 1 title and scope>", "<child story 2 title and scope>"]}\n\n'
+    "Do NOT wrap this in any other text or markdown if you determine the story must be split.\n"
+    "If the story fits within the thresholds, proceed with normal runbook generation."
+)
 
 
 @dataclass
@@ -265,6 +281,8 @@ Your output must be the FILLED IN template, starting with the Header. Do NOT wra
 Replace placeholders like <Title>, <Clear summary...>, etc. with actual content.
 Update '## Panel Review Findings' with specific commentary.
 Update '## Targeted Refactors & Cleanups (INFRA-043)' with any relevant cleanups found.
+
+{SPLIT_REQUEST_DIRECTIVE}
 """
 
     user_prompt = f"""STORY CONTENT:
@@ -299,6 +317,33 @@ Generate the runbook now.
         console.print("[bold red]❌ AI returned empty response.[/bold red]")
         raise typer.Exit(code=1)
 
+    # -- SPLIT_REQUEST Fallback (INFRA-094) --
+    if "SPLIT_REQUEST" in content:
+        split_data = _parse_split_request(content)
+        if split_data:
+            # AC-3: Save decomposition suggestions
+            config.split_requests_dir.mkdir(parents=True, exist_ok=True)
+            split_path = config.split_requests_dir / f"{story_id}.json"
+            split_path.write_text(json.dumps(split_data, indent=2))
+
+            # NFR: Structured logging (SOC2)
+            logger.warning(
+                "split_request story=%s reason=%s suggestion_count=%d",
+                story_id,
+                scrub_sensitive_data(split_data.get("reason", ""))[:200],
+                len(split_data.get("suggestions", [])),
+            )
+
+            # AC-4: Exit with code 2 and guidance
+            console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
+            console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
+            console.print(f"  • Suggestions: {len(split_data.get('suggestions', []))}")
+            for i, s in enumerate(split_data.get("suggestions", []), 1):
+                console.print(f"    {i}. {s}")
+            console.print(f"\nDecomposition saved to: {split_path}")
+            console.print("[dim]Create child stories with: agent new-story <ID>[/dim]")
+            raise typer.Exit(code=2)
+
     # 5. Write
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
@@ -328,3 +373,42 @@ def _load_journey_context() -> str:
     if journeys_content:
         return scrub_sensitive_data(journeys_content[:5000])
     return "None defined yet."
+
+
+def _parse_split_request(content: str) -> Optional[dict]:
+    """Extract and parse SPLIT_REQUEST JSON from AI response.
+
+    Handles:
+    - Pure JSON response
+    - JSON embedded in markdown code fences
+    - Malformed JSON (returns None -> treat as normal runbook)
+
+    Args:
+        content: Raw AI response string.
+
+    Returns:
+        Parsed dict if valid SPLIT_REQUEST, None otherwise.
+    """
+    # Try direct parse first
+    try:
+        data = json.loads(content.strip())
+        if isinstance(data, dict) and data.get("SPLIT_REQUEST"):
+            return data
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Try extracting from markdown code fences (\n made optional for AI variance)
+    json_match = re.search(r"```(?:json)?\s*\n?(.+?)\n?\s*```", content, re.DOTALL)
+    if json_match:
+        try:
+            data = json.loads(json_match.group(1).strip())
+            if isinstance(data, dict) and data.get("SPLIT_REQUEST"):
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Malformed or not a SPLIT_REQUEST -- graceful fallback
+    logger.debug(
+        "SPLIT_REQUEST marker found but JSON parse failed, treating as normal runbook"
+    )
+    return None

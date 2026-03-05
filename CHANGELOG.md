@@ -64,6 +64,14 @@
   - OpenTelemetry tracing span `gate.pr_size` and structured logging.
   - 7 unit tests covering threshold, bypasses, exclusions, and error handling.
 
+- **SPLIT_REQUEST Fallback for Runbook Generation** (INFRA-094):
+  - `agent new-runbook` now includes a Complexity Gatekeeper Directive in the AI system prompt.
+  - When the AI determines a story exceeds complexity thresholds (400 LOC, 8 steps, or 4 files), it emits a `SPLIT_REQUEST` JSON response instead of a runbook.
+  - CLI detects and parses `SPLIT_REQUEST` responses (including JSON embedded in markdown fences), saves decomposition suggestions to `.agent/cache/split_requests/{story_id}.json`, and exits with code 2.
+  - Graceful fallback: malformed SPLIT_REQUEST JSON is treated as a normal runbook.
+  - Structured audit logging with scrubbed reason field (SOC2/PII-safe).
+  - 10 unit tests covering valid/malformed/fenced JSON parsing, CLI exit codes, and structured logging.
+
 ### Fixed
 
 - **ReAct JSON parser hardening** (INFRA-088):
