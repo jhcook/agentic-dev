@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-096**: Safe implementation apply — search/replace format, source context injection, and file size guard.
+  - Added `parse_search_replace_blocks()` parser for `<<<SEARCH/===/>>>` format.
+  - Added source context injection (`extract_modify_files` + `build_source_context`) to AI prompts.
+  - Added `apply_search_replace_to_file()` for surgical, no-partial-apply edits.
+  - Added file size guard to `apply_change_to_file()` — rejects full-file overwrites for files >200 LOC.
+  - Added `--legacy-apply` CLI flag for escape-hatch bypass (audit-logged via SOC2).
+  - Updated AI system prompts to instruct search/replace for existing files.
 - **INFRA-095**: Implemented micro-commit implementation loop and circuit breaker in `implement.py`.
   - Added line-level edit distance tracking per implementation step.
   - Added save-point micro-commits after each successful runbook step application.
