@@ -18,6 +18,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 import typer
@@ -46,6 +47,11 @@ except ImportError:
 MAX_EDIT_DISTANCE_PER_STEP = 30
 LOC_WARNING_THRESHOLD = 200
 LOC_CIRCUIT_BREAKER_THRESHOLD = 400
+
+# Safe Apply Thresholds (INFRA-096)
+FILE_SIZE_GUARD_THRESHOLD = 200   # LOC — reject full-file overwrite above this
+SOURCE_CONTEXT_MAX_LOC = 300      # LOC — truncate source context above this
+SOURCE_CONTEXT_HEAD_TAIL = 100    # LOC — lines to keep from head/tail when truncating
 
 app = typer.Typer()
 console = Console()
@@ -87,6 +93,58 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
             blocks.append({'file': filepath, 'content': code})
     
     return blocks
+
+
+def parse_search_replace_blocks(content: str) -> List[Dict[str, str]]:
+    """
+    Parse search/replace blocks from AI-generated content.
+
+    Expected format (per file):
+        File: path/to/file.py
+        <<<SEARCH
+        exact lines to find
+        ===
+        replacement lines
+        >>>
+
+    Multiple blocks per file are supported.
+
+    Returns:
+        List of dicts with 'file', 'search', 'replace' keys.
+    """
+    blocks = []
+
+    # Split content by File: headers
+    file_sections = re.split(
+        r'(?:^|\n)(?:File|Modify):\s*`?([^\n`]+)`?\s*\n',
+        content,
+        flags=re.IGNORECASE,
+    )
+
+    # file_sections alternates: [preamble, filepath1, body1, filepath2, body2, ...]
+    for i in range(1, len(file_sections), 2):
+        filepath = file_sections[i].strip()
+        body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
+
+        # Find all <<<SEARCH ... === ... >>> blocks in this file's body
+        sr_pattern = r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>'
+        for match in re.finditer(sr_pattern, body, re.DOTALL):
+            search_text = match.group(1)
+            replace_text = match.group(2)
+            blocks.append({
+                'file': filepath,
+                'search': search_text,
+                'replace': replace_text,
+            })
+
+    # OTel span for observability
+    if tracer:
+        span = tracer.start_span("implement.parse_search_replace")
+        span.set_attribute("block_count", len(blocks))
+        span.end()
+
+    return blocks
+
 
 def backup_file(file_path: Path) -> Optional[Path]:
     """Create a timestamped backup of a file before modification."""
@@ -562,16 +620,296 @@ def resolve_path(filepath: str) -> Optional[Path]:
     
     return file_path
 
-def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool:
+
+def extract_modify_files(runbook_content: str) -> List[str]:
+    """
+    Scan runbook content for [MODIFY] markers and extract file paths.
+
+    Looks for patterns like:
+        #### [MODIFY] .agent/src/agent/commands/implement.py
+
+    Returns:
+        List of file path strings referenced by [MODIFY] markers.
+    """
+    pattern = r'\[MODIFY\]\s*`?([^\n`]+)`?'
+    matches = re.findall(pattern, runbook_content, re.IGNORECASE)
+    # Deduplicate while preserving order
+    seen = set()
+    result = []
+    for path in matches:
+        path = path.strip()
+        if path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
+def build_source_context(file_paths: List[str]) -> str:
+    """
+    Build source context string by reading current file contents.
+
+    Files exceeding SOURCE_CONTEXT_MAX_LOC are truncated to
+    first/last SOURCE_CONTEXT_HEAD_TAIL lines with an omission marker.
+
+    Args:
+        file_paths: List of repo-relative file paths to read.
+
+    Returns:
+        Formatted string containing file contents for prompt injection.
+    """
+    def _inner():
+        context_parts = []
+
+        for filepath in file_paths:
+            resolved = resolve_path(filepath)
+            if not resolved or not resolved.exists():
+                logging.warning(
+                    "source_context_skip file=%s reason=not_found", filepath
+                )
+                continue
+
+            try:
+                content = resolved.read_text()
+            except Exception as e:
+                logging.warning(
+                    "source_context_skip file=%s reason=%s", filepath, e
+                )
+                continue
+
+            lines = content.splitlines()
+            loc = len(lines)
+
+            if loc > SOURCE_CONTEXT_MAX_LOC:
+                head = "\n".join(lines[:SOURCE_CONTEXT_HEAD_TAIL])
+                tail = "\n".join(lines[-SOURCE_CONTEXT_HEAD_TAIL:])
+                omitted = loc - (2 * SOURCE_CONTEXT_HEAD_TAIL)
+                truncated_content = (
+                    f"{head}\n"
+                    f"... ({omitted} lines omitted) ...\n"
+                    f"{tail}"
+                )
+                context_parts.append(
+                    f"### Current content of `{filepath}` "
+                    f"({loc} LOC — truncated):\n"
+                    f"```\n{truncated_content}\n```\n"
+                )
+            else:
+                context_parts.append(
+                    f"### Current content of `{filepath}` ({loc} LOC):\n"
+                    f"```\n{content}\n```\n"
+                )
+
+        return "\n".join(context_parts)
+
+    if tracer:
+        with tracer.start_as_current_span("implement.inject_source_context") as span:
+            span.set_attribute("file_count", len(file_paths))
+            result = _inner()
+            span.set_attribute("total_chars", len(result))
+            return result
+    return _inner()
+
+
+def apply_search_replace_to_file(
+    filepath: str,
+    blocks: List[Dict[str, str]],
+    yes: bool = False,
+) -> tuple[bool, str]:
+    """
+    Apply search/replace blocks surgically to an existing file.
+
+    Each block must match exactly. If any block fails to match,
+    the entire operation is aborted — no partial apply.
+
+    Args:
+        filepath: Repo-relative file path.
+        blocks: List of dicts with 'search' and 'replace' keys.
+        yes: Skip confirmation prompts.
+
+    Returns:
+        Tuple of (success: bool, final_content: str).
+        On failure, final_content is the original unchanged content.
+    """
+    # OTel span for observability
+    span_ctx = None
+    if tracer:
+        span_ctx = tracer.start_span("implement.apply_change")
+        span_ctx.set_attribute("file", filepath)
+        span_ctx.set_attribute("apply_mode", "search_replace")
+
+    resolved_path = resolve_path(filepath)
+    if not resolved_path or not resolved_path.exists():
+        console.print(
+            f"[bold red]❌ Cannot apply search/replace to "
+            f"'{filepath}': file not found.[/bold red]"
+        )
+        return False, ""
+
+    original_content = resolved_path.read_text()
+    working_content = original_content
+
+    # Dry-run: verify all blocks match before applying any
+    for i, block in enumerate(blocks):
+        if block['search'] not in working_content:
+            console.print(
+                f"[bold red]❌ Search block {i+1}/{len(blocks)} "
+                f"not found in {filepath}.[/bold red]"
+            )
+            console.print(
+                f"[dim]Expected to find:[/dim]\n"
+                f"[red]{block['search'][:200]}...[/red]"
+            )
+            logging.warning(
+                "search_replace_match_failure file=%s block=%d/%d",
+                filepath, i + 1, len(blocks),
+            )
+            return False, original_content
+
+        # Warn if search text is ambiguous (appears multiple times)
+        match_count = working_content.count(block['search'])
+        if match_count > 1:
+            console.print(
+                f"[yellow]⚠️  Search block {i+1} matches "
+                f"{match_count} locations in {filepath}. "
+                f"Replacing first occurrence only.[/yellow]"
+            )
+            logging.warning(
+                "search_replace_ambiguous file=%s block=%d/%d "
+                "match_count=%d",
+                filepath, i + 1, len(blocks), match_count,
+            )
+
+        # Apply this block to working content (for subsequent matches)
+        working_content = working_content.replace(
+            block['search'], block['replace'], 1
+        )
+
+    # Show diff preview
+    console.print(f"\n[bold cyan]📝 Search/Replace for: {filepath}[/bold cyan]")
+    console.print(
+        f"[dim]Applying {len(blocks)} search/replace block(s)[/dim]"
+    )
+
+    # Show unified diff (uses module-level difflib import)
+    diff_lines = list(difflib.unified_diff(
+        original_content.splitlines(keepends=True),
+        working_content.splitlines(keepends=True),
+        fromfile=f"a/{filepath}",
+        tofile=f"b/{filepath}",
+    ))
+    if diff_lines:
+        diff_text = "".join(diff_lines)
+        syntax = Syntax(diff_text, "diff", theme="monokai")
+        console.print(syntax)
+
+    # Confirmation
+    if not yes:
+        response = typer.confirm(
+            f"\nApply {len(blocks)} search/replace block(s) to "
+            f"{filepath}?",
+            default=False,
+        )
+        if not response:
+            console.print("[yellow]⏭️  Skipped[/yellow]")
+            return False, original_content
+
+    # Backup and write
+    backup_path = backup_file(resolved_path)
+    if backup_path:
+        console.print(f"[dim]💾 Backup created: {backup_path}[/dim]")
+
+    try:
+        resolved_path.write_text(working_content)
+        console.print(
+            f"[bold green]✅ Applied {len(blocks)} search/replace "
+            f"block(s) to {filepath}[/bold green]"
+        )
+
+        # Structured logging (NFR)
+        logging.info(
+            "apply_change apply_mode=search_replace file=%s "
+            "blocks=%d lines_changed=%d",
+            filepath, len(blocks),
+            count_edit_distance(original_content, working_content),
+        )
+
+        # Log the change
+        log_file = Path(".agent/logs/implement_changes.log")
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().isoformat()
+        with open(log_file, "a") as f:
+            f.write(
+                f"[{timestamp}] SearchReplace: {filepath} "
+                f"({len(blocks)} blocks)\n"
+            )
+
+        if span_ctx:
+            span_ctx.set_attribute("success", True)
+            span_ctx.end()
+        return True, working_content
+    except Exception as e:
+        console.print(
+            f"[bold red]❌ Failed to write file: {e}[/bold red]"
+        )
+        if span_ctx:
+            span_ctx.set_attribute("success", False)
+            span_ctx.end()
+        return False, original_content
+
+
+def apply_change_to_file(
+    filepath: str,
+    content: str,
+    yes: bool = False,
+    legacy_apply: bool = False,
+) -> bool:
     """
     Apply code changes to a file with smart path resolution.
+
+    For existing files exceeding FILE_SIZE_GUARD_THRESHOLD, rejects
+    full-file overwrites unless legacy_apply is True (AC-5).
     """
+    # OTel span for observability
+    span_ctx = None
+    if tracer:
+        span_ctx = tracer.start_span("implement.apply_change")
+        span_ctx.set_attribute("file", filepath)
+        span_ctx.set_attribute("apply_mode", "full_file")
+
     resolved_path = resolve_path(filepath)
     if not resolved_path:
+        if span_ctx:
+            span_ctx.set_attribute("success", False)
+            span_ctx.end()
         return False
         
     file_path = resolved_path
     filepath = str(resolved_path)
+
+    # AC-5: File size guard for existing files
+    if file_path.exists() and not legacy_apply:
+        try:
+            existing_lines = len(file_path.read_text().splitlines())
+        except Exception:
+            existing_lines = 0
+
+        if existing_lines > FILE_SIZE_GUARD_THRESHOLD:
+            console.print(
+                f"\n[bold red]❌ Rejected full-file overwrite for "
+                f"{filepath} ({existing_lines} LOC > "
+                f"{FILE_SIZE_GUARD_THRESHOLD} threshold).[/bold red]"
+            )
+            console.print(
+                "[yellow]The AI must use search/replace format for "
+                "large existing files, or use --legacy-apply to "
+                "bypass.[/yellow]"
+            )
+            logging.warning(
+                "apply_change apply_mode=rejected file=%s "
+                "file_loc=%d threshold=%d",
+                filepath, existing_lines, FILE_SIZE_GUARD_THRESHOLD,
+            )
+            return False
 
     # Show diff preview
     console.print(f"\n[bold cyan]📝 Changes for: {filepath}[/bold cyan]")
@@ -611,6 +949,13 @@ def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool
         from agent.commands.license import apply_license_to_file
         if apply_license_to_file(file_path):
             console.print(f"[dim]Added copyright header to {filepath}[/dim]")
+
+        # Structured logging (NFR — INFRA-096)
+        logging.info(
+            "apply_change apply_mode=full_file file=%s "
+            "lines_changed=%d",
+            filepath, len(content.splitlines()),
+        )
         
         # Log the change
         log_file = Path(".agent/logs/implement_changes.log")
@@ -619,9 +964,15 @@ def apply_change_to_file(filepath: str, content: str, yes: bool = False) -> bool
         with open(log_file, "a") as f:
             f.write(f"[{timestamp}] Modified: {filepath}\n")
             
+        if span_ctx:
+            span_ctx.set_attribute("success", True)
+            span_ctx.end()
         return True
     except Exception as e:
         console.print(f"[bold red]❌ Failed to write file: {e}[/bold red]")
+        if span_ctx:
+            span_ctx.set_attribute("success", False)
+            span_ctx.end()
         return False
 
 def split_runbook_into_chunks(content: str) -> tuple[str, List[str]]:
@@ -723,6 +1074,10 @@ def implement(
     ),
     skip_security: bool = typer.Option(
         False, "--skip-security", help="Skip security scan gate (audit-logged)."
+    ),
+    legacy_apply: bool = typer.Option(
+        False, "--legacy-apply",
+        help="Bypass safe-apply protections (full-file overwrite allowed). Audit-logged.",
     ),
 ):
     """
@@ -828,6 +1183,14 @@ def implement(
         raise typer.Exit(code=1)
     console.print(f"[green]✅ Journey Gate passed — linked: {', '.join(journey_result['journey_ids'])}[/green]")
 
+    # INFRA-096: Audit log legacy-apply usage
+    if legacy_apply:
+        gates.log_skip_audit("Safe apply bypass", story_id)
+        console.print(
+            f"⚠️  [AUDIT] Safe-apply protections bypassed at "
+            f"{datetime.now().isoformat()}"
+        )
+
     update_story_state(story_id, "IN_PROGRESS", context_prefix="Phase 0")
 
     # 2. Load Guide
@@ -882,20 +1245,62 @@ INSTRUCTIONS:
 - **IMPORTANT**: Use REPO-RELATIVE paths for all files (e.g., .agent/src/agent/main.py). 
 - **WARNING**: DO NOT use 'agent/' as a root folder. The source code lives in '.agent/src/agent/'.
 - **IMPORTANT**: Respect all Architectural Decision Records (ADRs). Do not contradict codified decisions.{license_instruction}
-- Output code using this format:
+- **OUTPUT FORMAT for EXISTING files** — emit search/replace blocks:
 
-File: path/to/file.py
+File: path/to/existing_file.py
+<<<SEARCH
+exact lines to find in the current file
+===
+replacement lines
+>>>
+
+You may emit multiple <<<SEARCH...>>> blocks per file.
+
+- **OUTPUT FORMAT for NEW files** — emit complete file content:
+
+File: path/to/new_file.py
 ```python
 # Complete file content here
 ```
 
-- Provide complete, working code for each file.
-- Include all necessary imports.
-- Documentation files (CHANGELOG.md, README.md) should show the COMPLETE updated file content.
+- NEVER emit complete file content for files listed in SOURCE CONTEXT below.
+  Use search/replace blocks to make surgical changes.
+- Include all necessary imports in your search/replace blocks.
+- Documentation files (CHANGELOG.md, README.md) should use search/replace if they already exist.
 - Test files should follow the patterns in .agent/tests/.
 """
+        # INFRA-096: Inject source context for files being modified
+        modify_files = extract_modify_files(runbook_content_scrubbed)
+        source_context = ""
+        if modify_files:
+            source_context = build_source_context(modify_files)
+            source_ctx_chars = len(source_context)
+            console.print(
+                f"[dim]📄 Injected source context for "
+                f"{len(modify_files)} file(s) "
+                f"({source_ctx_chars} chars)[/dim]"
+            )
+            # Token budget warning (NFR)
+            total_estimate = (
+                len(system_prompt) + len(runbook_content_scrubbed)
+                + source_ctx_chars + 5000  # overhead estimate
+            )
+            if total_estimate > 80000:  # ~80% of 100k char window
+                logging.warning(
+                    "token_budget_warning total_chars=%d "
+                    "threshold=80000",
+                    total_estimate,
+                )
+                console.print(
+                    f"[yellow]⚠️  Prompt size ({total_estimate} chars) "
+                    f"approaching context window limit.[/yellow]"
+                )
+
         user_prompt = f"""RUNBOOK CONTENT:
 {runbook_content_scrubbed}
+
+SOURCE CONTEXT (Current file contents for files being modified):
+{source_context}
 
 IMPLEMENTATION GUIDE:
 {guide_content}
@@ -963,13 +1368,37 @@ CONSTRAINTS:
 4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py). DO NOT use 'agent/' as root.{license_instruction}
 5. **CRITICAL**: Keep changes small — aim for under {MAX_EDIT_DISTANCE_PER_STEP} lines of edits per step.
 OUTPUT FORMAT:
-Return a Markdown response with file paths and code blocks:
+- **For EXISTING files** — use search/replace blocks:
 
-File: path/to/file.py
+File: path/to/existing_file.py
+<<<SEARCH
+exact lines to find in the current file
+===
+replacement lines
+>>>
+
+- **For NEW files** — use complete file content:
+
+File: path/to/new_file.py
 ```python
 # Complete file content here
 ```
+
+- NEVER emit complete file content for files in SOURCE CONTEXT. Use search/replace.
 """
+            # INFRA-096: Per-chunk source context
+            chunk_modify_files = extract_modify_files(chunk)
+            chunk_source_context = ""
+            if chunk_modify_files:
+                chunk_source_context = build_source_context(
+                    chunk_modify_files
+                )
+                console.print(
+                    f"[dim]📄 Source context: "
+                    f"{len(chunk_modify_files)} file(s) "
+                    f"({len(chunk_source_context)} chars)[/dim]"
+                )
+
             chunk_user_prompt = f"""GLOBAL RUNBOOK CONTEXT (Truncated):
 {global_runbook_context[:8000]}
 
@@ -977,6 +1406,9 @@ File: path/to/file.py
 CURRENT TASK:
 {chunk}
 --------------------------------------------------------------------------------
+
+SOURCE CONTEXT (Current file contents):
+{chunk_source_context}
 
 RULES (Filtered):
 {filtered_rules}
@@ -1009,16 +1441,24 @@ ARCHITECTURAL DECISIONS (ADRs):
 
             # --- Apply and measure edit distance (AC-1, AC-2) ---
             if apply:
-                code_blocks = parse_code_blocks(chunk_result)
                 step_loc = 0
                 step_modified_files = []
 
-                if code_blocks:
-                    console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                    for block in code_blocks:
-                        file_path = Path(block['file'])
+                # --- Apply search/replace blocks first (INFRA-096) ---
+                sr_blocks = parse_search_replace_blocks(chunk_result)
+                if sr_blocks:
+                    # Group blocks by file (uses module-level defaultdict import)
+                    sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+                    for block in sr_blocks:
+                        sr_by_file[block['file']].append(block)
 
-                        # Measure edit distance before applying
+                    console.print(
+                        f"[dim]Found {len(sr_blocks)} search/replace "
+                        f"block(s) across {len(sr_by_file)} file(s)[/dim]"
+                    )
+
+                    for sr_filepath, file_blocks in sr_by_file.items():
+                        file_path = Path(sr_filepath)
                         original_content = ""
                         if file_path.exists():
                             try:
@@ -1026,10 +1466,50 @@ ARCHITECTURAL DECISIONS (ADRs):
                             except Exception:
                                 pass
 
-                        success = apply_change_to_file(block['file'], block['content'], yes)
+                        success, final_content = apply_search_replace_to_file(
+                            sr_filepath, file_blocks, yes,
+                        )
 
                         if success:
-                            block_loc = count_edit_distance(original_content, block['content'])
+                            block_loc = count_edit_distance(
+                                original_content, final_content
+                            )
+                            step_loc += block_loc
+                            step_modified_files.append(sr_filepath)
+
+                # --- Then apply full-file code blocks (existing path) ---
+                code_blocks = parse_code_blocks(chunk_result)
+                if code_blocks:
+                    # Filter out files already handled by search/replace
+                    sr_handled = {b['file'] for b in sr_blocks} if sr_blocks else set()
+                    code_blocks = [
+                        b for b in code_blocks
+                        if b['file'] not in sr_handled
+                    ]
+
+                    if code_blocks:
+                        console.print(
+                            f"[dim]Found {len(code_blocks)} full-file "
+                            f"block(s) in this task[/dim]"
+                        )
+                        for block in code_blocks:
+                            file_path = Path(block['file'])
+
+                            # Measure edit distance before applying
+                            original_content = ""
+                            if file_path.exists():
+                                try:
+                                    original_content = file_path.read_text()
+                                except Exception:
+                                    pass
+
+                            success = apply_change_to_file(
+                                block['file'], block['content'], yes,
+                                legacy_apply=legacy_apply,
+                            )
+
+                            if success:
+                                block_loc = count_edit_distance(original_content, block['content'])
                             step_loc += block_loc
                             step_modified_files.append(block['file'])
 
@@ -1142,10 +1622,36 @@ ARCHITECTURAL DECISIONS (ADRs):
          console.print(Markdown(full_content))
     elif apply and not fallback_needed: # If we did full context apply, do it now
          console.print("\n[bold blue]🔧 Applying changes...[/bold blue]")
-         code_blocks = parse_code_blocks(full_content)
-         # ... apply loop ...
+
+         # INFRA-096: Handle search/replace blocks first
+         sr_blocks = parse_search_replace_blocks(full_content)
+         if sr_blocks:
+             # Uses module-level defaultdict import
+             sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+             for block in sr_blocks:
+                 sr_by_file[block['file']].append(block)
+
+             for sr_filepath, file_blocks in sr_by_file.items():
+                 success, _ = apply_search_replace_to_file(
+                     sr_filepath, file_blocks, yes,
+                 )
+                 if not success:
+                     logging.warning(
+                         "full_context_sr_failure file=%s blocks=%d",
+                         sr_filepath, len(file_blocks),
+                     )
+
+         # Then handle full-file code blocks
+         sr_handled = {b['file'] for b in sr_blocks} if sr_blocks else set()
+         code_blocks = [
+             b for b in parse_code_blocks(full_content)
+             if b['file'] not in sr_handled
+         ]
          for block in code_blocks:
-            apply_change_to_file(block['file'], block['content'], yes)
+            apply_change_to_file(
+                block['file'], block['content'], yes,
+                legacy_apply=legacy_apply,
+            )
             
     # 1.3 AUTOMATION: Post-Apply Governance Gates
     if apply and implementation_success:

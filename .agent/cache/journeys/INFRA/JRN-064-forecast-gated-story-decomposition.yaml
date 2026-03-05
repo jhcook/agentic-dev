@@ -138,7 +138,8 @@ depends_on: []
 implementation:
   routes: []
   files: []
-  tests: []
+  tests:
+  - .agent/tests/journeys/test_jrn_064.py
 
 test_hints:
   framework: pytest
