@@ -1123,13 +1123,14 @@ def preflight(
     # Write preflight result marker for downstream consumers (e.g. `agent pr`)
     try:
         import json as _json
+        import time as _time
         _marker_path = config.cache_dir / ".preflight_result"
         _head_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip()
         _marker_path.write_text(_json.dumps({
             "story_id": story_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
             "commit": _head_sha,
             "verdict": "PASS",
         }, indent=2))
