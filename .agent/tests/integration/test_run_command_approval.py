@@ -13,52 +13,42 @@
 # limitations under the License.
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from agent.core.adk.tools import run_command
-from agent.core.adk.runtime import get_user_consent
+from agent.core.adk.tools import make_interactive_tools
+
+# run_command is a nested function inside make_interactive_tools
+_tools = make_interactive_tools(Path("."))
+run_command = next(t for t in _tools if t.__name__ == "run_command")
+
 
 class TestRunCommandApproval(unittest.TestCase):
 
-    @patch('agent.core.adk.runtime.get_user_consent')
-    @patch('subprocess.run')
-    def test_run_command_approved(self, mock_subprocess_run, mock_get_user_consent):
-        """Verify run_command executes when user provides consent."""
-        # Arrange: Simulate user approving the command
-        mock_get_user_consent.return_value = True
+    @patch('subprocess.Popen')
+    def test_run_command_executes(self, mock_popen):
+        """Verify run_command executes and returns output."""
         mock_proc = MagicMock()
+        mock_proc.stdout.readline.side_effect = ['Success\n', '']
+        mock_proc.poll.side_effect = [None, 0, 0]
+        mock_proc.wait.return_value = 0
         mock_proc.returncode = 0
-        mock_proc.stdout = 'Success'
-        mock_proc.stderr = ''
-        mock_subprocess_run.return_value = mock_proc
+        mock_popen.return_value = mock_proc
 
-        command_to_run = 'ls -l'
-
-        # Act: Execute the tool
-        result = run_command(command=command_to_run)
-
-        # Assert: The consent function was called and the command was executed
-        mock_get_user_consent.assert_called_once_with(f'Permit execution of: "{command_to_run}"?')
-        mock_subprocess_run.assert_called_once_with(command_to_run, shell=True, capture_output=True, text=True, check=False)
+        result = run_command(command='echo hello')
         self.assertIn('Success', result)
 
-    @patch('agent.core.adk.runtime.get_user_consent')
-    @patch('subprocess.run')
-    def test_run_command_denied(self, mock_subprocess_run, mock_get_user_consent):
-        """Verify run_command does NOT execute when user denies consent."""
-        # Arrange: Simulate user denying the command
-        mock_get_user_consent.return_value = False
-        command_to_run = 'rm -rf /'
+    def test_run_command_empty(self):
+        """Verify run_command rejects empty commands."""
+        result = run_command(command='')
+        self.assertIn('Error', result)
 
-        # Act & Assert: The tool should raise a PermissionError
-        with self.assertRaises(PermissionError) as cm:
-            run_command(command=command_to_run)
-        
-        self.assertEqual(str(cm.exception), 'User denied execution of command.')
+    def test_run_command_path_traversal(self):
+        """Verify run_command rejects path traversal."""
+        result = run_command(command='cat ../../etc/passwd')
+        self.assertIn('Error', result)
 
-        # Assert: The consent function was called but the command was NOT executed
-        mock_get_user_consent.assert_called_once_with(f'Permit execution of: "{command_to_run}"?')
-        mock_subprocess_run.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
+

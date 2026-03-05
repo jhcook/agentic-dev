@@ -16,70 +16,69 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from agent.core.adk.tools import patch_file
+from agent.core.adk.tools import make_interactive_tools
+
+
+def _get_patch_file(repo_root: Path):
+    """Extract patch_file tool bound to a specific repo_root."""
+    tools = make_interactive_tools(repo_root.resolve())
+    return next(t for t in tools if t.__name__ == "patch_file")
+
 
 class TestPatchFileTool(unittest.TestCase):
     def test_patch_file_success(self):
         with TemporaryDirectory() as tempdir:
             temp_path = Path(tempdir)
+            patch_file = _get_patch_file(temp_path)
             file_path = temp_path / "test_file.txt"
             
             # Create a file with initial content
             initial_content = "Hello world\nThis is a test\nGoodbye world"
-            with open(file_path, "w") as f:
-                f.write(initial_content)
+            file_path.write_text(initial_content)
                 
             # Use the patch_file tool to replace a line
             search_str = "This is a test"
             replace_str = "This is a successful patch"
-            patch_file(path=str(file_path), search=search_str, replace=replace_str)
+            patch_file(path="test_file.txt", search=search_str, replace=replace_str)
             
             # Verify the content was updated
-            with open(file_path, "r") as f:
-                content = f.read()
-                
+            content = file_path.read_text()
             expected_content = "Hello world\nThis is a successful patch\nGoodbye world"
             self.assertEqual(content, expected_content)
 
     def test_patch_file_no_match(self):
         with TemporaryDirectory() as tempdir:
             temp_path = Path(tempdir)
+            patch_file = _get_patch_file(temp_path)
             file_path = temp_path / "test_file.txt"
             
             initial_content = "Hello world\nThis is a test\nGoodbye world"
-            with open(file_path, "w") as f:
-                f.write(initial_content)
+            file_path.write_text(initial_content)
                 
             # Attempt to patch with a search string that doesn't exist
-            with self.assertRaises(ValueError) as cm:
-                patch_file(path=str(file_path), search="nonexistent string", replace="wont work")
-            
-            self.assertIn("Search string 'nonexistent string' not found or found multiple times in", str(cm.exception))
+            result = patch_file(path="test_file.txt", search="nonexistent string", replace="wont work")
+            self.assertIn("not found", result)
             
             # Verify the content was not changed
-            with open(file_path, "r") as f:
-                content = f.read()
+            content = file_path.read_text()
             self.assertEqual(content, initial_content)
 
     def test_patch_file_multiple_matches(self):
         with TemporaryDirectory() as tempdir:
             temp_path = Path(tempdir)
+            patch_file = _get_patch_file(temp_path)
             file_path = temp_path / "test_file.txt"
             
             # Create a file with a repeated line
             initial_content = "Hello world\nThis is a test\nThis is a test\nGoodbye world"
-            with open(file_path, "w") as f:
-                f.write(initial_content)
+            file_path.write_text(initial_content)
                 
             # Attempt to patch with a search string that appears multiple times
-            with self.assertRaises(ValueError) as cm:
-                patch_file(path=str(file_path), search="This is a test", replace="wont work")
-            
-            self.assertIn("Search string 'This is a test' not found or found multiple times in", str(cm.exception))
+            result = patch_file(path="test_file.txt", search="This is a test", replace="wont work")
+            self.assertIn("matches", result)
             
             # Verify the content was not changed
-            with open(file_path, "r") as f:
-                content = f.read()
+            content = file_path.read_text()
             self.assertEqual(content, initial_content)
 
 if __name__ == '__main__':
