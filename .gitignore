@@ -66,3 +66,4 @@ npm-debug.log
 agentic-executive-premium/
 
 .agent/cache/chat_sessions.db
+.agent/cache/.preflight_result
