@@ -68,23 +68,9 @@ from agent.tui.session import ConversationSession, Message, SessionStore, TokenB
 
 logger = logging.getLogger(__name__)
 
-# System prompt builder — constructs context-rich prompt at runtime
-def _build_system_prompt() -> str:
-    """Build a system prompt modeled after the voice agent's depth."""
-    from agent.core.config import config
 
-    repo_root = str(config.repo_root)
-    repo_name = config.repo_root.name
-
-    # Read the actual license header template
-    license_header = ""
-    try:
-        license_path = config.templates_dir / "license_header.txt"
-        if license_path.exists():
-            license_header = license_path.read_text().strip()
-    except Exception:
-        pass
-
+def _build_clinical_prompt(repo_name: str, repo_root: str, license_header: str) -> str:
+    """Build the original hardcoded 'clinical' system prompt (fallback)."""
     prompt = (
         f"You are an expert agentic development assistant embedded in the "
         f"**{repo_name}** repository at `{repo_root}`.\n\n"
@@ -138,7 +124,6 @@ def _build_system_prompt() -> str:
         "- All file-modifying tools automatically stage changes with `git add`.\n\n"
     )
 
-    # Add license header instructions if template exists
     if license_header:
         prompt += (
             "## License Headers\n"
@@ -171,6 +156,107 @@ def _build_system_prompt() -> str:
         )
 
     return prompt
+
+
+def _build_custom_prompt(repo_name: str, repo_root: str, license_header: str,
+                         system_prompt: str, personality_content: str) -> str:
+    """Build a layered prompt from configured personality + repo context + runtime."""
+    parts = []
+
+    # Layer 1: Personality preamble from agent.yaml
+    if system_prompt:
+        parts.append(system_prompt.strip())
+
+    # Layer 2: Repo context from personality_file (e.g. GEMINI.md)
+    if personality_content:
+        parts.append(personality_content.strip())
+
+    # Layer 3: Runtime context
+    runtime = f"## Repository Context\nYou are working in the **{repo_name}** repository at `{repo_root}`.\n"
+
+    if license_header:
+        runtime += (
+            "\n## Required License Header\n"
+            "When creating or editing source files, use this EXACT license header:\n"
+            "```\n" + license_header + "\n```\n"
+        )
+
+    runtime += (
+        "\n## Project Layout\n"
+        "```\n"
+        f"{repo_name}/\n"
+        "├── .agent/              # Agent configuration & artifacts\n"
+        "│   ├── src/agent/       # Agent CLI source (Python/Typer)\n"
+        "│   ├── tests/           # Test suite (pytest)\n"
+        "│   ├── workflows/       # Executable workflow definitions (.md)\n"
+        "│   ├── etc/             # Config (agent.yaml, agents.yaml)\n"
+        "│   ├── cache/           # Stories, runbooks, journeys\n"
+        "│   ├── adrs/            # Architecture Decision Records\n"
+        "│   ├── docs/            # Project documentation\n"
+        "\n"
+        "├── CHANGELOG.md\n"
+        "└── README.md\n"
+        "```\n"
+    )
+
+    parts.append(runtime.strip())
+    return "\n\n".join(parts)
+
+
+# System prompt builder — constructs context-rich prompt at runtime
+def _build_system_prompt() -> str:
+    """Build a system prompt with configurable personality layering.
+
+    When console.system_prompt or console.personality_file are configured in
+    agent.yaml, those are layered with runtime context to form the prompt.
+    When neither is configured, the original hardcoded prompt is used as-is.
+    """
+    from agent.core.config import config
+
+    repo_root = str(config.repo_root)
+    repo_name = config.repo_root.name
+
+    # Read the actual license header template
+    license_header = ""
+    try:
+        license_path = config.templates_dir / "license_header.txt"
+        if license_path.exists():
+            license_header = license_path.read_text().strip()
+    except Exception:
+        pass
+
+    # Check if custom personality is configured
+    has_custom = bool(
+        getattr(config, 'console', None)
+        and (config.console.system_prompt or config.console.personality_file)
+    )
+
+    if not has_custom:
+        # Fallback: use the original hardcoded prompt — unchanged behavior
+        return _build_clinical_prompt(repo_name, repo_root, license_header)
+
+    # Load personality file content if configured
+    personality_content = ""
+    if config.console.personality_file:
+        try:
+            repo_root_path = Path(config.repo_root).resolve()
+            safe_path = (repo_root_path / config.console.personality_file).resolve()
+            if not str(safe_path).startswith(str(repo_root_path)):
+                logger.warning("system_prompt.path_rejected", extra={"path": str(safe_path)})
+            elif safe_path.exists() and safe_path.is_file():
+                personality_content = safe_path.read_text()
+                logger.debug("system_prompt.personality_loaded", extra={
+                    "path": str(safe_path),
+                    "chars": len(personality_content),
+                })
+        except Exception as e:
+            logger.error("system_prompt.load_failed", extra={"error": str(e)})
+
+    return _build_custom_prompt(
+        repo_name, repo_root, license_header,
+        config.console.system_prompt or "",
+        personality_content,
+    )
 
 
 # Cache the prompt after first build

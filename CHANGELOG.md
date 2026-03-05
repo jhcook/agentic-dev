@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-097**: Configurable agent personality for `agent console` via `agent.yaml`.
+  - Added `console.personality_file` and `console.system_prompt` config keys.
+  - Support for repo-specific context files (e.g., `GEMINI.md`) in the console system prompt.
+  - Path traversal protection for `personality_file` (must resolve within repo root).
+  - Graceful fallback to existing hardcoded prompt when no config is set.
+  - Debug logging for prompt composition (`system_prompt.personality_loaded`).
 - **INFRA-096**: Safe implementation apply — search/replace format, source context injection, and file size guard.
   - Added `parse_search_replace_blocks()` parser for `<<<SEARCH/===/>>>` format.
   - Added source context injection (`extract_modify_files` + `build_source_context`) to AI prompts.

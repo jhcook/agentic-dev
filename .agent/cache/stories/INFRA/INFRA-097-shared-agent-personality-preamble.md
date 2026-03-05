@@ -2,7 +2,7 @@
 
 ## State
 
-ACCEPTED
+COMMITTED
 
 ## Problem Statement
 
@@ -70,7 +70,8 @@ _None required — this is a configuration change, not an architectural shift._
 
 ## Linked Journeys
 
-_TBD_
+- JRN-072: Terminal Console TUI Chat
+- JRN-088: Console Agentic Tool Workflows
 
 ## Impact Analysis Summary
 
