@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+from pydantic import BaseModel, Field
 
 try:
     from dotenv import load_dotenv
@@ -28,6 +29,11 @@ except ImportError:
     pass  # dotenv is optional
 
 logger = logging.getLogger(__name__)
+
+class ConsoleConfig(BaseModel):
+    """Configuration for the agent console personality and system prompt."""
+    personality_file: Optional[str] = None
+    system_prompt: Optional[str] = None
 
 class Config:
     def __init__(self):
@@ -62,8 +68,23 @@ class Config:
         # Enabled Providers logic (INFRA-044)
         self.enabled_providers: List[str] = self._get_enabled_providers()
 
+        # Console Configuration (INFRA-097)
+        self.console = self._load_console_config()
+
         # Auto-load Environment Variables from agent.yaml
         self._load_agent_env_vars()
+
+    def _load_console_config(self) -> ConsoleConfig:
+        """Loads 'console' block from agent.yaml."""
+        yaml_path = self.etc_dir / "agent.yaml"
+        if yaml_path.exists():
+            try:
+                data = self.load_yaml(yaml_path)
+                console_data = data.get("console", {})
+                return ConsoleConfig(**console_data)
+            except Exception as e:
+                logger.warning(f"Failed to load console config from agent.yaml: {e}")
+        return ConsoleConfig()
 
     def _load_agent_env_vars(self):
         """Loads 'env' block from agent.yaml and injects into os.environ."""

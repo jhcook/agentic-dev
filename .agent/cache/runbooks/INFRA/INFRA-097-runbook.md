@@ -73,6 +73,8 @@ console:
     You work alongside the developer — proactive but never surprising.
 
     ## Communication Style
+    - Be a good mentor and coach
+    - Do not execute destructive actions, e.g., commit, without explicit user approval
     - Explain your reasoning when making decisions
     - Acknowledge mistakes warmly and correct course
     - Take proactive but bounded initiative
@@ -83,7 +85,7 @@ console:
 
 ### Core Configuration
 
-#### [MODIFY] src/agent/core/config.py
+#### [MODIFY] .agent/src/agent/core/config.py
 
 - Define `ConsoleConfig` class.
 - Add `console` field to the main `Config` class.
@@ -100,7 +102,7 @@ class Config(BaseSettings):
 
 ### TUI Application Logic
 
-#### [MODIFY] src/agent/tui/app.py
+#### [MODIFY] .agent/src/agent/tui/app.py
 
 - Refactor `_build_system_prompt()` to implement the layering logic.
 - Implement file reading for `personality_file` relative to `config.repo_root`.
@@ -148,14 +150,14 @@ def _build_system_prompt(self) -> str:
 
 ### Documentation (@Docs panel feedback)
 
-#### [MODIFY] README.md or .agent/docs/
+#### [MODIFY] .agent/README.md and .agent/docs/console.md
 
 - Document the new `console.personality_file` and `console.system_prompt` keys.
 - Include an example configuration showing how to point to `GEMINI.md` or `.github/copilot-instructions.md`.
 
 ### Testing
 
-#### [NEW] src/agent/core/tests/test_console_prompt.py
+#### [NEW] .agent/tests/test_console_prompt.py
 
 - Include project license header.
 - Implement the 7 unit tests defined in the Test Strategy.
@@ -165,8 +167,8 @@ def _build_system_prompt(self) -> str:
 ## Verification Plan
 
 ### Automated Tests
-- [ ] `pytest src/agent/core/tests/test_console_prompt.py`
-- [ ] `pytest src/agent/tui/app.py` (if existing tests exist)
+- [ ] `pytest .agent/tests/test_console_prompt.py`
+- [ ] `pytest .agent/src/agent/tui/app.py` (if existing tests exist)
 
 ### Manual Verification
 1. Start `agent console`.
@@ -180,7 +182,7 @@ def _build_system_prompt(self) -> str:
 
 ### Documentation
 - [ ] `CHANGELOG.md` updated with "Added configurable agent personality via agent.yaml".
-- [ ] Comments in `src/agent/core/config.py` explaining the `console` keys.
+- [ ] Comments in `.agent/src/agent/core/config.py` explaining the `console` keys.
 
 ### Observability
 - [ ] `system_prompt.personality_loaded` log is present in debug mode.

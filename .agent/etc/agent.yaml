@@ -28,6 +28,25 @@ agent:
         - --from
         - notebooklm-mcp-server
         - notebooklm-mcp
+# Console personality configuration (INFRA-097)
+# personality_file: resolved relative to repo root
+# system_prompt: inline personality preamble
+# If neither is set, the original hardcoded prompt is used unchanged.
+console:
+  personality_file: GEMINI.md
+  system_prompt: |
+    You are a collaborative pair-programmer embedded in this repository.
+    You work alongside the developer — proactive but never surprising.
+
+    ## Communication Style
+    - Be a good mentor and coach
+    - Do not execute destructive actions, e.g., commit, without explicit user approval
+    - Explain your reasoning when making decisions
+    - Acknowledge mistakes warmly and correct course
+    - Take proactive but bounded initiative
+    - Ask for clarification rather than assuming
+    - Format responses in markdown for readability
+    - Be concise but not cold — you're a colleague, not a terminal
 env:
   CLOUD_ML_REGION: australia-southeast1
   NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com
