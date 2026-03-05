@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import difflib
 import logging
 import re
 import shutil
@@ -33,6 +34,18 @@ from agent.core.utils import (
 from agent.core.context import context_loader
 from agent.commands.utils import update_story_state
 from agent.commands import gates
+from agent.core.utils import get_next_id
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None  # Graceful degradation if OTel not installed
+
+# Micro-Commit Circuit Breaker Thresholds (INFRA-095)
+MAX_EDIT_DISTANCE_PER_STEP = 30
+LOC_WARNING_THRESHOLD = 200
+LOC_CIRCUIT_BREAKER_THRESHOLD = 400
 
 app = typer.Typer()
 console = Console()
@@ -138,6 +151,275 @@ def sanitize_branch_name(title: str) -> str:
     name = title.lower()
     name = re.sub(r'[^a-z0-9]+', '-', name)
     return name.strip('-')
+
+
+def count_edit_distance(original: str, modified: str) -> int:
+    """Count the line-level edit distance between two file contents.
+
+    Uses a simple diff-based approach: counts lines that are added or removed.
+    Binary files or empty comparisons return 0.
+
+    # TODO(INFRA-096): Update to also accept search/replace block format
+    # once diff-based apply lands.
+
+    Args:
+        original: Original file content (empty string for new files).
+        modified: Modified file content.
+
+    Returns:
+        Number of lines changed (additions + deletions).
+    """
+    if not original and not modified:
+        return 0
+
+    original_lines = original.splitlines(keepends=True)
+    modified_lines = modified.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(original_lines, modified_lines, lineterm="")
+    edit_count = 0
+    for line in diff:
+        if line.startswith("+") and not line.startswith("+++"):
+            edit_count += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            edit_count += 1
+
+    return edit_count
+
+
+def _create_follow_up_story(
+    original_story_id: str,
+    original_title: str,
+    remaining_chunks: List[str],
+    completed_step_count: int,
+    cumulative_loc: int,
+) -> Optional[str]:
+    """Auto-generate a follow-up story for remaining runbook steps.
+
+    Called when the circuit breaker activates. Creates a COMMITTED story
+    referencing the remaining implementation steps.
+
+    Args:
+        original_story_id: The story ID that triggered the circuit breaker.
+        original_title: Human-readable title of the original story.
+        remaining_chunks: List of unprocessed runbook chunk strings.
+        completed_step_count: Number of steps already completed.
+        cumulative_loc: LOC count at circuit breaker activation.
+
+    Returns:
+        The new story ID if created successfully, None otherwise.
+    """
+    # Determine scope prefix from original story ID
+    prefix = original_story_id.split("-")[0] if "-" in original_story_id else "INFRA"
+    scope_dir = config.stories_dir / prefix
+    scope_dir.mkdir(parents=True, exist_ok=True)
+
+    new_story_id = get_next_id(scope_dir, prefix)
+
+    # Build remaining steps summary
+    remaining_summary = "\n".join(
+        f"- Step {completed_step_count + i + 1}: {chunk[:200].strip()}"
+        for i, chunk in enumerate(remaining_chunks)
+    )
+
+    content = f"""# {new_story_id}: {original_title} (Continuation)
+
+## State
+
+COMMITTED
+
+## Problem Statement
+
+Circuit breaker activated during implementation of {original_story_id} at {cumulative_loc} LOC cumulative.
+This follow-up story contains the remaining implementation steps.
+
+## User Story
+
+As a **developer**, I want **the remaining steps from {original_story_id} implemented** so that **the full feature is completed across atomic PRs**.
+
+## Acceptance Criteria
+
+- [ ] Complete remaining implementation steps from {original_story_id} runbook.
+
+## Remaining Steps from {original_story_id}
+
+{remaining_summary}
+
+## Linked ADRs
+
+- ADR-005 (AI-Driven Governance Preflight)
+
+## Related Stories
+
+- {original_story_id} (parent — circuit breaker continuation)
+
+## Linked Journeys
+
+- JRN-065 — Circuit Breaker During Implementation
+
+## Impact Analysis Summary
+
+Components touched: See remaining steps above.
+Workflows affected: /implement
+Risks: None beyond standard implementation risks.
+
+## Test Strategy
+
+- Follow the test strategy from the original {original_story_id} runbook.
+
+## Rollback Plan
+
+Revert changes from this follow-up story. The partial work from {original_story_id} remains intact.
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0
+"""
+
+    safe_title = sanitize_branch_name(f"{original_title}-continuation")
+    filename = f"{new_story_id}-{safe_title}.md"
+    file_path = scope_dir / filename
+
+    # Guard: never overwrite an existing story file (Panel recommendation)
+    if file_path.exists():
+        logging.error(
+            "follow_up_story_collision path=%s story=%s",
+            file_path, new_story_id,
+        )
+        return None
+
+    try:
+        file_path.write_text(scrub_sensitive_data(content))
+        logging.info(
+            "follow_up_story_created story=%s parent=%s remaining_steps=%d",
+            new_story_id, original_story_id, len(remaining_chunks),
+        )
+        return new_story_id
+    except Exception as e:
+        logging.error("Failed to create follow-up story: %s", e)
+        return None
+
+
+def _update_or_create_plan(
+    original_story_id: str,
+    follow_up_story_id: str,
+    original_title: str,
+) -> None:
+    """Link original and follow-up stories in a Plan document.
+
+    If a Plan already exists referencing the original story, appends the
+    follow-up. Otherwise, creates a minimal Plan linking both.
+
+    Args:
+        original_story_id: The original story ID.
+        follow_up_story_id: The newly created follow-up story ID.
+        original_title: Human-readable title.
+    """
+    prefix = original_story_id.split("-")[0] if "-" in original_story_id else "INFRA"
+    plans_scope_dir = config.plans_dir / prefix
+    plans_scope_dir.mkdir(parents=True, exist_ok=True)
+
+    # Search for existing plan referencing original story
+    existing_plan = None
+    if plans_scope_dir.exists():
+        for plan_file in plans_scope_dir.glob("*.md"):
+            try:
+                plan_content = plan_file.read_text()
+                if original_story_id in plan_content:
+                    existing_plan = plan_file
+                    break
+            except Exception:
+                continue
+
+    if existing_plan:
+        # Append follow-up to existing plan
+        try:
+            plan_content = existing_plan.read_text()
+            append_text = (
+                f"\n- {follow_up_story_id}: {original_title} "
+                f"(Continuation — circuit breaker split)\n"
+            )
+            existing_plan.write_text(plan_content + append_text)
+            console.print(f"[dim]📎 Updated existing plan: {existing_plan.name}[/dim]")
+        except Exception as e:
+            logging.warning("Failed to update existing plan %s: %s", existing_plan, e)
+    else:
+        # Create minimal plan
+        plan_filename = f"{original_story_id}-plan.md"
+        plan_path = plans_scope_dir / plan_filename
+        plan_content = f"""# Plan: {original_title}
+
+## Stories
+
+- {original_story_id}: {original_title} (partial — circuit breaker activated)
+- {follow_up_story_id}: {original_title} (Continuation)
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0
+"""
+        try:
+            plan_path.write_text(plan_content)
+            console.print(f"[dim]📎 Created plan linking stories: {plan_path.name}[/dim]")
+        except Exception as e:
+            logging.warning("Failed to create plan: %s", e)
+
+
+def _micro_commit_step(
+    story_id: str,
+    step_index: int,
+    step_loc: int,
+    cumulative_loc: int,
+    modified_files: List[str],
+) -> bool:
+    """Create a micro-commit save point for a single implementation step.
+
+    Stages modified files and creates an atomic commit. Returns False if
+    the git operation fails (non-fatal — logged and skipped).
+
+    Args:
+        story_id: Story ID for the commit message.
+        step_index: 1-based step index.
+        step_loc: Lines changed in this step.
+        cumulative_loc: Total lines changed so far.
+        modified_files: List of file paths modified in this step.
+
+    Returns:
+        True if commit succeeded, False otherwise.
+    """
+    if not modified_files:
+        return True
+
+    try:
+        # Stage modified files
+        subprocess.run(
+            ["git", "add"] + modified_files,
+            check=True, capture_output=True, timeout=30,
+        )
+
+        # Create atomic commit
+        commit_msg = (
+            f"feat({story_id}): implement step {step_index} "
+            f"[{step_loc} LOC, {cumulative_loc} cumulative]"
+        )
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            check=True, capture_output=True, timeout=30,
+        )
+
+        logging.info(
+            "save_point story=%s step=%d step_loc=%d cumulative_loc=%d",
+            story_id, step_index, step_loc, cumulative_loc,
+        )
+        return True
+
+    except subprocess.CalledProcessError as e:
+        logging.warning(
+            "save_point_failed story=%s step=%d error=%s",
+            story_id, step_index, e,
+        )
+        console.print(f"[yellow]⚠️  Save-point commit failed for step {step_index}: {e}[/yellow]")
+        return False
+
 
 def create_branch(story_id: str, title: str):
     """Create or checkout a feature branch."""
@@ -665,18 +947,13 @@ ARCHITECTURAL DECISIONS (ADRs):
         else:
              ai_service.reset_provider()
 
+        cumulative_loc = 0
+        completed_steps = 0
+
         for idx, chunk in enumerate(chunks):
             if len(chunks) > 1:
                 console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
 
-            system_prompt = """You are an Implementation Agent.
-Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
-... (rest of chunking prompt) ...
-"""
-            # Reuse previous chunking logic here...
-            # For brevity in this replacement, I need to make sure I don't lose the logic I wrote before.
-            # I will use the previously written chunking loop here.
-            
             chunk_system_prompt = f"""You are an Implementation Agent.
 Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.
 CONSTRAINTS:
@@ -684,6 +961,7 @@ CONSTRAINTS:
 2. Maintain consistency with the 'GLOBAL RUNBOOK CONTEXT'.
 3. Follow the 'IMPLEMENTATION GUIDE' and 'GOVERNANCE RULES'.
 4. **IMPORTANT**: Use REPO-RELATIVE paths (e.g., .agent/src/agent/main.py). DO NOT use 'agent/' as root.{license_instruction}
+5. **CRITICAL**: Keep changes small — aim for under {MAX_EDIT_DISTANCE_PER_STEP} lines of edits per step.
 OUTPUT FORMAT:
 Return a Markdown response with file paths and code blocks:
 
@@ -709,9 +987,11 @@ DETAILED ROLE INSTRUCTIONS:
 ARCHITECTURAL DECISIONS (ADRs):
 {adrs_content}
 """
-            logging.info(f"AI Task {idx+1}/{len(chunks)} | Context size: ~{len(chunk_system_prompt) + len(chunk_user_prompt)} chars")
-
-
+            logging.info(
+                "AI Task %d/%d | Context size: ~%d chars",
+                idx + 1, len(chunks),
+                len(chunk_system_prompt) + len(chunk_user_prompt),
+            )
 
             chunk_result = None
             try:
@@ -719,22 +999,136 @@ ARCHITECTURAL DECISIONS (ADRs):
                 with console.status(f"[bold green]🤖 AI is coding task {idx+1}/{len(chunks)}...[/bold green]"):
                     chunk_result = ai_service.complete(chunk_system_prompt, chunk_user_prompt, model=model)
             except Exception as e:
-                 console.print(f"[bold red]❌ Task {idx+1} failed during generation: {e}[/bold red]")
-                 raise typer.Exit(code=1)
+                console.print(f"[bold red]❌ Task {idx+1} failed during generation: {e}[/bold red]")
+                raise typer.Exit(code=1)
 
-            if chunk_result:
-                full_content += f"\n\n{chunk_result}"
-                # Apply immediately if flag set (NOW SAFE: Outside spinner)
-                if apply:
-                    code_blocks = parse_code_blocks(chunk_result)
-                    if code_blocks:
-                        console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
-                        for block in code_blocks:
-                            success = apply_change_to_file(block['file'], block['content'], yes)
-                            # If applying fails, we might want to warn but not hard stop? 
-                            # But implementation_success implies generally things worked.
-            
-        # If we made it through the loop (or failed and exited), set success status if we have content
+            if not chunk_result:
+                continue
+
+            full_content += f"\n\n{chunk_result}"
+
+            # --- Apply and measure edit distance (AC-1, AC-2) ---
+            if apply:
+                code_blocks = parse_code_blocks(chunk_result)
+                step_loc = 0
+                step_modified_files = []
+
+                if code_blocks:
+                    console.print(f"[dim]Found {len(code_blocks)} file(s) in this task[/dim]")
+                    for block in code_blocks:
+                        file_path = Path(block['file'])
+
+                        # Measure edit distance before applying
+                        original_content = ""
+                        if file_path.exists():
+                            try:
+                                original_content = file_path.read_text()
+                            except Exception:
+                                pass
+
+                        success = apply_change_to_file(block['file'], block['content'], yes)
+
+                        if success:
+                            block_loc = count_edit_distance(original_content, block['content'])
+                            step_loc += block_loc
+                            step_modified_files.append(block['file'])
+
+                # AC-2: Small-step enforcement
+                if step_loc > MAX_EDIT_DISTANCE_PER_STEP:
+                    console.print(
+                        f"[yellow]⚠️  Step {idx+1} exceeded small-step limit: "
+                        f"{step_loc} LOC (max {MAX_EDIT_DISTANCE_PER_STEP})[/yellow]"
+                    )
+
+                cumulative_loc += step_loc
+                completed_steps = idx + 1
+
+                # AC-1: Save-point commit (with OTel span)
+                def _do_micro_commit():
+                    _micro_commit_step(
+                        story_id, idx + 1, step_loc, cumulative_loc, step_modified_files,
+                    )
+
+                if tracer:
+                    with tracer.start_as_current_span("implement.micro_commit_step") as span:
+                        span.set_attribute("step_index", idx + 1)
+                        span.set_attribute("step_loc", step_loc)
+                        span.set_attribute("cumulative_loc", cumulative_loc)
+                        _do_micro_commit()
+                else:
+                    _do_micro_commit()
+
+                console.print(
+                    f"[green]✅ Step {idx+1} committed "
+                    f"({step_loc} LOC this step, {cumulative_loc} LOC cumulative)[/green]"
+                )
+
+                # AC-3: LOC warning
+                if LOC_WARNING_THRESHOLD <= cumulative_loc < LOC_CIRCUIT_BREAKER_THRESHOLD:
+                    console.print(
+                        f"[bold yellow]⚠️  Approaching LOC limit: "
+                        f"{cumulative_loc}/{LOC_CIRCUIT_BREAKER_THRESHOLD} cumulative[/bold yellow]"
+                    )
+                    logging.warning(
+                        "loc_warning story=%s cumulative_loc=%d threshold=%d",
+                        story_id, cumulative_loc, LOC_CIRCUIT_BREAKER_THRESHOLD,
+                    )
+
+                # AC-4: Circuit breaker
+                if cumulative_loc >= LOC_CIRCUIT_BREAKER_THRESHOLD:
+                    remaining_chunks = chunks[idx + 1:]
+
+                    def _do_circuit_breaker():
+                        nonlocal remaining_chunks
+                        logging.warning(
+                            "circuit_breaker story=%s cumulative_loc=%d "
+                            "completed_steps=%d remaining_steps=%d",
+                            story_id, cumulative_loc, completed_steps, len(remaining_chunks),
+                        )
+
+                        console.print(
+                            f"\n[bold red]🛑 Circuit breaker triggered at "
+                            f"{cumulative_loc} LOC (limit: {LOC_CIRCUIT_BREAKER_THRESHOLD}).[/bold red]"
+                        )
+
+                        if remaining_chunks:
+                            # AC-5: Follow-up story
+                            follow_up_id = _create_follow_up_story(
+                                story_id, story_title, remaining_chunks,
+                                completed_steps, cumulative_loc,
+                            )
+
+                            if follow_up_id:
+                                console.print(
+                                    f"[bold blue]📝 Follow-up story created: {follow_up_id}[/bold blue]"
+                                )
+                                console.print(
+                                    f"[dim]Run: agent new-runbook {follow_up_id}[/dim]"
+                                )
+
+                                # AC-6: Plan linkage
+                                _update_or_create_plan(story_id, follow_up_id, story_title)
+
+                        console.print(
+                            f"[bold green]✅ Partial work committed ({completed_steps} steps).[/bold green]"
+                        )
+                        console.print(
+                            "[dim]Exiting cleanly. Resume with the follow-up story.[/dim]"
+                        )
+
+                    if tracer:
+                        with tracer.start_as_current_span("implement.circuit_breaker") as span:
+                            span.set_attribute("story_id", story_id)
+                            span.set_attribute("cumulative_loc", cumulative_loc)
+                            span.set_attribute("completed_steps", completed_steps)
+                            span.set_attribute("remaining_steps", len(remaining_chunks))
+                            _do_circuit_breaker()
+                    else:
+                        _do_circuit_breaker()
+
+                    raise typer.Exit(code=0)
+
+        # If we made it through the loop, set success status if we have content
         if full_content:
             implementation_success = True
 
