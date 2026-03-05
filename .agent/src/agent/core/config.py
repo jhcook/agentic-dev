@@ -48,6 +48,7 @@ class Config:
 
         self.stories_dir = self.cache_dir / "stories"
         self.plans_dir = self.cache_dir / "plans"
+        self.split_requests_dir = self.cache_dir / "split_requests"
         self.runbooks_dir = self.cache_dir / "runbooks"
         self.journeys_dir = self.cache_dir / "journeys"
 
