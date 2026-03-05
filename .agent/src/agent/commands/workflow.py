@@ -47,25 +47,41 @@ def pr(
     
     preflight_passed = True
     if skip_preflight:
-        # Check if a previous preflight already passed for this branch
+        # Check if a previous preflight already passed
         from agent.core.config import config
         _marker_path = config.cache_dir / ".preflight_result"
         _prior_pass = False
         if _marker_path.exists():
             try:
                 import json as _json
+                from datetime import datetime as _dt
+
                 _marker = _json.loads(_marker_path.read_text())
-                _head_sha = subprocess.check_output(
-                    ["git", "rev-parse", "HEAD"], text=True
-                ).strip()
-                # Match if marker commit is HEAD or an ancestor of HEAD
-                if _marker.get("verdict") == "PASS" and _marker.get("commit"):
-                    _is_ancestor = subprocess.run(
-                        ["git", "merge-base", "--is-ancestor", _marker["commit"], _head_sha],
-                        capture_output=True,
-                    ).returncode == 0
-                    if _is_ancestor:
-                        _prior_pass = True
+                if _marker.get("verdict") == "PASS":
+                    # Strategy 1: git ancestry (same branch, no divergence)
+                    _head_sha = subprocess.check_output(
+                        ["git", "rev-parse", "HEAD"], text=True
+                    ).strip()
+                    if _marker.get("commit"):
+                        _is_ancestor = subprocess.run(
+                            ["git", "merge-base", "--is-ancestor", _marker["commit"], _head_sha],
+                            capture_output=True,
+                        ).returncode == 0
+                        if _is_ancestor:
+                            _prior_pass = True
+
+                    # Strategy 2: time + story match (handles branch merges/switches)
+                    if not _prior_pass and _marker.get("timestamp") and _marker.get("story_id"):
+                        _marker_story = _marker["story_id"]
+                        _story_match = story_id and _marker_story == story_id
+                        try:
+                            _marker_time = _dt.fromisoformat(_marker["timestamp"])
+                            _age_seconds = (_dt.now() - _marker_time).total_seconds()
+                            _is_recent = _age_seconds < 3600  # 1 hour
+                        except (ValueError, TypeError):
+                            _is_recent = False
+                        if _story_match and _is_recent:
+                            _prior_pass = True
             except Exception:
                 pass
 
