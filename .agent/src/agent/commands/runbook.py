@@ -282,7 +282,7 @@ Replace placeholders like <Title>, <Clear summary...>, etc. with actual content.
 Update '## Panel Review Findings' with specific commentary.
 Update '## Targeted Refactors & Cleanups (INFRA-043)' with any relevant cleanups found.
 
-{SPLIT_REQUEST_DIRECTIVE}
+{SPLIT_REQUEST_DIRECTIVE if not skip_forecast else '(Forecast gate bypassed — generate the runbook regardless of complexity.)'}
 """
 
     user_prompt = f"""STORY CONTENT:
@@ -334,15 +334,33 @@ Generate the runbook now.
                 len(split_data.get("suggestions", [])),
             )
 
-            # AC-4: Exit with code 2 and guidance
-            console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
-            console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
-            console.print(f"  • Suggestions: {len(split_data.get('suggestions', []))}")
-            for i, s in enumerate(split_data.get("suggestions", []), 1):
-                console.print(f"    {i}. {s}")
-            console.print(f"\nDecomposition saved to: {split_path}")
-            console.print("[dim]Create child stories with: agent new-story <ID>[/dim]")
-            raise typer.Exit(code=2)
+            if skip_forecast:
+                # Gate was bypassed — treat split as advisory, not blocking
+                logger.info(
+                    "split_request advisory_only=True story=%s (--skip-forecast)",
+                    story_id,
+                )
+                console.print(
+                    "[dim]ℹ️  AI recommended splitting (advisory only — "
+                    "--skip-forecast active). Generating runbook anyway.[/dim]"
+                )
+                # Re-generate without the SPLIT_REQUEST directive
+                console.print("[bold green]🤖 Panel is re-generating (no split directive)...[/bold green]")
+                with console.status("[bold green]🤖 Panel is re-generating...[/bold green]"):
+                    content = ai_service.complete(system_prompt, user_prompt)
+                if not content:
+                    console.print("[bold red]❌ AI returned empty response on retry.[/bold red]")
+                    raise typer.Exit(code=1)
+            else:
+                # AC-4: Exit with code 2 and guidance
+                console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
+                console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
+                console.print(f"  • Suggestions: {len(split_data.get('suggestions', []))}")
+                for i, s in enumerate(split_data.get("suggestions", []), 1):
+                    console.print(f"    {i}. {s}")
+                console.print(f"\nDecomposition saved to: {split_path}")
+                console.print("[dim]Create child stories with: agent new-story <ID>[/dim]")
+                raise typer.Exit(code=2)
 
     # 5. Write
     runbook_file.write_text(content)
