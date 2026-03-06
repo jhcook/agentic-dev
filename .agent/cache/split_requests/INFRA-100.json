@@ -1,0 +1,9 @@
+{
+  "SPLIT_REQUEST": true,
+  "reason": "Decomposing a 1,169 LOC monolith into a modular package structure involves creating or modifying approximately 9 files and moving over 600 lines of code, which exceeds the complexity thresholds.",
+  "suggestions": [
+    "INFRA-100a: AI Service Foundations - Define the AIProvider protocol and extract common streaming and retry utilities.",
+    "INFRA-100b: AI Provider Migration - Implement individual provider modules (OpenAI, Vertex, Anthropic, Ollama) within the new providers package.",
+    "INFRA-100c: AI Service Facade Refactor - Update the main AI service to delegate to modular components and achieve the <500 LOC target."
+  ]
+}

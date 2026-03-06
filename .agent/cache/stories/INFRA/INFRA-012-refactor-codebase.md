@@ -6,7 +6,8 @@ INFRA-008
 
 ## State
 
-COMMITTED
+SUPERSEDED
+(INFRA-099)
 
 ## Problem Statement
 
