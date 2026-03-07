@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- refactor: decompose monolithic governance module into package structure (INFRA-101)
+- refactor: extract governance roles management into `core.governance.roles` (INFRA-101)
+
 ### Added
 - Decomposed AI service into modular providers using Strategy pattern (INFRA-100).
 - New `AIProvider` protocol and standard error types in `core/ai/protocols.py`.

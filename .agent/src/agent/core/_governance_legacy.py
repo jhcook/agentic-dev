@@ -13,11 +13,20 @@
 # limitations under the License.
 
 """
-Core governance logic for the Agent CLI.
+TRANSITIONAL MODULE — do not import directly.
 
-This module provides the functionality for convening the AI Governance Council,
-loading agent roles from configuration, conducting preflight checks,
-and executing governance audits.
+This is the original governance.py monolith, preserved during the
+multi-slice decomposition defined by INFRA-101. Import via the package
+facade: ``from agent.core.governance import ...``
+
+Extracted so far:
+  - load_roles → agent.core.governance.roles (INFRA-101)
+
+Pending extraction:
+  - log_governance_event, GateResult aggregation → validation.py (INFRA-101.2)
+  - _parse_findings, _filter_relevant_roles, prompt helpers → panel_prompts.py (INFRA-101.3)
+  - convene_council_full, convene_council_fast → panel.py (INFRA-101.4)
+  - __init__.py cleanup + delete this file → INFRA-101.5
 """
 
 import re
@@ -42,6 +51,11 @@ logger = logging.getLogger(__name__)
 
 AUDIT_LOG_FILE = config.agent_dir / "logs" / "audit_events.log"
 
+# NOTE: load_roles has been extracted to agent.core.governance.roles (INFRA-101).
+# This shim re-imports it to keep internal callers working during the migration.
+from agent.core.governance.roles import load_roles  # noqa: E402
+
+
 def log_governance_event(event_type: str, details: str):
     """Log governance-related events securely."""
     AUDIT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -52,54 +66,6 @@ def log_governance_event(event_type: str, details: str):
 
 
 # --- Governance Council Logic ---
-
-def load_roles() -> List[Dict[str, str]]:
-    """
-    Load roles from agents.yaml.
-    Fallback to hardcoded roles if file is missing or invalid.
-    """
-    agents_file = config.etc_dir / "agents.yaml"
-    roles = []
-    
-    if agents_file.exists():
-        try:
-            with open(agents_file, 'r') as f:
-                data = yaml.safe_load(f)
-                team = data.get('team', [])
-                for member in team:
-                    name = member.get('name', 'Unknown')
-                    desc = member.get('description', '')
-                    resps = member.get('responsibilities', [])
-                    
-                    focus = desc
-                    if resps:
-                        focus += f" Priorities: {', '.join(resps)}."
-                        
-                    roles.append({
-                        "role": member.get('role', name.lower()),
-                        "name": name,
-                        "description": desc,
-                        "focus": focus,
-                        "governance_checks": member.get('governance_checks', []),
-                        "instruction": member.get('instruction', '')
-                    })
-        except Exception:
-            pass
-
-    if not roles:
-        roles = [
-            {"name": "Architect", "focus": "System design, ADR compliance, patterns, and dependency hygiene."},
-            {"name": "Security (CISO)", "focus": "Chief Information Security Officer. Enforcer of technical security controls, vulnerabilities, and secure coding practices."},
-            {"name": "Compliance (Lawyer)", "focus": "Legal & Compliance Officer. Enforcer of GDPR, SOC2, Licensing, and regulatory frameworks."},
-            {"name": "QA", "focus": "Test coverage, edge cases, and testability of the changes."},
-            {"name": "Docs", "focus": "Documentation updates, clarity, and user manual accuracy."},
-            {"name": "Observability", "focus": "Logging, metrics, tracing, and error handling."},
-            {"name": "Backend", "focus": "API design, database schemas, and backend patterns."},
-            {"name": "Mobile", "focus": "Mobile-specific UX, performance, and platform guidelines."},
-            {"name": "Web", "focus": "Web accessibility, responsive design, and browser compatibility."}
-        ]
-        
-    return roles
 
 def convene_council(
     story_id: str,
