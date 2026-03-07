@@ -161,6 +161,65 @@ def backup_file(file_path: Path) -> Optional[Path]:
     shutil.copy2(file_path, backup_path)
     return backup_path
 
+
+def enforce_docstrings(filepath: str, content: str) -> List[str]:
+    """Check generated Python source for missing PEP-257 docstrings.
+
+    Inspects every module, class, and function/method definition (including
+    inner functions such as decorator closures) and returns a list of
+    human-readable violation strings.  Non-Python files always pass.
+
+    Args:
+        filepath: Repo-relative path of the file being generated.
+        content: The Python source code string to validate.
+
+    Returns:
+        A list of violation strings, e.g.
+        ["streaming.py: decorator() is missing a docstring"].  Empty list
+        means the content passes.
+    """
+    import ast
+
+    if not filepath.endswith(".py"):
+        return []
+
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        # Syntax errors are caught by the QA gate; don't double-report here.
+        return []
+
+    violations: List[str] = []
+    filename = Path(filepath).name
+
+    def _has_docstring(node: ast.AST) -> bool:
+        """Return True if node's first statement is a string literal."""
+        return (
+            bool(getattr(node, "body", None))
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)  # type: ignore[attr-defined]
+            and isinstance(node.body[0].value.value, str)      # type: ignore[attr-defined]
+        )
+
+    # Module-level docstring
+    if not _has_docstring(tree):
+        violations.append(f"{filename}: module is missing a docstring")
+
+    # Walk all class/function definitions (includes inner functions)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not _has_docstring(node):
+                violations.append(
+                    f"{filename}: {node.name}() is missing a docstring"
+                )
+        elif isinstance(node, ast.ClassDef):
+            if not _has_docstring(node):
+                violations.append(
+                    f"{filename}: class {node.name} is missing a docstring"
+                )
+
+    return violations
+
 import subprocess
 
 
@@ -1510,6 +1569,23 @@ ARCHITECTURAL DECISIONS (ADRs):
                                 except Exception:
                                     pass
 
+                            # --- Pre-apply docstring enforcement (INFRA-100) ---
+                            docstring_violations = enforce_docstrings(
+                                block['file'], block['content']
+                            )
+                            if docstring_violations:
+                                rejected_files.append(block['file'])
+                                console.print(
+                                    f"[bold red]❌ DOCSTRING GATE: {block['file']} rejected "
+                                    f"({len(docstring_violations)} violation(s)):[/bold red]"
+                                )
+                                for v in docstring_violations:
+                                    console.print(f"   [red]• {v}[/red]")
+                                console.print(
+                                    "[yellow]   Fix: add PEP-257 docstrings and re-run.[/yellow]"
+                                )
+                                continue
+
                             success = apply_change_to_file(
                                 block['file'], block['content'], yes,
                                 legacy_apply=legacy_apply,
@@ -1664,6 +1740,23 @@ ARCHITECTURAL DECISIONS (ADRs):
              if b['file'] not in sr_handled
          ]
          for block in code_blocks:
+            # --- Pre-apply docstring enforcement (INFRA-100) ---
+            fc_docstring_violations = enforce_docstrings(
+                block['file'], block['content']
+            )
+            if fc_docstring_violations:
+                rejected_files.append(block['file'])
+                console.print(
+                    f"[bold red]❌ DOCSTRING GATE: {block['file']} rejected "
+                    f"({len(fc_docstring_violations)} violation(s)):[/bold red]"
+                )
+                for v in fc_docstring_violations:
+                    console.print(f"   [red]• {v}[/red]")
+                console.print(
+                    "[yellow]   Fix: add PEP-257 docstrings and re-run.[/yellow]"
+                )
+                continue
+
             fc_success = apply_change_to_file(
                 block['file'], block['content'], yes,
                 legacy_apply=legacy_apply,
