@@ -567,19 +567,30 @@ def create_branch(story_id: str, title: str):
         f.write(f"[{datetime.now().isoformat()}] Branch{'Switched' if exists else 'Created'}: {branch_name}\n")
 
 def find_directories_in_repo(dirname: str) -> List[str]:
-    """
-    Search for directories with a specific name in the repo.
-    Excludes .git but ALLOWS other dot-directories (like .agent).
+    """Search for directories with a specific name in the repo.
+
+    Excludes ``.git``, ``node_modules``, and ``dist`` to prevent false-positive
+    matches inside the web frontend dependency tree (e.g. dozens of
+    ``node_modules/*/src`` entries that make common names ambiguous).
+
+    Args:
+        dirname: Directory base name to search for.
+
+    Returns:
+        List of repo-relative directory paths matching *dirname*.
     """
     try:
-        # find . -path './.git' -prune -o -type d -name "dirname" -print
-        cmd = ["find", ".", "-path", "./.git", "-prune", "-o", "-type", "d", "-name", dirname, "-print"]
+        cmd = [
+            "find", ".",
+            "-path", "./.git", "-prune",
+            "-o", "-path", "*/node_modules", "-prune",
+            "-o", "-path", "*/dist", "-prune",
+            "-o", "-type", "d", "-name", dirname, "-print",
+        ]
         result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
         if not result:
             return []
-        
-        # clean up paths (./foo -> foo)
-        paths = [p.lstrip("./") for p in result.split('\n') if p]
+        paths = [p.lstrip("./") for p in result.split("\n") if p]
         return paths
     except Exception:
         return []
