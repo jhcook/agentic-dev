@@ -228,7 +228,16 @@ def new_runbook(
     adrs_content = ctx.get("adrs", "")
     source_tree = ctx.get("source_tree", "")
     source_code = ctx.get("source_code", "")
-    
+
+    # INFRA-107: Targeted introspection for story-referenced files
+    targeted_context = context_loader._load_targeted_context(story_content)
+    test_impact = context_loader._load_test_impact(story_content)
+    behavioral_contracts = context_loader._load_behavioral_contracts(story_content)
+
+    if targeted_context or test_impact:
+        total = len(targeted_context) + len(test_impact) + len(behavioral_contracts)
+        console.print(f"[dim]ℹ️  Targeted introspection: {total} chars[/dim]")
+
     if source_tree:
         console.print(f"[dim]ℹ️  Including source context ({len(source_tree) + len(source_code)} chars)[/dim]")
     
@@ -265,6 +274,9 @@ INSTRUCTIONS:
 5. You MUST respect all Architectural Decision Records (ADRs) as codified decisions.
 6. You MUST follow the DETAILED ROLE INSTRUCTIONS for each role.
 7. You MUST use the SOURCE CODE CONTEXT to derive accurate file paths, existing patterns, and SDK usage. Do NOT invent file paths or SDK calls — use only what appears in the source tree and code outlines.
+8. You MUST copy actual function signatures from TARGETED FILE SIGNATURES into the Codebase Introspection section. Do NOT paraphrase or modify signatures.
+9. You MUST list all patch targets from TEST IMPACT MATRIX in the Test Impact Matrix section and specify the new patch target for each.
+10. You MUST preserve all BEHAVIORAL CONTRACTS. If a default value or invariant must change, explicitly document it in the runbook step.
 
 INPUTS:
 1. User Story (Requirements)
@@ -305,6 +317,15 @@ SOURCE FILE TREE:
 
 SOURCE CODE OUTLINES:
 {source_code if source_code else "(No source files found)"}
+
+TARGETED FILE SIGNATURES (critical — actual signatures of files in scope):
+{targeted_context if targeted_context else "(No targeted files identified in story)"}
+
+TEST IMPACT MATRIX (tests with patch targets for these modules — MUST be addressed):
+{test_impact if test_impact else "(No test impact detected)"}
+
+BEHAVIORAL CONTRACTS (defaults and invariants — MUST be preserved):
+{behavioral_contracts if behavioral_contracts else "(No behavioral contracts found)"}
 
 Generate the runbook now.
 """

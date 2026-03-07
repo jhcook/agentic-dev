@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- INFRA-107: Added targeted codebase introspection to `agent new-runbook`.
+- New `ContextLoader` methods: `_load_targeted_context`, `_load_test_impact`, `_load_behavioral_contracts`.
+- Automatic Test Impact Matrix and Behavioral Contract extraction for runbook generation.
+
+### Changed
+- Increased default source context budget to 16,000 characters.
+- Included `tests/` directory in broad source outlines.
+
+### Added
 - **INFRA-097**: Configurable agent personality for `agent console` via `agent.yaml`.
   - Added `console.personality_file` and `console.system_prompt` config keys.
   - Support for repo-specific context files (e.g., `GEMINI.md`) in the console system prompt.

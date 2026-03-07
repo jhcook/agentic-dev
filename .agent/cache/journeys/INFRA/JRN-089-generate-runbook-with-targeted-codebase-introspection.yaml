@@ -1,0 +1,118 @@
+id: JRN-089
+title: Generate Runbook with Targeted Codebase Introspection
+state: COMMITTED
+schema_version: 1
+priority: high
+tags:
+  - infra
+  - cli
+  - runbook-generation
+  - context-loading
+actor: developer using agent CLI
+description: |
+  A developer runs `agent new-runbook <STORY-ID>` and expects the generated runbook to
+  include actual function/class signatures from files referenced in the story, a test impact
+  matrix listing all patch() targets in existing tests, and behavioral contracts (default
+  values, invariants) extracted from existing test assertions. This ensures runbooks are
+  grounded in codebase reality rather than aspirational code.
+preconditions:
+  - Agent CLI is installed and configured
+  - A committed story file exists in .agent/cache/stories/
+  - Story references specific source files via [MODIFY] / [NEW] / [DELETE] annotations
+  - .agent/tests/ directory exists with test files
+auth_context:
+  level: public
+  permissions: []
+steps:
+  - id: 1
+    action: Developer runs `agent new-runbook INFRA-107` (or any story with file references)
+    system_response: >
+      CLI loads story content, then calls _load_targeted_context() which extracts
+      file paths from story annotations and reads their import/signature lines.
+    assertions:
+      - Story content is read and file paths are parsed via regex
+      - For each referenced file, function signatures are extracted (not invented)
+      - Missing files emit FILE NOT FOUND (verify path!) warning
+  - id: 2
+    action: CLI loads test impact matrix via _load_test_impact()
+    system_response: >
+      System walks .agent/tests/, reads each .py file, finds all patch() calls
+      whose target strings contain a module fragment from the story's referenced files.
+    assertions:
+      - All test files with matching patch() targets are listed
+      - Missing tests directory returns empty string without crashing
+      - Output is scrubbed for PII/secrets before injection
+  - id: 3
+    action: CLI loads behavioral contracts via _load_behavioral_contracts()
+    system_response: >
+      System extracts assert statements and function call defaults from test files
+      that reference the story's modules. Returns formatted contract list.
+    assertions:
+      - Default parameter values and key assertions are extracted
+      - Empty or missing tests directory returns header only
+      - Contracts include source file reference and current value
+  - id: 4
+    action: CLI injects targeted context, test impact, and behavioral contracts into AI prompt
+    system_response: >
+      The three context strings are added to the user_prompt as dedicated sections
+      (TARGETED FILE SIGNATURES, TEST IMPACT MATRIX, BEHAVIORAL CONTRACTS).
+      System prompt instructs AI to copy (not paraphrase) signatures.
+    assertions:
+      - Total injected chars are logged at DEBUG level
+      - If none of the three sections has content, generation proceeds without error
+      - AI prompt includes explicit instructions to preserve behavioral contracts
+  - id: 5
+    action: Developer reviews generated runbook
+    system_response: >
+      Runbook contains a ## Codebase Introspection section with actual signatures
+      from source, a Test Impact Matrix table populated from real patch() targets,
+      and a Behavioral Contracts table from real test assertions.
+    assertions:
+      - Codebase Introspection section contains actual (not invented) signatures
+      - Test Impact Matrix lists every test file with a patch target for in-scope modules
+      - Behavioral Contracts table is present and non-empty when contracts exist
+      - Runbook generation completes in < 1 second extra vs baseline
+error_paths:
+  - trigger_step: 1
+    condition: Story references a file that does not exist on disk
+    system_response: Context includes "FILE NOT FOUND (verify path!)" for that path; generation continues
+    assertions:
+      - Warning is present in generated runbook Codebase Introspection section
+      - Generation does not abort
+    severity: expected
+  - trigger_step: 2
+    condition: .agent/tests/ directory is missing
+    system_response: _load_test_impact() and _load_behavioral_contracts() return header-only strings
+    assertions:
+      - No exception is raised
+      - Generation completes with existing context
+    severity: expected
+edge_cases:
+  - scenario: Story references no source files (no MODIFY/NEW/DELETE annotations)
+    expected: All three targeted functions return header-only strings; generation proceeds normally
+    severity: warning
+  - scenario: Targeted context size exceeds AI provider token limit
+    expected: CLI logs a WARNING; generation may truncate but does not crash
+    severity: warning
+data_state:
+  data_classification: internal
+  inputs:
+    - story content (string)
+    - source files (read-only)
+    - test files (read-only)
+  persistent:
+    - generated runbook file in .agent/cache/runbooks/
+linked_stories:
+  - INFRA-107
+linked_adrs:
+  - ADR-025
+  - ADR-041
+depends_on: []
+implementation:
+  routes: []
+  files:
+    - .agent/src/agent/core/context.py
+    - .agent/src/agent/commands/runbook.py
+    - .agent/templates/runbook-template.md
+  tests:
+    - .agent/tests/test_infra_107.py

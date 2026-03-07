@@ -17,6 +17,24 @@ PROPOSED
 (Critique the story/plan from each perspective)
 {panel_checks}
 
+## Codebase Introspection
+
+### Target File Signatures (from source)
+
+(Agent: Copy actual function/class signatures from TARGETED FILE SIGNATURES context. Do NOT invent signatures.)
+
+### Test Impact Matrix
+
+| Test File | Current Patch Target | New Patch Target | Action Required |
+|-----------|---------------------|-----------------|-----------------|
+| (Agent: Populate from TEST IMPACT MATRIX context) | | | |
+
+### Behavioral Contracts
+
+| Contract | Source | Current Value | Preserve? |
+|----------|--------|--------------|-----------|
+| (Agent: Populate from BEHAVIORAL CONTRACTS context) | | | |
+
 ## Targeted Refactors & Cleanups (INFRA-043)
 
 (Agent: List tech debt or "cleanup" items here. User: Check [x] to approve implementation.)
