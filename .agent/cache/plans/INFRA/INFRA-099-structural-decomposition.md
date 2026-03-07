@@ -15,6 +15,7 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 | Story | Target File | Decomposition |
 |---|---|---|
 | **INFRA-100** | `core/ai/service.py` (1,169 LOC) | → `service.py` + `streaming.py` + `providers.py` |
+| **INFRA-108** | `core/ai/providers.py` (812 LOC) | → `providers/{openai,vertex,anthropic,ollama,gh}.py` + factory (descoped from INFRA-100) |
 | **INFRA-101** | `core/governance.py` (1,988 LOC) | → `governance/{panel,roles,validation}.py` |
 
 ### Phase 2: Commands
@@ -40,9 +41,9 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 ## Dependencies
 
 ```
-INFRA-100 ──┐
+INFRA-100 ──┬── INFRA-108 (depends on INFRA-100's providers.py output)
 INFRA-101 ──┤
-INFRA-102 ──┤── all independent, can run in any order
+INFRA-102 ──┤── all others independent, can run in any order
 INFRA-103 ──┤
 INFRA-104 ──┤
 INFRA-105 ──┘
