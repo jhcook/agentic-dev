@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Decomposed AI service into modular providers using Strategy pattern (INFRA-100).
+- New `AIProvider` protocol and standard error types in `core/ai/protocols.py`.
+- Isolated streaming and retry logic with exponential backoff in `core/ai/streaming.py`.
+- Unified provider registry in `core/ai/providers.py`.
+
+### AI Core
+- Decomposed monolithic `AIService` into a modular, provider-based architecture using the Strategy pattern (INFRA-100).
+- Introduced `AIProvider` Protocol for standardized model interactions.
+- Extracted retry and backoff logic into a dedicated `streaming` module.
+- Consolidated provider dispatch logic in `providers.py` to support future multi-backend extensibility.
+
+### Added
 - INFRA-107: Added targeted codebase introspection to `agent new-runbook`.
 - New `ContextLoader` methods: `_load_targeted_context`, `_load_test_impact`, `_load_behavioral_contracts`.
 - Automatic Test Impact Matrix and Behavioral Contract extraction for runbook generation.

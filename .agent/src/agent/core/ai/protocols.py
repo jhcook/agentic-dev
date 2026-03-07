@@ -12,22 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Protocol, runtime_checkable, AsyncGenerator, Optional, List, Any
+from typing import Protocol, runtime_checkable, AsyncGenerator, Optional, List, Dict, Any
 
 class AIError(Exception):
-    """Base exception for all AI-related errors."""
+    """Base exception for all AI provider errors."""
     pass
 
 class AIConnectionError(AIError):
-    """Raised when there is a connectivity issue with the AI provider."""
+    """Raised when there is a network or connectivity issue with the provider."""
     pass
 
 class AIRateLimitError(AIError):
-    """Raised when the AI provider returns a rate limit error (e.g., HTTP 429)."""
+    """Raised when the provider rate limits the request."""
     pass
 
 class AIConfigurationError(AIError):
-    """Raised when the AI provider is misconfigured or missing credentials."""
+    """Raised when provider configuration is missing or invalid."""
     pass
 
 @runtime_checkable
@@ -40,7 +40,7 @@ class AIProvider(Protocol):
         system_prompt: Optional[str] = None, 
         **kwargs: Any
     ) -> str:
-        """Generate a single text completion."""
+        """Generate a complete text response."""
         ...
 
     async def stream(
@@ -49,13 +49,13 @@ class AIProvider(Protocol):
         system_prompt: Optional[str] = None, 
         **kwargs: Any
     ) -> AsyncGenerator[str, None]:
-        """Stream a text completion as an async generator of chunks."""
-        yield ""
+        """Stream a text response chunk by chunk."""
+        ...
 
     def supports_tools(self) -> bool:
-        """Returns True if the provider supports tool/function calling."""
+        """Return True if the provider supports tool calling."""
         ...
 
     def get_models(self) -> List[str]:
-        """Returns a list of supported model identifiers for this provider."""
+        """Return a list of available model identifiers for this provider."""
         ...

@@ -37,6 +37,8 @@ logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 logging.getLogger("backoff").setLevel(logging.ERROR)
 
 from agent.core.config import get_valid_providers
+from agent.core.ai import protocols  # noqa: F401 — ensures protocols module is importable
+from agent.core.ai import streaming  # noqa: F401 — ensures streaming module is importable
 from agent.core.router import router
 from agent.core.secrets import get_secret
 
