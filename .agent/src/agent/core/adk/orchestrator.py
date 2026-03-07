@@ -212,8 +212,27 @@ async def _orchestrate_async(
     json_roles = []
 
     from agent.core.ai import ai_service as _ai_svc
+    # Ensure the service is initialised so provider is resolved (not None/empty).
+    # The ADK adapter will also call _ensure_initialized() per-agent, but we need
+    # the provider name now to choose the correct diff-size limit.
+    try:
+        _ai_svc._ensure_initialized()
+    except Exception:
+        pass  # Best-effort; fall back to the conservative default below.
     _provider = getattr(_ai_svc, "provider", None) or ""
-    _max_diff = MAX_DIFF_CHARS_GH if _provider == "gh" else MAX_DIFF_CHARS_DEFAULT
+
+    # Provider-aware diff limit:
+    #   gh              →   6 000 chars  (free-tier, ~8k token cap)
+    #   vertex / gemini → 200 000 chars  (Gemini 2.5 Pro: 1M token context)
+    #   anthropic       → 200 000 chars  (Claude: 200k token context)
+    #   all others      →  40 000 chars  (conservative safe default)
+    _LARGE_CONTEXT_PROVIDERS = {"vertex", "gemini", "anthropic"}
+    if _provider == "gh":
+        _max_diff = MAX_DIFF_CHARS_GH
+    elif _provider in _LARGE_CONTEXT_PROVIDERS:
+        _max_diff = 200_000
+    else:
+        _max_diff = MAX_DIFF_CHARS_DEFAULT
     _diff_truncated = False
     if len(full_diff) > _max_diff:
         full_diff = full_diff[:_max_diff]
