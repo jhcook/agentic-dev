@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from pathlib import Path
 
 from agent.core.config import LLM_PROVIDER
 from agent.core.secrets import get_secret_manager
@@ -40,13 +41,14 @@ def validate_credentials(check_llm: bool = True) -> None:
     from agent.core.ai import ai_service
     provider = (ai_service.provider or LLM_PROVIDER).lower()
     
-    # Map provider to list of acceptable keys (any one will do)
+    # Map provider to list of acceptable env var keys (any one will do).
+    # For vertex, also accept GCLOUD_PROJECT which some SDK versions export.
     provider_key_map = {
         "openai": ["OPENAI_API_KEY"],
         "anthropic": ["ANTHROPIC_API_KEY"],
         "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         "gh": ["GH_API_KEY", "GITHUB_TOKEN"],
-        "vertex": ["GOOGLE_CLOUD_PROJECT"],
+        "vertex": ["GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"],
     }
     
     # Default to OpenAI if unknown, or just check nothing if provider is 'local' etc.
@@ -96,7 +98,26 @@ def validate_credentials(check_llm: bool = True) -> None:
                     raise
                 except Exception:
                     pass
-            
+
+    # Step C (vertex only): Fall back to ADC quota_project_id in the
+    # application_default_credentials.json file. This is set by
+    # `gcloud auth application-default login` and is a valid project
+    # reference even without GOOGLE_CLOUD_PROJECT being in the environment.
+    if not found_any and provider == "vertex":
+        import json
+        adc_path = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+        if adc_path.exists():
+            try:
+                adc_data = json.loads(adc_path.read_text())
+                if adc_data.get("quota_project_id"):
+                    found_any = True
+                    logger.debug(
+                        "vertex_project resolved from ADC quota_project_id=%s",
+                        adc_data["quota_project_id"],
+                    )
+            except Exception:
+                pass
+
     if not found_any:
         # Report the primary key name as missing
         missing_keys.append(target_keys[0])
