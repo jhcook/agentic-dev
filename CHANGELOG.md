@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Unit tests for governance roles and package facade.
+- New `agent.core.governance` package structure.
+
+### Changed
+- Refactor: Extract governance roles module from legacy monolith into `agent.core.governance.roles` (INFRA-101).
+- Decomposed monolithic `core/governance.py` into a package structure `core/governance/`.
+
+### Changed
+- refactor: decompose monolithic governance module into package structure (INFRA-101)
+- refactor: extract governance roles management into `core.governance.roles` (INFRA-101)
+
+### Added
 - Decomposed AI service into modular providers using Strategy pattern (INFRA-100).
 - New `AIProvider` protocol and standard error types in `core/ai/protocols.py`.
 - Isolated streaming and retry logic with exponential backoff in `core/ai/streaming.py`.

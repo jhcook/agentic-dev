@@ -642,16 +642,31 @@ def resolve_path(filepath: str) -> Optional[Path]:
     # We walk the path parts. If we hit a non-existent directory, we try to resolve it.
     parts = file_path.parts
     current_check = Path(".")
-    
+
+    # Known root prefixes that are unambiguous — never fuzzy-search within these.
+    # Prevents '.agent/src/agent/core/governance/' from matching web/components/governance.
+    TRUSTED_ROOT_PREFIXES = (
+        ".agent/",
+        "agent/",
+        "backend/",
+        "web/",
+        "mobile/",
+    )
+    is_trusted_root = any(filepath.startswith(p) for p in TRUSTED_ROOT_PREFIXES)
+
     for i, part in enumerate(parts[:-1]): # Skip filename
         next_check = current_check / part
         if not next_check.exists():
-            # This directory component is missing. 
-            # Example: 'src/foo.py' -> 'src' missing.
-            # Search for a directory named 'part' in the repo.
+            if is_trusted_root:
+                # Path starts with a known repo root — trust the full path and
+                # let the caller create the directory (apply_change_to_file does mkdir -p).
+                # Do NOT fuzzy-search for the missing component.
+                return file_path
+
+            # Fallback fuzzy search only for paths without a trusted root prefix.
             console.print(f"[dim]Directory '{next_check}' not found. Searching for '{part}'...[/dim]")
             dir_candidates = find_directories_in_repo(str(part))
-            
+
             if len(dir_candidates) == 0:
                 console.print(f"[bold red]❌ Cannot create new root hierarchy '{next_check}'.[/bold red]")
                 console.print(f"[red]Directory '{part}' not found in repo.[/red]")
@@ -659,15 +674,6 @@ def resolve_path(filepath: str) -> Optional[Path]:
             elif len(dir_candidates) == 1:
                 # Unique match found! Resolve the prefix.
                 found_dir = dir_candidates[0]
-                # Reconstruct path: found_dir + rest_of_path
-                # existing parts: parts[:i] was valid (or root).
-                # part is replaced by found_dir.
-                # remaining is parts[i+1:]
-                
-                # Wait, if we are at 'src' (root), parts[:i] is empty.
-                # found_dir is e.g. 'packages/app/src'
-                # remaining is 'foo.py'
-                
                 rest_of_path = Path(*parts[i+1:])
                 new_full_path = Path(found_dir) / rest_of_path
                 console.print(f"[yellow]⚠️  Path Auto-Correct (Dir Match): '{filepath}' -> '{new_full_path}'[/yellow]")
@@ -679,15 +685,9 @@ def resolve_path(filepath: str) -> Optional[Path]:
                     console.print(f"  - {c}")
                 console.print("[red]Aborting. Please specify the full path.[/red]")
                 return None
-                
+
         current_check = next_check
 
-    # If we made it here, the parent directories exist, or we are creating a file in root (allowed if not caught above).
-    # But wait, logic above catches the *first* missing component.
-    # If I create 'new_root/foo.py', 'new_root' is missing.
-    # 'find_directories_in_repo' for 'new_root' -> returns [].
-    # Returns None. So we BLOCK creating new root dirs implicitly. This is Desired.
-    
     return file_path
 
 
@@ -1849,6 +1849,10 @@ ARCHITECTURAL DECISIONS (ADRs):
                 )
             except Exception:
                 test_cmd = "pytest"
+            # Safety: run_modified_files may not be set if the full-context
+            # path processed all steps in bulk (no per-step accumulation).
+            if 'run_modified_files' not in dir():
+                run_modified_files = []
             qa_result = gates.run_qa_gate(test_cmd, modified_files=run_modified_files)
             gate_results.append(qa_result)
             status = "PASSED" if qa_result.passed else "BLOCKED"
