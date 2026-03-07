@@ -165,6 +165,7 @@ Technical setup and maintenance:
 | File | Purpose | Documentation |
 |------|---------|---------------|
 | `agents.yaml` | Governance panel roles | [Link](configuration.md#agentsyaml---governance-panel) |
+| `agent.yaml` | Agent behaviour & test commands | [Link](configuration.md#agentyaml---agent-behaviour) |
 | `router.yaml` | AI model selection | [Link](configuration.md#routeryaml---offline-model-selection) |
 | `.agent/rules/*.mdc` | Governance rules | [Link](rules_and_instructions.md#rules-directory-structure) |
 | `.agent/instructions/` | Role instructions | [Link](rules_and_instructions.md#instructions-directory-structure) |
