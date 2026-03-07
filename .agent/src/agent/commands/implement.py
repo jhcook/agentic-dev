@@ -1270,6 +1270,9 @@ File: path/to/new_file.py
 - Include all necessary imports in your search/replace blocks.
 - Documentation files (CHANGELOG.md, README.md) should use search/replace if they already exist.
 - Test files should follow the patterns in .agent/tests/.
+- **CRITICAL — DOCSTRINGS**: Every module, class, and function/method you produce MUST have a
+  PEP-257 docstring. This is enforced by an automated gate — missing docstrings will BLOCK the
+  build. Inner functions (e.g. decorator closures) are not exempt.
 """
         # INFRA-096: Inject source context for files being modified
         modify_files = extract_modify_files(runbook_content_scrubbed)
@@ -1387,6 +1390,8 @@ File: path/to/new_file.py
 ```
 
 - NEVER emit complete file content for files in SOURCE CONTEXT. Use search/replace.
+- **CRITICAL — DOCSTRINGS**: Every module, class, and function/method you produce MUST have a
+  PEP-257 docstring. Missing docstrings will BLOCK the build. Inner functions are not exempt.
 """
             # INFRA-096: Per-chunk source context
             chunk_modify_files = extract_modify_files(chunk)
