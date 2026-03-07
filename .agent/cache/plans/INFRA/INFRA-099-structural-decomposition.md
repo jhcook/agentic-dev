@@ -42,7 +42,6 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 
 | Story | Target File | Decomposition |
 |---|---|---|
-| **INFRA-107** | `commands/runbook.py` | Targeted codebase introspection hooks for runbook generation |
 | **INFRA-108** | `core/ai/providers.py` (812 LOC) | Protocol-based refactor → `providers/{openai,vertex,anthropic,ollama,gh}.py` + factory |
 | **INFRA-109** | `core/implement/orchestrator.py` | Fix `resolve_path` trusted-prefix short-circuit to prevent fuzzy match overwrites |
 | **INFRA-110** | `commands/check.py` | Complete check.py decomposition to ≤500 LOC; ADC fallback, diff truncation, provider warning (AC-4/5/6 done in INFRA-103) |
@@ -58,7 +57,6 @@ INFRA-104 ──┤
 INFRA-105 ──┘
              └── INFRA-106 (must run last among Phase 1-4)
 
-INFRA-107   ── independent (runbook generation hardening)
 INFRA-108   ── depends on INFRA-100 (providers.py refactor)
 INFRA-109   ── independent (path resolution fix)
 INFRA-110   ── depends on INFRA-103 (completes check.py extraction)
