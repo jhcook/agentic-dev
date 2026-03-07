@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, TypedDict
 
 import typer
 
@@ -49,19 +49,27 @@ def check_credentials(check_llm: bool = False) -> None:
     validate_credentials(check_llm=check_llm)
 
 
-def validate_linked_journeys(story_id: str) -> dict:
+class LinkedJourneysResult(TypedDict):
+    """Structured return value from :func:`validate_linked_journeys`."""
+
+    passed: bool
+    journey_ids: List[str]
+    error: Optional[str]
+
+
+def validate_linked_journeys(story_id: str) -> LinkedJourneysResult:
     """Validate that a story has real linked journeys (not just placeholder JRN-XXX).
 
     Args:
         story_id: The story identifier, e.g. ``"INFRA-103"``.
 
     Returns:
-        dict with keys:
+        :class:`LinkedJourneysResult` with keys:
             - ``passed`` (bool)
             - ``journey_ids`` (list[str])
             - ``error`` (str | None)
     """
-    result: dict = {"passed": False, "journey_ids": [], "error": None}
+    result: LinkedJourneysResult = {"passed": False, "journey_ids": [], "error": None}
 
     found_file = None
     for file_path in config.stories_dir.rglob(f"{story_id}*.md"):

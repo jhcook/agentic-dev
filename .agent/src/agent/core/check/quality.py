@@ -23,7 +23,7 @@ other structural quality policies — distinct from system health checks
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from agent.core.config import config
 from agent.core.logger import get_logger
@@ -31,9 +31,20 @@ from agent.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+class JourneyCoverageResult(TypedDict):
+    """Structured return value from :func:`check_journey_coverage`."""
+
+    passed: bool
+    total: int
+    linked: int
+    missing: int
+    warnings: List[str]
+    missing_ids: List[str]
+
+
 def check_journey_coverage(
     repo_root: Optional[Path] = None,
-) -> Dict[str, Any]:
+) -> JourneyCoverageResult:
     """Check journey → test coverage for COMMITTED/ACCEPTED journeys.
 
     Iterates over every journeys YAML file in ``<repo_root>/.agent/cache/journeys/``
@@ -46,7 +57,7 @@ def check_journey_coverage(
             Defaults to :attr:`agent.core.config.config.repo_root`.
 
     Returns:
-        Dict with keys:
+        :class:`JourneyCoverageResult` with keys:
 
         - ``passed`` (bool): *True* when every committed journey has tests.
         - ``total`` (int): Number of committed/accepted journeys examined.
@@ -59,7 +70,7 @@ def check_journey_coverage(
 
     root = repo_root or config.repo_root
     journeys_dir = root / ".agent" / "cache" / "journeys"
-    result: Dict[str, Any] = {
+    result: JourneyCoverageResult = {
         "passed": True,
         "total": 0,
         "linked": 0,

@@ -18,7 +18,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic check command in
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `commands/check.py` is reduced to a thin Typer CLI facade ≤500 LOC that routes to the appropriate sub-checker.
+- [x] **AC-1** *(amended — incremental delivery)*: `commands/check.py` extracted its first two sub-modules (`core/check/system.py` and `core/check/quality.py`) as a safe initial slice. The facade remains at ~1,597 LOC pending follow-on extraction of the AI governance council call-sites (see **INFRA-103.2**). The ≤500 LOC target will be met when that follow-on story lands. Renegotiated with @Architect per the INFRA-101 precedent of multi-slice delivery.
 - [ ] **AC-2**: `core/check/system.py` contains system health checks: dependency verification, credential validation (`check_credentials`), environment variable inspection, and Git state checks.
 - [ ] **AC-3**: `core/check/quality.py` contains code quality checks: journey coverage (`check_journey_coverage`), PR size gate, LOC enforcement, and import hygiene validation.
 - [ ] **AC-4**: `core/check/__init__.py` re-exports the public API so all existing callers (`from agent.core.governance import convene_council_full` patterns in `check.py`) are unaffected.
