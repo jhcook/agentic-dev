@@ -567,19 +567,30 @@ def create_branch(story_id: str, title: str):
         f.write(f"[{datetime.now().isoformat()}] Branch{'Switched' if exists else 'Created'}: {branch_name}\n")
 
 def find_directories_in_repo(dirname: str) -> List[str]:
-    """
-    Search for directories with a specific name in the repo.
-    Excludes .git but ALLOWS other dot-directories (like .agent).
+    """Search for directories with a specific name in the repo.
+
+    Excludes ``.git``, ``node_modules``, and ``dist`` to prevent false-positive
+    matches inside the web frontend dependency tree (e.g. dozens of
+    ``node_modules/*/src`` entries that make common names ambiguous).
+
+    Args:
+        dirname: Directory base name to search for.
+
+    Returns:
+        List of repo-relative directory paths matching *dirname*.
     """
     try:
-        # find . -path './.git' -prune -o -type d -name "dirname" -print
-        cmd = ["find", ".", "-path", "./.git", "-prune", "-o", "-type", "d", "-name", dirname, "-print"]
+        cmd = [
+            "find", ".",
+            "-path", "./.git", "-prune",
+            "-o", "-path", "*/node_modules", "-prune",
+            "-o", "-path", "*/dist", "-prune",
+            "-o", "-type", "d", "-name", dirname, "-print",
+        ]
         result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
         if not result:
             return []
-        
-        # clean up paths (./foo -> foo)
-        paths = [p.lstrip("./") for p in result.split('\n') if p]
+        paths = [p.lstrip("./") for p in result.split("\n") if p]
         return paths
     except Exception:
         return []
@@ -1417,6 +1428,7 @@ ARCHITECTURAL DECISIONS (ADRs):
              ai_service.reset_provider()
 
         cumulative_loc = 0
+        run_modified_files: List[str] = []  # all files touched across all steps
         completed_steps = 0
 
         for idx, chunk in enumerate(chunks):
@@ -1614,6 +1626,8 @@ ARCHITECTURAL DECISIONS (ADRs):
 
                 cumulative_loc += step_loc
                 completed_steps = idx + 1
+
+                run_modified_files.extend(step_modified_files)
 
                 # AC-1: Save-point commit (with OTel span)
                 def _do_micro_commit():
@@ -1826,12 +1840,16 @@ ARCHITECTURAL DECISIONS (ADRs):
                 agent_cfg = _yaml.safe_load(
                     (config.etc_dir / "agent.yaml").read_text()
                 )
-                test_cmd = agent_cfg.get("agent", {}).get(
-                    "test_command", "pytest .agent/tests"
+                _agent_sec = agent_cfg.get("agent", {})
+                # Prefer test_commands (dict, polyglot) over test_command (str, legacy)
+                test_cmd: "str | dict" = (
+                    _agent_sec.get("test_commands")
+                    or _agent_sec.get("test_command")
+                    or "pytest"
                 )
             except Exception:
-                test_cmd = "pytest .agent/tests"
-            qa_result = gates.run_qa_gate(test_cmd)
+                test_cmd = "pytest"
+            qa_result = gates.run_qa_gate(test_cmd, modified_files=run_modified_files)
             gate_results.append(qa_result)
             status = "PASSED" if qa_result.passed else "BLOCKED"
             color = "green" if qa_result.passed else "red"

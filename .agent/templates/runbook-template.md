@@ -6,7 +6,7 @@ PROPOSED
 
 ## Goal Description
 
-< Clear summary of the objective >
+< Clear one-paragraph summary of the objective and WHY it is needed >
 
 ## Linked Journeys
 
@@ -39,29 +39,62 @@ PROPOSED
 
 (Agent: List tech debt or "cleanup" items here. User: Check [x] to approve implementation.)
 
-- [ ] Example: Convert prints to logger in `src/utils.py`
-- [ ] Example: Fix formatting in `src/main.py`
+- [ ] < Example cleanup item >
 
 ## Implementation Steps
 
-(Must be detailed enough for a qualified engineer)
+> **Steps must be machine-executable.** Every step must use exactly one of the three
+> action markers below, followed by concrete content the CLI can apply verbatim.
+> Do NOT write prose instructions — the tool applies these literally.
+>
+> - **`#### [MODIFY] <path>`** — change an existing file.
+>   Follow with one or more `<<<SEARCH / === / >>>` blocks. The SEARCH text must be
+>   copied verbatim from the current file (use the Codebase Introspection section above).
+>
+> - **`#### [NEW] <path>`** — create a new file.
+>   Follow with the complete file content in a fenced code block. No placeholders.
+>
+> - **`#### [DELETE] <path>`** — remove a file.
+>   Follow with a one-line rationale comment. No code block needed.
+>
+> Use the **full repo-relative path** from the repo root for every `<path>`.
+> One logical concern per `### Step N` — split if in doubt.
 
-### [Component Name]
+### Step 1: < Descriptive title — what changes and why >
 
-#### [MODIFY | NEW | DELETE] [file path]
+#### [MODIFY] < path/to/existing/file >
 
-- < Specific instruction on what to change >
-- < Code snippets if necessary for clarity >
+```
+<<<SEARCH
+< exact lines from the current file >
+===
+< replacement lines >
+>>>
+```
+
+### Step 2: < Create a new file >
+
+#### [NEW] < path/to/new/file >
+
+```
+< complete file content >
+```
+
+### Step 3: < Remove an obsolete file >
+
+#### [DELETE] < path/to/obsolete/file >
+
+<!-- < one-line rationale > -->
 
 ## Verification Plan
 
 ### Automated Tests
 
-- [ ] Test 1
+- [ ] < Test command and expected outcome >
 
 ### Manual Verification
 
-- [ ] Step 1
+- [ ] < Concrete command to run and expected output >
 
 ## Definition of Done
 
@@ -69,17 +102,16 @@ PROPOSED
 
 - [ ] CHANGELOG.md updated
 - [ ] README.md updated (if applicable)
-- [ ] API Documentation updated (if applicable)
 
 ### Observability
 
 - [ ] Logs are structured and free of PII
-- [ ] Metrics added for new features
+- [ ] New structured `extra=` dicts added if new logging added
 
 ### Testing
 
-- [ ] Unit tests passed
-- [ ] Integration tests passed
+- [ ] All existing tests pass
+- [ ] New tests added for each new public interface
 
 ## Copyright
 

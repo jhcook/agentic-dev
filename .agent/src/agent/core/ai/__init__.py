@@ -13,6 +13,16 @@
 # limitations under the License.
 
 from .service import AIService, ai_service
-from .protocols import AIProvider, AIError, AIRateLimitError, AIConnectionError
+from .protocols import AIProvider, AIError, AIRateLimitError, AIConnectionError, AIConfigurationError
+from .providers import get_provider
 
-__all__ = ["AIService", "ai_service", "AIProvider", "AIError", "AIRateLimitError", "AIConnectionError"]
+__all__ = [
+    "AIService",
+    "ai_service",
+    "AIProvider",
+    "AIError",
+    "AIRateLimitError",
+    "AIConnectionError",
+    "AIConfigurationError",
+    "get_provider",
+]

@@ -9,6 +9,7 @@ The Agent CLI uses several configuration files:
 ```
 .agent/etc/
 ├── agents.yaml          # Governance panel roles
+├── agent.yaml           # Agent behaviour & test commands
 └── router.yaml          # AI model routing rules
 ```
 
@@ -201,6 +202,66 @@ Override with `--provider` flag:
 agent --provider gemini new-runbook WEB-001
 ```
 
+## agent.yaml - Agent Behaviour
+
+Controls the agent's own runtime behaviour: which AI provider to use, how to run
+tests, and environment defaults. Lives at `.agent/etc/agent.yaml`.
+
+### test_commands — Polyglot Test Suites
+
+The `test_commands` key maps a **repo-relative directory prefix** to the shell
+command that runs tests for that domain. During `agent implement --apply`, the
+pipeline collects every file modified across all steps and runs **only** the
+test suite(s) whose prefix matches.
+
+```yaml
+agent:
+  provider: vertex   # default AI provider
+  test_commands:
+    .agent/:    "cd .agent/src && python -m pytest agent/ -q --tb=short"
+    backend/:   "cd backend && python -m pytest -q --tb=short"
+    web/:       "cd web && npm test -- --watchAll=false --passWithNoTests"
+    mobile/:    "cd mobile && npx jest --passWithNoTests"
+```
+
+| Modified files in this run | Suites that run |
+|---|---|
+| `.agent/src/agent/commands/gates.py` | `.agent/` only |
+| `web/src/components/Button.tsx` | `web/` only |
+| `backend/routes.py` + `web/pages/index.tsx` | `backend/` + `web/` |
+| _(no matches)_ | All suites (safe default) |
+
+**Legacy single-string config** still works unchanged — backward-compatible:
+
+```yaml
+agent:
+  test_command: "make test"   # runs on every implement run, no scoping
+```
+
+### Full agent.yaml reference
+
+```yaml
+panel:
+  engine: adk          # native | adk
+  num_retries: 5
+
+agent:
+  provider: vertex     # vertex | gemini | openai | anthropic | gh
+  test_commands:       # directory-scoped test runners (polyglot)
+    .agent/: "cd .agent/src && python -m pytest agent/ -q --tb=short"
+  models:
+    gemini: models/gemini-2.0-pro
+    vertex: gemini-2.5-pro
+
+console:
+  personality_file: GEMINI.md   # resolved from repo root
+  system_prompt: |              # inline preamble (overrides personality_file)
+    ...
+
+env:                   # extra env vars injected for every agent subprocess
+  CLOUD_ML_REGION: us-central1
+```
+
 ## Environment Variables
 
 ### AI Provider Keys
@@ -352,42 +413,45 @@ How do we revert safely?
 
 ### Runbook Template
 
-Edit `.agent/templates/runbook-template.md`:
+Edit `.agent/templates/runbook-template.md`. Runbook steps must be
+**machine-executable** — see the template for the three permitted step formats:
 
 ```markdown
-# {{STORY_ID}}: {{TITLE}}
+### Step 1: Add retry logic to fetch helper
 
-Status: PROPOSED
+#### [MODIFY] backend/src/utils/fetch.py
 
-## Goal
-{{AI_GENERATED_SUMMARY}}
-
-## Compliance Checklist
-- [ ] @Architect: Architectural review
-- [ ] @Security: Security scan
-- [ ] @QA: Test strategy approved
-
-## Timeline
-**Estimated Effort**: {{AI_ESTIMATE}}
-**Deadline**: {{DEADLINE}}
-
-## Implementation Steps
-
-### Phase 1: Setup
-{{AI_GENERATED_STEPS}}
-
-### Phase 2: Core Implementation
-{{AI_GENERATED_STEPS}}
-
-### Phase 3: Testing
-{{AI_GENERATED_STEPS}}
-
-### Phase 4: Documentation
-{{AI_GENERATED_STEPS}}
-
-## Rollback Procedure
-{{AI_GENERATED_ROLLBACK}}
 ```
+
+<<<SEARCH
+def fetch(url):
+    return requests.get(url)
+===
+def fetch(url, retries=3):
+    for attempt in range(retries):
+        try:
+            return requests.get(url, timeout=10)
+        except requests.Timeout:
+            if attempt == retries - 1:
+                raise
+>>>
+```
+
+### Step 2: Add new config file
+
+#### [NEW] backend/config/retry.yaml
+
+```yaml
+retry:
+  max_attempts: 3
+  backoff_ms: 200
+```
+
+```
+
+The `[MODIFY]` block uses `<<<SEARCH/===/>>>` with verbatim text from the
+current file. The `[NEW]` block contains the complete file content.
+`[DELETE]` removes a file with a one-line rationale comment.
 
 ## Workflow Configuration
 
