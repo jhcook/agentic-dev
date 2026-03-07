@@ -387,16 +387,30 @@ class AIService:
         try:
             agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
             configured_provider = config.get_value(agent_config, "agent.provider")
-            if configured_provider and configured_provider in self.clients:
-                self.provider = configured_provider
-                return
+            if configured_provider:
+                if configured_provider in self.clients:
+                    self.provider = configured_provider
+                    return
+                else:
+                    # Configured provider failed to initialise (e.g. expired credentials).
+                    # Warn clearly rather than silently falling back to a low-quality provider.
+                    console.print(
+                        f"[bold yellow]⚠️  Configured provider '{configured_provider}' "
+                        f"is unavailable (credentials may be expired). "
+                        f"Falling back to next available provider.[/bold yellow]"
+                    )
+                    logging.warning(
+                        "configured_provider_unavailable provider=%s", configured_provider
+                    )
         except Exception:
             pass
 
         # 2. Hardcoded Fallback Priority
-        if 'gh' in self.clients:
-            self.provider = 'gh'
-        elif 'gemini' in self.clients:
+        # 'gh' is last: it is a free-tier, rate-limited provider. All configured
+        # providers (gemini, vertex, openai, anthropic) should be preferred.
+        # Context-length is not the concern — chunking handles that — but
+        # rate limits and model quality make gh an absolute last resort.
+        if 'gemini' in self.clients:
             self.provider = 'gemini'
         elif 'vertex' in self.clients:
             self.provider = 'vertex'
@@ -406,6 +420,8 @@ class AIService:
             self.provider = 'anthropic'
         elif 'ollama' in self.clients:
             self.provider = 'ollama'
+        elif 'gh' in self.clients:
+            self.provider = 'gh'
         else:
             self.provider = None
             
@@ -444,9 +460,10 @@ class AIService:
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
         """
-        # Chain order: gh -> gemini -> vertex -> openai -> anthropic -> ollama
-        # TODO: This chain could also be dynamic from config
-        fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic', 'ollama']
+        # Chain order: gemini -> vertex -> openai -> anthropic -> ollama -> gh
+        # gh is last: free-tier rate limits make it an absolute last resort
+        # (context limits are handled by chunking, not provider selection)
+        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'ollama', 'gh']
         
         current_idx = -1
         try:

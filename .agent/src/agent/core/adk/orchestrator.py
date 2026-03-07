@@ -50,6 +50,13 @@ logger = logging.getLogger(__name__)
 #   - Actual LLM inference time (~10-30s per call)
 AGENT_TIMEOUT = 300
 
+# Maximum diff characters sent to the governance council in a single prompt.
+# Leaves headroom for story + rules + ADRs in a 128k-token context window.
+# Drops to 6 000 for the 'gh' provider (free-tier, ~8k token cap) to match
+# the native governance path's chunking behaviour in _governance_legacy.py.
+MAX_DIFF_CHARS_DEFAULT = 40_000
+MAX_DIFF_CHARS_GH = 6_000
+
 
 def _parse_agent_output(output: str) -> Dict:
     """Parses structured agent output into a findings dict.
@@ -204,6 +211,19 @@ async def _orchestrate_async(
 
     json_roles = []
 
+    from agent.core.ai import ai_service as _ai_svc
+    _provider = getattr(_ai_svc, "provider", None) or ""
+    _max_diff = MAX_DIFF_CHARS_GH if _provider == "gh" else MAX_DIFF_CHARS_DEFAULT
+    _diff_truncated = False
+    if len(full_diff) > _max_diff:
+        full_diff = full_diff[:_max_diff]
+        _diff_truncated = True
+        logger.warning(
+            "Diff truncated to %d chars for provider '%s' "
+            "(original was larger). Governance review covers partial diff.",
+            _max_diff, _provider,
+        )
+
     # Build user prompt once (same for all agents)
     user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n"
     if adrs_content:
@@ -213,6 +233,12 @@ async def _orchestrate_async(
     if user_question:
         user_prompt += f"<question>{user_question}</question>\n"
     user_prompt += f"<diff>{full_diff}</diff>"
+    if _diff_truncated:
+        user_prompt += (
+            "\n\n[NOTE: The diff shown above was truncated due to provider context limits. "
+            "Review the visible changes only. Do NOT flag issues you cannot confirm "
+            "from the partial diff.]"
+        )
 
     async def _run_single_agent(agent):
         """Run a single agent and return parsed role_data dict."""
