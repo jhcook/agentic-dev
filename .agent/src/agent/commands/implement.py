@@ -818,8 +818,15 @@ ADRs:
             console.print("\n[bold green]✅ All governance gates passed.[/bold green]")
             update_story_state(story_id, "COMPLETED", context_prefix="Phase 10")
         else:
-            console.print("\n[bold red]🚫 Some governance gates BLOCKED.[/bold red]")
-            raise typer.Exit(code=1)
+            console.print(
+                "\n[bold yellow]⚠️  Some governance gates produced warnings.[/bold yellow]"
+            )
+            console.print(
+                f"[yellow]Code has been committed — run "
+                f"[bold]agent preflight --story {story_id}[/bold] "
+                f"to resolve issues before opening a PR.[/yellow]"
+            )
+            update_story_state(story_id, "REVIEW_NEEDED", context_prefix="Phase 10")
 
     if not apply:
         console.print("\n[dim]Dry-run complete. Re-run with --apply to write changes.[/dim]")
@@ -828,11 +835,17 @@ ADRs:
 
 
 def _print_gate(result: "gates.GateResult") -> None:
-    """Print a single gate result to the console."""
-    status = "PASSED" if result.passed else "BLOCKED"
-    color = "green" if result.passed else "red"
+    """Print a single gate result to the console.
+
+    Passed gates are shown in green. Failed gates are shown in yellow —
+    they are non-fatal warnings during ``implement``; ``preflight`` is
+    the hard enforcement point before a PR is opened.
+    """
+    status = "PASSED" if result.passed else "WARN"
+    color = "green" if result.passed else "yellow"
+    icon = "✅" if result.passed else "⚠️ "
     console.print(
-        f"  [{color}][PHASE] {result.name} ... {status} "
+        f"  [{color}]{icon} [PHASE] {result.name} ... {status} "
         f"({result.elapsed_seconds:.2f}s)[/{color}]"
     )
     if result.details:
