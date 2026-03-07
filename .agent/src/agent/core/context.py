@@ -251,6 +251,157 @@ class ContextLoader:
         logger.debug("Source tree: %d files found", file_count)
         return scrub_sensitive_data(tree)
 
+    def _load_targeted_context(self, story_content: str) -> str:
+        """Parse file paths from story and extract signatures/imports."""
+        paths = set(_re.findall(
+            r'(?:\[)?(?:MODIFY|NEW|DELETE|refactor|decompose)(?:\])?\s+[`"]?'
+            r'([a-zA-Z0-9_/.-]+\.py)[`"]?',
+            story_content, _re.IGNORECASE
+        ))
+        
+        sig_pattern = _re.compile(
+            r"^[ \t]*((?:@\w+.*\n[ \t]*)*"
+            r"(?:class|def|async\s+def)\s+\S+.*?):\s*$",
+            _re.MULTILINE,
+        )
+        
+        output = "TARGETED FILE SIGNATURES:\n"
+        file_count = 0
+        
+        for path_str in sorted(paths):
+            target_path = None
+            # Resolution logic
+            candidates = [
+                config.agent_dir / path_str,
+                config.agent_dir / "src" / path_str,
+                config.agent_dir / ".agent" / "src" / path_str,
+                os.path.abspath(path_str)
+            ]
+            for cand in candidates:
+                if os.path.isfile(cand):
+                    target_path = cand
+                    break
+            
+            if not target_path:
+                output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
+                continue
+
+            try:
+                content = open(target_path, "r", errors="ignore").read()
+                rel_path = os.path.relpath(target_path, config.agent_dir)
+                
+                lines = []
+                # First 30 imports
+                import_lines = [
+                    l for l in content.splitlines() 
+                    if l.startswith(("import ", "from "))
+                ][:30]
+                lines.extend(import_lines)
+                
+                # Signatures
+                for m in sig_pattern.finditer(content):
+                    lines.append(m.group(1))
+                
+                output += f"\n--- {rel_path} ---\n" + "\n".join(lines) + "\n"
+                file_count += 1
+            except Exception:
+                output += f"\n--- {path_str} --- ERROR READING FILE\n"
+
+        result = scrub_sensitive_data(output)
+        logger.debug(
+            "Targeted context: %d files included, %d chars",
+            file_count, len(result),
+        )
+        return result
+
+    def _load_test_impact(self, story_content: str) -> str:
+        """Find tests that patch modules referenced in the story."""
+        modules = set()
+        for path in _re.findall(r'([a-zA-Z0-9_/.-]+\.py)', story_content):
+            dotted = path.replace('/', '.').replace('.py', '')
+            if 'agent.' not in dotted:
+                dotted = 'agent.' + dotted
+            # Clean up leading dots or common prefixes
+            dotted = dotted.lstrip('.')
+            modules.add(dotted)
+
+        tests_dir = config.agent_dir / "tests"
+        if not tests_dir.exists():
+            # Try .agent/tests
+            tests_dir = config.agent_dir / ".agent" / "tests"
+            if not tests_dir.exists():
+                return "TEST IMPACT MATRIX:\n(No tests directory found)"
+
+        impact = "TEST IMPACT MATRIX:\n"
+        test_count = 0
+        patch_pattern = _re.compile(r'patch\(["\']([^"\']+)["\']\)')
+
+        for test_file in sorted(tests_dir.rglob("*.py")):
+            try:
+                content = test_file.read_text(errors="ignore")
+                patches = patch_pattern.findall(content)
+                
+                relevant_patches = []
+                for p in patches:
+                    if any(m in p for m in modules):
+                        relevant_patches.append(p)
+                
+                if relevant_patches:
+                    rel_path = test_file.relative_to(config.agent_dir)
+                    impact += f"{rel_path}:\n"
+                    for rp in relevant_patches:
+                        impact += f"  - patch(\"{rp}\")\n"
+                    test_count += 1
+            except Exception:
+                continue
+
+        result = scrub_sensitive_data(impact)
+        logger.debug(
+            "Test impact: %d affected files found, %d chars",
+            test_count, len(result),
+        )
+        return result
+
+    def _load_behavioral_contracts(self, story_content: str) -> str:
+        """Extract assertions and default parameter values from related tests."""
+        # Get module stems (e.g. 'service' from 'core/ai/service.py')
+        stems = set()
+        for path in _re.findall(r'([a-zA-Z0-9_-]+\.py)', story_content):
+            stems.add(path.replace('.py', ''))
+
+        tests_dir = config.agent_dir / "tests"
+        if not tests_dir.exists():
+            tests_dir = config.agent_dir / ".agent" / "tests"
+            if not tests_dir.exists():
+                return "BEHAVIORAL CONTRACTS:\n"
+
+        contracts = "BEHAVIORAL CONTRACTS:\n"
+        
+        # Patterns for contracts
+        assert_pattern = _re.compile(r'(assert\w*\s*.*?(?:default|fallback|timeout|temperature|auto_)\s*[=!<>]+\s*[^\n,)]+)')
+        param_pattern = _re.compile(r'(\w+\([^)]*(?:default|fallback|auto_)\w*\s*=\s*[^,)]+)')
+
+        for test_file in sorted(tests_dir.rglob("*.py")):
+            # Only check tests that might be related to the stems
+            if not any(stem in test_file.name for stem in stems):
+                continue
+                
+            try:
+                content = test_file.read_text(errors="ignore")
+                found = []
+                found.extend(assert_pattern.findall(content))
+                found.extend(param_pattern.findall(content))
+                
+                if found:
+                    rel_path = test_file.relative_to(config.agent_dir)
+                    contracts += f"{rel_path}: {', '.join(found)}\n"
+            except Exception:
+                continue
+
+        result = scrub_sensitive_data(contracts)
+        logger.debug("Behavioral contracts: %d chars extracted", len(result))
+        return result
+
     def _load_source_snippets(self, budget: int = 0) -> str:
         """Loads compact source outlines (imports + signatures) from Python files.
 
@@ -272,10 +423,10 @@ class ContextLoader:
 
         if budget <= 0:
             budget = int(
-                os.environ.get("AGENT_SOURCE_CONTEXT_CHAR_LIMIT", "8000")
+                os.environ.get("AGENT_SOURCE_CONTEXT_CHAR_LIMIT", "16000")
             )
 
-        exclude_dirs = {"__pycache__", ".pytest_cache", "tests"}
+        exclude_dirs = {"__pycache__", ".pytest_cache"}
         # Match class/def/async def signatures, including indented and decorated
         sig_pattern = _re.compile(
             r"^[ \t]*((?:@\w+.*\n[ \t]*)*"
