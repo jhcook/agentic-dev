@@ -140,8 +140,12 @@ def test_validate_story_not_found_returns_false(tmp_path):
 
 
 def test_check_credentials_delegates():
-    """Delegates to validate_credentials without raising when mock succeeds."""
-    with patch("agent.core.check.system.validate_credentials") as mock_vc:
+    """Delegates to validate_credentials without raising when mock succeeds.
+
+    validate_credentials is a local (ADR-025) import inside check_credentials,
+    so we patch it at its source path rather than at the system module level.
+    """
+    with patch("agent.core.auth.credentials.validate_credentials") as mock_vc:
         mock_vc.return_value = None
         check_credentials(check_llm=False)
         mock_vc.assert_called_once_with(check_llm=False)
@@ -151,7 +155,7 @@ def test_check_credentials_propagates_error():
     """Re-raises MissingCredentialsError from validate_credentials."""
     from agent.core.auth.errors import MissingCredentialsError
 
-    with patch("agent.core.check.system.validate_credentials") as mock_vc:
+    with patch("agent.core.auth.credentials.validate_credentials") as mock_vc:
         mock_vc.side_effect = MissingCredentialsError("No key")
         with pytest.raises(MissingCredentialsError):
             check_credentials(check_llm=True)

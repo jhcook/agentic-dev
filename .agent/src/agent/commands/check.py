@@ -881,9 +881,11 @@ def preflight(
                 user_prompt = f"Fix the following blocking findings:\n{context_str}" + "\n".join(blocking_findings)
                 
                 def on_thought(thought: str, step: int):
+                    """Print an agentic-loop thought step to the console."""
                     console.print(f"[dim cyan]🤔 Thought:[/dim cyan] [dim]{thought.strip()}[/dim]")
-                    
+
                 def on_tool_call(tool: str, args: dict, step: int):
+                    """Print an agentic-loop tool invocation to the console."""
                     console.print(f"[dim magenta]🛠️  Action:[/dim magenta] [bold]{tool}[/bold] [dim]{args}[/dim]")
                     
                 try:
@@ -1492,7 +1494,8 @@ def run_ui_tests(
     log_file = Path(".agent/logs/agent_run_ui_tests.log")
     log_file.parent.mkdir(parents=True, exist_ok=True)
     
-    def log(msg: str, console_msg: Optional[str] = None):
+    def log(msg: str, console_msg: Optional[str] = None):  # noqa: E306
+        """Append a timestamped message to the UI-test log file and optionally print it."""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         entry = f"[{timestamp}] {msg}\n"
         with open(log_file, "a") as f:
