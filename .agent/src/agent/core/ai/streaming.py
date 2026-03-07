@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import functools
+import asyncio
 import logging
-from typing import Callable, Any, TypeVar, AsyncGenerator, Optional
-
+import random
+from typing import TypeVar, Callable, Any, Awaitable, AsyncGenerator, Optional
 from agent.core.ai.protocols import AIRateLimitError, AIConnectionError
 
 logger = logging.getLogger(__name__)
@@ -25,55 +25,59 @@ T = TypeVar("T")
 
 def ai_retry(max_retries: int = 3, base_delay: float = 1.0):
     """
-    Decorator for retrying AI provider calls with exponential backoff.
-    Specifically handles rate limits and connection issues.
+    Decorator for retrying AI provider calls with exponential backoff and jitter.
+    
+    Args:
+        max_retries: Maximum number of retry attempts.
+        base_delay: Initial delay in seconds.
     """
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         """Wrap an async AI call with retry/backoff logic."""
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
             """Execute the wrapped function, retrying on rate limit or connection errors."""
-            last_exception = None
-            for attempt in range(max_retries):
+            last_error = None
+            for attempt in range(max_retries + 1):
                 try:
                     return await func(*args, **kwargs)
-                except AIRateLimitError as e:
-                    last_exception = e
+                except (AIRateLimitError, AIConnectionError) as e:
+                    last_error = e
+                    if attempt == max_retries:
+                        break
                     delay = base_delay * (2 ** attempt)
+                    jitter = delay * 0.1 * (2 * random.random() - 1)
+                    final_delay = max(0, delay + jitter)
                     logger.warning(
-                        "Rate limited by AI provider, retrying in %.1fs", 
-                        delay, 
-                        extra={"attempt": attempt + 1, "max_retries": max_retries}
+                        "AI request failed (%s), retrying in %.2fs (attempt %d/%d)",
+                        type(e).__name__,
+                        final_delay,
+                        attempt + 1,
+                        max_retries,
+                        extra={"attempt": attempt, "error": str(e)},
                     )
-                    await asyncio.sleep(delay)
-                except AIConnectionError as e:
-                    last_exception = e
-                    delay = base_delay * 0.5  # Faster retry for connection blips
-                    logger.debug(
-                        "Connection issue with AI provider, retrying in %.1fs", 
-                        delay, 
-                        extra={"attempt": attempt + 1}
-                    )
-                    await asyncio.sleep(delay)
-            
-            if last_exception:
-                raise last_exception
-            raise AIRateLimitError("Max retries exceeded")
+                    await asyncio.sleep(final_delay)
+            raise last_error or RuntimeError("Retry loop exited without result or error")
         return wrapper
     return decorator
 
+
 async def process_stream(
-    generator: AsyncGenerator[str, None], 
-    on_chunk: Optional[Callable[[str], None]] = None
+    generator: AsyncGenerator[str, None],
+    on_chunk: Optional[Callable[[str], None]] = None,
 ) -> str:
+    """Consume an async stream, optionally invoking a callback per chunk.
+
+    Args:
+        generator: The async generator yielding string chunks.
+        on_chunk: Optional callback invoked for each non-empty chunk.
+
+    Returns:
+        The fully assembled response string.
     """
-    Helper to consume an async stream, optionally calling a callback per chunk,
-    and returning the fully assembled string.
-    """
-    full_response = []
+    parts: list[str] = []
     async for chunk in generator:
         if chunk:
-            full_response.append(chunk)
+            parts.append(chunk)
             if on_chunk:
                 on_chunk(chunk)
-    return "".join(full_response)
+    return "".join(parts)

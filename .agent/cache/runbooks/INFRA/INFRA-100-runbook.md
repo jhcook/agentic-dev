@@ -145,43 +145,53 @@ def ai_retry(max_retries: int = 3, base_delay: float = 1.0):
 
 ### 3. Consolidate Provider Dispatch and Refactor Facade
 
-#### MODIFY `src/agent/core/ai/providers.py` (unified, ≤500 LOC)
+#### MODIFY `.agent/src/agent/core/ai/providers.py` (unified, ≤500 LOC)
 
 - Keep all provider dispatch logic in a single `providers.py` (no per-provider files yet — that is INFRA-108).
 - Replace hardcoded `if provider == "openai":` chains with a `PROVIDERS` registry dict mapping name → callable.
 - Wrap provider-specific SDK exceptions in `AIError` subtypes from `protocols.py`.
 - Structured logging with `extra` dicts on each provider call.
 
-#### MODIFY `src/agent/core/ai/service.py` (facade, ≤500 LOC)
+This is a NEW file and should be emitted as a complete code block.
 
-- Remove all implementation detail (streaming logic, retry, exception mapping) — these now live in `streaming.py`.
-- Import `providers.py` for dispatch; import `streaming.py` for retry decorators.
-- Preserve the existing `AIService` class signature and `ai_service` singleton for backward compatibility.
+#### MODIFY `.agent/src/agent/core/ai/service.py` (surgical patch only)
 
-```python
-from agent.core.ai.protocols import AIProvider
-from agent.core.ai import providers, streaming
+> ⚠️ `service.py` is 1,169 LOC. You MUST use `<<<SEARCH/===/>>>` blocks — do NOT emit a full replacement.
+>
+> The goal is NOT to reduce service.py in this story — that is future work once INFRA-108 completes.
+> The ONLY required change is to import the new modules so they are wired in:
 
-class AIService:
-    async def query(self, prompt, system_prompt=None, model=None, stream=False, **kwargs):
-        provider = providers.get_provider(model or config.default_model)
-        if stream:
-            return provider.stream(prompt, system_prompt=system_prompt, **kwargs)
-        return await provider.generate(prompt, system_prompt=system_prompt, **kwargs)
-```
+File: `.agent/src/agent/core/ai/service.py`
+<<<SEARCH
+from agent.core.config import get_valid_providers
+===
+from agent.core.config import get_valid_providers
+from agent.core.ai import protocols  # noqa: F401 — ensures protocols module is importable
+from agent.core.ai import streaming  # noqa: F401 — ensures streaming module is importable
+>>>
 
 ### 4. Ensure CLI Importability
 
-- Verify no circular imports were introduced.
-- Run: `python -c "from agent.cli import app; print('OK')"`
+> Run the following to verify no circular imports:
+> `python -c "from agent.cli import app; print('OK')"`
+
+#### CREATE `.agent/src/agent/core/ai/tests/test_providers.py` (NEW file)
+
+> ⚠️ Tests live at `.agent/src/agent/core/ai/tests/` — NOT `.agent/tests/core/ai/`.
+> Use a COMPLETE code block since this is a new file.
+
+#### CREATE `.agent/src/agent/core/ai/tests/test_streaming.py` (NEW file)
+
+> ⚠️ Tests live at `.agent/src/agent/core/ai/tests/` — NOT `.agent/tests/core/ai/`.
+> Use a COMPLETE code block since this is a new file.
 
 ## Verification Plan
 
 ### Automated Tests
 
-- [ ] `pytest tests/core/ai/test_service.py`: Verify facade still works.
-- [ ] `pytest tests/core/ai/test_providers.py`: (New) Verify individual providers satisfy Protocol.
-- [ ] `pytest tests/core/ai/test_streaming.py`: (New) Verify retry logic and chunking.
+- [ ] `pytest .agent/src/agent/core/ai/tests/test_providers.py`: (New) Verify individual providers satisfy Protocol.
+- [ ] `pytest .agent/src/agent/core/ai/tests/test_streaming.py`: (New) Verify retry logic and chunking.
+- [ ] `pytest .agent/src/agent/core/ai/tests/test_service.py`: Verify facade still works.
 - [ ] `agent check --story INFRA-100`: Run governance gates.
 
 ### Manual Verification
