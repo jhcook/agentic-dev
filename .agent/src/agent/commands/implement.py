@@ -1225,6 +1225,8 @@ def implement(
     
     # Track overall success
     implementation_success = False
+    # Track files the safe-apply guard rejected (INFRA-096)
+    rejected_files: List[str] = []
 
     try:
         system_prompt = f"""You are an Implementation Agent.
@@ -1508,10 +1510,19 @@ ARCHITECTURAL DECISIONS (ADRs):
                                 legacy_apply=legacy_apply,
                             )
 
+                            block_loc = 0
                             if success:
                                 block_loc = count_edit_distance(original_content, block['content'])
+                                step_modified_files.append(block['file'])
+                            else:
+                                rejected_files.append(block['file'])
+                                console.print(
+                                    f"[bold yellow]⚠️  INCOMPLETE STEP: "
+                                    f"{block['file']} was not applied. "
+                                    f"Update the runbook step to use "
+                                    f"<<<SEARCH/===/>>> format for this file.[/bold yellow]"
+                                )
                             step_loc += block_loc
-                            step_modified_files.append(block['file'])
 
                 # AC-2: Small-step enforcement
                 if step_loc > MAX_EDIT_DISTANCE_PER_STEP:
@@ -1648,11 +1659,36 @@ ARCHITECTURAL DECISIONS (ADRs):
              if b['file'] not in sr_handled
          ]
          for block in code_blocks:
-            apply_change_to_file(
+            fc_success = apply_change_to_file(
                 block['file'], block['content'], yes,
                 legacy_apply=legacy_apply,
             )
+            if not fc_success:
+                rejected_files.append(block['file'])
+                console.print(
+                    f"[bold yellow]⚠️  INCOMPLETE: {block['file']} was not applied. "
+                    f"Update the runbook step to use <<<SEARCH/===/>>> format.[/bold yellow]"
+                )
             
+    # Surface incomplete steps before governance gates so the developer
+    # sees the full picture regardless of gate outcomes.
+    if rejected_files:
+        console.print(
+            "\n[bold red]🚨 INCOMPLETE IMPLEMENTATION "
+            f"— {len(rejected_files)} file(s) were NOT applied:[/bold red]"
+        )
+        for rf in rejected_files:
+            console.print(f"  [red]• {rf}[/red]")
+        console.print(
+            "[yellow]Hint: update the runbook step(s) above to use "
+            "<<<SEARCH\n<exact lines>\n===\n<replacement>\n>>> blocks "
+            "instead of full-file output, then re-run `agent implement`.[/yellow]"
+        )
+        logging.warning(
+            "implement_incomplete story=%s rejected_files=%r",
+            story_id, rejected_files,
+        )
+
     # 1.3 AUTOMATION: Post-Apply Governance Gates
     if apply and implementation_success:
         console.print("\n[bold blue]🔒 Running Post-Apply Governance Gates...[/bold blue]")

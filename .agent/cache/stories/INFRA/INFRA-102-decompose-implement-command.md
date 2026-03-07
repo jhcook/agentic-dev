@@ -26,12 +26,14 @@ As a **Backend Engineer**, I want to **decompose the monolithic implement comman
 - [ ] **AC-6**: No circular imports — `python -c "import agent.cli"` succeeds.
 - [ ] **AC-7**: New unit tests in `tests/core/implement/test_orchestrator.py` and `tests/core/implement/test_circuit_breaker.py`.
 - [ ] **AC-8**: All new modules include PEP-484 type hints and PEP-257 docstrings.
+- [ ] **AC-9**: When `apply_change_to_file` rejects a full-file overwrite (safe-apply guard), the file is added to a `rejected_files` list, a `⚠️ INCOMPLETE STEP` warning is printed immediately with a hint to use `<<<SEARCH/===/>>>` format, and a `🚨 INCOMPLETE IMPLEMENTATION` summary listing all rejected files is printed before the governance gates. The `block_loc` uninitialised-variable bug (where LOC from a prior loop iteration was incorrectly accumulated on failure) is also corrected.
 - [ ] **Negative Test**: Circuit breaker correctly auto-commits partial work and halts execution when cumulative LOC exceeds 400.
 
 ## Non-Functional Requirements
 
 - **Performance**: Step execution latency unchanged; circuit breaker LOC tracking adds no perceptible overhead.
 - **Security**: Safe-apply guards (file overwrite protection) must be preserved in `orchestrator.py`.
+- **Reliability**: Rejected files must never be silently swallowed — an INCOMPLETE summary must always be surfaced to the developer before gates run (AC-9).
 - **Compliance**: Micro-commit atomicity (INFRA-089, INFRA-095) must be fully preserved.
 - **Observability**: OpenTelemetry spans across step execution and circuit breaker activation must be retained.
 
