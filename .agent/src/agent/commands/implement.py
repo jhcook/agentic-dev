@@ -31,11 +31,44 @@ from agent.core.config import config
 from agent.core.utils import (
     find_runbook_file,
     scrub_sensitive_data,
+    get_next_id,
 )
 from agent.core.context import context_loader
 from agent.commands.utils import update_story_state
 from agent.commands import gates
-from agent.core.utils import get_next_id
+
+# ---------------------------------------------------------------------------
+# Re-export core symbols so existing tests (that import from
+# agent.commands.implement) continue to work without modification (AC-5).
+# ---------------------------------------------------------------------------
+from agent.core.implement.circuit_breaker import (  # noqa: F401
+    count_edit_distance,
+    create_follow_up_story as _create_follow_up_story,
+    update_or_create_plan as _update_or_create_plan,
+    micro_commit_step as _micro_commit_step,
+    MAX_EDIT_DISTANCE_PER_STEP,
+    LOC_WARNING_THRESHOLD,
+    LOC_CIRCUIT_BREAKER_THRESHOLD,
+)
+from agent.core.implement.guards import (  # noqa: F401
+    enforce_docstrings,
+    backup_file,
+    apply_search_replace_to_file,
+    apply_change_to_file,
+    FILE_SIZE_GUARD_THRESHOLD,
+    SOURCE_CONTEXT_MAX_LOC,
+    SOURCE_CONTEXT_HEAD_TAIL,
+)
+from agent.core.implement.orchestrator import (  # noqa: F401
+    parse_code_blocks,
+    parse_search_replace_blocks,
+    split_runbook_into_chunks,
+    extract_modify_files,
+    build_source_context,
+    resolve_path,
+    _find_file_in_repo as find_file_in_repo,
+    _find_directories_in_repo as find_directories_in_repo,
+)
 
 try:
     from opentelemetry import trace
@@ -1287,26 +1320,76 @@ def implement(
     if app_license_template:
         license_instruction = f"\n- **CRITICAL**: All new source code files MUST begin with the following exact license header:\n{app_license_template}\n"
 
-    # Attempt 1: Full Context
-    console.print("[dim]Attempting full context execution...[/dim]")
-    
-    full_content = ""
-    fallback_needed = False
-    
-    # Track overall success
-    implementation_success = False
-    # Track files the safe-apply guard rejected (INFRA-096)
-    rejected_files: List[str] = []
+    # -----------------------------------------------------------------------
+    # Verbatim-first: if the whole runbook is self-contained (all steps have
+    # explicit File: / <<<SEARCH blocks), apply everything directly without
+    # invoking the AI at all. This path is fast, free, and deterministic.
+    # -----------------------------------------------------------------------
+    _all_sr   = parse_search_replace_blocks(runbook_content_scrubbed)
+    _all_code = parse_code_blocks(runbook_content_scrubbed)
+    if (_all_sr or _all_code) and apply:
+        console.print(
+            f"[bold green]⚡ Verbatim runbook detected "
+            f"({len(_all_sr)} S/R, {len(_all_code)} full-file blocks) "
+            f"— applying directly without AI[/bold green]"
+        )
+        rejected_files: List[str] = []
+        run_modified_files: List[str] = []
+        cumulative_loc = 0
+        implementation_success = True
 
-    try:
+        # Process S/R blocks
+        if _all_sr:
+            _sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+            for _b in _all_sr:
+                _sr_by_file[_b["file"]].append(_b)
+            for _fp, _file_blocks in _sr_by_file.items():
+                _orig = Path(_fp).read_text() if Path(_fp).exists() else ""
+                _ok, _final = apply_search_replace_to_file(_fp, _file_blocks, yes)
+                if _ok:
+                    cumulative_loc += count_edit_distance(_orig, _final)
+                    run_modified_files.append(_fp)
+
+        # Process full-file blocks
+        _sr_done = {_b["file"] for _b in _all_sr}
+        for _b in _all_code:
+            if _b["file"] in _sr_done:
+                continue
+            _viols = enforce_docstrings(_b["file"], _b["content"])
+            if _viols:
+                rejected_files.append(_b["file"])
+                console.print(f"[bold red]❌ DOCSTRING GATE: {_b['file']} ({len(_viols)} violation(s))[/bold red]")
+                for _v in _viols:
+                    console.print(f"   [red]• {_v}[/red]")
+                continue
+            _orig = Path(_b["file"]).read_text() if Path(_b["file"]).exists() else ""
+            _bloc = 0
+            _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
+            if _ok:
+                _bloc = count_edit_distance(_orig, _b["content"])
+                run_modified_files.append(_b["file"])
+                cumulative_loc += _bloc
+            else:
+                rejected_files.append(_b["file"])
+
+        full_content = f"[verbatim: {len(run_modified_files)} file(s) applied]"
+        _micro_commit_step(story_id, 1, cumulative_loc, cumulative_loc, run_modified_files)
+        console.print(f"[green]✅ All verbatim blocks applied ({cumulative_loc} LOC)[/green]")
+
+        # Skip both AI attempts and jump straight to governance gates
+        fallback_needed = False
+    else:
+        implementation_success = False
+        fallback_needed = False
+        full_content = ""
+        rejected_files: List[str] = []
+
+    if not implementation_success:
+      # Attempt 1: Full Context
+      console.print("[dim]Attempting full context execution...[/dim]")
+      try:
         system_prompt = f"""You are an Implementation Agent.
 Your goal is to EXECUTE ALL tasks defined in the provided RUNBOOK, including code, documentation, and tests.
-
-CONTEXT:
-1. RUNBOOK (The plan you must follow - ALL sections are mandatory)
-2. IMPLEMENTATION GUIDE (The process you must follow)
-3. RULES (Governance you must obey)
-4. ADRs (Architectural decisions you must respect)
 
 INSTRUCTIONS:
 - Review the ENTIRE Runbook, including:
@@ -1401,7 +1484,7 @@ ARCHITECTURAL DECISIONS (ADRs):
         
         implementation_success = True
 
-    except Exception as e:
+      except Exception as e:
         console.print(f"[yellow]⚠️ Full context failed: {e}[/yellow]")
         console.print("[bold blue]🔄 Falling back to Chunked Processing...[/bold blue]")
         fallback_needed = True
@@ -1434,6 +1517,76 @@ ARCHITECTURAL DECISIONS (ADRs):
         for idx, chunk in enumerate(chunks):
             if len(chunks) > 1:
                 console.print(f"\n[bold blue]🚀 Processing Task {idx+1}/{len(chunks)}...[/bold blue]")
+
+            # ----------------------------------------------------------------
+            # Verbatim-block short-circuit (INFRA-109 reliability fix)
+            # If the runbook chunk already contains explicit code blocks or
+            # search/replace blocks, apply them directly — no AI needed.
+            # This makes runbooks with inline code deterministic.
+            # ----------------------------------------------------------------
+            preflight_sr = parse_search_replace_blocks(chunk)
+            preflight_code = parse_code_blocks(chunk)
+            if preflight_sr or preflight_code:
+                console.print(
+                    f"[dim]⚡ Step {idx+1}: verbatim blocks detected "
+                    f"({len(preflight_sr)} S/R, {len(preflight_code)} full-file) "
+                    f"— applying directly, no AI call needed[/dim]"
+                )
+                step_loc = 0
+                step_modified_files: List[str] = []
+
+                # Apply S/R blocks first
+                if preflight_sr:
+                    sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+                    for block in preflight_sr:
+                        sr_by_file[block["file"]].append(block)
+                    for sr_filepath, file_blocks in sr_by_file.items():
+                        fp = Path(sr_filepath)
+                        orig = fp.read_text() if fp.exists() else ""
+                        ok, final = apply_search_replace_to_file(sr_filepath, file_blocks, yes)
+                        if ok:
+                            step_loc += count_edit_distance(orig, final)
+                            step_modified_files.append(sr_filepath)
+
+                # Apply full-file blocks (skip any already handled by S/R)
+                sr_done = {b["file"] for b in preflight_sr}
+                for block in preflight_code:
+                    if block["file"] in sr_done:
+                        continue
+                    violations = enforce_docstrings(block["file"], block["content"])
+                    if violations:
+                        rejected_files.append(block["file"])
+                        console.print(
+                            f"[bold red]❌ DOCSTRING GATE: {block['file']} rejected "
+                            f"({len(violations)} violation(s)):[/bold red]"
+                        )
+                        for v in violations:
+                            console.print(f"   [red]• {v}[/red]")
+                        continue
+                    fp = Path(block["file"])
+                    orig = fp.read_text() if fp.exists() else ""
+                    block_loc = 0
+                    ok = apply_change_to_file(block["file"], block["content"], yes, legacy_apply=legacy_apply)
+                    if ok:
+                        block_loc = count_edit_distance(orig, block["content"])
+                        step_modified_files.append(block["file"])
+                    else:
+                        rejected_files.append(block["file"])
+                    step_loc += block_loc
+
+                full_content += f"\n\n[verbatim step {idx+1}: {len(step_modified_files)} file(s) applied]"
+                cumulative_loc += step_loc
+                completed_steps = idx + 1
+                run_modified_files.extend(step_modified_files)
+                _micro_commit_step(story_id, idx + 1, step_loc, cumulative_loc, step_modified_files)
+                console.print(
+                    f"[green]✅ Step {idx+1} applied "
+                    f"({step_loc} LOC, {cumulative_loc} cumulative)[/green]"
+                )
+                if cumulative_loc >= LOC_CIRCUIT_BREAKER_THRESHOLD:
+                    console.print(f"[bold red]🛑 Circuit breaker: {cumulative_loc} LOC.[/bold red]")
+                    break
+                continue  # skip AI call for this chunk
 
             chunk_system_prompt = f"""You are an Implementation Agent.
 Your goal is to EXECUTE a SPECIFIC task from the provided RUNBOOK.

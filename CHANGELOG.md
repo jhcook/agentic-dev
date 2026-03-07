@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Decomposed `commands/implement.py` into focused modules under `core/implement/`:
+  - `circuit_breaker.py`: Tracks LOC edits and enforces thresholds.
+  - `guards.py`: Handles docstring enforcement and safe-apply size guards.
+  - `orchestrator.py`: Manages path resolution, block parsing, and chunking logic.
+- Retained `commands/implement.py` as a facade re-exporting symbols for backward compatibility with existing tests.
+- Fixed uninitialised-variable bug in `apply_chunk` logic.
+- **`agent implement` reliability**: Runbooks with explicit `File:`/`<<<SEARCH` blocks are now applied directly without AI regeneration, making them deterministic and CI-safe.
+- **`resolve_path` trusted-prefix fix** (INFRA-109): Paths starting with `.agent/`, `agent/`, `backend/`, `web/`, or `mobile/` now bypass fuzzy filename search, preventing silent misdirection to same-named files elsewhere in the repo.
+
 ### Added
 - Unit tests for governance roles and package facade.
 - New `agent.core.governance` package structure.

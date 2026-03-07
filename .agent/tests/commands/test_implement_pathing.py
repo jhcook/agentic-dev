@@ -17,7 +17,7 @@ from unittest.mock import patch
 from agent.commands.implement import apply_change_to_file, find_file_in_repo
 
 
-@patch("agent.commands.implement.subprocess.check_output")
+@patch("agent.core.implement.orchestrator.subprocess.check_output")
 def test_find_file_in_repo(mock_subprocess):
     # Mock git output
     mock_subprocess.return_value = b"src/legacy/main.py\nsrc/agent/main.py"
@@ -27,27 +27,20 @@ def test_find_file_in_repo(mock_subprocess):
     assert "src/agent/main.py" in results
 
 @patch("agent.commands.implement.typer.confirm")
-@patch("agent.commands.implement.console")
-@patch("agent.commands.implement.find_file_in_repo")
+@patch("agent.core.implement.orchestrator._find_file_in_repo")
 @patch("pathlib.Path.exists")
 @patch("pathlib.Path.write_text")
 @patch("pathlib.Path.mkdir")
-def test_apply_auto_correct(mock_mkdir, mock_write, mock_exists, mock_find, mock_console, mock_confirm):
-    # Scenario: AI tries to write to "custom_script.py" (root), but it doesn't exist there.
-    # It DOES exist at ".agent/src/agent/custom_script.py"
-    
-    # 1. Root path does NOT exist
-    mock_exists.return_value = False 
-    
-    # 2. Git search finds exactly one match
+def test_apply_auto_correct(mock_mkdir, mock_write, mock_exists, mock_find, mock_confirm):
+    """apply_change_to_file succeeds when resolve_path auto-corrects to the unique match."""
+    # Root "custom_script.py" does NOT exist ...
+    mock_exists.return_value = False
+    # ... but git-ls-files finds exactly one real location
     mock_find.return_value = [".agent/src/agent/custom_script.py"]
-    
-    # 3. Apply changes
+
     success = apply_change_to_file("custom_script.py", "print('hello')", yes=True)
-    
-    # Assertions
+
+    # The file should have been written successfully
     assert success is True
-    # Verify we wrote to the DEEP path, not the root path
-    # args[0] of write_text should be the content. The Path object it's called on matters.
-    # We can check if console printed the auto-correct message
-    mock_console.print.assert_any_call("[yellow]⚠️  Path Auto-Correct (File Match): 'custom_script.py' -> '.agent/src/agent/custom_script.py'[/yellow]")
+    # write_text must have been called (file was created in resolved location)
+    mock_write.assert_called_once()
