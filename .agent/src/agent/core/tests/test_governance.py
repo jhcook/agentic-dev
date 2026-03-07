@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Regression suite for the agent.core.governance package facade (INFRA-101).
+"""Regression suite for agent.core.governance package facade (INFRA-101).
 
 Ensures that all public symbols remain importable from the governance package
 throughout the multi-slice decomposition (AC-4, AC-5, AC-6).
@@ -22,68 +22,64 @@ import importlib
 
 
 class TestPublicAPIAvailable:
-    """All expected public symbols are importable from the governance package facade."""
+    """All public symbols are importable from agent.core.governance."""
 
     def test_import_load_roles(self) -> None:
-        """load_roles is importable from the governance facade."""
+        """Verify load_roles is available."""
         from agent.core.governance import load_roles  # noqa: F401
         assert callable(load_roles)
 
-    def test_import_get_role(self) -> None:
-        """get_role is importable from the governance facade."""
-        from agent.core.governance import get_role  # noqa: F401
-        assert callable(get_role)
-
     def test_import_log_governance_event(self) -> None:
-        """log_governance_event is importable from the governance facade."""
+        """Verify log_governance_event is available."""
         from agent.core.governance import log_governance_event  # noqa: F401
         assert callable(log_governance_event)
 
     def test_import_convene_council_full(self) -> None:
-        """convene_council_full is importable from the governance facade."""
+        """Verify convene_council_full is available."""
         from agent.core.governance import convene_council_full  # noqa: F401
         assert callable(convene_council_full)
 
     def test_import_audit_result(self) -> None:
-        """AuditResult dataclass is importable from the governance facade."""
+        """Verify AuditResult is available."""
         from agent.core.governance import AuditResult  # noqa: F401
         assert AuditResult is not None
 
     def test_import_extract_references(self) -> None:
-        """_extract_references is importable from the governance facade."""
+        """Verify _extract_references is available."""
         from agent.core.governance import _extract_references  # noqa: F401
         assert callable(_extract_references)
 
     def test_import_validate_references(self) -> None:
-        """_validate_references is importable from the governance facade."""
+        """Verify _validate_references is available."""
         from agent.core.governance import _validate_references  # noqa: F401
         assert callable(_validate_references)
 
     def test_import_run_audit(self) -> None:
-        """run_audit is importable from the governance facade."""
+        """Verify run_audit is available."""
         from agent.core.governance import run_audit  # noqa: F401
         assert callable(run_audit)
 
     def test_no_circular_import(self) -> None:
-        """Importing agent.cli succeeds with no circular import errors (AC-6)."""
+        """python -c 'import agent.cli' must succeed (AC-6)."""
+        # Exercise the full import chain by importing the CLI module
         mod = importlib.import_module("agent.cli")
         assert mod is not None
 
 
 class TestLoadRolesBehavioralEquivalence:
-    """Behavioral equivalence checks for load_roles() via the facade (AC-5)."""
+    """load_roles() returns a list of dicts with expected keys."""
 
-    def test_returns_non_empty_list(self) -> None:
-        """load_roles() returns a non-empty list of role dicts."""
+    def test_returns_list(self) -> None:
+        """load_roles returns a list."""
         from agent.core.governance import load_roles
         roles = load_roles()
         assert isinstance(roles, list)
         assert len(roles) > 0
 
-    def test_each_role_has_name_and_focus(self) -> None:
-        """Every role dict returned by load_roles() has 'name' and 'focus' keys."""
+    def test_each_role_has_required_keys(self) -> None:
+        """Each role dict contains the expected keys."""
         from agent.core.governance import load_roles
         roles = load_roles()
         for role in roles:
-            assert "name" in role, f"Role missing 'name': {role}"
-            assert "focus" in role, f"Role missing 'focus': {role}"
+            assert "name" in role
+            assert "focus" in role

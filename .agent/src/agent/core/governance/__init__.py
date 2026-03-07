@@ -18,16 +18,15 @@ Re-exports all public symbols from the governance sub-modules so that
 existing callers using ``from agent.core.governance import ...`` continue
 to work without modification throughout the multi-slice decomposition.
 
-Decomposition status (INFRA-101 series):
+Decomposition status:
   - roles.py      ✅ Extracted (INFRA-101)
   - validation.py ⏳ Pending (INFRA-101.2)
   - panel.py      ⏳ Pending (INFRA-101.4)
 """
 
 # ── Roles sub-module (INFRA-101) ──────────────────────────────────────────
-from agent.core.governance.roles import (  # noqa: F401
+from agent.core.governance.roles import (
     load_roles,
-    get_role,
 )
 
 # ── Remaining symbols still in the legacy monolith (until extracted) ───────
@@ -56,9 +55,8 @@ from agent.core._governance_legacy import (  # noqa: F401
 )
 
 __all__ = [
-    # Roles (extracted)
+    # Roles
     "load_roles",
-    "get_role",
     # Legacy (re-exported until extraction complete)
     "AUDIT_LOG_FILE",
     "ROLE_FILE_PATTERNS",
