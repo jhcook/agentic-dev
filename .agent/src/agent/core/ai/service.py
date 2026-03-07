@@ -227,7 +227,21 @@ class AIService:
             logging.debug("Skipping Gemini: GEMINI_API_KEY not found in environment or secrets.")
 
         # 2. Check Vertex AI
+        # Prefer the env var, then the secrets store, then fall back to
+        # google.auth.default() which reads the quota_project_id from ADC
+        # (set by `gcloud auth application-default login`).
         vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT") or get_secret("api_key", service="vertex")
+        if not vertex_proj:
+            try:
+                import google.auth
+                _, _adc_project = google.auth.default()
+                if _adc_project:
+                    vertex_proj = _adc_project
+                    logging.debug(
+                        "Vertex AI: project auto-detected from ADC: %s", vertex_proj
+                    )
+            except Exception:
+                pass
         if vertex_proj:
             # Set the env var so _build_genai_client finds it natively
             os.environ["GOOGLE_CLOUD_PROJECT"] = vertex_proj
@@ -392,11 +406,13 @@ class AIService:
                     self.provider = configured_provider
                     return
                 else:
-                    # Configured provider failed to initialise (e.g. expired credentials).
-                    # Warn clearly rather than silently falling back to a low-quality provider.
+                    # Configured provider is not in the active client pool — it either
+                    # failed to initialise or is not configured (missing env var / secret).
+                    # Surface a clear, non-alarmist notice so operators know which
+                    # provider is being bypassed and why to look.
                     console.print(
                         f"[bold yellow]⚠️  Configured provider '{configured_provider}' "
-                        f"is unavailable (credentials may be expired). "
+                        f"is not available (initialisation failed or not configured). "
                         f"Falling back to next available provider.[/bold yellow]"
                     )
                     logging.warning(
