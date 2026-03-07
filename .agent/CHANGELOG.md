@@ -4,7 +4,12 @@ All notable changes to the Agent Governance Framework will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] - 2026-02-18
+## [Unreleased]
+### Refactored
+- INFRA-108: Decomposed `core/ai/providers.py` into `core/ai/providers/` package with
+  per-provider modules (openai, vertex, anthropic, ollama, gh, mock). `AIService._try_complete`
+  and `stream_complete` now delegate to `AIProvider` instances via the `get_provider()` factory.
+  Rate-limit retry uses typed `AIRateLimitError` instead of string matching. - 2026-02-18
 
 ### Fixed
 
