@@ -83,6 +83,20 @@ def _find_directories_in_repo(dirname: str) -> List[str]:
         return []
 
 
+
+def extract_story_id(content: str) -> Optional[str]:
+    """Extract the first story ID (e.g. INFRA-042) from content.
+
+    Args:
+        content: Text to search, typically a runbook or story file.
+
+    Returns:
+        First matching story ID string, or None if not found.
+    """
+    match = re.search(r"\b([A-Z]+-\d+)\b", content)
+    return match.group(1) if match else None
+
+
 def resolve_path(filepath: str) -> Optional[Path]:
     """Resolve a file path to a real location, with fuzzy fallback.
 
