@@ -21,7 +21,7 @@ from agent.core.logger import get_logger
 
 import typer
 from rich.console import Console
-from rich.prompt import Prompt, Confirm # Needed now for UI logic
+from rich.prompt import Prompt, Confirm  # Needed now for UI logic
 from rich.panel import Panel
 import os
 
@@ -33,188 +33,14 @@ from agent.core.governance import convene_council_full
 from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.fixer import InteractiveFixer
 
+# ── INFRA-103: Re-export extracted helpers so existing mock-patch paths remain valid ──
+from agent.core.check.quality import check_journey_coverage  # noqa: F401
+from agent.core.check.system import validate_linked_journeys, validate_story  # noqa: F401
+
 
 console = Console()
 
-
-def check_journey_coverage(
-    repo_root: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """Check journey → test coverage for COMMITTED/ACCEPTED journeys.
-
-    Returns:
-        Dict with keys: passed (bool), total, linked, missing,
-        warnings (list[str]), missing_ids (list[str])
-    """
-    import yaml  # ADR-025: local import
-
-    root = repo_root or config.repo_root
-    journeys_dir = root / ".agent" / "cache" / "journeys"
-    result: Dict[str, Any] = {
-        "passed": True, "total": 0, "linked": 0, "missing": 0,
-        "warnings": [], "missing_ids": [],
-    }
-
-    if not journeys_dir.exists():
-        return result
-
-    for scope_dir in sorted(journeys_dir.iterdir()):
-        if not scope_dir.is_dir():
-            continue
-        for jfile in sorted(scope_dir.glob("JRN-*.yaml")):
-            try:
-                data = yaml.safe_load(jfile.read_text())
-            except Exception:
-                continue
-            if not isinstance(data, dict):
-                continue
-            state = (data.get("state") or "DRAFT").upper()
-            if state not in ("COMMITTED", "ACCEPTED"):
-                continue
-
-            result["total"] += 1
-            tests = data.get("implementation", {}).get("tests", [])
-            jid = data.get("id", jfile.stem)
-
-            if not tests:
-                result["missing"] += 1
-                result["missing_ids"].append(jid)
-                result["warnings"].append(f"{jid}: No tests linked")
-                result["passed"] = False
-                continue
-
-            all_exist = True
-            for t in tests:
-                tp = Path(t)
-                if tp.is_absolute():
-                    result["warnings"].append(f"{jid}: Absolute test path '{t}'")
-                    all_exist = False
-                    continue
-                if not (root / tp).exists():
-                    result["warnings"].append(f"{jid}: Test file not found: '{t}'")
-                    all_exist = False
-
-            if all_exist:
-                result["linked"] += 1
-            else:
-                result["missing"] += 1
-                result["missing_ids"].append(jid)
-                result["passed"] = False
-
-    return result
-
-
-def validate_linked_journeys(story_id: str) -> dict:
-    """
-    Validate that a story has real linked journeys (not just placeholder JRN-XXX).
-
-    Returns:
-        dict with keys: passed (bool), journey_ids (list[str]), error (str|None)
-    """
-    result = {"passed": False, "journey_ids": [], "error": None}
-
-    # Find story file
-    found_file = None
-    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-        if file_path.name.startswith(story_id):
-            found_file = file_path
-            break
-
-    if not found_file:
-        result["error"] = f"Story file not found for {story_id}"
-        return result
-
-    content = found_file.read_text(errors="ignore")
-
-    # Extract ## Linked Journeys section
-    import re as _re
-    match = _re.search(
-        r"## Linked Journeys\s*\n(.*?)(?=\n## |\Z)",
-        content,
-        _re.DOTALL,
-    )
-
-    if not match:
-        result["error"] = "Story is missing '## Linked Journeys' section"
-        return result
-
-    section_text = match.group(1).strip()
-    if not section_text:
-        result["error"] = "Story '## Linked Journeys' section is empty"
-        return result
-
-    # Extract JRN-NNN IDs (exclude placeholder JRN-XXX)
-    journey_ids = _re.findall(r"\bJRN-\d+\b", section_text)
-
-    if not journey_ids:
-        result["error"] = (
-            "No valid journey IDs found in '## Linked Journeys' — "
-            "replace the JRN-XXX placeholder with real journey IDs"
-        )
-        return result
-
-    result["passed"] = True
-    result["journey_ids"] = journey_ids
-    return result
-
-
-def validate_story(
-    story_id: str = typer.Argument(..., help="The ID of the story to validate."),
-    return_bool: bool = False,
-    interactive: bool = False
-):
-    """
-    Validate the schema and required sections of a story file.
-    """
-    # Find story file
-    # This logic is duplicated from bash `find_story_file`. 
-    # TODO: move find_story_file to agent.core.utils or similar
-    
-    found_file = None
-    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-        if file_path.name.startswith(story_id):
-            found_file = file_path
-            break
-            
-    if not found_file:
-         console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
-         if return_bool:
-             return False
-         raise typer.Exit(code=1)
-         
-    content = found_file.read_text(errors="ignore")
-    required_sections = [
-        "Problem Statement", 
-        "User Story", 
-        "Acceptance Criteria", 
-        "Non-Functional Requirements", 
-        "Impact Analysis Summary", 
-        "Test Strategy", 
-        "Rollback Plan"
-    ]
-    
-    missing = []
-    for section in required_sections:
-        if f"## {section}" not in content:
-            missing.append(section)
-            
-    if missing:
-        if interactive:
-            console.print("[yellow]Agentic Repair is currently disabled pending security compliance (approval flows).[/yellow]")
-            
-        if not interactive:
-            console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
-            console.print(f"Missing sections: {', '.join(missing)}")
-            
-        if return_bool:
-            return False
-        raise typer.Exit(code=1)
-    else:
-        console.print(f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]")
-        if return_bool:
-            return True
-
-
+logger = get_logger(__name__)
 
 def _print_reference_summary(console: Console, roles_data: list, ref_metrics: dict, finding_validation: dict | None = None) -> None:
     """Print a Governance Validation Summary combining finding validation and reference checks."""
