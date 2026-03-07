@@ -121,57 +121,106 @@ def run_security_scan(
     )
 
 
-def run_qa_gate(test_command: str = "pytest .agent/tests") -> GateResult:
-    """Execute the configured test command as a QA gate.
+def run_qa_gate(
+    test_command: "str | dict[str, str]" = "pytest",
+    modified_files: "Optional[List[str]]" = None,
+) -> GateResult:
+    """Execute the configured test suite(s) as a QA gate.
+
+    Supports two config shapes:
+
+    **Legacy — single string** (backward-compatible)::
+
+        test_command: "cd .agent/src && python -m pytest agent/ -q"
+
+    **Polyglot — directory-scoped dict**::
+
+        test_commands:
+          .agent/:  "cd .agent/src && python -m pytest agent/ -q"
+          web/:     "cd web && npm test -- --watchAll=false"
+          mobile/:  "cd mobile && npx jest --passWithNoTests"
+
+    When a dict is provided, only the commands whose key is a prefix of at
+    least one modified file are executed. If *modified_files* is empty or
+    None, all commands run (safe default for manual invocations).
 
     Args:
-        test_command: Shell command to run tests (default: ``pytest .agent/tests``).
+        test_command: Either a shell command string or a ``{prefix: command}``
+            mapping loaded from ``agent.yaml``.
+        modified_files: Repo-relative paths of files changed in this step.
+            Used to select which scoped suites to run.
 
     Returns:
-        GateResult with pass/fail based on exit code.
+        GateResult aggregating pass/fail across all selected suites.
     """
     start = time.time()
-    try:
-        result = subprocess.run(
-            test_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=300,
-        )
+
+    # ── Resolve which commands to run ────────────────────────────────────────
+    if isinstance(test_command, str):
+        commands_to_run: list[tuple[str, str]] = [("", test_command)]
+    else:
+        # Dict: match each prefix against the modified file list
+        if modified_files:
+            commands_to_run = [
+                (prefix, cmd)
+                for prefix, cmd in test_command.items()
+                if any(f.startswith(prefix.rstrip("/")) for f in modified_files)
+            ]
+        else:
+            commands_to_run = list(test_command.items())
+
+    if not commands_to_run:
         elapsed = time.time() - start
-        if result.returncode != 0:
-            # Show last 10 lines of stderr for context
-            stderr_tail = "\n".join(result.stderr.strip().splitlines()[-10:])
-            return GateResult(
-                name="QA Validation",
-                passed=False,
-                elapsed_seconds=elapsed,
-                details=f"Exit code {result.returncode}.\n{stderr_tail}",
-            )
         return GateResult(
             name="QA Validation",
             passed=True,
             elapsed_seconds=elapsed,
-            details="All tests passed.",
+            details="No test suite matched the modified files — skipped.",
         )
-    except FileNotFoundError:
-        elapsed = time.time() - start
+
+    # ── Run each selected command ─────────────────────────────────────────────
+    failures: list[str] = []
+    suite_labels: list[str] = []
+
+    for prefix, cmd in commands_to_run:
+        label = prefix.strip("/") or "default"
+        suite_labels.append(label)
+        logger.info("qa_gate suite=%s cmd=%s", label, cmd)
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=300,
+            )
+            if result.returncode != 0:
+                stderr_tail = "\n".join(result.stderr.strip().splitlines()[-10:])
+                failures.append(
+                    f"[{label}] exit {result.returncode}\n{stderr_tail}"
+                )
+        except FileNotFoundError:
+            failures.append(f"[{label}] command not found: {cmd}")
+        except subprocess.TimeoutExpired:
+            failures.append(f"[{label}] timed out after 300s")
+
+    elapsed = time.time() - start
+    suites_run = ", ".join(suite_labels)
+
+    if failures:
         return GateResult(
             name="QA Validation",
             passed=False,
             elapsed_seconds=elapsed,
-            details=f"Command not found: {test_command}",
+            details="\n".join(failures),
         )
-    except subprocess.TimeoutExpired:
-        elapsed = time.time() - start
-        return GateResult(
-            name="QA Validation",
-            passed=False,
-            elapsed_seconds=elapsed,
-            details="Test command timed out after 300s.",
-        )
+    return GateResult(
+        name="QA Validation",
+        passed=True,
+        elapsed_seconds=elapsed,
+        details=f"All tests passed ({suites_run}).",
+    )
 
 
 def run_docs_check(filepaths: List[Path]) -> GateResult:

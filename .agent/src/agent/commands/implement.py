@@ -1428,6 +1428,7 @@ ARCHITECTURAL DECISIONS (ADRs):
              ai_service.reset_provider()
 
         cumulative_loc = 0
+        run_modified_files: List[str] = []  # all files touched across all steps
         completed_steps = 0
 
         for idx, chunk in enumerate(chunks):
@@ -1625,6 +1626,8 @@ ARCHITECTURAL DECISIONS (ADRs):
 
                 cumulative_loc += step_loc
                 completed_steps = idx + 1
+
+                run_modified_files.extend(step_modified_files)
 
                 # AC-1: Save-point commit (with OTel span)
                 def _do_micro_commit():
@@ -1837,12 +1840,16 @@ ARCHITECTURAL DECISIONS (ADRs):
                 agent_cfg = _yaml.safe_load(
                     (config.etc_dir / "agent.yaml").read_text()
                 )
-                test_cmd = agent_cfg.get("agent", {}).get(
-                    "test_command", "pytest .agent/tests"
+                _agent_sec = agent_cfg.get("agent", {})
+                # Prefer test_commands (dict, polyglot) over test_command (str, legacy)
+                test_cmd: "str | dict" = (
+                    _agent_sec.get("test_commands")
+                    or _agent_sec.get("test_command")
+                    or "pytest"
                 )
             except Exception:
-                test_cmd = "pytest .agent/tests"
-            qa_result = gates.run_qa_gate(test_cmd)
+                test_cmd = "pytest"
+            qa_result = gates.run_qa_gate(test_cmd, modified_files=run_modified_files)
             gate_results.append(qa_result)
             status = "PASSED" if qa_result.passed else "BLOCKED"
             color = "green" if qa_result.passed else "red"
