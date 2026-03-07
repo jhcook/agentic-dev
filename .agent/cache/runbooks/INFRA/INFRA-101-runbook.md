@@ -78,6 +78,15 @@ L44:  AUDIT_LOG_FILE = config.agent_dir / "logs" / "audit_events.log"
 
 ## Implementation Steps
 
+### Step 0: Pre-create the package directory tree
+
+Run this once before any file steps. Creates `governance/`
+so the CLI never needs to search for an ambiguous "governance" directory.
+
+```bash
+mkdir -p .agent/src/agent/core/governance && mkdir -p .agent/tests/core/governance
+```
+
 ### Step 1: Create the `core/governance/` package directory with `__init__.py` facade
 
 The `__init__.py` re-exports **all current public symbols** from `governance.py` so no callers break during the multi-slice migration.
@@ -427,14 +436,14 @@ def get_role(name: str, roles: Optional[List[Dict]] = None) -> Optional[Dict]:
 
 ### Step 5: Create test package scaffolding
 
-> **Note**: Tests live under `agent/core/governance/tests/` to mirror the new package structure.
+> **Note**: Tests live under `.agent/tests/core/governance/` — the canonical test root for this repo, never inside `src/`.
 
-#### [NEW] .agent/src/agent/core/governance/tests/**init**.py
+#### [NEW] .agent/tests/core/governance/**init**.py
 
 ```python
 ```
 
-#### [NEW] .agent/src/agent/core/governance/tests/test_roles.py
+#### [NEW] .agent/tests/core/governance/test_roles.py
 
 ```python
 # Copyright 2026 Justin Cook
@@ -667,11 +676,11 @@ class TestFacadeImport:
         assert callable(_lr)
 ```
 
-### Step 6: Create top-level  `tests/core/test_governance.py` regression suite (AC-5)
+### Step 6: Create `.agent/tests/core/test_governance.py` regression suite (AC-5)
 
 Per AC-5 all existing tests in `tests/core/test_governance.py` must pass. Since the file does not currently exist, we create it now as a regression suite for the facade interface.
 
-#### [NEW] .agent/src/agent/core/tests/test_governance.py
+#### [NEW] .agent/tests/core/test_governance.py
 
 ```python
 # Copyright 2026 Justin Cook
