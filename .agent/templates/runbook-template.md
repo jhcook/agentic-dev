@@ -26,7 +26,7 @@ PROPOSED
 ### Test Impact Matrix
 
 | Test File | Current Patch Target | New Patch Target | Action Required |
-|-----------|---------------------|-----------------|--------------------|
+|-----------|---------------------|-----------------|-----------------|
 | (Agent: Populate from TEST IMPACT MATRIX context) | | | |
 
 ### Behavioral Contracts
@@ -39,69 +39,58 @@ PROPOSED
 
 (Agent: List tech debt or "cleanup" items here. User: Check [x] to approve implementation.)
 
-- [ ] Example: Convert prints to logger in `src/utils.py`
+- [ ] < Example cleanup item >
 
 ## Implementation Steps
 
-> **MACHINE-EXECUTABLE FORMAT RULES — Do NOT write prose; the CLI applies these literally.**
+> **Steps must be machine-executable.** Every step must use exactly one of the three
+> action markers below, followed by concrete content the CLI can apply verbatim.
+> Do NOT write prose instructions — the tool applies these literally.
 >
-> **Rule 1 — Modifying an existing file:** Use `#### [MODIFY] path/to/file.py` followed by
-> one or more exact `<<<SEARCH/===/>>>` blocks. The SEARCH text must be a verbatim excerpt
-> from the current file (copy it from the Codebase Introspection section above).
+> - **`#### [MODIFY] <path>`** — change an existing file.
+>   Follow with one or more `<<<SEARCH / === / >>>` blocks. The SEARCH text must be
+>   copied verbatim from the current file (use the Codebase Introspection section above).
 >
-> **Rule 2 — Creating a new file:** Use `#### [NEW] path/to/file.py` followed by the
-> complete file content in a fenced code block. No placeholders; the block is written verbatim.
+> - **`#### [NEW] <path>`** — create a new file.
+>   Follow with the complete file content in a fenced code block. No placeholders.
 >
-> **Rule 3 — Deleting a file:** Use `#### [DELETE] path/to/file.py` with a one-line
-> rationale comment. No code block needed.
+> - **`#### [DELETE] <path>`** — remove a file.
+>   Follow with a one-line rationale comment. No code block needed.
 >
-> **Rule 4 — Absolute paths only.** Use the full repo-relative path from the repo root,
-> e.g. `.agent/src/agent/core/ai/providers/openai.py`, not `src/agent/…`.
->
-> **Rule 5 — One concern per step.** Each `### Step N` heading must touch ≤ 1 logical unit
-> (one class, one function, one config key). Split if in doubt.
+> Use the **full repo-relative path** from the repo root for every `<path>`.
+> One logical concern per `### Step N` — split if in doubt.
 
 ### Step 1: < Descriptive title — what changes and why >
 
-#### [MODIFY] .agent/src/agent/core/example.py
+#### [MODIFY] < path/to/existing/file >
 
 ```
 <<<SEARCH
-def old_function():
-    pass
+< exact lines from the current file >
 ===
-def old_function():
-    """Docstring."""
-    return "updated"
+< replacement lines >
 >>>
 ```
 
-### Step 2: < Create new file >
+### Step 2: < Create a new file >
 
-#### [NEW] .agent/src/agent/core/ai/providers/example.py
+#### [NEW] < path/to/new/file >
 
-```python
-# Copyright 2026 Justin Cook
-# Licensed under the Apache License, Version 2.0
-"""Module docstring."""
-
-class ExampleProvider:
-    """Example."""
-    ...
+```
+< complete file content >
 ```
 
-### Step 3: < Delete obsolete file >
+### Step 3: < Remove an obsolete file >
 
-#### [DELETE] .agent/src/agent/core/ai/old_module.py
+#### [DELETE] < path/to/obsolete/file >
 
-<!-- Replaced by providers/ package in Step 2. -->
+<!-- < one-line rationale > -->
 
 ## Verification Plan
 
 ### Automated Tests
 
-- [ ] `pytest .agent/src/agent/core/ai/tests/ -v` — all AI tests pass
-- [ ] `python -c "import agent.cli"` — no circular imports
+- [ ] < Test command and expected outcome >
 
 ### Manual Verification
 
@@ -122,7 +111,7 @@ class ExampleProvider:
 ### Testing
 
 - [ ] All existing tests pass
-- [ ] New unit tests added for each new public class/function
+- [ ] New tests added for each new public interface
 
 ## Copyright
 

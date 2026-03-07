@@ -5,12 +5,7 @@ panel:
 agent:
   # provider: gemini | vertex | openai | anthropic | gh
   provider: vertex
-  test_command: >-
-    cd .agent/src && python -m pytest agent/ -q --tb=short
-    --deselect agent/core/ai/tests/test_service.py::test_complete_unknown_error_retries_provider
-    --deselect agent/core/ai/tests/test_service.py::test_try_complete_fail_fast_on_429
-    --deselect agent/core/auth/tests/test_regression_credentials.py::TestPreflightWithoutCreds::test_preflight_no_ai_no_credentials_does_not_raise
-    --deselect agent/core/auth/tests/test_regression_credentials.py::TestPreflightWithoutCreds::test_preflight_with_ai_requires_credentials
+  test_command: "cd .agent/src && python -m pytest agent/ -q --tb=short"
   models:
     gemini: models/gemini-3-pro-preview
     vertex: gemini-2.5-pro

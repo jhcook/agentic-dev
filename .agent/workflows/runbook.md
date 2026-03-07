@@ -13,41 +13,19 @@ description: Create a new implementation plan (Runbook) for a committed Story.
    - Make any necessary manual adjustments or refinements.
 
 3. **Mandatory Format Check — BEFORE accepting:**
-   Implementation steps **MUST** be machine-executable, not prose. Reject any runbook where steps contain vague instructions like "move the logic" or "update this function". Every step must use one of these formats:
+   Implementation steps **MUST** be machine-executable. Reject any runbook step written as
+   prose (e.g. "move this logic" or "update this function"). Every step must use one of:
 
-   **Modifying an existing file:**
+   - `#### [MODIFY] <full/repo/relative/path>` — followed by `<<<SEARCH/===/>>>` blocks
+     containing verbatim lines from the current file.
+   - `#### [NEW] <full/repo/relative/path>` — followed by complete file content in a
+     fenced code block. No placeholders.
+   - `#### [DELETE] <full/repo/relative/path>` — followed by a one-line rationale comment.
 
-   ```
-   #### [MODIFY] .agent/src/path/to/file.py
-   <<<SEARCH
-   <exact verbatim lines from the current file>
-   ===
-   <exact replacement lines>
-   >>>
-   ```
-
-   **Creating a new file:**
-
-   ```
-   #### [NEW] .agent/src/path/to/new_file.py
-   ```python
-   <complete file content — no placeholders>
-   ```
-
-   ```
-
-   **Deleting a file:**
-   ```
-
-   #### [DELETE] .agent/src/path/to/old_file.py
-
-   ```
-
-   Key rules enforced here (not in the CLI):
-   - Paths must be full repo-relative paths (no bare `src/` that could match node_modules).
-   - SEARCH blocks must be verbatim — copied from the Codebase Introspection section.
-   - No `<placeholder>` values anywhere in NEW file blocks.
-   - One logical concern per `### Step N`.
+   Key rules:
+   - Paths are full repo-relative paths from the repo root (no ambiguous bare directory names).
+   - SEARCH text is copied verbatim from the Codebase Introspection section — not invented.
+   - One logical concern per `### Step N` — split steps if needed.
 
 4. **Status**:
    - Once reviewed and finalized, change `## State\nPROPOSED` to `## State\nACCEPTED` if you (acting as the Architect) are satisfied.
