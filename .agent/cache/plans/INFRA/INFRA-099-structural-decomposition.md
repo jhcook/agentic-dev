@@ -46,6 +46,16 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 | **INFRA-109** | `core/implement/orchestrator.py` | Fix `resolve_path` trusted-prefix short-circuit to prevent fuzzy match overwrites |
 | **INFRA-110** | `commands/check.py` | Complete check.py decomposition to ≤500 LOC; ADC fallback, diff truncation, provider warning (AC-4/5/6 done in INFRA-103) |
 
+### Phase 6: TUI Decomposition
+
+| Story | Target File | Decomposition |
+|---|---|---|
+| **INFRA-111** | `tui/app.py` | Extract Prompt and Command Logic (`tui/prompts.py`) |
+| **INFRA-112** | `tui/app.py` | Extract Chat Integration and Selection Logging (`tui/chat.py`) |
+| **INFRA-113** | `tui/app.py` | Migrate Async Task Workers and Recovery |
+| **INFRA-114** | `tui/app.py` | Refactor TUI App Scaffold |
+| **INFRA-115** | `tui/app.py` | Validation and Test Coverage |
+
 ## Dependencies
 
 ```
@@ -60,6 +70,11 @@ INFRA-105 ──┘
 INFRA-108   ── depends on INFRA-100 (providers.py refactor)
 INFRA-109   ── independent (path resolution fix)
 INFRA-110   ── depends on INFRA-103 (completes check.py extraction)
+INFRA-111   ── independent (TUI refactoring)
+INFRA-112   ── depends on INFRA-111
+INFRA-113   ── depends on INFRA-112
+INFRA-114   ── depends on INFRA-113
+INFRA-115   ── depends on INFRA-114
 ```
 
 ## Copyright
