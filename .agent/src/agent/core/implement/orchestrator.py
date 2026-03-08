@@ -129,6 +129,14 @@ def resolve_path(filepath: str) -> Optional[Path]:
             new_path = exact[0]
             if new_path != filepath:
                 _console.print(f"[yellow]⚠️  Path Auto-Correct (File): '{filepath}' -> '{new_path}'[/yellow]")
+                logging.warning(
+                    "Path auto-corrected via fuzzy match",
+                    extra={
+                        "event": "path_auto_correction",
+                        "original_path": filepath,
+                        "resolved_path": new_path
+                    }
+                )
             return Path(new_path)
         if len(exact) > 1:
             _console.print(f"[bold red]❌ Ambiguous file path '{filepath}'. Found {len(exact)} matches.[/bold red]")
@@ -149,6 +157,14 @@ def resolve_path(filepath: str) -> Optional[Path]:
                 rest = Path(*parts[i + 1:])
                 new_full = Path(dir_candidates[0]) / rest
                 _console.print(f"[yellow]⚠️  Path Auto-Correct (Dir): '{filepath}' -> '{new_full}'[/yellow]")
+                logging.warning(
+                    "Path auto-corrected via fuzzy match",
+                    extra={
+                        "event": "path_auto_correction",
+                        "original_path": filepath,
+                        "resolved_path": str(new_full)
+                    }
+                )
                 return new_full
             _console.print(f"[bold red]❌ Ambiguous directory '{part}'. Found {len(dir_candidates)} matches.[/bold red]")
             return None
