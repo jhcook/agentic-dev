@@ -39,10 +39,12 @@ logging.getLogger("backoff").setLevel(logging.ERROR)
 from agent.core.config import get_valid_providers
 from agent.core.ai import protocols  # noqa: F401 — ensures protocols module is importable
 from agent.core.ai import streaming  # noqa: F401 — ensures streaming module is importable
+from agent.core.logger import get_logger
 from agent.core.router import router
 from agent.core.secrets import get_secret
 
 console = Console()
+logger = get_logger(__name__)
 
 ai_command_runs_total = Counter(
     "ai_command_runs_total",
@@ -227,7 +229,22 @@ class AIService:
             logging.debug("Skipping Gemini: GEMINI_API_KEY not found in environment or secrets.")
 
         # 2. Check Vertex AI
+        # Prefer the env var, then the secrets store, then fall back to
+        # google.auth.default() which reads the quota_project_id from ADC
+        # (set by `gcloud auth application-default login`).
         vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT") or get_secret("api_key", service="vertex")
+        if not vertex_proj:
+            try:
+                import google.auth
+                _, _adc_project = google.auth.default()
+                if _adc_project:
+                    vertex_proj = _adc_project
+                    logger.debug(
+                        "Vertex AI: project auto-detected from ADC",
+                        extra={"project_id": vertex_proj},
+                    )
+            except Exception:
+                pass
         if vertex_proj:
             # Set the env var so _build_genai_client finds it natively
             os.environ["GOOGLE_CLOUD_PROJECT"] = vertex_proj
@@ -306,9 +323,9 @@ class AIService:
         from urllib.parse import urlparse
         parsed = urlparse(ollama_host)
         if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
-            logging.warning(
-                "OLLAMA_HOST=%s is not localhost — skipping for security.",
-                ollama_host,
+            logger.warning(
+                "Skipping Ollama: remote host rejected for security",
+                extra={"ollama_host": ollama_host},
             )
         else:
             try:
@@ -387,16 +404,33 @@ class AIService:
         try:
             agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
             configured_provider = config.get_value(agent_config, "agent.provider")
-            if configured_provider and configured_provider in self.clients:
-                self.provider = configured_provider
-                return
+            if configured_provider:
+                if configured_provider in self.clients:
+                    self.provider = configured_provider
+                    return
+                else:
+                    # Configured provider is not in the active client pool — it either
+                    # failed to initialise or is not configured (missing env var / secret).
+                    # Surface a clear, non-alarmist notice so operators know which
+                    # provider is being bypassed and why to look.
+                    console.print(
+                        f"[bold yellow]⚠️  Configured provider '{configured_provider}' "
+                        f"is not available (initialisation failed or not configured). "
+                        f"Falling back to next available provider.[/bold yellow]"
+                    )
+                    logger.warning(
+                        "Configured provider is not available",
+                        extra={"provider": configured_provider, "reason": "initialisation failed or not configured"},
+                    )
         except Exception:
             pass
 
         # 2. Hardcoded Fallback Priority
-        if 'gh' in self.clients:
-            self.provider = 'gh'
-        elif 'gemini' in self.clients:
+        # 'gh' is last: it is a free-tier, rate-limited provider. All configured
+        # providers (gemini, vertex, openai, anthropic) should be preferred.
+        # Context-length is not the concern — chunking handles that — but
+        # rate limits and model quality make gh an absolute last resort.
+        if 'gemini' in self.clients:
             self.provider = 'gemini'
         elif 'vertex' in self.clients:
             self.provider = 'vertex'
@@ -406,6 +440,8 @@ class AIService:
             self.provider = 'anthropic'
         elif 'ollama' in self.clients:
             self.provider = 'ollama'
+        elif 'gh' in self.clients:
+            self.provider = 'gh'
         else:
             self.provider = None
             
@@ -444,9 +480,10 @@ class AIService:
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
         """
-        # Chain order: gh -> gemini -> vertex -> openai -> anthropic -> ollama
-        # TODO: This chain could also be dynamic from config
-        fallback_chain = ['gh', 'gemini', 'vertex', 'openai', 'anthropic', 'ollama']
+        # Chain order: gemini -> vertex -> openai -> anthropic -> ollama -> gh
+        # gh is last: free-tier rate limits make it an absolute last resort
+        # (context limits are handled by chunking, not provider selection)
+        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'ollama', 'gh']
         
         current_idx = -1
         try:

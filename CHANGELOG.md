@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **INFRA-103**: Decomposed `commands/check.py` (1,768 LOC) into a thin CLI
+  facade plus `core/check/system.py` (credential validation, story schema,
+  journey linkage) and `core/check/quality.py` (journey coverage). All existing
+  callers and mock-patch paths remain unaffected via re-exports. New unit tests
+  added in `tests/core/check/`.
+
 ### Changed
 
 - Decomposed `commands/implement.py` into focused modules under `core/implement/`:
@@ -77,3 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Refactored `agent implement` chunked processing loop to support atomic save points and size enforcement.
+
+## Copyright
+
+Copyright 2026 Justin Cook

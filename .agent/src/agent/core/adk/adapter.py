@@ -79,6 +79,8 @@ class AIServiceModelAdapter(BaseLlm):
         _try_complete() itself.
 
         Acquires a threading.Semaphore to cap concurrent API calls.
+        Temperature is fixed at 0.0 to maximise determinism across
+        successive preflight runs.
         """
         with _thread_semaphore:
             self._ai_service._ensure_initialized()
@@ -89,7 +91,8 @@ class AIServiceModelAdapter(BaseLlm):
             configured_model = config.get_model(provider)
             
             result = self._ai_service._try_complete(
-                provider, system_prompt, user_prompt, configured_model
+                provider, system_prompt, user_prompt, configured_model,
+                temperature=0.0,  # deterministic governance reviews
             )
         return (result or "")[:50_000]
 

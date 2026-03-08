@@ -50,6 +50,13 @@ logger = logging.getLogger(__name__)
 #   - Actual LLM inference time (~10-30s per call)
 AGENT_TIMEOUT = 300
 
+# Maximum diff characters sent to the governance council in a single prompt.
+# Leaves headroom for story + rules + ADRs in a 128k-token context window.
+# Drops to 6 000 for the 'gh' provider (free-tier, ~8k token cap) to match
+# the native governance path's chunking behaviour in _governance_legacy.py.
+MAX_DIFF_CHARS_DEFAULT = 40_000
+MAX_DIFF_CHARS_GH = 6_000
+
 
 def _parse_agent_output(output: str) -> Dict:
     """Parses structured agent output into a findings dict.
@@ -177,11 +184,17 @@ async def _orchestrate_async(
     user_question: Optional[str] = None,
     adrs_content: str = "",
     progress_callback: Optional[callable] = None,
+    previous_verdicts: Optional[Dict] = None,
 ) -> Dict:
     """Async orchestration of all role agents.
 
     Creates the AIServiceModelAdapter, tool suite, and role agents, then
     runs each agent and aggregates results into the standard audit format.
+
+    Args:
+        previous_verdicts: Optional dict of role_name -> {verdict, summary}
+            from the most recent .preflight_result cache. Injected into the
+            prompt so agents cannot re-raise already-resolved findings.
     """
     start_time = time.time()
 
@@ -204,6 +217,37 @@ async def _orchestrate_async(
 
     json_roles = []
 
+    from agent.core.ai import ai_service as _ai_svc
+    # Ensure the service is initialised so provider is resolved (not None/empty).
+    # The ADK adapter will also call _ensure_initialized() per-agent, but we need
+    # the provider name now to choose the correct diff-size limit.
+    try:
+        _ai_svc._ensure_initialized()
+    except Exception:
+        pass  # Best-effort; fall back to the conservative default below.
+    _provider = getattr(_ai_svc, "provider", None) or ""
+
+    # Provider-aware diff limit:
+    #   gh              →   6 000 chars  (free-tier, ~8k token cap)
+    #   vertex / gemini → 200 000 chars  (Gemini 2.5 Pro: 1M token context)
+    #   anthropic       → 200 000 chars  (Claude: 200k token context)
+    #   all others      →  40 000 chars  (conservative safe default)
+    _LARGE_CONTEXT_PROVIDERS = {"vertex", "gemini", "anthropic"}
+    if _provider == "gh":
+        _max_diff = MAX_DIFF_CHARS_GH
+    elif _provider in _LARGE_CONTEXT_PROVIDERS:
+        _max_diff = 200_000
+    else:
+        _max_diff = MAX_DIFF_CHARS_DEFAULT
+    _diff_truncated = False
+    if len(full_diff) > _max_diff:
+        full_diff = full_diff[:_max_diff]
+        _diff_truncated = True
+        logger.warning(
+            "Diff truncated for governance review",
+            extra={"provider": _provider, "max_diff_chars": _max_diff},
+        )
+
     # Build user prompt once (same for all agents)
     user_prompt = f"<story>{story_content}</story>\n<rules>{rules_content}</rules>\n"
     if adrs_content:
@@ -213,6 +257,28 @@ async def _orchestrate_async(
     if user_question:
         user_prompt += f"<question>{user_question}</question>\n"
     user_prompt += f"<diff>{full_diff}</diff>"
+    if _diff_truncated:
+        user_prompt += (
+            "\n\n[NOTE: The diff shown above was truncated due to provider context limits. "
+            "Review the visible changes only. Do NOT flag issues you cannot confirm "
+            "from the partial diff.]"
+        )
+
+    # Inject previous verdicts so agents cannot oscillate on already-resolved findings.
+    if previous_verdicts:
+        lines = ["<previous_verdicts>"]
+        lines.append(
+            "These are the verdicts from the PREVIOUS preflight run for this story. "
+            "Treat any role that was PASS in the previous run as already-resolved for "
+            "those findings — do NOT re-raise them unless new code since that run "
+            "introduces a fresh violation."
+        )
+        for role_name, rv in previous_verdicts.items():
+            v = rv.get("verdict", "UNKNOWN")
+            s = rv.get("summary", "")
+            lines.append(f"  {role_name}: {v} — {s}")
+        lines.append("</previous_verdicts>")
+        user_prompt += "\n\n" + "\n".join(lines)
 
     async def _run_single_agent(agent):
         """Run a single agent and return parsed role_data dict."""
@@ -499,6 +565,10 @@ def convene_council_adk(
     Bridges the sync CLI world to the async ADK world via asyncio.run().
     Falls through to the caller (governance.py) if any exception is raised.
 
+    Reads per-role verdicts from .preflight_result (if present and for this
+    story) and injects them into the prompt so agents cannot oscillate on
+    already-resolved findings.
+
     Args:
         story_id: Story identifier.
         story_content: Full story markdown.
@@ -514,6 +584,20 @@ def convene_council_adk(
     Returns:
         Dict with 'verdict', 'log_file', and 'json_report'.
     """
+    import json as _json
+
+    # Load previous role verdicts from .preflight_result so agents can see
+    # what was already decided and avoid oscillating.
+    previous_verdicts: Optional[Dict] = None
+    _marker_path = config.cache_dir / ".preflight_result"
+    try:
+        if _marker_path.exists():
+            _cached = _json.loads(_marker_path.read_text())
+            if _cached.get("story_id") == story_id:
+                previous_verdicts = _cached.get("role_verdicts")
+    except Exception:
+        pass  # Best-effort — missing cache is fine
+
     return asyncio.run(
         _orchestrate_async(
             roles=roles,
@@ -526,5 +610,6 @@ def convene_council_adk(
             user_question=user_question,
             adrs_content=adrs_content,
             progress_callback=progress_callback,
+            previous_verdicts=previous_verdicts,
         )
     )
