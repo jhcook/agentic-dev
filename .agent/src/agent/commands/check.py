@@ -127,6 +127,24 @@ def _print_reference_summary(console: Console, roles_data: list, ref_metrics: di
         console.print("[dim]🔍 No governance findings or references to validate.[/dim]")
 
 
+
+def validate_story(
+    story_id: str = typer.Argument(..., help="Story ID to validate, e.g. INFRA-103"),
+) -> None:
+    """Validate that a story file has all required sections."""
+    from agent.core.check.system import validate_story as _validate_story
+    from rich.console import Console
+    _console = Console()
+    result = _validate_story(story_id)
+    if result["passed"]:
+        _console.print(f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]")
+    else:
+        _console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
+        if result["error"]:
+            _console.print(f"[red]{result['error']}[/red]")
+        raise typer.Exit(code=1)
+
+
 def preflight(
     story_id: Optional[str] = typer.Option(None, "--story", help="The story ID to validate against."),
     offline: bool = typer.Option(False, "--offline", help="Disable AI-powered governance review."),
@@ -229,14 +247,20 @@ def preflight(
     json_report["story_id"] = story_id
 
     # 1. Validate Story First
-    if not validate_story(story_id, return_bool=True, interactive=interactive):
-        msg = "Story validation failed."
-        console.print(f"[bold red]❌ Preflight failed: {msg}[/bold red]")
+    _story_result = validate_story(story_id)
+    if not _story_result["passed"]:
+        if _story_result["story_file"] is None:
+            msg = f"Story file not found for {story_id}"
+        else:
+            msg = _story_result["error"] or "Story validation failed."
+        console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
+        console.print(f"[red]{msg}[/red]")
         if report_file:
              json_report["error"] = msg
              import json
              report_file.write_text(json.dumps(json_report, indent=2))
         raise typer.Exit(code=1)
+    console.print(f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]")
 
     # 1.1 Notion Sync Awareness (Oracle Pattern)
     if not legacy_context:
@@ -936,9 +960,9 @@ def preflight(
             ).stdout.strip()
             _overall = result.get("json_report", {}).get("overall_verdict", "UNKNOWN")
             _role_verdicts = {
-                r["role"]: {"verdict": r.get("verdict", "UNKNOWN"), "summary": r.get("summary", "")}
+                r["name"]: {"verdict": r.get("verdict", "UNKNOWN"), "summary": r.get("summary", "")}
                 for r in _roles_data
-                if "role" in r
+                if "name" in r
             }
             _marker_path.write_text(_json.dumps({
                 "story_id": story_id,

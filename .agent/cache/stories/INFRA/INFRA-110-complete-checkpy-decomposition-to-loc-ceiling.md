@@ -25,6 +25,11 @@ INFRA-099
 - [x] **AC-5 (Diff Truncation)** *(done — INFRA-103)*: ADK orchestrator applies provider-aware limits (vertex/gemini=200k, gh=6k, default=40k). Provider resolved post `_ensure_initialized()` so name is never empty.
 - [x] **AC-6 (Provider Fallback Warning)** *(done — INFRA-103)*: Neutral warning when configured provider is not in active client pool.
 - [x] **AC-7 (Implement Gate as Warning)** *(done — INFRA-103)*: `agent implement` post-apply gate failures produce a `⚠️` warning and set story state to `REVIEW_NEEDED` instead of blocking the run. `preflight` remains the hard gatekeeper. Tests in `tests/core/check/test_implement_gate.py`.
+- [x] **AC-8 (Governance Determinism — temperature)** *(done — INFRA-103)*: ADK governance adapter passes `temperature=0.0` on all LLM calls, matching the native path's gatekeeper-mode behaviour. Both paths now converge on a deterministic response.
+- [x] **AC-9 (Governance Determinism — previous verdicts)** *(done — INFRA-103)*: Per-role verdicts written to `.preflight_result` (PASS and BLOCK runs). Next run reads them and injects a `<previous_verdicts>` block into every agent's prompt, preventing oscillation on resolved findings.
+- [x] **AC-10 (Governance Determinism — scope lock)** *(done — INFRA-103)*: `SCOPE RULES` added to all governance agent system prompts: cite sources or pass, acknowledge documented co-commits, don't contradict previous verdicts.
+- [x] **AC-11 (validate_story TypedDict)** *(done — INFRA-103)*: `core/check/system.validate_story` now returns `ValidateStoryResult` TypedDict; rich/typer logic moved to a thin `commands/check.validate_story` CLI wrapper — decoupling core from presentation per ADR-041.
+- [ ] **AC-12 (preflight() decomposition)**: The `preflight()` function in `commands/check.py` is currently ~1 000 LOC. It must be decomposed: governance orchestration, report formatting, and credential checks extracted to `core/check/` sub-modules. `preflight()` facade must reach ≤500 LOC.
 
 ## Non-Functional Requirements
 

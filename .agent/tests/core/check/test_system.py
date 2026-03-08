@@ -89,7 +89,7 @@ def test_validate_linked_journeys_not_found(tmp_path):
 
 
 def test_validate_story_pass(tmp_path):
-    """Full story with all required sections returns True when return_bool=True."""
+    """Full story with all required sections returns passed=True."""
     mock_stories = tmp_path / "stories"
     mock_stories.mkdir()
     (mock_stories / "INFRA").mkdir()
@@ -105,13 +105,15 @@ def test_validate_story_pass(tmp_path):
     )
 
     with patch("agent.core.config.config.stories_dir", mock_stories):
-        result = validate_story("INFRA-001", return_bool=True)
+        result = validate_story("INFRA-001")
 
-    assert result is True
+    assert result["passed"] is True
+    assert result["missing_sections"] == []
+    assert result["error"] is None
 
 
 def test_validate_story_missing_sections(tmp_path):
-    """Story missing sections returns False when return_bool=True."""
+    """Story missing sections returns passed=False with missing_sections listed."""
     mock_stories = tmp_path / "stories"
     mock_stories.mkdir()
     (mock_stories / "INFRA").mkdir()
@@ -120,20 +122,24 @@ def test_validate_story_missing_sections(tmp_path):
     )
 
     with patch("agent.core.config.config.stories_dir", mock_stories):
-        result = validate_story("INFRA-002", return_bool=True)
+        result = validate_story("INFRA-002")
 
-    assert result is False
+    assert result["passed"] is False
+    assert "User Story" in result["missing_sections"]
+    assert result["error"] is not None
 
 
 def test_validate_story_not_found_returns_false(tmp_path):
-    """Missing story file returns False when return_bool=True (no exception)."""
+    """Missing story file returns passed=False, story_file=None (no exception)."""
     mock_stories = tmp_path / "stories"
     mock_stories.mkdir()
 
     with patch("agent.core.config.config.stories_dir", mock_stories):
-        result = validate_story("INFRA-999", return_bool=True)
+        result = validate_story("INFRA-999")
 
-    assert result is False
+    assert result["passed"] is False
+    assert result["story_file"] is None
+    assert result["error"] is not None
 
 
 # ─── check_credentials ────────────────────────────────────────────────────────

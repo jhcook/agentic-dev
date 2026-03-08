@@ -53,7 +53,12 @@ As a **Backend Engineer**, I want to **decompose the monolithic check command in
   - `core/check/__init__.py` (new — re-exports public API)
 - **Workflows affected**: `agent check`, `agent preflight` (which calls governance checks).
 - **Risks identified**: `check_journey_coverage` is called both by `check.py` and `governance.py` — its new location in `core/check/quality.py` must be importable from `governance/validation.py` without creating a circular dependency.
-- **Out-of-scope changes co-committed**: ADC fallback, diff truncation, implement-gate-as-warning, and provider fallback warning are tracked and documented in **INFRA-110**.
+- **Out-of-scope changes co-committed** (all tracked and documented in **INFRA-110**):
+  - ADC fallback, provider-aware diff truncation, implement-gate-as-warning, provider fallback warning
+  - `temperature=0.0` on all ADK governance LLM calls (`core/adk/adapter.py`) for parity with the native path which already uses `0.0` in gatekeeper mode
+  - Per-role verdicts persisted to `.preflight_result` after every council run (PASS and BLOCK); read back and injected as `<previous_verdicts>` block into the next run's prompt to prevent oscillation
+  - `SCOPE RULES` added to governance agent system prompts to enforce evidence-only findings
+  - `core/check/system.validate_story` refactored from `Optional[bool]` + rich/typer to a pure `ValidateStoryResult` TypedDict; CLI presentation moved to a thin `commands/check.validate_story` wrapper
 
 ## Test Strategy
 

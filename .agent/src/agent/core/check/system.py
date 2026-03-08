@@ -25,8 +25,6 @@ import re
 from pathlib import Path
 from typing import List, Optional, TypedDict
 
-import typer
-
 from agent.core.config import config
 from agent.core.logger import get_logger
 
@@ -117,30 +115,38 @@ def validate_linked_journeys(story_id: str) -> LinkedJourneysResult:
     return result
 
 
-def validate_story(
-    story_id: str,
-    return_bool: bool = False,
-    interactive: bool = False,
-) -> Optional[bool]:
+class ValidateStoryResult(TypedDict):
+    """Structured return value from :func:`validate_story`."""
+
+    passed: bool
+    missing_sections: List[str]
+    story_file: Optional[str]
+    error: Optional[str]
+
+
+def validate_story(story_id: str) -> ValidateStoryResult:
     """Validate the schema and required sections of a story file.
+
+    Pure data function — no console output, no process control.
+    Callers in the ``commands`` layer are responsible for printing
+    messages and handling exit codes.
 
     Args:
         story_id: The story identifier, e.g. ``"INFRA-103"``.
-        return_bool: When *True* return a boolean instead of raising.
-        interactive: When *True* print a note about agentic repair being
-            disabled (informational only).
 
     Returns:
-        ``True`` when *return_bool* is set and validation passes; ``False``
-        when *return_bool* is set and validation fails; ``None`` otherwise.
-
-    Raises:
-        typer.Exit: With code 1 when *return_bool* is False and validation
-            fails.
+        :class:`ValidateStoryResult` with keys:
+            - ``passed`` (bool): True when all required sections are present.
+            - ``missing_sections`` (list[str]): Sections absent from the file.
+            - ``story_file`` (str | None): Resolved file path, or None if not found.
+            - ``error`` (str | None): Human-readable error, or None on success.
     """
-    from rich.console import Console  # ADR-025
-
-    _console = Console()
+    result: ValidateStoryResult = {
+        "passed": False,
+        "missing_sections": [],
+        "story_file": None,
+        "error": None,
+    }
 
     found_file = None
     for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
@@ -149,12 +155,11 @@ def validate_story(
             break
 
     if not found_file:
-        _console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
+        result["error"] = f"Story file not found for {story_id}"
         logger.warning("Story file not found", extra={"story_id": story_id})
-        if return_bool:
-            return False
-        raise typer.Exit(code=1)
+        return result
 
+    result["story_file"] = str(found_file)
     content = found_file.read_text(errors="ignore")
     required_sections = [
         "Problem Statement",
@@ -167,30 +172,16 @@ def validate_story(
     ]
 
     missing = [s for s in required_sections if f"## {s}" not in content]
+    result["missing_sections"] = missing
 
     if missing:
-        if interactive:
-            _console.print(
-                "[yellow]Agentic Repair is currently disabled pending security compliance "
-                "(approval flows).[/yellow]"
-            )
-        else:
-            _console.print(
-                f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]"
-            )
-            _console.print(f"Missing sections: {', '.join(missing)}")
-
+        result["error"] = f"Missing sections: {', '.join(missing)}"
         logger.warning(
             "Story schema validation failed",
             extra={"story_id": story_id, "missing_sections": missing},
         )
-        if return_bool:
-            return False
-        raise typer.Exit(code=1)
+        return result
 
-    _console.print(
-        f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]"
-    )
+    result["passed"] = True
     logger.info("Story schema validation passed", extra={"story_id": story_id})
-    if return_bool:
-        return True
+    return result
