@@ -238,9 +238,8 @@ async def _orchestrate_async(
         full_diff = full_diff[:_max_diff]
         _diff_truncated = True
         logger.warning(
-            "Diff truncated to %d chars for provider '%s' "
-            "(original was larger). Governance review covers partial diff.",
-            _max_diff, _provider,
+            "Diff truncated for governance review",
+            extra={"provider": _provider, "max_diff_chars": _max_diff},
         )
 
     # Build user prompt once (same for all agents)

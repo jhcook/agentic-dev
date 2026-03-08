@@ -39,10 +39,12 @@ logging.getLogger("backoff").setLevel(logging.ERROR)
 from agent.core.config import get_valid_providers
 from agent.core.ai import protocols  # noqa: F401 — ensures protocols module is importable
 from agent.core.ai import streaming  # noqa: F401 — ensures streaming module is importable
+from agent.core.logger import get_logger
 from agent.core.router import router
 from agent.core.secrets import get_secret
 
 console = Console()
+logger = get_logger(__name__)
 
 ai_command_runs_total = Counter(
     "ai_command_runs_total",
@@ -320,9 +322,9 @@ class AIService:
         from urllib.parse import urlparse
         parsed = urlparse(ollama_host)
         if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
-            logging.warning(
-                "OLLAMA_HOST=%s is not localhost — skipping for security.",
-                ollama_host,
+            logger.warning(
+                "Skipping Ollama: remote host rejected for security",
+                extra={"ollama_host": ollama_host},
             )
         else:
             try:
@@ -415,8 +417,9 @@ class AIService:
                         f"is not available (initialisation failed or not configured). "
                         f"Falling back to next available provider.[/bold yellow]"
                     )
-                    logging.warning(
-                        "configured_provider_unavailable provider=%s", configured_provider
+                    logger.warning(
+                        "Configured provider is not available",
+                        extra={"provider": configured_provider, "reason": "initialisation failed or not configured"},
                     )
         except Exception:
             pass
