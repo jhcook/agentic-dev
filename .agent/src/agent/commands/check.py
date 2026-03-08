@@ -924,6 +924,32 @@ def preflight(
         if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
             _print_reference_summary(console, _roles_data, _ref_metrics, _fv_metrics)
 
+        # Persist per-role verdicts to .preflight_result immediately after the council
+        # runs (PASS *and* BLOCK). The next run reads this to inject previous verdicts
+        # into the prompt so agents cannot oscillate on already-resolved findings.
+        try:
+            import json as _json
+            import time as _time
+            _marker_path = config.cache_dir / ".preflight_result"
+            _head_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+            ).stdout.strip()
+            _overall = result.get("json_report", {}).get("overall_verdict", "UNKNOWN")
+            _role_verdicts = {
+                r["role"]: {"verdict": r.get("verdict", "UNKNOWN"), "summary": r.get("summary", "")}
+                for r in _roles_data
+                if "role" in r
+            }
+            _marker_path.write_text(_json.dumps({
+                "story_id": story_id,
+                "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "commit": _head_sha,
+                "verdict": _overall,
+                "role_verdicts": _role_verdicts,
+            }, indent=2))
+        except Exception:
+            pass  # Best-effort, non-critical
+
         if not governance_passed:
             if report_file:
                 json_report["overall_verdict"] = "BLOCK"
@@ -973,22 +999,8 @@ def preflight(
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
-    # Write preflight result marker for downstream consumers (e.g. `agent pr`)
-    try:
-        import json as _json
-        import time as _time
-        _marker_path = config.cache_dir / ".preflight_result"
-        _head_sha = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
-        ).stdout.strip()
-        _marker_path.write_text(_json.dumps({
-            "story_id": story_id,
-            "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "commit": _head_sha,
-            "verdict": "PASS",
-        }, indent=2))
-    except Exception:
-        pass  # Best-effort, non-critical
+
+
 
     if report_file:
          import json

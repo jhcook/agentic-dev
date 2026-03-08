@@ -184,11 +184,17 @@ async def _orchestrate_async(
     user_question: Optional[str] = None,
     adrs_content: str = "",
     progress_callback: Optional[callable] = None,
+    previous_verdicts: Optional[Dict] = None,
 ) -> Dict:
     """Async orchestration of all role agents.
 
     Creates the AIServiceModelAdapter, tool suite, and role agents, then
     runs each agent and aggregates results into the standard audit format.
+
+    Args:
+        previous_verdicts: Optional dict of role_name -> {verdict, summary}
+            from the most recent .preflight_result cache. Injected into the
+            prompt so agents cannot re-raise already-resolved findings.
     """
     start_time = time.time()
 
@@ -257,6 +263,22 @@ async def _orchestrate_async(
             "Review the visible changes only. Do NOT flag issues you cannot confirm "
             "from the partial diff.]"
         )
+
+    # Inject previous verdicts so agents cannot oscillate on already-resolved findings.
+    if previous_verdicts:
+        lines = ["<previous_verdicts>"]
+        lines.append(
+            "These are the verdicts from the PREVIOUS preflight run for this story. "
+            "Treat any role that was PASS in the previous run as already-resolved for "
+            "those findings — do NOT re-raise them unless new code since that run "
+            "introduces a fresh violation."
+        )
+        for role_name, rv in previous_verdicts.items():
+            v = rv.get("verdict", "UNKNOWN")
+            s = rv.get("summary", "")
+            lines.append(f"  {role_name}: {v} — {s}")
+        lines.append("</previous_verdicts>")
+        user_prompt += "\n\n" + "\n".join(lines)
 
     async def _run_single_agent(agent):
         """Run a single agent and return parsed role_data dict."""
@@ -543,6 +565,10 @@ def convene_council_adk(
     Bridges the sync CLI world to the async ADK world via asyncio.run().
     Falls through to the caller (governance.py) if any exception is raised.
 
+    Reads per-role verdicts from .preflight_result (if present and for this
+    story) and injects them into the prompt so agents cannot oscillate on
+    already-resolved findings.
+
     Args:
         story_id: Story identifier.
         story_content: Full story markdown.
@@ -558,6 +584,20 @@ def convene_council_adk(
     Returns:
         Dict with 'verdict', 'log_file', and 'json_report'.
     """
+    import json as _json
+
+    # Load previous role verdicts from .preflight_result so agents can see
+    # what was already decided and avoid oscillating.
+    previous_verdicts: Optional[Dict] = None
+    _marker_path = config.cache_dir / ".preflight_result"
+    try:
+        if _marker_path.exists():
+            _cached = _json.loads(_marker_path.read_text())
+            if _cached.get("story_id") == story_id:
+                previous_verdicts = _cached.get("role_verdicts")
+    except Exception:
+        pass  # Best-effort — missing cache is fine
+
     return asyncio.run(
         _orchestrate_async(
             roles=roles,
@@ -570,5 +610,6 @@ def convene_council_adk(
             user_question=user_question,
             adrs_content=adrs_content,
             progress_callback=progress_callback,
+            previous_verdicts=previous_verdicts,
         )
     )
