@@ -35,7 +35,7 @@ from agent.core.fixer import InteractiveFixer
 
 # ── INFRA-103: Re-export extracted helpers so existing mock-patch paths remain valid ──
 from agent.core.check.quality import check_journey_coverage  # noqa: F401
-from agent.core.check.system import validate_linked_journeys, validate_story  # noqa: F401
+from agent.core.check.system import validate_linked_journeys  # noqa: F401
 
 
 console = Console()
@@ -247,7 +247,8 @@ def preflight(
     json_report["story_id"] = story_id
 
     # 1. Validate Story First
-    _story_result = validate_story(story_id)
+    from agent.core.check.system import validate_story as _validate_story_core
+    _story_result = _validate_story_core(story_id)
     if not _story_result["passed"]:
         if _story_result["story_file"] is None:
             msg = f"Story file not found for {story_id}"
