@@ -58,23 +58,19 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 
 ## Dependencies
 
-```
-INFRA-100 ──┬── INFRA-108 (depends on INFRA-100's providers.py output)
-INFRA-101 ──┤
-INFRA-102 ──┤── all others independent, can run in any order
-INFRA-103 ──┤
-INFRA-104 ──┤
+```text
+INFRA-100 ──┬── INFRA-108 (save for last)
+INFRA-101   │
+INFRA-102 ──┼── INFRA-109 (independent path fix)
+INFRA-103 ──┼── INFRA-110 (completes INFRA-103)
 INFRA-105 ──┘
-             └── INFRA-106 (must run last among Phase 1-4)
 
-INFRA-108   ── depends on INFRA-100 (providers.py refactor)
-INFRA-109   ── independent (path resolution fix)
-INFRA-110   ── depends on INFRA-103 (completes check.py extraction)
-INFRA-111   ── independent (TUI refactoring)
-INFRA-112   ── depends on INFRA-111
-INFRA-113   ── depends on INFRA-112
-INFRA-114   ── depends on INFRA-113
-INFRA-115   ── depends on INFRA-114
+TUI Chain (replaces INFRA-104):
+INFRA-111 ──> INFRA-112 ──> INFRA-113 ──> INFRA-114 ──> INFRA-115
+
+After all above:
+  └── INFRA-106 (LOC enforcement script)
+       └── INFRA-108 (Final Protocol Refactor)
 ```
 
 ## Copyright

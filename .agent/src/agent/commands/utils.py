@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Valid story states recognised by the agent workflow.
 _VALID_STATES = frozenset({
     "DRAFT", "READY", "IN_PROGRESS", "COMMITTED", "DONE",
-    "BLOCKED", "RETIRED", "DEPRECATED", "SUPERSEDED",
+    "BLOCKED", "RETIRED", "DEPRECATED", "SUPERSEDED", "REVIEW_NEEDED",
 })
 
 
