@@ -24,6 +24,7 @@ INFRA-099
 - [x] **AC-4 (ADC Fallback)** *(done — INFRA-103)*: Vertex AI auto-detects `GOOGLE_CLOUD_PROJECT` via `google.auth.default()` when env var is absent.
 - [x] **AC-5 (Diff Truncation)** *(done — INFRA-103)*: ADK orchestrator applies provider-aware limits (vertex/gemini=200k, gh=6k, default=40k). Provider resolved post `_ensure_initialized()` so name is never empty.
 - [x] **AC-6 (Provider Fallback Warning)** *(done — INFRA-103)*: Neutral warning when configured provider is not in active client pool.
+- [x] **AC-7 (Implement Gate as Warning)** *(done — INFRA-103)*: `agent implement` post-apply gate failures produce a `⚠️` warning and set story state to `REVIEW_NEEDED` instead of blocking the run. `preflight` remains the hard gatekeeper. Tests in `tests/core/check/test_implement_gate.py`.
 
 ## Non-Functional Requirements
 
