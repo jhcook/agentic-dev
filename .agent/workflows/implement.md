@@ -90,3 +90,7 @@ If the CLI command fails (e.g., due to AI context length limits or complex refac
 3. Write the code using file editing tools.
 4. Manually run `make test`.
 5. Run `agent preflight --story <STORY-ID>` to validate your manual changes against the Governance Council.
+
+## Copyright
+
+Copyright 2026 Justin Cook

@@ -239,8 +239,9 @@ class AIService:
                 _, _adc_project = google.auth.default()
                 if _adc_project:
                     vertex_proj = _adc_project
-                    logging.debug(
-                        "Vertex AI: project auto-detected from ADC: %s", vertex_proj
+                    logger.debug(
+                        "Vertex AI: project auto-detected from ADC",
+                        extra={"project_id": vertex_proj},
                     )
             except Exception:
                 pass

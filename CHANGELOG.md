@@ -84,3 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Refactored `agent implement` chunked processing loop to support atomic save points and size enforcement.
+
+## Copyright
+
+Copyright 2026 Justin Cook
