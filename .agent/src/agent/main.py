@@ -39,6 +39,7 @@ from agent.commands import (
     console as console_cmd,
     implement,
     importer,
+    impact,
     journey,
     license as license_cmd,
     lint,
@@ -46,6 +47,7 @@ from agent.commands import (
     match,
     mcp,
     onboard,
+    panel,
     plan,
     runbook,
     secret,
@@ -55,6 +57,7 @@ from agent.commands import (
     workflow,
     query,
     review_chat as review_chat_cmd,
+    tests_ui,
 )
 
 app = typer.Typer()
@@ -120,9 +123,9 @@ from agent.core.auth.decorators import with_creds
 # Governance & Quality
 app.command()(lint.lint)
 app.command()(check.preflight)
-app.command()(with_creds(check.impact))
-app.command()(with_creds(check.panel))
-app.command(name="run-ui-tests")(check.run_ui_tests)
+app.command()(with_creds(impact.impact))
+app.command()(with_creds(panel.panel))
+app.command(name="run-ui-tests")(tests_ui.run_ui_tests)
 app.command("audit")(audit.audit)
 
 

@@ -25,7 +25,7 @@ from pathlib import Path
 
 import typer
 from typer.testing import CliRunner
-from agent.commands.check import impact
+from agent.commands.impact import impact
 
 
 runner = CliRunner()
@@ -68,8 +68,8 @@ _JOURNEY_PATCHES = {
 class TestImpactNoChanges:
     """No staged changes → warn and exit 0."""
 
-    @patch("agent.commands.check.subprocess.run")
-    @patch("agent.commands.check.config")
+    @patch("agent.commands.impact.subprocess.run")
+    @patch("agent.commands.impact.config")
     def test_no_staged_changes(self, mock_config, mock_run, tmp_path):
         _, stories_dir = _make_story(tmp_path)
         mock_config.stories_dir = stories_dir
@@ -84,8 +84,8 @@ class TestImpactNoChanges:
 class TestImpactBaseBranch:
     """--base flag should use git diff base...HEAD."""
 
-    @patch("agent.commands.check.subprocess.run")
-    @patch("agent.commands.check.config")
+    @patch("agent.commands.impact.subprocess.run")
+    @patch("agent.commands.impact.config")
     def test_base_uses_correct_diff(self, mock_config, mock_run, tmp_path):
         _, stories_dir = _make_story(tmp_path)
         mock_config.stories_dir = stories_dir
@@ -101,8 +101,8 @@ class TestImpactBaseBranch:
 class TestImpactStaticAnalysis:
     """Static analysis with mocked DependencyAnalyzer."""
 
-    @patch("agent.commands.check.config")
-    @patch("agent.commands.check.subprocess.run")
+    @patch("agent.commands.impact.config")
+    @patch("agent.commands.impact.subprocess.run")
     def test_structured_output(self, mock_run, mock_config, tmp_path):
         _, stories_dir = _make_story(tmp_path)
         mock_config.stories_dir = stories_dir
@@ -139,8 +139,8 @@ class TestImpactStaticAnalysis:
 class TestImpactUpdateStory:
     """--update-story modifies the story file."""
 
-    @patch("agent.commands.check.config")
-    @patch("agent.commands.check.subprocess.run")
+    @patch("agent.commands.impact.config")
+    @patch("agent.commands.impact.subprocess.run")
     def test_update_story(self, mock_run, mock_config, tmp_path):
         story, stories_dir = _make_story(
             tmp_path,
@@ -185,8 +185,8 @@ class TestImpactUpdateStory:
 class TestImpactJsonOutput:
     """--json produces valid JSON."""
 
-    @patch("agent.commands.check.config")
-    @patch("agent.commands.check.subprocess.run")
+    @patch("agent.commands.impact.config")
+    @patch("agent.commands.impact.subprocess.run")
     def test_json_output(self, mock_run, mock_config, tmp_path):
         import json
 

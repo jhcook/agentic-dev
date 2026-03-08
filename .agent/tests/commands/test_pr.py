@@ -61,7 +61,8 @@ def test_pr_skip_preflight_logs_warning(mock_edit, mock_run, mock_check_out, moc
     mock_check_out.return_value = b"chore: update deps"
     mock_run.return_value = MagicMock(returncode=0)
 
-    result = runner.invoke(test_app, ["--skip-preflight"])
+    with patch("pathlib.Path.exists", return_value=False), patch("agent.commands.workflow.validate_credentials"):
+        result = runner.invoke(test_app, ["--skip-preflight"])
 
     assert result.exit_code == 0
     assert "Preflight SKIPPED" in result.stdout

@@ -59,8 +59,8 @@ voice = [
     
     # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility
     # "kokoro-onnx>=0.3.1",
-    "onnxruntime>=1.16.0",
-    "webrtcvad>=2.0.10",
+    # "onnxruntime>=1.16.0",
+    # "webrtcvad>=2.0.10",
     # "faster-whisper>=1.0.0",
 ]
 

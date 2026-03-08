@@ -21,7 +21,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from agent.commands.check import check_journey_coverage
+from agent.core.check.quality import check_journey_coverage
 from agent.main import app
 
 runner = CliRunner()

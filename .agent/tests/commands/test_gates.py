@@ -129,7 +129,7 @@ class TestRunQaGate:
     def test_failing_command(self):
         result = run_qa_gate("false")  # Unix `false` always exits 1
         assert result.passed is False
-        assert "Exit code" in result.details
+        assert "exit 1" in result.details
 
     def test_missing_command(self):
         result = run_qa_gate("nonexistent_command_xyz_12345")
@@ -144,7 +144,7 @@ class TestRunQaGate:
             result = run_qa_gate()
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert call_args[0][0] == "pytest .agent/tests"
+            assert call_args[0][0] == "pytest"
 
 
 # ── Docs Check ────────────────────────────────────────────────

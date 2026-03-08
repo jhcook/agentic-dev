@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Refactored
+- **INFRA-110**: Decomposed `check.py` command into modular components in `core/check/`, separating concerns like preflight orchestration, reporting, syncing, and testing.
 - **INFRA-103**: Decomposed `commands/check.py` (1,768 LOC) into a thin CLI
   facade plus `core/check/system.py` (credential validation, story schema,
   journey linkage) and `core/check/quality.py` (journey coverage). All existing

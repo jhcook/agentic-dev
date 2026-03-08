@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
+import agent.core.check.preflight
 
 import pytest
 from typer.testing import CliRunner
@@ -40,13 +41,14 @@ def clean_env(tmp_path):
     
     # Patch the config object instances in the loaded module
     noop_coverage = {"passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": []}
-    with patch("agent.core.config.config.stories_dir", mock_stories), \
+    with patch("agent.core.context.context_loader.load_context", new_callable=AsyncMock, return_value={"rules": "", "instructions": "", "adrs": "", "source_tree": "", "source_code": "", "context": ""}), \
+         patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.config.config.rules_dir", mock_rules), \
          patch("agent.core.config.config.agent_dir", mock_agent), \
          patch("agent.sync.notion.NotionSync"), \
          patch("agent.sync.notebooklm.ensure_notebooklm_sync", return_value="SUCCESS"), \
          patch("agent.db.journey_index.JourneyIndex"), \
-         patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
+         patch("agent.core.check.quality.check_journey_coverage", return_value=noop_coverage):
     
         # Create fake story
         (mock_stories / "INFRA").mkdir()
@@ -153,13 +155,14 @@ def test_preflight_journey_gate_blocks(mock_run, mock_check_ai, mock_gov_ai, tmp
     (mock_rules / "500-test.mdc").write_text("Rule 1")
 
     noop_coverage = {"passed": True, "total": 0, "linked": 0, "missing": 0, "warnings": []}
-    with patch("agent.core.config.config.stories_dir", mock_stories), \
+    with patch("agent.core.context.context_loader.load_context", new_callable=AsyncMock, return_value={"rules": "", "instructions": "", "adrs": "", "source_tree": "", "source_code": "", "context": ""}), \
+         patch("agent.core.config.config.stories_dir", mock_stories), \
          patch("agent.core.config.config.rules_dir", mock_rules), \
          patch("agent.core.config.config.agent_dir", mock_agent), \
          patch("agent.sync.notion.NotionSync"), \
          patch("agent.sync.notebooklm.ensure_notebooklm_sync", return_value="SUCCESS"), \
          patch("agent.db.journey_index.JourneyIndex"), \
-         patch("agent.commands.check.check_journey_coverage", return_value=noop_coverage):
+         patch("agent.core.check.quality.check_journey_coverage", return_value=noop_coverage):
 
         result = runner.invoke(app, ["preflight", "--story", "INFRA-999"])
 

@@ -66,11 +66,15 @@ def test_implement_updates_journey_yaml(tmp_path, monkeypatch):
     mock_llm_response = """
 File: src/new_file.py
 ```python
+\"\"\"Module docstring\"\"\"
 print('Hello World')
 ```
 File: tests/test_new_file.py
 ```python
-def test_hello(): pass
+\"\"\"Test module docstring\"\"\"
+def test_hello():
+    \"\"\"Test docstring\"\"\"
+    pass
 ```
 """
     

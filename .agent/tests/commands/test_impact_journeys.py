@@ -23,7 +23,7 @@ import typer
 from unittest.mock import MagicMock
 from typer.testing import CliRunner
 
-from agent.commands.check import impact
+from agent.commands.impact import impact
 
 _app = typer.Typer()
 _app.command()(impact)
