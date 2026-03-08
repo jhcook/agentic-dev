@@ -130,7 +130,7 @@ def test_validate_linked_journeys_missing_section(tmp_path):
     assert "missing" in result["error"].lower()
 
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_journey_gate_blocks(mock_run, mock_check_ai, mock_gov_ai, tmp_path):
@@ -166,7 +166,7 @@ def test_preflight_journey_gate_blocks(mock_run, mock_check_ai, mock_gov_ai, tmp
     assert result.exit_code == 1
     assert "Journey Gate" in result.output
 
-@patch("agent.core.governance.ai_service") 
+@patch("agent.core._governance_legacy.ai_service") 
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 @patch("agent.commands.check.scrub_sensitive_data")
@@ -214,7 +214,7 @@ def test_preflight_scrubbing_and_chunking(mock_scrub, mock_run, mock_check_ai, m
         # With default roles, we expect many calls
         assert mock_gov_ai.complete.call_count > 6
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -250,7 +250,7 @@ def test_preflight_aggregation_block(mock_run, mock_check_ai, mock_gov_ai, clean
     assert "Blocked by Governance Council" in out
     assert "Hardcoded password" in out
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -286,7 +286,7 @@ def test_preflight_audit_logging(mock_run, mock_check_ai, mock_gov_ai, clean_env
     assert "Story: INFRA-123" in content
     assert "PASS" in content
 
-@patch("agent.core.governance.ai_service") 
+@patch("agent.core._governance_legacy.ai_service") 
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_verdict_parsing_false_positive(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -312,7 +312,7 @@ It avoids the error markdown for a BLOCK verdict.
     assert result.exit_code == 0
     assert "Preflight checks passed" in clean_out(result.stdout)
 
-@patch("agent.core.governance.ai_service") 
+@patch("agent.core._governance_legacy.ai_service") 
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -339,7 +339,7 @@ def test_preflight_verdict_parsing_markdown_bold(mock_run, mock_check_ai, mock_g
     assert result.exit_code == 0
     assert "Preflight checks passed" in clean_out(result.stdout)
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, tmp_path):
@@ -378,7 +378,7 @@ def test_preflight_json_report(mock_run, mock_check_ai, mock_gov_ai, clean_env, 
 
 # ─── INCONCLUSIVE Detection ──────────────────────────────────────────
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_inconclusive_when_all_agents_fail(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -416,7 +416,7 @@ def test_preflight_inconclusive_when_all_agents_fail(mock_run, mock_check_ai, mo
     assert "Preflight checks passed" not in out
 
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_passes_when_findings_validated(mock_run, mock_check_ai, mock_gov_ai, clean_env):
@@ -439,7 +439,7 @@ def test_preflight_passes_when_findings_validated(mock_run, mock_check_ai, mock_
     assert "Preflight checks passed" in clean_out(result.output)
 
 
-@patch("agent.core.governance.ai_service")
+@patch("agent.core._governance_legacy.ai_service")
 @patch("agent.core.ai.ai_service")
 @patch("agent.commands.check.subprocess.run")
 def test_preflight_block_demoted_when_all_refs_hallucinated(mock_run, mock_check_ai, mock_gov_ai, clean_env):
