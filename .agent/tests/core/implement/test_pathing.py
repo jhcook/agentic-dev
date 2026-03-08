@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Regression tests for path resolution logic (INFRA-109)."""
+"""Tests for path resolution logic in the implement orchestrator (INFRA-109)."""
 
 import pytest
+import logging
 from pathlib import Path
 from unittest.mock import patch
-import logging
-
 from agent.core.implement.orchestrator import resolve_path, TRUSTED_ROOT_PREFIXES
 
 def test_resolve_path_trusted_prefix_ac1():
@@ -35,11 +34,11 @@ def test_resolve_path_fuzzy_match_non_trusted_ac2():
     expected = ".agent/tests/core/implement/test_orchestrator.py"
     
     with patch("agent.core.implement.orchestrator._find_file_in_repo", return_value=[expected]):
-        with patch("agent.core.implement.orchestrator.logging.warning") as mock_warn:
+        with patch("agent.core.implement.orchestrator.logging") as mock_logging:
             result = resolve_path(path)
             assert result == Path(expected)
-            mock_warn.assert_called_once()
-            _, kwargs = mock_warn.call_args
+            mock_logging.warning.assert_called_once()
+            _, kwargs = mock_logging.warning.call_args
             assert kwargs["extra"]["original_path"] == path
             assert kwargs["extra"]["resolved_path"] == expected
 
