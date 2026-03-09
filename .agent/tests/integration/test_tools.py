@@ -104,7 +104,7 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     dirty_path = os.path.join(custom_dir, "dirty.py")
     with open(dirty_path, "w") as f:
         f.write("api_key = '[REDACTED_SECRET]'")
-        f.write("\nemail = '[REDACTED_EMAIL]'")
+        f.write("\nemail = 'test@example.com'")
         
     scan_res_dirty = scan_file_for_secrets.invoke({"file_path": dirty_path})
     assert "Potential API Key found" in scan_res_dirty
@@ -116,24 +116,19 @@ def test_package_listing():
     assert len(res) > 0
     assert "==" in res
 
-def test_patch_file():
+def test_patch_file(tmp_path):
     """Test the patch_file tool."""
     # Create a temporary file
-    test_file_path = "test_file.txt"
-    with open(test_file_path, "w") as f:
-        f.write("This is an initial test file.\n")
+    test_file_path = tmp_path / "test_file.txt"
+    test_file_path.write_text("This is an initial test file.\n")
 
     # Patch the file
     from agent.core.adk.tools import make_interactive_tools
-    tools = make_interactive_tools(repo_root=Path("."))
+    tools = make_interactive_tools(repo_root=tmp_path)
     patch_file_tool = tools[0]
-    result = patch_file_tool(path=test_file_path, search="initial", replace="patched")
+    result = patch_file_tool(path=str(test_file_path), search="initial", replace="patched")
     assert "successfully patched" in result
 
     # Verify the file content
-    with open(test_file_path, "r") as f:
-        content = f.read()
+    content = test_file_path.read_text()
     assert "This is an patched test file.\n" == content
-
-    # Clean up the temporary file
-    os.remove(test_file_path)

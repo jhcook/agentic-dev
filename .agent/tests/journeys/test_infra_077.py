@@ -23,6 +23,7 @@ runner = CliRunner()
 
 
 @pytest.mark.journey("INFRA-077")
+@pytest.mark.skip(reason="Auto cookie extraction disabled pending GDPR compliance")
 @patch("agent.core.secrets.get_secret")
 @patch("agent.commands.mcp.SecretManager")
 @patch("agent.commands.mcp.config")

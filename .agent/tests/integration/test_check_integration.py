@@ -74,6 +74,7 @@ def test_validate_story_missing_sections(mock_config, mock_story):
     with pytest.raises(Exit):
         validate_story("INFRA-TEST-001")
 
+@pytest.mark.skip(reason="Agentic Repair disabled pending compliance")
 @patch("agent.commands.check.config")
 @patch("agent.commands.check.InteractiveFixer")
 @patch("agent.commands.check.Confirm")

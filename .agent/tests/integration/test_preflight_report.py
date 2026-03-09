@@ -28,7 +28,7 @@
 # limitations under the License.
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, ANY, MagicMock
 import json
 from pathlib import Path
 import tempfile
@@ -127,19 +127,26 @@ class TestPreflightReport(unittest.TestCase):
             }
         }
 
-        try:
-            check.preflight(
-                story_id="TEST-002",
-                offline=False,
-                report_file=self.report_path,
-                skip_tests=True,
-                base=None,
-                provider=None,
-                ignore_tests=False,
-                interactive=False
-            )
-        except typer.Exit as e:
-            self.assertEqual(e.exit_code, 1)
+        with patch("agent.core.secrets.SecretManager") as MockSM:
+            mock_sm_instance = MagicMock()
+            mock_sm_instance.is_initialized.return_value = True
+            mock_sm_instance.is_unlocked.return_value = True
+            mock_sm_instance.get_secret.return_value = "fake_token"
+            MockSM.return_value = mock_sm_instance
+            
+            try:
+                check.preflight(
+                    story_id="TEST-002",
+                    offline=False,
+                    report_file=self.report_path,
+                    skip_tests=True,
+                    base=None,
+                    provider=None,
+                    ignore_tests=False,
+                    interactive=False
+                )
+            except typer.Exit as e:
+                self.assertEqual(e.exit_code, 1)
 
         self.assertTrue(self.report_path.exists(), "Report file should exist on governance block")
         data = json.loads(self.report_path.read_text())

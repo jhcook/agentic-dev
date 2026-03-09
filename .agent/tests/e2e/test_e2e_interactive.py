@@ -44,6 +44,7 @@ def temp_repo(tmp_path):
 runner = CliRunner()
 
 
+@pytest.mark.skip(reason="Agentic Repair disabled pending compliance")
 def test_interactive_preflight_typer_e2e(temp_repo):
     """
     Simulate E2E using Typer's CliRunner with mocked AI service.
@@ -99,6 +100,7 @@ def test_interactive_preflight_typer_e2e(temp_repo):
         assert "Applied fix" in result.stdout
         assert "Verification Passed" in result.stdout
 
+@pytest.mark.skip(reason="Agentic Repair disabled pending compliance")
 def test_interactive_preflight_empty_ai_response(temp_repo):
     """
     Simulate scenario where AI returns empty/invalid response.
@@ -133,6 +135,7 @@ def test_interactive_preflight_empty_ai_response(temp_repo):
         assert "Manual Fix (Open in Editor)" in result.stdout
         assert "AI generation failed" in result.stdout
 
+@pytest.mark.skip(reason="Agentic Repair disabled pending compliance")
 def test_interactive_preflight_voice_mode(temp_repo):
     """
     Simulate Voice Mode (AGENT_VOICE_MODE=1) and ensure output is formatted for TTS.

@@ -475,6 +475,8 @@ def preflight(
     console.print(f"[green]✅ Journey Gate passed — linked: {', '.join(journey_gate['journey_ids'])}[/green]")
 
     # 1.5 Run Automated Tests
+    tests_passed = True
+    
     if skip_tests:
         console.print("[yellow]⏩ Skipping automated tests (--skip-tests passed).[/yellow]")
     else:
@@ -655,7 +657,6 @@ def preflight(
                 console.print("[dim]  ⏭️  Skipping web lint/tests (node_modules not installed — handled by web CI workflow)[/dim]")
 
         # --- EXECUTE CMDS ---
-        tests_passed = True
         
         if not test_commands:
              console.print("[green]✅ No relevant tests to run based on changed files.[/green]")
