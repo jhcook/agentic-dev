@@ -31,6 +31,9 @@ agent/
 
 Prerequisites: Python 3.10+, Git.
 
+> [!NOTE]
+> **Intel Mac Compatibility:** If you are running this repository on an Intel Mac (macOS x86_64), you **must use Python 3.11 or Python 3.12**. Python 3.13+ is not supported on Intel Macs because the required PyTorch wheels are no longer built for this architecture. Apple Silicon (M-series), Linux, and Windows support Python 3.13+.
+
 ```bash
 pip install -e .agent/
 ```
