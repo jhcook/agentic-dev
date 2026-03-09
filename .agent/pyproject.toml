@@ -3,7 +3,7 @@ name = "backend"
 version = "0.1.0"
 description = "Backend implementation"
 authors = [{ name = "Justin Cook", email = "jhcook@secnix.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
@@ -36,6 +36,8 @@ dependencies = [
     "langchain-huggingface>=1.2.0",
     "sentence-transformers>=2.2.0,<3.0.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "sentence-transformers>=2.2.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torch>=2.0.0,<2.3.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch>=2.0.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "openai>=1.0.0",
     "anthropic>=0.3.0",
     "google-genai>=0.1.0",
@@ -61,7 +63,8 @@ voice = [
     
     # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility
     # "kokoro-onnx>=0.3.1",
-    "onnxruntime>=1.16.0",
+    "onnxruntime>=1.16.0,<1.24.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "onnxruntime>=1.16.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "webrtcvad>=2.0.10",
     # "faster-whisper>=1.0.0",
 ]
