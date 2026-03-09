@@ -857,7 +857,7 @@ ADRs:
         all_passed = all(r.passed for r in gate_results)
         if all_passed:
             console.print("\n[bold green]✅ All governance gates passed.[/bold green]")
-            update_story_state(story_id, "DONE", context_prefix="Phase 10")
+            update_story_state(story_id, "COMPLETED", context_prefix="Phase 10")
         else:
             console.print(
                 "\n[bold yellow]⚠️  Some governance gates produced warnings.[/bold yellow]"

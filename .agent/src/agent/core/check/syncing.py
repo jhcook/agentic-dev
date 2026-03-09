@@ -1,52 +1,67 @@
 # Copyright 2026 Justin Cook
 # Licensed under the Apache License, Version 2.0 (the "License");
-from rich.console import Console
 from agent.core.logger import get_logger
+from agent.core.check.models import SyncOraclePatternResult
+from opentelemetry import trace
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
-def sync_oracle_pattern(console: Console) -> None:
-    """Implement NotebookLM / Notion Sync."""
-    console.print("\n[bold blue]🔄 Verifying Notion Sync Status (Oracle Pattern)...[/bold blue]")
+def sync_oracle_pattern() -> SyncOraclePatternResult:
+    """Implement NotebookLM / Notion Sync.
+    
+    Synchronizes local context with external Oracle sources (Notion, NotebookLM).
+    If an external source cannot be reached, falls back to a purely local 
+    Vector DB (ChromaDB) ensuring offline mode degrades gracefully.
+    
+    Returns:
+        SyncOraclePatternResult indicating the status of each system.
+    """
+    with tracer.start_as_current_span("sync_oracle_pattern"):
+        result: SyncOraclePatternResult = {
+            "notebooklm_ready": False,
+        "notebooklm_status": "UNKNOWN",
+        "notion_ready": False,
+        "notion_status": "UNKNOWN",
+        "vector_db_ready": False,
+        "vector_db_status": "UNKNOWN"
+    }
+
     try:
         from agent.sync.notion import NotionSync
         NotionSync()
-        console.print("[green]✅ Notion sync ready (Oracle Pattern context active).[/green]")
+        result["notion_ready"] = True
+        result["notion_status"] = "Notion sync ready (Oracle Pattern context active)."
     except Exception as e:
         logger.warning("Notion sync unreachable", extra={"error": str(e)})
-        console.print(f"[yellow]⚠️  Notion sync unreachable: {e}. Oracle Pattern may have stale context.[/yellow]")
-        
-    notebooklm_ready = False
-    console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
+        result["notion_status"] = f"Notion sync unreachable: {e}. Oracle Pattern may have stale context."
+
     try:
         import asyncio
         from agent.sync.notebooklm import ensure_notebooklm_sync
-        from rich.status import Status
         
-        with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
-            def _update_notebooklm_status(msg: str):
-                _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
-            
-            sync_status = asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status))
+        sync_status = asyncio.run(ensure_notebooklm_sync(progress_callback=None))
             
         if sync_status == "SUCCESS":
-            console.print("[green]✅ NotebookLM sync ready.[/green]")
-            notebooklm_ready = True
+            result["notebooklm_ready"] = True
+            result["notebooklm_status"] = "NotebookLM sync ready."
         elif sync_status == "NOT_CONFIGURED":
-            console.print("[yellow]ℹ️  NotebookLM sync not configured.[/yellow]")
+            result["notebooklm_status"] = "NotebookLM sync not configured."
         else:
-            console.print("[yellow]⚠️  NotebookLM sync unavailable or degraded.[/yellow]")
+            result["notebooklm_status"] = "NotebookLM sync unavailable or degraded."
     except Exception as e:
         logger.warning("NotebookLM sync unreachable", extra={"error": str(e)})
-        console.print(f"[yellow]⚠️  NotebookLM sync unreachable: {e}.[/yellow]")
+        result["notebooklm_status"] = f"NotebookLM sync unreachable: {e}."
 
-    if not notebooklm_ready:
-        console.print("\n[bold blue]🔄 Rebuilding Local Vector DB (Oracle Pattern Fallback)...[/bold blue]")
+    if not result["notebooklm_ready"]:
         try:
             from agent.db.journey_index import JourneyIndex
             idx = JourneyIndex()
             idx.build()
-            console.print("[green]✅ Local Vector DB ready.[/green]")
+            result["vector_db_ready"] = True
+            result["vector_db_status"] = "Local Vector DB ready."
         except Exception as e:
             logger.error("Local Vector DB build failed", extra={"error": str(e)})
-            console.print(f"[yellow]⚠️  Local Vector DB build failed: {e}.[/yellow]")
+            result["vector_db_status"] = f"Local Vector DB build failed: {e}."
+
+    return result

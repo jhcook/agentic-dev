@@ -184,7 +184,10 @@ def preflight(
     # 1.1 Notion Sync Awareness (Oracle Pattern)
     if not legacy_context:
         from agent.core.check.syncing import sync_oracle_pattern
-        sync_oracle_pattern(console)
+        sync_result = sync_oracle_pattern()
+        if sync_result.get("warnings"):
+            for w in sync_result["warnings"]:
+                console.print(f"[yellow]  ⚠️  {w}[/yellow]")
 
     # 1.2 Journey Gate (INFRA-055)
     console.print("\n[bold blue]🗺️  Checking Journey Gate...[/bold blue]")
@@ -206,10 +209,44 @@ def preflight(
 
     # 1.5 Run Automated Tests
     from agent.core.check.testing import run_smart_test_selection
-    tests_ok = run_smart_test_selection(console, base, skip_tests, interactive, ignore_tests, json_report)
+    import subprocess
+    
+    test_result = run_smart_test_selection(base, skip_tests, interactive, ignore_tests)
+    tests_ok = True
+    
+    if test_result.get("skipped"):
+        console.print("\n[dim]Skipping tests...[/dim]")
+    elif test_result.get("error"):
+        console.print(f"\n[bold red]❌ Test Selection Failed: {test_result['error']}[/bold red]")
+        tests_ok = False
+    elif test_result.get("test_commands"):
+        console.print("\n[bold blue]🧪 Running Automated Tests...[/bold blue]")
+        for cmd_info in test_result["test_commands"]:
+            cmd_name = cmd_info.get("name", "Tests")
+            cmd = cmd_info.get("cmd", [])
+            cwd = cmd_info.get("cwd")
+            
+            console.print(f"  [bold]Run ({cmd_name}):[/bold] [cyan]{' '.join(str(c) for c in cmd)}[/cyan]")
+            
+            try:
+                # Actually run the tests
+                res = subprocess.run(cmd, cwd=cwd)
+                if res.returncode != 0:
+                    console.print(f"  [bold red]❌ {cmd_name} failed.[/bold red]")
+                    tests_ok = False
+                else:
+                    console.print(f"  [green]✅ {cmd_name} passed.[/green]")
+            except Exception as e:
+                 console.print(f"  [bold red]❌ Failed to execute {cmd_name}: {e}[/bold red]")
+                 tests_ok = False
+    else:
+        console.print("\n[dim]No tests selected for current changes.[/dim]")
+
     if not tests_ok and not ignore_tests:
         if report_file:
             import json
+            json_report["overall_verdict"] = "BLOCK"
+            json_report["error"] = "Test failure."
             report_file.write_text(json.dumps(json_report, indent=2))
         raise typer.Exit(code=1)
 
@@ -234,10 +271,46 @@ def preflight(
 
     # 1.8 Journey Coverage Check (Phase 2: Blocking for story-linked journeys)
     from agent.core.check.journeys import check_journey_coverage_gate, run_journey_impact_mapping
-    check_journey_coverage_gate(console, journey_gate, json_report, report_file)
+    
+    console.print("\n[bold blue]📋 Checking Journey Test Coverage...[/bold blue]")
+    coverage_result = check_journey_coverage_gate(journey_gate)
+    
+    if coverage_result["warnings"]:
+        console.print(
+            f"[yellow]⚠️  Journey Coverage: {coverage_result['linked']}/{coverage_result['total']}"
+            f" COMMITTED journeys linked[/yellow]"
+        )
+        for w in coverage_result["warnings"][:10]:
+            console.print(f"  [yellow]• {w}[/yellow]")
+
+    if not coverage_result["passed"]:
+        console.print(f"[bold red]❌ {coverage_result['error']}[/bold red]")
+        json_report["overall_verdict"] = "BLOCK"
+        if report_file:
+            import json
+            json_report["error"] = coverage_result["error"]
+            report_file.write_text(json.dumps(json_report, indent=2))
+        raise typer.Exit(code=1)
+    else:
+        console.print("[green]✅ Journey Coverage: All linked.[/green]")
 
     # 1.9 Journey Impact Mapping (INFRA-059)
-    run_journey_impact_mapping(console, base, json_report)
+    console.print("\n[bold blue]🗺️  Mapping Changed Files → Journeys...[/bold blue]")
+    mapping_result = run_journey_impact_mapping(base)
+    
+    if mapping_result.get("rebuilt_index"):
+        console.print("[dim]  Rebuilt journey index[/dim]")
+        
+    if mapping_result.get("affected_journeys"):
+        affected = mapping_result["affected_journeys"]
+        console.print(f"[cyan]  {len(affected)} journey(s) affected by changed files.[/cyan]")
+        if mapping_result.get("test_files_to_run"):
+            _cmd_str = "pytest " + " ".join(mapping_result["test_files_to_run"])
+            console.print(f"  [bold]Run:[/bold] [cyan]{_cmd_str}[/cyan]")
+    elif mapping_result.get("changed_files"):
+        console.print("[dim]  No journeys affected.[/dim]")
+    else:
+        console.print("[dim]  No changed files for journey mapping.[/dim]")
 
     # 2. Get Changed Files (for AI review)
     # Re-run diff cleanly
