@@ -31,8 +31,9 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 
-from agent.core.config import config
+
 from agent.core.context import context_loader
+from agent.core.config import config
 from agent.core import utils as agent_utils
 from agent.core.utils import find_runbook_file, get_next_id, scrub_sensitive_data
 from agent.commands import gates
@@ -812,6 +813,46 @@ ADRs:
         pr_size = gates.check_pr_size(commit_message=story_title)
         gate_results.append(pr_size)
         _print_gate(pr_size)
+
+
+
+        if linked_journey_ids:
+            try:
+                import yaml
+                
+                updated_journeys = []
+                for jid in linked_journey_ids:
+                    # Construct full formatted journey ID if it's just a number
+                    full_jid = jid if jid.startswith("JRN-") else f"JRN-{jid}"
+                    jf = None
+                    if config.journeys_dir.exists():
+                        for f in config.journeys_dir.rglob(f"{full_jid}*"):
+                            if f.is_file() and f.suffix in (".yml", ".yaml"):
+                                jf = f
+                                break
+                    if jf and jf.exists():
+                        jdata = yaml.safe_load(jf.read_text())
+                        if jdata and "implementation" in jdata:
+                            # Add modified files
+                            cur_files = set(jdata["implementation"].get("files", []))
+                            for mf in run_modified_files:
+                                if not str(mf).startswith("tests"):
+                                    cur_files.add(str(mf))
+                            jdata["implementation"]["files"] = sorted(list(cur_files))
+                            
+                            # Add modified tests
+                            cur_tests = set(jdata["implementation"].get("tests", []))
+                            for mf in run_modified_files:
+                                if str(mf).startswith("tests"):
+                                    cur_tests.add(str(mf))
+                            jdata["implementation"]["tests"] = sorted(list(cur_tests))
+                            
+                            jf.write_text(yaml.safe_dump(jdata, sort_keys=False))
+                            updated_journeys.append(jf.name)
+                if updated_journeys:
+                    console.print(f"[dim]Updated linked journey(s): {', '.join(updated_journeys)}[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Failed to update journey YAMLs: {e}[/yellow]")
 
         all_passed = all(r.passed for r in gate_results)
         if all_passed:

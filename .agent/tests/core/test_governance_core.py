@@ -23,7 +23,7 @@ from agent.core.governance import convene_council_full
 def mock_ai_service():
     with patch("agent.core.config.Config.panel_engine", new_callable=PropertyMock) as mock_engine:
         mock_engine.return_value = "native"
-        with patch("agent.core.governance.ai_service") as mock:
+        with patch("agent.core._governance_legacy.ai_service") as mock:
             mock.provider = "openai"
             yield mock
 

@@ -19,7 +19,7 @@ from agent.core.governance import convene_council_full
 
 @pytest.fixture
 def mock_ai_service():
-    with patch("agent.core.governance.ai_service") as mock:
+    with patch("agent.core._governance_legacy.ai_service") as mock:
         mock.provider = "openai"
         mock.complete.return_value = "Verdict: PASS"
         mock.try_switch_provider.return_value = False
@@ -27,7 +27,7 @@ def mock_ai_service():
 
 @pytest.fixture
 def mock_config():
-    with patch("agent.core.governance.config") as mock:
+    with patch("agent.core._governance_legacy.config") as mock:
         mock.get_council_tools.return_value = ["github:get_issue"]
         yield mock
 

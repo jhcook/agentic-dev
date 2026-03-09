@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -29,8 +29,14 @@ INFRA-099
 - [x] **AC-9 (Governance Determinism — previous verdicts)** *(done — INFRA-103)*: Per-role verdicts written to `.preflight_result` (PASS and BLOCK runs). Next run reads them and injects a `<previous_verdicts>` block into every agent's prompt, preventing oscillation on resolved findings.
 - [x] **AC-10 (Governance Determinism — scope lock)** *(done — INFRA-103)*: `SCOPE RULES` added to all governance agent system prompts: cite sources or pass, acknowledge documented co-commits, don't contradict previous verdicts.
 - [x] **AC-11 (validate_story TypedDict)** *(done — INFRA-103)*: `core/check/system.validate_story` now returns `ValidateStoryResult` TypedDict; rich/typer logic moved to a thin `commands/check.validate_story` CLI wrapper — decoupling core from presentation per ADR-041.
-- [ ] **AC-12 (preflight() decomposition)**: The `preflight()` function in `commands/check.py` is currently ~1 000 LOC. It must be decomposed: governance orchestration, report formatting, and credential checks extracted to `core/check/` sub-modules. `preflight()` facade must reach ≤500 LOC.
-
+- [x] **AC-12 (preflight() decomposition)**: The `preflight()` function in `commands/check.py` is currently ~1 000 LOC. It must be decomposed: governance orchestration, report formatting, and credential checks extracted to `core/check/` sub-modules. `preflight()` facade must reach ≤500 LOC.
+- [x] **AC-13 (Impact Command Refactoring)**: Refactor `agent/src/agent/commands/impact.py` to be a thin Typer-based facade that calls `agent.core.check.impact.run_impact_analysis` and renders the returned `ImpactResult` object. All business logic must reside in the core module.
+- [x] **AC-14 (Check Module Refactoring)**: Refactor the functions in `core/check/syncing.py`, `core/check/testing.py`, and `core/check/journeys.py` to return data structures/results instead of printing directly to the console. The calling function in `agent/src/agent/commands/check.py` should be responsible for all console output.
+- [x] **AC-15 (New Unit Tests)**: Implement meaningful unit tests for the functions within the new modules in `.agent/src/agent/core/check/`. Each placeholder test file must be populated with tests that cover the functionality of the corresponding module.
+- [x] **AC-16 (Implement Status Revert)**: Revert the change in `.agent/src/agent/commands/implement.py` near line 860. The state change should be `"COMPLETED"` instead of `"DONE"`.
+- [x] **AC-17 (Pyproject Revert)**: Revert the dependency changes in `.agent/pyproject.toml` lines 61-64 to uncomment the local voice dependencies.
+- [x] **AC-18 (Journey Coverage Signature)**: Update the signature of `check_journey_coverage_gate` in `.agent/src/agent/core/check/journeys.py` to use the `ValidateStoryResult` `TypedDict` for the `journey_gate` parameter.
+- [x] **AC-19 (TypedDict Audit)**: Audit all new functions in the `agent.core.check` package and replace generic `dict` and `list` parameter types with specific `TypedDict` definitions where applicable, as required by AC-2.
 ## Non-Functional Requirements
 
 - **Performance**: No latency increase in command execution or preflight flow.

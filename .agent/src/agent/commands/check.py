@@ -42,89 +42,7 @@ console = Console()
 
 logger = get_logger(__name__)
 
-def _print_reference_summary(console: Console, roles_data: list, ref_metrics: dict, finding_validation: dict | None = None) -> None:
-    """Print a Governance Validation Summary combining finding validation and reference checks."""
-    from rich.table import Table as RefTable
-
-    ref_table = RefTable(title="🔍 Governance Validation Summary", show_lines=True)
-    ref_table.add_column("Role", style="cyan")
-    # Finding validation columns
-    ref_table.add_column("Findings", justify="right", style="bold")
-    ref_table.add_column("Validated", justify="right", style="green")
-    ref_table.add_column("Filtered", justify="right", style="red")
-    # Reference validation columns
-    ref_table.add_column("Refs Cited", justify="right", style="dim")
-    ref_table.add_column("Refs Valid", justify="right", style="dim green")
-    ref_table.add_column("Refs Invalid", justify="right", style="dim red")
-
-    has_data = False
-    for role in roles_data:
-        fv = role.get("finding_validation", {})
-        f_total = fv.get("total", 0)
-        f_validated = fv.get("validated", 0)
-        f_filtered = fv.get("filtered", 0)
-
-        # Skip roles that had nothing to validate (no AI findings produced)
-        if f_total == 0:
-            continue
-
-        refs = role.get("references", {})
-        if isinstance(refs, dict):
-            cited = refs.get("cited", [])
-            valid = refs.get("valid", [])
-            invalid = refs.get("invalid", [])
-        else:
-            cited, valid, invalid = [], [], []
-
-        # Style filtered count red if > 0
-        filtered_str = f"[bold red]{f_filtered}[/bold red]" if f_filtered > 0 else str(f_filtered)
-
-        ref_table.add_row(
-            role.get("name", "Unknown"),
-            str(f_total),
-            str(f_validated),
-            filtered_str,
-            str(len(cited)),
-            str(len(valid)),
-            str(len(invalid)),
-        )
-        has_data = True
-
-    # Aggregate row
-    total_refs = ref_metrics.get("total_refs", 0)
-    citation_rate = ref_metrics.get("citation_rate", 0.0)
-    hallucination_rate = ref_metrics.get("hallucination_rate", 0.0)
-
-    fv_agg = finding_validation or {}
-    agg_total = fv_agg.get("total_ai_findings", 0)
-    agg_validated = fv_agg.get("validated", 0)
-    agg_filtered = fv_agg.get("filtered_false_positives", 0)
-    fp_rate = fv_agg.get("false_positive_rate", 0.0)
-
-    agg_filtered_str = f"[bold red]{agg_filtered}[/bold red]" if agg_filtered > 0 else str(agg_filtered)
-
-    ref_table.add_row(
-        "[bold]TOTAL[/bold]",
-        f"[bold]{agg_total}[/bold]",
-        f"[bold]{agg_validated}[/bold]",
-        agg_filtered_str,
-        f"[bold]{total_refs}[/bold]",
-        f"[bold]{len(ref_metrics.get('valid', []))}[/bold]",
-        f"[bold]{len(ref_metrics.get('invalid', []))}[/bold]",
-    )
-
-    if has_data or total_refs > 0 or agg_total > 0:
-        console.print(ref_table)
-        summary_parts = []
-        if agg_total > 0:
-            summary_parts.append(f"False Positive Rate: {fp_rate:.0%}")
-        if total_refs > 0:
-            summary_parts.append(f"Citation Rate: {citation_rate:.0%}")
-            summary_parts.append(f"Hallucination Rate: {hallucination_rate:.0%}")
-        if summary_parts:
-            console.print(f"[dim]{' | '.join(summary_parts)}[/dim]")
-    else:
-        console.print("[dim]🔍 No governance findings or references to validate.[/dim]")
+from agent.core.check.reporting import print_reference_summary as _print_reference_summary
 
 
 
@@ -265,47 +183,11 @@ def preflight(
 
     # 1.1 Notion Sync Awareness (Oracle Pattern)
     if not legacy_context:
-        console.print("\n[bold blue]🔄 Verifying Notion Sync Status (Oracle Pattern)...[/bold blue]")
-        try:
-            from agent.sync.notion import NotionSync
-            NotionSync()
-            console.print("[green]✅ Notion sync ready (Oracle Pattern context active).[/green]")
-        except Exception as e:
-            console.print(f"[yellow]⚠️  Notion sync unreachable: {e}. Oracle Pattern may have stale context.[/yellow]")
-            
-        notebooklm_ready = False
-        console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
-        try:
-            import asyncio
-            from agent.sync.notebooklm import ensure_notebooklm_sync
-            from rich.status import Status
-            
-            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
-                def _update_notebooklm_status(msg: str):
-                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
-                
-                sync_status = asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status))
-                
-            if sync_status == "SUCCESS":
-                console.print("[green]✅ NotebookLM sync ready.[/green]")
-                notebooklm_ready = True
-            elif sync_status == "NOT_CONFIGURED":
-                # Inform the user that it's just not set up
-                console.print("[yellow]ℹ️  NotebookLM sync not configured.[/yellow]")
-            else:
-                console.print("[yellow]⚠️  NotebookLM sync unavailable or degraded.[/yellow]")
-        except Exception as e:
-            console.print(f"[yellow]⚠️  NotebookLM sync unreachable: {e}.[/yellow]")
-
-        if not notebooklm_ready:
-            console.print("\n[bold blue]🔄 Rebuilding Local Vector DB (Oracle Pattern Fallback)...[/bold blue]")
-            try:
-                from agent.db.journey_index import JourneyIndex
-                idx = JourneyIndex()
-                idx.build()
-                console.print("[green]✅ Local Vector DB ready.[/green]")
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Local Vector DB build failed: {e}.[/yellow]")
+        from agent.core.check.syncing import sync_oracle_pattern
+        sync_result = sync_oracle_pattern()
+        if sync_result.get("warnings"):
+            for w in sync_result["warnings"]:
+                console.print(f"[yellow]  ⚠️  {w}[/yellow]")
 
     # 1.2 Journey Gate (INFRA-055)
     console.print("\n[bold blue]🗺️  Checking Journey Gate...[/bold blue]")
@@ -326,255 +208,47 @@ def preflight(
     console.print(f"[green]✅ Journey Gate passed — linked: {', '.join(journey_gate['journey_ids'])}[/green]")
 
     # 1.5 Run Automated Tests
-    if skip_tests:
-        console.print("[yellow]⏩ Skipping automated tests (--skip-tests passed).[/yellow]")
-    else:
-        console.print("[bold blue]🧪 Implementing Smart Test Selection...[/bold blue]")
-        
-        # Identify changed files
-        if base:
-            cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
-        else:
-            cmd = ["git", "diff", "--cached", "--name-only"]
+    from agent.core.check.testing import run_smart_test_selection
+    import subprocess
+    
+    test_result = run_smart_test_selection(base, skip_tests, interactive, ignore_tests)
+    tests_ok = True
+    
+    if test_result.get("skipped"):
+        console.print("\n[dim]Skipping tests...[/dim]")
+    elif test_result.get("error"):
+        console.print(f"\n[bold red]❌ Test Selection Failed: {test_result['error']}[/bold red]")
+        tests_ok = False
+    elif test_result.get("test_commands"):
+        console.print("\n[bold blue]🧪 Running Automated Tests...[/bold blue]")
+        for cmd_info in test_result["test_commands"]:
+            cmd_name = cmd_info.get("name", "Tests")
+            cmd = cmd_info.get("cmd", [])
+            cwd = cmd_info.get("cwd")
             
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            files = [Path(f) for f in result.stdout.strip().splitlines() if f]
-        except Exception as e:
-            console.print(f"[bold red]❌ Error finding changed files: {e}[/bold red]")
-            files = []
-
-        # Analyze Dependencies
-        from agent.core.dependency_analyzer import DependencyAnalyzer
-        analyzer = DependencyAnalyzer(Path.cwd())
-        
-        # Get all files for analysis context
-        # Ideally we should list all files, but for now we might rely on dynamic resolution or just simple glob
-        # The analzyer helper finds reverse deps requires ALL files to be passed if we want full graph
-        # For optimization, we'll try to just identify test files that import changed modules
-        # But `find_reverse_dependencies` needs `all_files`.
-        
-        # Group changes by project
-        # Update: Support agent self-development by checking .agent/src paths
-        backend_changes = [f for f in files if str(f).startswith("backend/") or str(f).startswith(".agent/src/backend/")]
-        mobile_changes = [f for f in files if str(f).startswith("mobile/")]
-        web_changes = [f for f in files if str(f).startswith("web/")]
-        
-        # Root python changes should include .agent python files (excluding tests which are handled differently)
-        root_py_changes = []
-        for f in files:
-            if f.suffix == ".py":
-                is_backend = str(f).startswith("backend/") or str(f).startswith(".agent/src/backend/")
-                # We want to catch changes in .agent/src/agent (Core) as root python changes that might affect everything
-                # check.py previously excluded .agent/, let's allow it but maybe filter distinct subdirs if needed.
-                # simpler: just include them.
-                if not is_backend:
-                    root_py_changes.append(f)
-        
-        test_commands = []
-        
-        # --- Python / Backend Strategy ---
-        if backend_changes or root_py_changes:
-            console.print("[dim]🐍 Analyzing Python dependencies...[/dim]")
+            console.print(f"  [bold]Run ({cmd_name}):[/bold] [cyan]{' '.join(str(c) for c in cmd)}[/cyan]")
             
-            # Simple fallback: if backend changed, run pytest backend. 
-            # If root changed, run pytest .
-            # But let's try strict dependency analysis if possible.
-            
-            # Find all test files
-            all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
-            # Filter out non-application test files
-            # .agent/ has its own test infra — never run agent tests in preflight
-            filtered_tests = []
-            for f in all_test_files:
-                rel_path = f.relative_to(Path.cwd())
-                parts = rel_path.parts
-                
-                # Exclude node_modules and virtual environments
-                if "node_modules" in parts or ".venv" in parts or "venv" in parts:
-                    continue
-                
-                # Exclude agent internal tests — preflight is for application code
-                if ".agent" in parts:
-                    continue
-                    
-                filtered_tests.append(rel_path)
-            
-            all_test_files = filtered_tests
-            
-            relevant_tests = set()
-            
-            # Map test files to their imports and check if they import changed files
-            # This is "forward" analysis from tests -> code
-            changed_set = set(files)
-            
-            for test_file in all_test_files:
-                deps = analyzer.get_file_dependencies(test_file)
-                # If test depends on any changed file
-                if changed_set.intersection(deps):
-                    relevant_tests.add(test_file)
-                # OR if the test file itself changed
-                if test_file in changed_set:
-                    relevant_tests.add(test_file)
-            
-            # Construct pytest command
-            pytest_args = ["-m", "pytest", "-v", "--ignore=.agent"]
-            
-            if relevant_tests:
-                console.print(f"[green]🎯 Found {len(relevant_tests)} relevant test(s).[/green]")
-                for rt in relevant_tests:
-                    console.print(f"  - {rt}")
-                # Pass specific files
-                # Note: If list is too long, we might fall back to dirs.
-                if len(relevant_tests) < 50:
-                    pytest_args.extend([str(t) for t in relevant_tests])
-                else:
-                    console.print("[yellow]Files list too long, falling back to directory discovery.[/yellow]")
-                    if backend_changes: pytest_args.append("backend")
-                    if root_py_changes: pytest_args.append(".")
-            else:
-                # No strictly dependent tests found — trust the analyzer and skip.
-                # Running all tests (e.g. `pytest .`) is too broad and pulls in
-                # unrelated test suites, causing false failures on PRs.
-                console.print("[dim]ℹ️  No test files depend on the changed code — skipping Python tests.[/dim]")
-                pytest_args = None
-
-            if pytest_args:
-                 # Check for venv
-                 # Try root .venv (preferred for isolation)
-                 root_venv_python = Path(".venv/bin/python")
-                 import sys
-                 if root_venv_python.exists():
-                      python_exe = str(root_venv_python)
-                 else:
-                      python_exe = sys.executable
-                
-                 test_commands.append({
-                     "name": "Python Tests",
-                     "cmd": [python_exe] + pytest_args,
-                     "cwd": Path.cwd()
-                 })
-
-        # --- Mobile Strategy (NPM) ---
-        if mobile_changes:
-            console.print("[dim]📱 Detecting Mobile (React Native) changes...[/dim]")
-            mobile_root = Path("mobile")
-            pkg_json = mobile_root / "package.json"
-            node_modules = mobile_root / "node_modules"
-            if pkg_json.exists() and node_modules.exists():
-                import json
-                scripts = json.loads(pkg_json.read_text()).get("scripts", {})
-                
-                if "lint" in scripts:
-                    test_commands.append({
-                        "name": "Mobile Lint",
-                        "cmd": ["npm", "run", "lint"],
-                        "cwd": mobile_root
-                    })
-                if "test" in scripts:
-                    test_commands.append({
-                        "name": "Mobile Tests",
-                        "cmd": ["npm", "test"],
-                        "cwd": mobile_root
-                    })
-            elif pkg_json.exists():
-                console.print("[dim]  ⏭️  Skipping mobile lint/tests (node_modules not installed — handled by mobile-ci workflow)[/dim]")
-
-        # --- Web Strategy (NPM) ---
-        if web_changes:
-            console.print("[dim]🌐 Detecting Web (Next.js) changes...[/dim]")
-            web_root = Path("web")
-            pkg_json = web_root / "package.json"
-            node_modules = web_root / "node_modules"
-            if pkg_json.exists() and node_modules.exists():
-                import json
-                scripts = json.loads(pkg_json.read_text()).get("scripts", {})
-                
-                if "lint" in scripts:
-                    test_commands.append({
-                        "name": "Web Lint",
-                        "cmd": ["npm", "run", "lint"],
-                        "cwd": web_root
-                    })
-                if "test" in scripts:
-                    test_commands.append({
-                        "name": "Web Tests",
-                        "cmd": ["npm", "test"],
-                        "cwd": web_root
-                    })
-            elif pkg_json.exists():
-                console.print("[dim]  ⏭️  Skipping web lint/tests (node_modules not installed — handled by web CI workflow)[/dim]")
-
-        # --- EXECUTE CMDS ---
-        tests_passed = True
-        
-        if not test_commands:
-             console.print("[green]✅ No relevant tests to run based on changed files.[/green]")
-             json_report["overall_verdict"] = "PASS"
-        
-        for task in test_commands:
-            console.print(f"[bold cyan]🏃 Running: {task['name']}[/bold cyan]")
             try:
-                # Stream output line by line but capture it for AI analysis
-                process = subprocess.Popen(
-                    task['cmd'],
-                    cwd=task['cwd'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1  # Line buffered
-                )
-                
-                captured_output = []
-                while True:
-                    line = process.stdout.readline()
-                    if not line and process.poll() is not None:
-                        break
-                    if line:
-                        console.print(line, end="", markup=False)
-                        captured_output.append(line)
-                        
-                # Ensure we get the return code
-                rc = process.poll()
-                
-                # Reconstruct res object for backward compatibility with logic below
-                from types import SimpleNamespace
-                res = SimpleNamespace(returncode=rc, stdout="".join(captured_output), stderr="")
-
-                
-                if res.returncode == 5:
-                    # pytest exit code 5 = no tests collected — treat as warning, not failure
-                    console.print(f"[yellow]⚠️  {task['name']}: No tests collected (skipped)[/yellow]")
-                elif res.returncode != 0:
-                    console.print(f"[bold red]❌ {task['name']} FAILED[/bold red]")
-                    tests_passed = False
-                    
-                    if interactive:
-                        console.print("\\n[bold yellow]Agentic Repair is currently disabled for security compliance.[/bold yellow]")
-
-                    if not tests_passed and not ignore_tests:
-                        break # Stop on first failure if not ignoring
+                # Actually run the tests
+                res = subprocess.run(cmd, cwd=cwd)
+                if res.returncode != 0:
+                    console.print(f"  [bold red]❌ {cmd_name} failed.[/bold red]")
+                    tests_ok = False
                 else:
-                    console.print(f"[green]✅ {task['name']} PASSED[/green]")
-            except FileNotFoundError:
-                 console.print(f"[red]❌ Command not found: {task['cmd'][0]}[/red]")
-                 tests_passed = False
+                    console.print(f"  [green]✅ {cmd_name} passed.[/green]")
+            except Exception as e:
+                 console.print(f"  [bold red]❌ Failed to execute {cmd_name}: {e}[/bold red]")
+                 tests_ok = False
+    else:
+        console.print("\n[dim]No tests selected for current changes.[/dim]")
 
-        if not tests_passed:
-            msg = "Automated tests failed."
-            if ignore_tests:
-                console.print(f"[yellow]⚠️  {msg} (Ignored by --ignore-tests)[/yellow]")
-            else:
-                console.print(f"[bold red]❌ {msg} Preflight ABORTED.[/bold red]")
-                if report_file:
-                    json_report["overall_verdict"] = "BLOCK"
-                    json_report["error"] = msg
-                    import json
-                    report_file.write_text(json.dumps(json_report, indent=2))
-                raise typer.Exit(code=1)
-        elif test_commands:
-            console.print("[bold green]✅ All tests passed.[/bold green]")
-            json_report["overall_verdict"] = "PASS"
+    if not tests_ok and not ignore_tests:
+        if report_file:
+            import json
+            json_report["overall_verdict"] = "BLOCK"
+            json_report["error"] = "Test failure."
+            report_file.write_text(json.dumps(json_report, indent=2))
+        raise typer.Exit(code=1)
 
     # 1.7 ADR Enforcement (Deterministic Gate — INFRA-057)
     console.print("\n[bold blue]📐 Running ADR Enforcement Checks...[/bold blue]")
@@ -596,89 +270,47 @@ def preflight(
         json_report["adr_enforcement"] = "PASS"
 
     # 1.8 Journey Coverage Check (Phase 2: Blocking for story-linked journeys)
+    from agent.core.check.journeys import check_journey_coverage_gate, run_journey_impact_mapping
+    
     console.print("\n[bold blue]📋 Checking Journey Test Coverage...[/bold blue]")
-    coverage_result = check_journey_coverage()
-    json_report["journey_coverage"] = coverage_result
-
+    coverage_result = check_journey_coverage_gate(journey_gate)
+    
     if coverage_result["warnings"]:
         console.print(
             f"[yellow]⚠️  Journey Coverage: {coverage_result['linked']}/{coverage_result['total']}"
             f" COMMITTED journeys linked[/yellow]"
         )
-        for w in coverage_result["warnings"][:10]:  # Cap output
+        for w in coverage_result["warnings"][:10]:
             console.print(f"  [yellow]• {w}[/yellow]")
 
-        # Block if any journey linked to THIS story has missing tests
-        story_journey_ids = set(journey_gate.get("journey_ids", []))
-        missing_ids = set(coverage_result.get("missing_ids", []))
-        blocked_journeys = story_journey_ids & missing_ids
-
-        if blocked_journeys:
-            msg = (
-                f"Journey Test Coverage FAILED — story-linked journey(s) "
-                f"{', '.join(sorted(blocked_journeys))} have no tests. "
-                f"Add tests to implementation.tests in each journey YAML."
-            )
-            console.print(f"[bold red]❌ {msg}[/bold red]")
-            json_report["overall_verdict"] = "BLOCK"
-            if report_file:
-                import json
-                json_report["error"] = msg
-                report_file.write_text(json.dumps(json_report, indent=2))
-            raise typer.Exit(code=1)
+    if not coverage_result["passed"]:
+        console.print(f"[bold red]❌ {coverage_result['error']}[/bold red]")
+        json_report["overall_verdict"] = "BLOCK"
+        if report_file:
+            import json
+            json_report["error"] = coverage_result["error"]
+            report_file.write_text(json.dumps(json_report, indent=2))
+        raise typer.Exit(code=1)
     else:
         console.print("[green]✅ Journey Coverage: All linked.[/green]")
 
     # 1.9 Journey Impact Mapping (INFRA-059)
     console.print("\n[bold blue]🗺️  Mapping Changed Files → Journeys...[/bold blue]")
-    from agent.db.journey_index import (
-        get_affected_journeys as _get_affected,
-        is_stale as _is_stale,
-        rebuild_index as _rebuild_idx,
-    )
-    from agent.db.init import get_db_path as _get_db_path
-    import sqlite3 as _sqlite3
-
-    _db = _sqlite3.connect(_get_db_path())
-    _journeys_dir = config.journeys_dir
-    _repo_root = config.repo_root
-
-    if _is_stale(_db, _journeys_dir):
-        _idx = _rebuild_idx(_db, _journeys_dir, _repo_root)
-        console.print(
-            f"[dim]  Rebuilt index: {_idx['journey_count']} journeys, "
-            f"{_idx['file_glob_count']} patterns[/dim]"
-        )
-
-    # Compute changed files early for journey mapping
-    _pf_cmd = (
-        ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
-        if base
-        else ["git", "diff", "--cached", "--name-only"]
-    )
-    _pf_res = subprocess.run(_pf_cmd, capture_output=True, text=True)
-    _pf_files = _pf_res.stdout.strip().splitlines()
-    _pf_files = [f for f in _pf_files if f]
-
-    if _pf_files:
-        _affected = _get_affected(_db, _pf_files, _repo_root)
-        if _affected:
-            _test_files: list[str] = []
-            for _j in _affected:
-                _test_files.extend(_j.get("tests", []))
-            console.print(
-                f"[cyan]  {len(_affected)} journey(s) affected by changed files.[/cyan]"
-            )
-            if _test_files:
-                _cmd_str = "pytest " + " ".join(sorted(set(_test_files)))
-                console.print(f"  [bold]Run:[/bold] [cyan]{_cmd_str}[/cyan]")
-            json_report["affected_journeys"] = _affected
-        else:
-            console.print("[dim]  No journeys affected.[/dim]")
+    mapping_result = run_journey_impact_mapping(base)
+    
+    if mapping_result.get("rebuilt_index"):
+        console.print("[dim]  Rebuilt journey index[/dim]")
+        
+    if mapping_result.get("affected_journeys"):
+        affected = mapping_result["affected_journeys"]
+        console.print(f"[cyan]  {len(affected)} journey(s) affected by changed files.[/cyan]")
+        if mapping_result.get("test_files_to_run"):
+            _cmd_str = "pytest " + " ".join(mapping_result["test_files_to_run"])
+            console.print(f"  [bold]Run:[/bold] [cyan]{_cmd_str}[/cyan]")
+    elif mapping_result.get("changed_files"):
+        console.print("[dim]  No journeys affected.[/dim]")
     else:
         console.print("[dim]  No changed files for journey mapping.[/dim]")
-
-    _db.close()
 
     # 2. Get Changed Files (for AI review)
     # Re-run diff cleanly
@@ -810,132 +442,10 @@ def preflight(
                 break  # Council passed — exit the retry loop
             
             # --- BLOCKED: Display findings ---
-            console.print("\n[bold red]⛔ Preflight Blocked by Governance Council:[/bold red]")
-            console.print(f"\n[dim]Detailed report saved to: {result.get('log_file')}[/dim]")
-             
-            console.print("\n[bold]Governance Council Findings:[/bold]")
-
-            # Categorize roles
-            roles = result.get("json_report", {}).get("roles", [])
-            passed_clean = []
-            passed_with_findings = []
-            blocking_roles = []
-
-            for role in roles:
-                name = role.get("name", "Unknown")
-                verdict = role.get("verdict", "UNKNOWN")
-                findings = role.get("findings", [])
-
-                if verdict == "PASS":
-                    if not findings:
-                        passed_clean.append(name)
-                    else:
-                        passed_with_findings.append(name)
-                else:
-                    blocking_roles.append(role)
-
-            # 1. Summary of Clean Passes
-            if passed_clean:
-                console.print(f"[green]✅ Approved (No Issues): {', '.join(passed_clean)}[/green]")
-
-            # 2. Summary of Passes with Findings (Suppressed Details)
-            if passed_with_findings:
-                console.print(f"[yellow]⚠️  Approved with Notes (Details Suppressed): {', '.join(passed_with_findings)}[/yellow]")
-
-            # 3. Blocking Issues — single pass for both panels and interactive repair list
-            blocking_findings = []
-            if blocking_roles:
-                blocking_names = [r.get("name", "Unknown") for r in blocking_roles]
-                console.print(f"[bold red]❌ Blocking Issues: {', '.join(blocking_names)}[/bold red]")
-
-                for role in blocking_roles:
-                    name = role.get("name", "Unknown")
-                    findings = role.get("findings", [])
-                    summary = role.get("summary", "")
-                    required_changes = role.get("required_changes", [])
-
-                    # Build structured panel content
-                    lines = []
-                    lines.append("VERDICT: BLOCK")
-                    if summary:
-                        lines.append("SUMMARY:")
-                        lines.append(f"{summary}")
-                    if findings:
-                        lines.append("FINDINGS:")
-                        for f in findings:
-                            lines.append(f"- {f}")
-                            blocking_findings.append(f"{name}: {f}")
-                    if required_changes:
-                        lines.append("REQUIRED_CHANGES:")
-                        for c in required_changes:
-                            lines.append(f"- {c}")
-                    
-                    if not findings and not required_changes:
-                        lines.append("[dim]Blocking verdict but no specific findings provided.[/dim]")
-                    
-                    content = "\n".join(lines)
-
-                    console.print(Panel(content, title=f"❌ {name}", border_style="red"))
-
-            # --- Interactive repair ---
-            fix_applied = False
-            if interactive and blocking_findings:
-                console.print("\n[bold yellow]🔧 Initiating Agentic Repair for Blocking Findings...[/bold yellow]")
-                
-                target_file_path = None
-                if story_id:
-                    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-                        if file_path.name.startswith(story_id):
-                            target_file_path = file_path
-                            break
-                            
-                # Use run_agentic_loop instead of InteractiveFixer
-                import asyncio
-                from agent.tui.agentic import run_agentic_loop
-                from agent.core.config import config as app_config
-                from agent.core.ai import ai_service as app_ai_service
-                
-                system_prompt = (
-                    "You are an expert developer resolving preflight governance failures. "
-                    "You must read the findings, examine the story or codebase, formulate a solution, "
-                    "and apply it using your tools. Use `patch_file` or `edit_file` to fix issues. "
-                    "When you are done, describe what you fixed in your Final Answer."
-                )
-                
-                context_str = f"Story ID: {story_id}\nTarget File: {target_file_path}\n\n" if target_file_path else ""
-                user_prompt = f"Fix the following blocking findings:\n{context_str}" + "\n".join(blocking_findings)
-                
-                def on_thought(thought: str, step: int):
-                    """Print an agentic-loop thought step to the console."""
-                    console.print(f"[dim cyan]🤔 Thought:[/dim cyan] [dim]{thought.strip()}[/dim]")
-
-                def on_tool_call(tool: str, args: dict, step: int):
-                    """Print an agentic-loop tool invocation to the console."""
-                    console.print(f"[dim magenta]🛠️  Action:[/dim magenta] [bold]{tool}[/bold] [dim]{args}[/dim]")
-                    
-                try:
-                    console.print(f"[dim]Starting AgentExecutor loop...[/dim]")
-                    final_answer = asyncio.run(run_agentic_loop(
-                        system_prompt=system_prompt,
-                        user_prompt=user_prompt,
-                        messages=[],
-                        repo_root=app_config.repo_root,
-                        provider=app_ai_service.provider,
-                        model=app_ai_service.models.get(app_ai_service.provider),
-                        on_thought=on_thought,
-                        on_tool_call=on_tool_call,
-                    ))
-                    console.print(f"\n[bold green]✅ Repair Completed. Agent said:[/bold green]\n{final_answer}")
-                    
-                    # Re-stage all modified files
-                    subprocess.run(["git", "add", "-u"], capture_output=True, text=True)
-                    
-                    fix_applied = True
-                    console.print("[bold cyan]🔄 Re-running governance checks to verify fix...[/bold cyan]")
-                    continue
-                    
-                except Exception as e:
-                    console.print(f"[yellow]⚠️  Agentic repair failed: {e}[/yellow]")
+            from agent.core.check.rendering import handle_blocked_findings
+            fix_applied = handle_blocked_findings(console, result, interactive, story_id, config)
+            if fix_applied:
+                continue
 
             # If we reach here without a fix applied, break out — no point retrying
             break
@@ -1036,599 +546,6 @@ def preflight(
          report_file.write_text(json.dumps(json_report, indent=2))
 
 
-def impact(
-    story_id: str = typer.Argument(..., help="The ID of the story."),
-    offline: bool = typer.Option(False, "--offline", help="Disable AI-powered impact analysis."),
-    base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
-    update_story: bool = typer.Option(False, "--update-story", help="Update the story file with the impact analysis."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."),
-    rebuild_index: bool = typer.Option(False, "--rebuild-index", help="Force rebuild journey file index."),
-    json_output: bool = typer.Option(False, "--json", help="Output results as JSON."),
-):
-    """
-    Run impact analysis for a story.
-    
-    Default: AI-powered analysis (risk, breaking changes).
-    --offline: Static analysis (files touched).
-    """
-    logger = get_logger(__name__)
-    console.print(f"[bold blue]🔍 Running impact analysis for {story_id}...[/bold blue]")
-
-    # 1. Find the story file
-    found_file = None
-    for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-        if file_path.name.startswith(story_id):
-            found_file = file_path
-            break
-            
-    if not found_file:
-         console.print(f"[bold red]❌ Story file not found for {story_id}[/bold red]")
-         raise typer.Exit(code=1)
-
-    story_content = found_file.read_text(errors="ignore")
-
-    # 2. Get Diff
-    if base:
-        # Use simple revision range without forcing origin/
-        # This allows HEAD~, local branches, or tags
-        cmd = ["git", "diff", "--name-only", f"{base}...HEAD"]
-        diff_cmd = ["git", "diff", f"{base}...HEAD", "."]
-    else:
-        cmd = ["git", "diff", "--cached", "--name-only"]
-        diff_cmd = ["git", "diff", "--cached", "."]
-        
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    files = result.stdout.strip().splitlines()
-    
-    if not files or files == ['']:
-        console.print("[yellow]⚠️  No files to analyze. Did you stage your changes?[/yellow]")
-        return
-
-    # 3. Generate Analysis
-    analysis = "Static Impact Analysis:\n" + "\n".join(f"- {f}" for f in files)
-    
-    if not offline:
-        # AI Mode
-        # Credentials validated by @with_creds decorator in main.py
-        console.print("[dim]🤖 Generating AI impact analysis...[/dim]")
-        from agent.core.ai import ai_service  # ADR-025: lazy init
-        if provider:
-            ai_service.set_provider(provider)
-            
-        diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
-        full_diff = diff_res.stdout
-        
-        # Scrubbing
-        full_diff = scrub_sensitive_data(full_diff)
-        story_content = scrub_sensitive_data(story_content)
-        
-        prompt = generate_impact_prompt(diff=full_diff, story=story_content)
-        logger.debug(
-            "AI impact prompt: %d chars, diff: %d chars",
-            len(prompt),
-            len(full_diff),
-        )
-        
-        try:
-            analysis = ai_service.get_completion(prompt)
-        except Exception as e:
-            console.print(f"[bold red]❌ AI Analysis Failed: {e}[/bold red]")
-            console.print("[dim]Opening editor for manual analysis entry...[/dim]")
-            edited = typer.edit(text=analysis)
-            if edited:
-                analysis = edited
-            
-    else:
-        # Static Mode - Use Dependency Analyzer
-        console.print("[dim]📊 Running static dependency analysis...[/dim]")
-        
-        from agent.core.dependency_analyzer import DependencyAnalyzer
-        
-        repo_root = Path.cwd()
-        analyzer = DependencyAnalyzer(repo_root)
-        
-        # Convert file strings to Path objects
-        changed_files = [Path(f) for f in files]
-        
-        # Get all Python and JS files in repo
-        all_files = []
-        for pattern in ['**/*.py', '**/*.js', '**/*.ts', '**/*.tsx']:
-            all_files.extend(repo_root.glob(pattern))
-        all_files = [f.relative_to(repo_root) for f in all_files]
-        
-        # Find reverse dependencies
-        reverse_deps = analyzer.find_reverse_dependencies(changed_files, all_files)
-        
-        total_impacted = sum(len(deps) for deps in reverse_deps.values())
-        logger.debug(
-            "Dependency graph: %d changed files, %d all files, %d reverse deps",
-            len(changed_files),
-            len(all_files),
-            total_impacted,
-        )
-        
-        # Build analysis summary
-        components = set()
-        for f in files:
-            parts = Path(f).parts
-            if len(parts) > 1:
-                components.add(parts[0])
-            else:
-                components.add("root")
-        
-        analysis = f"""## Impact Analysis Summary
-
-**Components**: {', '.join(sorted(components))}
-**Files Changed**: {len(files)}
-**Reverse Dependencies**: {total_impacted} file(s) impacted
-
-### Changed Files
-{chr(10).join('- ' + f for f in files)}
-
-### Risk Summary
-- Blast radius: {'🔴 High' if total_impacted > 20 else '🟡 Medium' if total_impacted > 5 else '🟢 Low'} ({total_impacted} dependent files)
-- Components affected: {len(components)}
-"""
-        
-        # Display detailed reverse dependencies
-        console.print("\n[bold]📊 Dependency Analysis:[/bold]")
-        for changed_file, dependents in reverse_deps.items():
-            console.print(f"\n📄 [cyan]{changed_file}[/cyan]")
-            if dependents:
-                console.print(
-                    f"  [yellow]→ Impacts {len(dependents)} file(s):[/yellow]"
-                )
-                # Show first 10 dependents
-                for dep in sorted(dependents)[:10]:
-                    console.print(f"    • {dep}")
-                if len(dependents) > 10:
-                    console.print(f"    ... and {len(dependents) - 10} more")
-            else:
-                console.print("  [green]✓ No direct dependents[/green]")
-
-    # 3b. Journey Impact Mapping (INFRA-059)
-    from agent.db.journey_index import (
-        get_affected_journeys,
-        is_stale,
-        rebuild_index as rebuild_journey_index,
-    )
-    from agent.db.init import get_db_path
-    import sqlite3 as _sqlite3
-
-    db_path = get_db_path()
-    jconn = _sqlite3.connect(db_path)
-    repo_root_path = config.repo_root
-    journeys_dir = config.journeys_dir
-
-    if rebuild_index or is_stale(jconn, journeys_dir):
-        console.print("[dim]📇 Rebuilding journey file index...[/dim]")
-        idx_result = rebuild_journey_index(jconn, journeys_dir, repo_root_path)
-        console.print(
-            f"[dim]  Indexed {idx_result['journey_count']} journeys, "
-            f"{idx_result['file_glob_count']} patterns "
-            f"({idx_result['rebuild_duration_ms']:.0f}ms)[/dim]"
-        )
-        for w in idx_result.get("warnings", []):
-            console.print(f"  [yellow]⚠️  {w}[/yellow]")
-
-    affected = get_affected_journeys(jconn, files, repo_root_path)
-    jconn.close()
-
-    if affected:
-        from rich.table import Table as RichTable
-
-        jtable = RichTable(title="Affected Journeys", show_lines=True)
-        jtable.add_column("Journey ID", style="cyan")
-        jtable.add_column("Title")
-        jtable.add_column("Matched Files", style="yellow")
-        jtable.add_column("Test File", style="green")
-
-        test_markers: list[str] = []
-        for j in affected:
-            tests = j.get("tests", [])
-            test_str = "\n".join(tests) if tests else "[red]— none —[/red]"
-            jtable.add_row(
-                j["id"],
-                j["title"],
-                "\n".join(j["matched_files"][:5]),
-                test_str,
-            )
-            for t in tests:
-                test_markers.append(t)
-
-        console.print(jtable)
-
-        if test_markers:
-            cmd_str = "pytest " + " ".join(sorted(set(test_markers)))
-            console.print(f"\n[bold]Run affected tests:[/bold]\n  [cyan]{cmd_str}[/cyan]")
-
-        # Warn about ungoverned files
-        governed_files = set()
-        for j in affected:
-            governed_files.update(j["matched_files"])
-        ungoverned = [f for f in files if f not in governed_files]
-        if ungoverned:
-            console.print(
-                f"\n[yellow]⚠️  {len(ungoverned)} file(s) not mapped to any journey:[/yellow]"
-            )
-            for uf in ungoverned[:5]:
-                console.print(f"  [dim]• {uf}[/dim]")
-            console.print(
-                "[dim]  Tip: Run 'agent journey backfill-tests' to link them.[/dim]"
-            )
-    else:
-        console.print("\n[dim]📋 No journeys affected by changed files.[/dim]")
-
-    # JSON output mode (INFRA-059 AC-5)
-    if json_output:
-        import json as _json
-        import time as _time
-
-        report = {
-            "story_id": story_id,
-            "changed_files": files,
-            "affected_journeys": affected,
-            "rebuild_timestamp": _time.time(),
-        }
-        console.print(_json.dumps(report, indent=2))
-        return
-
-    console.print("\n[bold]Impact Analysis:[/bold]")
-    console.print(analysis)
-
-    # 4. Update Story
-    if update_story:
-        console.print(f"[dim]✏️ Updating story file: {found_file.name}...[/dim]")
-        # We need to replace the content under "## Impact Analysis Summary"
-        # Simple regex replacement or just finding the header
-        import re
-        
-        # Normalize the analysis to ensure it has the header if missing from AI (it shouldn't be based on prompt)
-        if "## Impact Analysis Summary" not in analysis:
-            analysis = "## Impact Analysis Summary\n" + analysis
-            
-        # Regex to match ## Impact Analysis Summary until the next ## Header or End of String
-        pattern = r"(## Impact Analysis Summary)([\s\S]*?)(?=\n## |$)"
-        
-        if re.search(pattern, story_content):
-            new_content = re.sub(pattern, analysis.strip(), story_content)
-            found_file.write_text(new_content)
-            console.print(f"[bold green]✅ Updated {found_file.name}[/bold green]")
-        else:
-            console.print(f"[yellow]⚠️  Could not find '## Impact Analysis Summary' section in {found_file.name}. Appending...[/yellow]")
-            found_file.write_text(story_content + "\n\n" + analysis)
-            console.print(f"[bold green]✅ Appended to {found_file.name}[/bold green]")
 
 
-def panel(
-    input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
-    base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
-    provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."),
-    apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
-    panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
-):
-    """
-    Convening the Governance Panel to review changes or discuss design.
-    """
-    from agent.core.ai import ai_service
 
-    # 0. Configure Panel Engine Override (INFRA-061)
-    if panel_engine:
-        config._panel_engine_override = panel_engine
-        console.print(f"[dim]Panel engine override: {panel_engine}[/dim]")
-
-    # 1. Configure Provider Override if set
-    if provider:
-        ai_service.set_provider(provider)
-    
-    # Smart Argument Parsing
-    story_id = None
-    question = None
-    
-    if input_arg:
-        # Check if input looks like a simple Story ID (e.g. "INFRA-123", "WEB-001")
-        if re.match(r"^[A-Z]+-\d+$", input_arg.strip(), re.IGNORECASE):
-            story_id = input_arg.upper()
-        else:
-            # Assume it's a question/instruction
-            question = input_arg
-            # Try to extract ID from question
-            match = re.search(r"([A-Z]+-\d+)", input_arg, re.IGNORECASE)
-            if match:
-                story_id = match.group(1).upper()
-
-    if not story_id:
-        story_id = infer_story_id()
-        if not story_id:
-             # If we have a question but no story ID, maybe we can proceed?
-             # But the tool relies on Story/Runbook context. 
-             # Let's prompt or error.
-             if question:
-                 console.print(f"[yellow]⚠️  Could not identify a linked Story ID from '{question}'.[/yellow]")
-             else:
-                 console.print("[bold red]❌ Story ID is required (and could not be inferred).[/bold red]")
-                 raise typer.Exit(code=1)
-
-    console.print(f"[bold cyan]🤖 Convening the Governance Panel for {story_id}...[/bold cyan]")
-    if question:
-        console.print(f"[dim]❓ Question: {question}[/dim]")
-
-    # 1. Get Changed Files
-    if base:
-        cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
-    else:
-        cmd = ["git", "diff", "--cached", "--name-only"]
-        
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    files = result.stdout.strip().splitlines()
-    files = [f for f in files if f] # Filter empty strings
-    
-    if not files:
-        console.print("[yellow]⚠️  No staged changes found. Proceeding in Design Review mode (Document Context Only).[/yellow]")
-
-    # 2. Get Full Diff
-    diff_cmd = ["git", "diff", "--cached", "."] if not base else ["git", "diff", f"origin/{base}...HEAD", "."]
-    diff_res = subprocess.run(diff_cmd, capture_output=True, text=True)
-    full_diff = diff_res.stdout
-    if not full_diff:
-        full_diff = ""
-
-    # 3. Load Context & Target File
-    story_content = ""
-    target_file = None
-    
-    # Try finding Runbook first (priority for implementation phase)
-    # Check common locations or use basic glob
-    for file_path in config.runbooks_dir.rglob(f"{story_id}*.md"):
-        if story_id in file_path.name:
-            target_file = file_path
-            story_content = file_path.read_text(errors="ignore")
-            console.print(f"[dim]📄 Found Runbook: {file_path.name}[/dim]")
-            break
-            
-    # Fallback to Story
-    if not target_file:
-        for file_path in config.stories_dir.rglob(f"{story_id}*.md"):
-            if file_path.name.startswith(story_id):
-                target_file = file_path
-                story_content = file_path.read_text(errors="ignore")
-                console.print(f"[dim]📄 Found Story: {file_path.name}[/dim]")
-                break
-    
-    if not story_content:
-         console.print(f"[yellow]⚠️  Story/Runbook for {story_id} not found. Reviewing without specific document context.[/yellow]")
-
-    import asyncio
-    full_context = asyncio.run(context_loader.load_context(story_id=story_id))
-    rules_content = full_context.get("rules", "")
-    instructions_content = full_context.get("instructions", "")
-    adrs_content = full_context.get("adrs", "")
-    
-    # 4. Scrum & Run
-    full_diff = scrub_sensitive_data(full_diff)
-    scrubbed_content = scrub_sensitive_data(story_content)
-    rules_content = scrub_sensitive_data(rules_content)
-    instructions_content = scrub_sensitive_data(instructions_content)
-
-
-    console.print("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]")
-    with console.status("[bold cyan]🤖 Convening AI Governance Panel (Consultation)...[/bold cyan]"):
-        try:
-            result = convene_council_full(
-                story_id=story_id,
-                story_content=scrubbed_content,
-                rules_content=rules_content,
-                instructions_content=instructions_content,
-                full_diff=full_diff,
-                mode="consultative",
-                council_identifier="panel",
-                user_question=question,
-                adrs_content=adrs_content,
-                progress_callback=None # Silence individual role progress
-            )
-        except Exception as e:
-            console.print(f"\n[bold red]❌ Governance Panel Failed:[/bold red] {e}")
-            if any(ind in str(e).lower() for ind in ["ssl", "certificate_verify", "deadline_exceeded", "504", "deadline expired"]):
-                console.print("[yellow]Hint: Your corporate proxy may be blocking the AI provider or hitting API rate limits/timeouts. Check your VPN/Proxy settings.[/yellow]")
-            raise typer.Exit(code=1)
-    
-    # 4.5 Display Results
-    console.print("\n[bold]Governance Panel Findings:[/bold]")
-
-    roles = result.get("json_report", {}).get("roles", [])
-    silent_roles = []
-    active_roles = []
-    
-    for role in roles:
-        findings = role.get("findings", [])
-        if not findings:
-            silent_roles.append(role.get("name", "Unknown"))
-        else:
-            active_roles.append(role)
-            
-    if silent_roles:
-        console.print(f"[dim]ℹ️  No advice from: {', '.join(silent_roles)}[/dim]")
-        
-    for role in active_roles:
-        name = role.get("name", "Unknown")
-        findings = role.get("findings", [])
-        
-        # In Consultative mode, findings are usually the full advice
-        content = ""
-        if isinstance(findings, list):
-            content = "\n".join(findings)
-        else:
-            content = str(findings)
-            
-        console.print(Panel(content, title=f"🤖 {name}", border_style="blue"))
-
-    # Display Reference Summary Table (INFRA-060 AC-9)
-    _ref_metrics = result.get("json_report", {}).get("reference_metrics", {})
-    _roles_data = result.get("json_report", {}).get("roles", [])
-    _fv_metrics = result.get("json_report", {}).get("finding_validation", {})
-    if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
-        _print_reference_summary(console, _roles_data, _ref_metrics, _fv_metrics)
-
-    # 5. Apply Advice
-    if apply and target_file and result["log_file"]:
-        console.print(f"\n[bold magenta]🏗️  Applying advice to {target_file.name}...[/bold magenta]")
-        
-        log_path = result["log_file"]
-        report_text = log_path.read_text()
-        
-        prompt = f"""You are an Expert Technical Writer and Architect.
-        
-TASK:
-Update the following document based on the advice from the Governance Panel.
-Appy the advice intelligently. Do not just append it. Integrate it into the relevant sections.
-If the advice suggests changes to code, do NOT change code, but update the plan/spec to reflect the need for changes.
-Maintain the original document structure/headers.
-
-DOCUMENT ({target_file.name}):
-{story_content}
-
-GOVERNANCE ADVICE:
-{report_text}
-
-OUTPUT:
-Return ONLY the full updated markdown content of the document.
-"""
-        updated_content = ai_service.get_completion(prompt)
-        
-        # Clean up markdown formatting if present (strip code blocks)
-        if updated_content:
-            content = updated_content.strip()
-            if content.startswith("```"):
-                lines = content.splitlines()
-                # Remove first line if it's a code block start
-                if lines[0].strip().startswith("```"):
-                    lines = lines[1:]
-                # Remove last line if it's a code block end
-                if lines and lines[-1].strip().startswith("```"):
-                    lines = lines[:-1]
-                updated_content = "\n".join(lines).strip()
-        
-        # Safety check: ensure content is not empty
-        if updated_content and len(updated_content) > 100:
-            target_file.write_text(updated_content)
-            console.print(f"[bold green]✅ Applied advice to {target_file.name}[/bold green]")
-        else:
-             console.print("[bold red]❌ Failed to generate valid update (Content empty or too short).[/bold red]")
-
-def run_ui_tests(
-    story_id: Optional[str] = typer.Argument(None, help="The ID of the story (for context/logging)."),
-    filter: Optional[str] = typer.Option(None, "--filter", help="Filter test flows by keyword.")
-):
-    """
-    Run UI journey tests using Maestro.
-    """
-    import shutil
-    import subprocess
-    import time
-    from pathlib import Path
-    
-    # 1. Setup Logging
-    log_file = Path(".agent/logs/agent_run_ui_tests.log")
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    def log(msg: str, console_msg: Optional[str] = None):  # noqa: E306
-        """Append a timestamped message to the UI-test log file and optionally print it."""
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"[{timestamp}] {msg}\n"
-        with open(log_file, "a") as f:
-            f.write(entry)
-        if console_msg:
-            console.print(console_msg)
-        elif console_msg is not False: # Pass False to suppress console
-            pass
-
-    console.print("[bold blue]📱 Initiating UI Test Run (Maestro)[/bold blue]")
-    log(f"Starting run_ui_tests. Story: {story_id}, Filter: {filter}")
-
-    # 2. Check Prerequisites
-    maestro_path = shutil.which("maestro")
-    if not maestro_path:
-        msg = "Maestro CLI is not installed or not in PATH."
-        log(f"Error: {msg}", console_msg=f"[bold red]❌ {msg}[/bold red]")
-        console.print("Please install Maestro: https://maestro.mobile.dev/")
-        raise typer.Exit(code=1)
-
-    # 3. Find Test Flows
-    search_paths = [Path("tests/ui"), Path(".maestro")]
-    test_flows = []
-    
-    for path in search_paths:
-        if path.exists() and path.is_dir():
-            found = list(path.rglob("*.yaml")) + list(path.rglob("*.yml"))
-            test_flows.extend(found)
-            
-    if not test_flows:
-        msg = f"No .yaml/.yml test flows found in {', '.join([str(p) for p in search_paths])}."
-        log(f"Info: {msg}", console_msg=f"[yellow]⚠️  {msg}[/yellow]")
-        raise typer.Exit(code=0)
-
-    # 4. Filter Flows
-    if filter:
-        test_flows = [f for f in test_flows if filter in f.name]
-        if not test_flows:
-            msg = f"No test flows match filter '{filter}'."
-            log(f"Info: {msg}", console_msg=f"[yellow]⚠️  {msg}[/yellow]")
-            raise typer.Exit(code=0)
-
-    log(f"Found {len(test_flows)} flows: {[f.name for f in test_flows]}")
-    console.print(f"Found {len(test_flows)} test flows.")
-
-    # 5. Execute Flows
-    failed_flows = []
-    passed_flows = []
-
-    for flow in test_flows:
-        console.print(f"\n[bold cyan]🏃 Running: {flow.name}[/bold cyan]")
-        log(f"Running flow: {flow}")
-        
-        start_time = time.time()
-        try:
-            # We stream output to console and also capture it? 
-            # Maestro output is pretty rich, let's let it stream to stdout 
-            # but assume failure if return code != 0
-            
-            # Using subprocess.run to allow streaming if we didn't capture_output, 
-            # but for log capture we might need to capture.
-            # Let's verify compatibility. Simple run:
-            
-            result = subprocess.run(
-                [maestro_path, "test", str(flow)],
-                check=False  # We handle code manually
-            )
-            
-            duration = time.time() - start_time
-            
-            if result.returncode == 0:
-                console.print(f"[green]✅ PASSED ({duration:.2f}s)[/green]")
-                log(f"Flow {flow.name} PASSED. Duration: {duration:.2f}s")
-                passed_flows.append(flow.name)
-            else:
-                console.print(f"[red]❌ FAILED ({duration:.2f}s)[/red]")
-                log(f"Flow {flow.name} FAILED. Duration: {duration:.2f}s. Exit code: {result.returncode}")
-                failed_flows.append(flow.name)
-                
-        except Exception as e:
-            console.print(f"[red]❌ Error executing flow {flow.name}: {e}[/red]")
-            log(f"Exception executing {flow.name}: {e}")
-            failed_flows.append(flow.name)
-
-    # 6. Summary
-    console.print("\n[bold]Test Summary[/bold]")
-    console.print(f"Total: {len(test_flows)}")
-    console.print(f"[green]Passed: {len(passed_flows)}[/green]")
-    
-    if failed_flows:
-        console.print(f"[red]Failed: {len(failed_flows)}[/red]")
-        for f in failed_flows:
-             console.print(f" - {f}")
-        
-        log(f"Run FAILED. Failed flows: {failed_flows}")
-        raise typer.Exit(code=1)
-    else:
-        log("Run PASSED.")
-        raise typer.Exit(code=0)

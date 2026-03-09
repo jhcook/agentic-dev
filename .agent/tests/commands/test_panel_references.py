@@ -23,7 +23,7 @@ from agent.core.governance import convene_council_full
 
 @pytest.fixture
 def mock_ai_service():
-    with patch("agent.core.governance.ai_service") as mock:
+    with patch("agent.core._governance_legacy.ai_service") as mock:
         mock.provider = "openai"
         yield mock
 
@@ -39,7 +39,7 @@ def test_gatekeeper_references_in_json_report(mock_ai_service, tmp_path):
     )
 
     # Create a valid ADR file
-    with patch("agent.core.governance.config") as mock_config:
+    with patch("agent.core._governance_legacy.config") as mock_config:
         mock_config.agent_dir = tmp_path
         mock_config.adrs_dir = tmp_path / "adrs"
         mock_config.adrs_dir.mkdir()
@@ -50,7 +50,7 @@ def test_gatekeeper_references_in_json_report(mock_ai_service, tmp_path):
         mock_config.get_council_tools.return_value = []
 
         # Mock load_roles to return a single role
-        with patch("agent.core.governance.load_roles") as mock_roles:
+        with patch("agent.core._governance_legacy.load_roles") as mock_roles:
             mock_roles.return_value = [{"name": "architect", "focus": "Architecture"}]
 
             result = convene_council_full(
@@ -82,7 +82,7 @@ def test_consultative_references_extracted(mock_ai_service, tmp_path):
         "Based on ADR-001 and JRN-045, I recommend the following changes..."
     )
 
-    with patch("agent.core.governance.config") as mock_config:
+    with patch("agent.core._governance_legacy.config") as mock_config:
         mock_config.agent_dir = tmp_path
         mock_config.adrs_dir = tmp_path / "adrs"
         mock_config.adrs_dir.mkdir()
@@ -94,7 +94,7 @@ def test_consultative_references_extracted(mock_ai_service, tmp_path):
         mock_config.repo_root = tmp_path
         mock_config.get_council_tools.return_value = []
 
-        with patch("agent.core.governance.load_roles") as mock_roles:
+        with patch("agent.core._governance_legacy.load_roles") as mock_roles:
             mock_roles.return_value = [{"name": "architect", "focus": "Architecture"}]
 
             result = convene_council_full(
@@ -127,7 +127,7 @@ def test_invalid_reference_warning(mock_ai_service, tmp_path):
     def capture_callback(msg):
         warnings.append(msg)
 
-    with patch("agent.core.governance.config") as mock_config:
+    with patch("agent.core._governance_legacy.config") as mock_config:
         mock_config.agent_dir = tmp_path
         mock_config.adrs_dir = tmp_path / "adrs"
         mock_config.adrs_dir.mkdir()  # No ADR-999 file
@@ -136,7 +136,7 @@ def test_invalid_reference_warning(mock_ai_service, tmp_path):
         mock_config.repo_root = tmp_path
         mock_config.get_council_tools.return_value = []
 
-        with patch("agent.core.governance.load_roles") as mock_roles:
+        with patch("agent.core._governance_legacy.load_roles") as mock_roles:
             mock_roles.return_value = [{"name": "security", "focus": "Security"}]
 
             result = convene_council_full(

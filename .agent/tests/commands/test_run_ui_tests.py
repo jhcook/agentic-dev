@@ -34,7 +34,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from agent.commands.check import run_ui_tests
+from agent.commands.tests_ui import run_ui_tests
 
 # Create a Typer app to test the command function
 app = typer.Typer()
