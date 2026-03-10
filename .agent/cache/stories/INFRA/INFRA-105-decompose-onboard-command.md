@@ -48,7 +48,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 - **Components touched**: `commands/onboard.py`, `commands/secret.py`, `core/auth/utils.py`, `core/onboard/steps.py`, `core/onboard/settings.py`, `core/onboard/integrations.py`, `core/onboard/prompter.py`, `core/onboard/__init__.py`, `tests/cli/test_onboard_e2e.py`, `tests/cli/test_onboard_unit.py`, `tests/core/auth/test_utils.py`, `tests/core/onboard/test_steps.py`, `tests/core/onboard/test_settings.py`, `tests/core/onboard/test_integrations.py`.
 - **Workflows affected**: `agent onboard` command, any CI bootstrap script invoking onboarding steps.
 - **Risks identified**: `check_dependencies` uses `shutil.which` and `subprocess` — mocking strategy in tests must be consistent across old and new locations.
-- **Out-of-Scope Changes**: Unrelated updates to `README.md`, `pyproject.toml`, and `src/agent/main.py` to address Python 3.13 incompatibility, as well as `src/agent/core/implement/orchestrator.py` to address regex parsing bugs for code blocks.
+- **Out-of-Scope Changes**: Unrelated updates to `README.md`, `pyproject.toml`, `.agent/etc/agent.yaml`, `.agent/tests/integration/test_preflight_report.py`, and `src/agent/main.py` to address Python 3.13 incompatibility, as well as `src/agent/core/implement/orchestrator.py` to address regex parsing bugs for code blocks.
 
 ## Test Strategy
 
