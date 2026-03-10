@@ -28,15 +28,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent.tui import app
+from agent.tui import prompts
 
 
 @pytest.fixture(autouse=True)
 def reset_prompt_cache():
     """Reset the cached system prompt before each test."""
-    app._CACHED_SYSTEM_PROMPT = None
+    prompts._CACHED_SYSTEM_PROMPT = None
     yield
-    app._CACHED_SYSTEM_PROMPT = None
+    prompts._CACHED_SYSTEM_PROMPT = None
 
 
 def _make_config(system_prompt=None, personality_file=None, repo_root="/tmp/test-repo"):
@@ -56,7 +56,7 @@ class TestFallbackBehavior:
         """AC-2: Fallback to existing hardcoded prompt when config is missing."""
         cfg = _make_config()
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "expert agentic development assistant" in prompt
             assert "test-repo" in prompt
 
@@ -64,7 +64,7 @@ class TestFallbackBehavior:
         """Empty strings for both keys should trigger fallback."""
         cfg = _make_config(system_prompt="", personality_file="")
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "expert agentic development assistant" in prompt
 
 
@@ -75,7 +75,7 @@ class TestCustomPersonality:
         """AC-1: system_prompt appears in the output."""
         cfg = _make_config(system_prompt="You are a collaborative pair-programmer.")
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "collaborative pair-programmer" in prompt
             assert "Repository Context" in prompt
             # Should NOT contain the clinical fallback
@@ -92,7 +92,7 @@ class TestCustomPersonality:
             repo_root=str(tmp_path),
         )
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "Be collaborative." in prompt
             assert "Agentic Dev" in prompt
             assert "Use strict workflows." in prompt
@@ -108,7 +108,7 @@ class TestCustomPersonality:
             repo_root=str(tmp_path),
         )
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             preamble_pos = prompt.index("Layer one preamble")
             file_pos = prompt.index("Repo Rules")
             runtime_pos = prompt.index("Repository Context")
@@ -126,8 +126,8 @@ class TestPathTraversal:
             repo_root=str(tmp_path),
         )
         with patch("agent.core.config.config", cfg), \
-             patch("agent.tui.app.logger") as mock_logger:
-            prompt = app._build_system_prompt()
+             patch("agent.tui.prompts.logger") as mock_logger:
+            prompt = prompts._build_system_prompt()
             mock_logger.warning.assert_called()
             call_args = mock_logger.warning.call_args
             assert "system_prompt.path_rejected" in str(call_args)
@@ -141,7 +141,7 @@ class TestPathTraversal:
             repo_root=str(tmp_path),
         )
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "Still works." in prompt
             assert "Repository Context" in prompt
 
@@ -153,7 +153,7 @@ class TestRuntimeContext:
         """Project layout tree appears in custom prompt."""
         cfg = _make_config(system_prompt="Custom.", repo_root=str(tmp_path))
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "Project Layout" in prompt
             assert ".agent/" in prompt
 
@@ -165,6 +165,6 @@ class TestRuntimeContext:
 
         cfg = _make_config(system_prompt="Custom.", repo_root=str(tmp_path))
         with patch("agent.core.config.config", cfg):
-            prompt = app._build_system_prompt()
+            prompt = prompts._build_system_prompt()
             assert "Copyright 2026 Test Corp" in prompt
             assert "Required License Header" in prompt

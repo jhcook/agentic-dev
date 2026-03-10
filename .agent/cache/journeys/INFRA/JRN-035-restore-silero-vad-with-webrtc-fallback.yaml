@@ -63,6 +63,8 @@ implementation:
   - .agent/src/agent/commands/admin.py
   - .agent/src/agent/commands/importer.py
   - .agent/src/agent/main.py
+  - .agent/src/agent/tui/app.py
+  - .agent/src/agent/tui/chat.py
   - .agent/src/backend/main.py
   - .agent/src/backend/routers/voice.py
   - .agent/src/backend/speech/interfaces.py
@@ -78,6 +80,7 @@ implementation:
   - .agent/src/backend/voice/vad.py
   - .agent/src/web/package-lock.json
   - .agent/src/web/package.json
+  - .agent/tests/test_console_prompt.py
   tests:
   - .agent/tests/commands/test_create_tool.py
   - .agent/tests/integration/test_tools.py

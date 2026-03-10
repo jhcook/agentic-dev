@@ -43,18 +43,7 @@ from textual.widgets import (
 from textual.containers import VerticalScroll
 from textual.widgets.option_list import Option
 
-class SelectionLog(VerticalScroll):
-    """A replacement for RichLog that holds Static widgets to allow for native text selection."""
-    
-    def write(self, renderable: Any, scroll_end: bool = False) -> None:
-        widget = Static(renderable)
-        widget._search_text = getattr(renderable, "markup", str(renderable))
-        self.mount(widget)
-        if scroll_end:
-            self.scroll_end(animate=False)
-
-    def clear(self) -> None:
-        self.query("*").remove()
+from agent.tui.chat import SelectionLog, process_chat_stream, resolve_provider
 
 from agent.tui.commands import (
     InputType,
