@@ -12,92 +12,72 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import getpass
-import os
-import shutil
-import subprocess
-import sys
-from pathlib import Path
-
 import typer
+from pathlib import Path
 from opentelemetry import trace
-
-
-# Note: This command requires `typer` and `python-dotenv`.
-# Ensure they are added to your project's dependencies.
 from rich.console import Console
-from rich.table import Table
+from agent.core.onboard import steps
 
-# from agent.core.ai.service import PROVIDERS, AIService, ai_service # Moved to local imports
-from agent.core.config import config
-from agent.core.secrets import (
-    InvalidPasswordError,
-    get_secret,
-    get_secret_manager,
-)
+# Access the main app instance from agent.main to maintain command registration
+# Note: In a real scenario, this command file is typically imported by main.py
+# where the 'app' Typer instance is defined.
+from agent.main import app
 
 console = Console()
 tracer = trace.get_tracer(__name__)
 
+# Proxies for testing backward compatibility and logic isolation
+def check_dependencies() -> bool:
+    """Proxy for check_dependencies step."""
+    return steps.check_dependencies(console)
 
-# REQUIRED_KEYS removed, driven by PROVIDERS constant from service.py
+def check_github_auth() -> bool:
+    """Proxy for check_github_auth step."""
+    return steps.check_github_auth(console)
 
-# Define project paths relative to the current working directory.
-# This assumes the command is run from the project root.
-PROJECT_ROOT: Path = Path(".").resolve()
-AGENT_DIR: Path = PROJECT_ROOT / ".agent"
-ENV_FILE: Path = PROJECT_ROOT / ".env"
-GITIGNORE_FILE: Path = PROJECT_ROOT / ".gitignore"
+def ensure_agent_directory(project_root: Path = None) -> Path:
+    """Proxy for ensure_agent_directory step."""
+    return steps.ensure_agent_directory(console, project_root)
 
-app = typer.Typer()
+def ensure_gitignore(project_root: Path = None) -> None:
+    """Proxy for ensure_gitignore step."""
+    steps.ensure_gitignore(console, project_root)
 
-def check_dependencies() -> None:
-    """Verifies that required system dependencies are installed."""
-    typer.echo("[INFO] Checking for required system dependencies...")
-    # As per @Security review, add any binary dependencies here. e.g., `git`
-    dependencies = ["git", "python3", "gh"]
-    recommended = ["node", "npm"]
+def configure_api_keys() -> None:
+    """Proxy for configure_api_keys step."""
+    steps.configure_api_keys(console)
 
-    all_found = True
-    for dep in dependencies:
-        if not shutil.which(dep):
-            typer.secho(
-                f"[ERROR] Binary dependency not found: '{dep}'. Please install it.",
-                fg=typer.colors.RED,
-            )
-            all_found = False
-        else:
-            typer.secho(f"  - Found binary: {dep}", fg=typer.colors.GREEN)
+def configure_agent_settings() -> None:
+    """Proxy for configure_agent_settings step."""
+    steps.configure_agent_settings(console)
 
-    # Check Python dependencies
-    python_deps = [
-        ("dotenv", "python-dotenv"),
-        ("mcp", "modelcontextprotocol"),
-        ("typer", "typer"),
-    ]
-    
-    import importlib.util
-    for module_name, package_name in python_deps:
-        if not importlib.util.find_spec(module_name):
-            typer.secho(
-                f"[ERROR] Python dependency not found: '{package_name}' ({module_name}).\n"
-                f"        Please run: pip install -e .agent",
-                fg=typer.colors.RED,
-            )
-            all_found = False
-        else:
-            typer.secho(f"  - Found module: {module_name}", fg=typer.colors.GREEN)
+def select_default_model(provider: str, config_data: dict, config_path: Path) -> None:
+    """Proxy for select_default_model step."""
+    steps.select_default_model(console, provider, config_data, config_path)
 
-    if not all_found:
-        raise typer.Exit(code=1)
+def configure_voice_settings() -> None:
+    """Proxy for configure_voice_settings step."""
+    steps.configure_voice_settings(console)
 
-    # Check recommended
-    for dep in recommended:
-        if not shutil.which(dep):
-            typer.secho(
-                f"[WARN] Recommended dependency not found: '{dep}'. Some features may be limited.",
-                fg=typer.colors.YELLOW,
-            )
+def configure_notion_settings() -> None:
+    """Proxy for configure_notion_settings step."""
+    steps.configure_notion_settings(console)
+
+def configure_mcp_settings() -> None:
+    """Proxy for configure_mcp_settings step."""
+    steps.configure_mcp_settings(console)
+
+def setup_frontend() -> None:
+    """Proxy for setup_frontend step."""
+    steps.setup_frontend(console)
+
+def run_verification() -> None:
+    """Proxy for run_verification step."""
+    steps.run_verification(console)
+
+def display_next_steps() -> None:
+    """Proxy for display_next_steps step."""
+    steps.display_next_steps(console)
         else:
             typer.secho(f"  - Found {dep} (recommended)", fg=typer.colors.GREEN)
             
@@ -1013,49 +993,25 @@ def display_next_steps() -> None:
 
 @app.command()
 def onboard() -> None:
-    """Guides a developer through initial agent setup and configuration."""
-    typer.secho("--- Agent Onboarding ---", bold=True)
-    typer.echo(
-        "This command will check dependencies and set up your local environment."
-    )
-
-    if sys.platform == "win32":
-        typer.secho(
-            "\n[ERROR] This command is not yet supported on Windows.",
-            fg=typer.colors.RED
-        )
-        raise typer.Exit(code=1)
-
-    try:
-        check_dependencies()
+    """Initialize the Agent environment and configure integrations."""
+    with tracer.start_as_current_span("agent_onboard"):
+        console.print("[bold]Starting Agent Onboarding[/bold]\n")
+        
+        if not check_dependencies():
+            console.print("[red]Missing critical dependencies. Please install them and try again.[/red]")
+            raise typer.Exit(code=1)
+            
+        check_github_auth()
         ensure_agent_directory()
         ensure_gitignore()
-        # Initialize secrets first so we can use them
-        configure_api_keys() 
-        check_github_auth() # Now safe to use secrets if needed? Actually I just save preference.
+        configure_api_keys()
         configure_agent_settings()
         configure_voice_settings()
         configure_notion_settings()
         configure_mcp_settings()
         setup_frontend()
         run_verification()
-        
-        typer.secho(
-            "\n[SUCCESS] Onboarding complete! The agent is ready to use.",
-            fg=typer.colors.GREEN,
-            bold=True,
-        )
         display_next_steps()
-
-    except typer.Exit:
-        raise
-    except Exception as e:
-        typer.secho(
-            f"\n[FATAL] An unexpected error occurred: {e}",
-            fg=typer.colors.RED,
-            bold=True
-        )
-        raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     app()

@@ -74,6 +74,7 @@ implementation:
   - .agent/src/agent/main.py
   - .agent/src/agent/utils/__init__.py
   - .agent/src/agent/utils/text.py
+  - src/agent/commands/onboard.py
   tests:
   - .agent/tests/commands/test_visualize.py
   - .agent/tests/core/test_graph.py

@@ -98,6 +98,8 @@ def onboard() -> None
 #### [NEW] src/agent/core/onboard/__init__.py
 
 ```python
+<<<SEARCH
+===
 """Onboarding step library for the Agent CLI."""
 
 from .steps import (
@@ -131,6 +133,7 @@ __all__ = [
     "run_verification",
     "display_next_steps",
 ]
+>>>
 ```
 
 ### Step 2: Implement the steps library
@@ -140,6 +143,8 @@ This move extracts logic from the CLI and refactors for `console` injection and 
 #### [NEW] src/agent/core/onboard/steps.py
 
 ```python
+<<<SEARCH
+===
 """Implementation of individual onboarding steps."""
 
 import os
@@ -191,7 +196,7 @@ def check_github_auth(console: Console) -> bool:
         if result.returncode == 0:
             console.print("[green]✓[/green] GitHub CLI authenticated.")
             return True
-        console.print("[yellow]![/yellow] GitHub CLI not authenticated. Run 'gh auth login'.")
+        console.print("[yellow]![[/yellow] GitHub CLI not authenticated. Run 'gh auth login'.")
         return False
     except FileNotFoundError:
         console.print("[red]✗[/red] gh binary not found.")
@@ -262,6 +267,7 @@ def display_next_steps(console: Console) -> None:
     console.print("\n[bold]Next Steps:[/bold]")
     console.print("1. agent run")
     console.print("2. agent status")
+>>>
 ```
 
 ### Step 3: Refactor the CLI facade
@@ -379,6 +385,8 @@ def onboard() -> None:
 #### [NEW] src/agent/core/onboard/test_steps.py
 
 ```python
+<<<SEARCH
+===
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -424,6 +432,7 @@ class TestOnboardSteps(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+>>>
 ```
 
 ## Verification Plan
