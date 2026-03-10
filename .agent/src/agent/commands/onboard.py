@@ -101,6 +101,7 @@ def onboard() -> None:
         configure_voice_settings()
         configure_notion_settings()
         configure_mcp_settings()
+        setup_frontend()
         run_verification()
         
         import typer

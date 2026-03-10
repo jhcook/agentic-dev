@@ -26,19 +26,22 @@ from agent.core.onboard import steps
 def console():
     return Console()
 
+@patch("agent.core.onboard.steps.logger")
 @patch("agent.core.onboard.steps.shutil.which")
 @patch("importlib.util.find_spec")
-def test_check_dependencies_success(mock_find_spec, mock_which, console):
+def test_check_dependencies_success(mock_find_spec, mock_which, mock_logger, console):
     """Test check_dependencies returns True when all found."""
     mock_which.return_value = "/usr/bin/tool"
     mock_find_spec.return_value = True
 
     result = steps.check_dependencies(console)
     assert result is True
+    mock_logger.info.assert_called_with("Starting dependency check", extra={"step": "check_dependencies"})
 
+@patch("agent.core.onboard.steps.logger")
 @patch("agent.core.onboard.steps.shutil.which")
 @patch("importlib.util.find_spec")
-def test_check_dependencies_missing_binary(mock_find_spec, mock_which, console):
+def test_check_dependencies_missing_binary(mock_find_spec, mock_which, mock_logger, console):
     """Test check_dependencies returns False when a binary is missing."""
     mock_find_spec.return_value = True
     
@@ -52,16 +55,20 @@ def test_check_dependencies_missing_binary(mock_find_spec, mock_which, console):
 
     result = steps.check_dependencies(console)
     assert result is False
+    mock_logger.info.assert_called_with("Starting dependency check", extra={"step": "check_dependencies"})
 
-def test_ensure_agent_directory_creates_dir(console, tmp_path):
+@patch("agent.core.onboard.steps.logger")
+def test_ensure_agent_directory_creates_dir(mock_logger, console, tmp_path):
     """Test ensure_agent_directory creates a missing directory."""
     expected_dir = tmp_path / ".agent"
     assert not expected_dir.exists()
     
     steps.ensure_agent_directory(console, project_root=tmp_path)
     assert expected_dir.is_dir()
+    mock_logger.info.assert_called_with("Ensuring agent workspace exists", extra={"step": "ensure_agent_directory"})
 
-def test_ensure_agent_directory_fails_if_file(console, tmp_path):
+@patch("agent.core.onboard.steps.logger")
+def test_ensure_agent_directory_fails_if_file(mock_logger, console, tmp_path):
     """Test ensure_agent_directory exits if .agent is a file."""
     expected_dir = tmp_path / ".agent"
     expected_dir.touch()
@@ -69,8 +76,10 @@ def test_ensure_agent_directory_fails_if_file(console, tmp_path):
     with pytest.raises(typer.Exit) as excinfo:
         steps.ensure_agent_directory(console, project_root=tmp_path)
     assert excinfo.value.exit_code == 1
+    mock_logger.info.assert_called_with("Ensuring agent workspace exists", extra={"step": "ensure_agent_directory"})
 
-def test_ensure_gitignore_creates_file(console, tmp_path):
+@patch("agent.core.onboard.steps.logger")
+def test_ensure_gitignore_creates_file(mock_logger, console, tmp_path):
     """Test ensure_gitignore creates a .gitignore explicitly."""
     gitignore = tmp_path / ".gitignore"
     assert not gitignore.exists()
@@ -78,3 +87,4 @@ def test_ensure_gitignore_creates_file(console, tmp_path):
     steps.ensure_gitignore(console, project_root=tmp_path)
     assert gitignore.is_file()
     assert ".env" in gitignore.read_text()
+    mock_logger.info.assert_called_with("Ensuring agent metadata is gitignored", extra={"step": "ensure_gitignore"})
