@@ -47,8 +47,12 @@ As a Backend Engineer, I want to relocate the `@work` async tasks from `app.py` 
 
 ## Test Strategy
 
-- **Unit Testing**: Unit tests covering streaming chunk rendering and disconnect recovery.
-- **Manual Verification**: "Negative Test" (disconnect recovery) in a live terminal session.
+- **Unit Testing**: 
+  - Unit tests covering streaming chunk rendering and disconnect recovery.
+  - Explicit verification testing that log scrubbing logic for sensitive keys is successfully preserved and actively sanitizing inputs.
+- **Manual Verification**: 
+  - "Negative Test" (disconnect recovery) in a live terminal session.
+  - Inspection of logs and OpenTelemetry spans during streaming to ensure structured logging flows correctly across the new boundaries without leaking sensitive data.
 
 ## Rollback Plan
 
