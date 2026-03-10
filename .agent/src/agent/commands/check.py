@@ -927,12 +927,15 @@ def preflight(
                         break
                 story_content = scrub_sensitive_data(story_content)
 
-            console.print("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]")
-            with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
+            with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]") as ctx:
                 try:
                     def _progress(msg: str):
-                        # Ensure we print with a newline for the TUI to consume
-                        console.print(f"[dim]  - {msg}[/dim]")
+                        transient_keywords = ["is reviewing", "Convening", "Panel engine", "Created", "Dispatching"]
+                        if any(k in msg for k in transient_keywords):
+                            ctx.update(f"[bold cyan]{msg}[/bold cyan]")
+                        else:
+                            # Ensure we print with a newline for the TUI to consume
+                            console.print(f"[dim]  - {msg}[/dim]")
 
                     result = convene_council_full(
                         story_id=story_id,
