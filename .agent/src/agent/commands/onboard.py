@@ -105,34 +105,26 @@ def ensure_gitignore(project_root: Optional[Path] = None) -> None:
 
 def configure_api_keys() -> None:
     """Proxy for configure_api_keys step."""
-    settings.get_secret_manager = get_secret_manager
     settings.configure_api_keys(prompter)
 
 def configure_agent_settings() -> None:
     """Proxy for configure_agent_settings step."""
-    settings.config = config
     settings.configure_agent_settings(prompter)
 
 def select_default_model(provider: str, config_data: Dict, config_path: Path) -> None:
     """Proxy for select_default_model step."""
-    settings.config = config
     settings.select_default_model(prompter, provider, config_data, config_path)
 
 def configure_voice_settings() -> None:
     """Proxy for configure_voice_settings step."""
-    integrations.config = config
-    integrations.get_secret_manager = get_secret_manager
     integrations.configure_voice_settings(prompter)
 
 def configure_notion_settings() -> None:
     """Proxy for configure_notion_settings step."""
-    integrations.config = config
-    integrations.get_secret_manager = get_secret_manager
     integrations.configure_notion_settings(prompter)
 
 def configure_mcp_settings() -> None:
     """Proxy for configure_mcp_settings step."""
-    integrations.config = config
     integrations.configure_mcp_settings(prompter)
 
 def setup_frontend() -> None:
