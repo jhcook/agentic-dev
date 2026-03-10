@@ -21,6 +21,7 @@ It serves as a thin facade, proxying all actual implementation logic to the
 
 import typer
 from pathlib import Path
+from typing import Dict, Optional
 from opentelemetry import trace
 from rich.console import Console
 
@@ -41,11 +42,11 @@ def check_github_auth() -> None:
     if not steps.check_github_auth(console):
         raise typer.Exit(code=1)
 
-def ensure_agent_directory(project_root: Path = None) -> None:
+def ensure_agent_directory(project_root: Optional[Path] = None) -> None:
     """Proxy for ensure_agent_directory step."""
     steps.ensure_agent_directory(console, project_root)
 
-def ensure_gitignore(project_root: Path = None) -> None:
+def ensure_gitignore(project_root: Optional[Path] = None) -> None:
     """Proxy for ensure_gitignore step."""
     steps.ensure_gitignore(console, project_root)
 
@@ -57,7 +58,7 @@ def configure_agent_settings() -> None:
     """Proxy for configure_agent_settings step."""
     steps.configure_agent_settings(console)
 
-def select_default_model(provider: str, config_data: dict, config_path: Path) -> None:
+def select_default_model(provider: str, config_data: Dict, config_path: Path) -> None:
     """Proxy for select_default_model step."""
     steps.select_default_model(console, provider, config_data, config_path)
 

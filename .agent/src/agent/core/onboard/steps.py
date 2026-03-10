@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Dict, Optional
 
 import typer
 from opentelemetry import trace
@@ -212,7 +213,7 @@ def check_github_auth(console: Console) -> bool:
     return True
 
 
-def ensure_agent_directory(console: Console, project_root: Path = None) -> None:
+def ensure_agent_directory(console: Console, project_root: Optional[Path] = None) -> None:
     """Ensures the .agent directory exists and is a directory."""
     logger.info("Ensuring agent workspace exists", extra={"step": "ensure_agent_directory"})
     root = project_root or Path(".").resolve()
@@ -233,7 +234,7 @@ def ensure_agent_directory(console: Console, project_root: Path = None) -> None:
         raise typer.Exit(code=1)
 
 
-def ensure_gitignore(console: Console, project_root: Path = None) -> None:
+def ensure_gitignore(console: Console, project_root: Optional[Path] = None) -> None:
     """Ensures .env is listed in .gitignore to prevent accidental secret exposure."""
     logger.info("Ensuring agent metadata is gitignored", extra={"step": "ensure_gitignore"})
     root = project_root or Path(".").resolve()
@@ -533,7 +534,7 @@ def configure_agent_settings(console: Console) -> None:
             typer.echo("Invalid input. Keeping default.")
 
 
-def select_default_model(console: Console, provider: str, config_data: dict, config_path: Path) -> None:
+def select_default_model(console: Console, provider: str, config_data: Dict, config_path: Path) -> None:
     """Prompts user to select a default model for the provider."""
     logger.info(f"Selecting default model for {provider}", extra={"step": "select_default_model"})
     try:
