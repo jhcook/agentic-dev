@@ -64,26 +64,13 @@ def configure_api_keys(prompter: Prompter) -> None:
     if not manager.is_initialized():
         prompter.echo("Secret Manager is not initialized.")
         prompter.echo("You need to set a master password to encrypt your API keys.")
-        from agent.core.auth.utils import validate_password_strength
-
-        while True:
-            password = prompter.getpass("Master password: ")
-            password_confirm = prompter.getpass("Confirm password: ")
-            if password != password_confirm:
-                prompter.secho("[ERROR] Passwords do not match.", color="red")
-                continue
-
-            is_valid, err_msg = validate_password_strength(password)
-            if is_valid:
-                try:
-                    manager.initialize(password)
-                    prompter.echo("[OK] Secret Manager initialized.")
-                    break
-                except Exception as e:
-                    prompter.secho(f"[ERROR] Initialization failed: {e}", color="red")
-                    prompter.exit(1)
-            else:
-                 prompter.echo(f"Password does not meet requirements: {err_msg}")
+        password = prompter.prompt_password_strength()
+        try:
+            manager.initialize(password)
+            prompter.echo("[OK] Secret Manager initialized.")
+        except Exception as e:
+            prompter.secho(f"[ERROR] Initialization failed: {e}", color="red")
+            prompter.exit(1)
 
     # 2. Unlock if needed
     if not manager.is_unlocked():

@@ -57,12 +57,14 @@ class TyperPrompter(Prompter):
         return getpass.getpass(message)  # no-preflight-check
         
     def prompt_password_strength(self) -> str:
-        from agent.commands.secret import _prompt_password, _validate_password_strength
+        from agent.commands.secret import _prompt_password
+        from agent.core.auth.utils import validate_password_strength
         while True:
             password = _prompt_password(confirm=True)  # no-preflight-check
-            if _validate_password_strength(password):
+            is_valid, err_msg = validate_password_strength(password)
+            if is_valid:
                 return password
-            typer.echo("Password does not meet requirements. Please try again.")
+            typer.echo(f"Password does not meet requirements: {err_msg}")
 
     def exit(self, code: int = 1) -> None:
         raise typer.Exit(code=code)
