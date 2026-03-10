@@ -48,7 +48,7 @@ class OpenAIProvider(BaseProvider):
     @ai_retry()
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a complete response using the OpenAI API (stub; full dispatch in INFRA-108)."""
-        logger.debug("Generating response using OpenAI", extra={"model": self.model_name})
+        logger.debug("Generating response using OpenAI", extra={"model": self.model_name, "provider": "openai"})
         if tracer:
             with tracer.start_as_current_span("ai_provider.generate") as span:
                 span.set_attribute("model_name", self.model_name)
@@ -58,7 +58,7 @@ class OpenAIProvider(BaseProvider):
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Stream a response token-by-token using the OpenAI API (stub; full dispatch in INFRA-108)."""
-        logger.debug("Streaming response using OpenAI", extra={"model": self.model_name})
+        logger.debug("Streaming response using OpenAI", extra={"model": self.model_name, "provider": "openai"})
         chunks = ["This ", "is ", "a ", "streamed ", "OpenAI ", "response."]
         if tracer:
             with tracer.start_as_current_span("ai_provider.stream") as span:
@@ -76,7 +76,7 @@ class VertexAIProvider(BaseProvider):
     @ai_retry()
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a complete response using the Vertex AI (Gemini) API (stub; full dispatch in INFRA-108)."""
-        logger.debug("Generating response using VertexAI", extra={"model": self.model_name})
+        logger.debug("Generating response using VertexAI", extra={"model": self.model_name, "provider": "vertex"})
         if tracer:
             with tracer.start_as_current_span("ai_provider.generate") as span:
                 span.set_attribute("model_name", self.model_name)
@@ -86,7 +86,7 @@ class VertexAIProvider(BaseProvider):
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Stream a response token-by-token using the Vertex AI API (stub; full dispatch in INFRA-108)."""
-        logger.debug("Streaming response using VertexAI", extra={"model": self.model_name})
+        logger.debug("Streaming response using VertexAI", extra={"model": self.model_name, "provider": "vertex"})
         if tracer:
             with tracer.start_as_current_span("ai_provider.stream") as span:
                 span.set_attribute("model_name", self.model_name)
@@ -147,7 +147,7 @@ def get_provider(model_name: str) -> AIProvider:
         elif model_name.startswith("gemini-"):
             provider_cls = VertexAIProvider
         else:
-            logger.warning("Unknown model '%s', defaulting to OpenAI", model_name)
+            logger.warning("Unknown model, defaulting to OpenAI", extra={"model": model_name, "provider": "openai"})
             provider_cls = OpenAIProvider
             
     return provider_cls(model_name=model_name)
