@@ -37,7 +37,9 @@ app = typer.Typer()
 console = Console()
 tracer = trace.get_tracer(__name__)
 
-class TyperPrompter:
+class TyperPrompter(Prompter):
+    """A Typer-based implementation of the Prompter protocol for CLI interaction."""
+    
     def echo(self, message: str) -> None:
         typer.echo(message)
         
