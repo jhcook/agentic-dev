@@ -116,10 +116,12 @@ class SelectionLog(VerticalScroll):
     """A replacement for RichLog that holds Static widgets to allow for native text selection."""
     
     def __init__(self, *args, **kwargs):
+        """Initialize the selection log with an empty history."""
         super().__init__(*args, **kwargs)
         self._history: List[Dict[str, str]] = []
 
     def write(self, renderable: Any, scroll_end: bool = False) -> None:
+        """Write a new renderable to the selection log, optionally scrolling to the end."""
         widget = Static(renderable)
         widget._search_text = getattr(renderable, "markup", str(renderable))
         self.mount(widget)
@@ -133,6 +135,7 @@ class SelectionLog(VerticalScroll):
         logger.debug(f"Selection added from {source}", extra={"source": source})
 
     def clear(self) -> None:
+        """Clear all contents from the selection log and reset history."""
         self.query("*").remove()
         self._history = []
 
