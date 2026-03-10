@@ -276,7 +276,7 @@ The CLI remains the entry point and handles Typer orchestration, but delegates i
 
 #### [MODIFY] src/agent/commands/onboard.py
 
-```
+```python
 <<<SEARCH
 import getpass
 import os
@@ -284,78 +284,210 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
 import typer
 from opentelemetry import trace
 from rich.console import Console
 from rich.table import Table
+
 from agent.core.config import config
 from agent.core.secrets import (
-def check_dependencies() -> None
-def check_github_auth() -> None
-def ensure_agent_directory(project_root: Path = None) -> None
-def ensure_gitignore(project_root: Path = None) -> None
-def configure_api_keys() -> None
-def configure_agent_settings() -> None
-def select_default_model(provider: str, config_data: dict, config_path: Path) -> None
-def configure_voice_settings() -> None
-def configure_notion_settings() -> None
-def configure_mcp_settings() -> None
-def setup_frontend() -> None
-def run_verification() -> None
-def display_next_steps() -> None
-@app.command()
-def onboard() -> None
+    InvalidPasswordError,
+    get_secret,
+    get_secret_manager,
+)
 ===
 import typer
 from pathlib import Path
+
 from opentelemetry import trace
 from rich.console import Console
+
 from agent.main import app
 from agent.core.onboard import steps
+>>>
+<<<SEARCH
+# Define project paths relative to the current working directory.
+# This assumes the command is run from the project root.
+PROJECT_ROOT: Path = Path(".").resolve()
+AGENT_DIR: Path = PROJECT_ROOT / ".agent"
+ENV_FILE: Path = PROJECT_ROOT / ".env"
+GITIGNORE_FILE: Path = PROJECT_ROOT / ".gitignore"
+
+app = typer.Typer()
 
 console = Console()
 tracer = trace.get_tracer(__name__)
-
-# Proxies for testing backward compatibility and logic isolation
+===
+console = Console()
+tracer = trace.get_tracer(__name__)
+>>>
+<<<SEARCH
+def check_dependencies() -> None:
+===
 def check_dependencies() -> bool:
+    """Proxy for check_dependencies step."""
     return steps.check_dependencies(console)
 
+def _old_check_dependencies() -> None:
+>>>
+<<<SEARCH
+def check_github_auth() -> None:
+===
 def check_github_auth() -> bool:
+    """Proxy for check_github_auth step."""
     return steps.check_github_auth(console)
 
+def _old_check_github_auth() -> None:
+>>>
+<<<SEARCH
+def ensure_agent_directory(project_root: Path = None) -> None:
+===
 def ensure_agent_directory(project_root: Path = None) -> Path:
+    """Proxy for ensure_agent_directory step."""
     return steps.ensure_agent_directory(console, project_root)
 
+def _old_ensure_agent_directory(project_root: Path = None) -> None:
+>>>
+<<<SEARCH
 def ensure_gitignore(project_root: Path = None) -> None:
+===
+def ensure_gitignore(project_root: Path = None) -> None:
+    """Proxy for ensure_gitignore step."""
     steps.ensure_gitignore(console, project_root)
 
+def _old_ensure_gitignore(project_root: Path = None) -> None:
+>>>
+<<<SEARCH
 def configure_api_keys() -> None:
+===
+def configure_api_keys() -> None:
+    """Proxy for configure_api_keys step."""
     steps.configure_api_keys(console)
 
+def _old_configure_api_keys() -> None:
+>>>
+<<<SEARCH
 def configure_agent_settings() -> None:
+===
+def configure_agent_settings() -> None:
+    """Proxy for configure_agent_settings step."""
     steps.configure_agent_settings(console)
 
+def _old_configure_agent_settings() -> None:
+>>>
+<<<SEARCH
 def select_default_model(provider: str, config_data: dict, config_path: Path) -> None:
+===
+def select_default_model(provider: str, config_data: dict, config_path: Path) -> None:
+    """Proxy for select_default_model step."""
     steps.select_default_model(console, provider, config_data, config_path)
 
+def _old_select_default_model(provider: str, config_data: dict, config_path: Path) -> None:
+>>>
+<<<SEARCH
 def configure_voice_settings() -> None:
+===
+def configure_voice_settings() -> None:
+    """Proxy for configure_voice_settings step."""
     steps.configure_voice_settings(console)
 
+def _old_configure_voice_settings() -> None:
+>>>
+<<<SEARCH
 def configure_notion_settings() -> None:
+===
+def configure_notion_settings() -> None:
+    """Proxy for configure_notion_settings step."""
     steps.configure_notion_settings(console)
 
+def _old_configure_notion_settings() -> None:
+>>>
+<<<SEARCH
 def configure_mcp_settings() -> None:
+===
+def configure_mcp_settings() -> None:
+    """Proxy for configure_mcp_settings step."""
     steps.configure_mcp_settings(console)
 
+def _old_configure_mcp_settings() -> None:
+>>>
+<<<SEARCH
 def setup_frontend() -> None:
+===
+def setup_frontend() -> None:
+    """Proxy for setup_frontend step."""
     steps.setup_frontend(console)
 
+def _old_setup_frontend() -> None:
+>>>
+<<<SEARCH
 def run_verification() -> None:
+===
+def run_verification() -> None:
+    """Proxy for run_verification step."""
     steps.run_verification(console)
 
+def _old_run_verification() -> None:
+>>>
+<<<SEARCH
 def display_next_steps() -> None:
+===
+def display_next_steps() -> None:
+    """Proxy for display_next_steps step."""
     steps.display_next_steps(console)
 
+def _old_display_next_steps() -> None:
+>>>
+<<<SEARCH
+@app.command()
+def onboard() -> None:
+    """Guides a developer through initial agent setup and configuration."""
+    typer.secho("--- Agent Onboarding Workspace ---", fg=typer.colors.BLUE, bold=True)
+    typer.echo(
+        "This command will check dependencies, initialize secure secrets vault, "
+        "and securely export .env configuration."
+    )
+
+    if sys.platform == "win32":
+        typer.secho(
+            "\n[ERROR] This command relies on UNIX dependencies (e.g. bash hooks). "
+            "Please use WSL.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        check_dependencies()
+        ensure_agent_directory()
+        ensure_gitignore()
+        # Initialize secrets first so other steps can use the unlocked vault
+        configure_api_keys()
+        check_github_auth() # Now we use GH auth alongside MCP
+        configure_agent_settings()
+        configure_voice_settings()
+        configure_notion_settings()
+        configure_mcp_settings()
+        setup_frontend()
+        run_verification()
+
+        typer.secho(
+            "\n[SUCCESS] Onboarding complete. You can now use 'agent run'.",
+            fg=typer.colors.GREEN,
+            bold=True,
+        )
+        display_next_steps()
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        typer.secho(
+            f"\n[FATAL] An unexpected error occurred during onboarding: {e}",
+            fg=typer.colors.RED,
+            bold=True
+        )
+        raise typer.Exit(code=1)
+===
 @app.command()
 def onboard() -> None:
     """Initialize the Agent environment and configure integrations."""
