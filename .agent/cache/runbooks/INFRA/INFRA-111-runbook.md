@@ -261,6 +261,7 @@ or sensitive personal data.
 PREFERRED_MODELS = [
     ("Gemini 2.5 Pro",   "gemini",    "gemini-2.5-pro"),
     ("Gemini 2.5 Flash", "gemini",    "gemini-2.5-flash"),
+    ("Gemini 2.5 Pro",   "vertex",    "gemini-2.5-pro"),
     ("Gemini 2.0 Flash", "vertex",    "gemini-2.0-flash"),
     ("GPT-4o",           "openai",    "gpt-4o"),
     ("GPT-4.1",          "openai",    "gpt-4.1"),
@@ -503,14 +504,14 @@ or sensitive personal data.
 # Curated list of preferred models across providers.
 # Each entry: (display_name, provider, model_id)
 PREFERRED_MODELS = [
-    ("Gemini 2.5 Pro",   "gemini",    "gemini-2.5-pro"),
-    ("Gemini 2.5 Flash", "gemini",    "gemini-2.5-flash"),
-    ("Gemini 2.0 Flash", "vertex",    "gemini-2.0-flash"),
-    ("GPT-4o",           "openai",    "gpt-4o"),
-    ("GPT-4.1",          "openai",    "gpt-4.1"),
-    ("Claude Sonnet 4",  "anthropic", "claude-sonnet-4-20250514"),
-    ("Claude Opus 4",    "anthropic", "claude-opus-4-20250514"),
-    ("Ollama (Local)",   "ollama",    None),  # uses OLLAMA_MODEL env default
+    ("Gemini 2.5 Pro",  "gemini",    "gemini-2.5-pro"),
+    ("Gemini 2.5 Pro",  "gemini",    "gemini-2.5-pro"),
+    ("Gemini 2.5 Pro",  "vertex",    "gemini-2.5-pro"),
+    ("GPT-4o",          "openai",    "gpt-4o"),
+    ("GPT-4.1",         "openai",    "gpt-4.1"),
+    ("Claude Sonnet 4", "anthropic", "claude-sonnet-4-20250514"),
+    ("Claude Opus 4",   "anthropic", "claude-opus-4-20250514"),
+    ("Ollama (Local)",  "ollama",    None),  # uses OLLAMA_MODEL env default
 ]
 ===
 from agent.tui.prompts import (

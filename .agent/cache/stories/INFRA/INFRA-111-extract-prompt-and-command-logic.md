@@ -46,7 +46,7 @@ As a Backend Engineer, I want to create `agent/tui/prompts.py` and migrate all i
 
 ## Test Strategy
 
-- **Unit Testing**: N/A for this structural move.
+- **Unit Testing**: Added `test_prompts.py` to test the extracted prompt building and history formatting logic.
 
 ## Rollback Plan
 
