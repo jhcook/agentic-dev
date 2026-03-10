@@ -26,7 +26,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-\"\"\"Core authentication utilities for agent security operations.\"\"\"
+"""Core authentication utilities for agent security operations."""
 from typing import Optional
 
 def validate_password_strength(password: str) -> tuple[bool, str]:

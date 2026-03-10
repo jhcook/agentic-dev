@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-\"\"\"Protocol for abstracting CLI interactions from core logic.\"\"\"
+"""Protocol for abstracting CLI interactions from core logic."""
 from typing import Protocol, List, Dict, Any, Optional
 
 class Prompter(Protocol):
