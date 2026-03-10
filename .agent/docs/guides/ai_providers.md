@@ -72,3 +72,8 @@ class MyNewProvider(BaseProvider):
                 span.set_attribute("provider", "mynew")
                 # Do the generation
 ```
+
+
+## Copyright
+
+Copyright 2026 Justin Cook

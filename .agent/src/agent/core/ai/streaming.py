@@ -15,6 +15,7 @@
 """
 Contains provider-agnostic retry decorators and stream processing helpers.
 """
+import functools
 import asyncio
 import logging
 import random

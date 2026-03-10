@@ -15,3 +15,7 @@ If you wish to add support for a new AI backend (e.g. LLaMA, OpenAI), please use
 2. Author your custom strategy class (e.g. `NewProvider`) ensuring it explicitly inherits from the standard `AIProvider` Protocol.
 3. Decorate your generic `stream` or `generate` request outputs with `@ai_retry` from `core/ai/streaming.py` to inherit platform rate-limit protections and telemetry logs.
 4. Register your provider implementation with `ProviderRegistry.register()`.
+
+## Copyright
+
+Copyright 2026 Justin Cook

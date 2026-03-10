@@ -10,3 +10,8 @@ The core AI layer exists within `.agent/src/agent/core/ai` and is decoupled into
 - **streaming.py**: Houses all `async` stream ingestion wrappers alongside resiliency decorators like `ai_retry` which implement standard exponential backoff.
 
 For instructions on adding new AI Provider models, please see `CONTRIBUTING.md`.
+
+
+## Copyright
+
+Copyright 2026 Justin Cook
