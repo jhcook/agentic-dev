@@ -79,13 +79,14 @@ async def process_chat_stream(stream: AsyncGenerator[Dict[str, Any], None]) -> A
     try:
         async for chunk in stream:
             if "error" in chunk:
-                error_msg = chunk["error"]
+                error_msg = scrub_sensitive_data(chunk["error"])
                 logger.error(f"Stream error: {error_msg}", extra={"error": error_msg})
                 yield f"\n[Error: {error_msg}]"
                 return
 
             content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
             if content:
+                content = scrub_sensitive_data(content)
                 yield content
                 full_response.append(content)
     except Exception as e:
