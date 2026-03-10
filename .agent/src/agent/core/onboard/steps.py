@@ -58,7 +58,7 @@ AGENT_DIR: Path = PROJECT_ROOT / ".agent"
 ENV_FILE: Path = PROJECT_ROOT / ".env"
 GITIGNORE_FILE: Path = PROJECT_ROOT / ".gitignore"
 
-def check_dependencies(console: Console) -> None:
+def check_dependencies(console: Console) -> bool:
     """Verifies that required system dependencies are installed."""
     logger.info("Starting dependency check", extra={"step": "check_dependencies"})
     typer.echo("[INFO] Checking for required system dependencies...")
@@ -97,7 +97,7 @@ def check_dependencies(console: Console) -> None:
             typer.secho(f"  - Found module: {module_name}", fg=typer.colors.GREEN)
 
     if not all_found:
-        raise typer.Exit(code=1)
+        return False
 
     # Check recommended
     for dep in recommended:
@@ -125,9 +125,10 @@ def check_dependencies(console: Console) -> None:
          typer.secho("  - Found tool: markdownlint", fg=typer.colors.GREEN)
 
     typer.secho("[OK] System dependencies check passed.", fg=typer.colors.GREEN)
+    return True
 
 
-def check_github_auth(console: Console) -> None:
+def check_github_auth(console: Console) -> bool:
     """Checks GitHub authentication via MCP and CLI (Unified)."""
     logger.info("Configuring GitHub Auth", extra={"step": "check_github_auth"})
     typer.echo("\n[INFO] Configuring GitHub Access...")
@@ -138,7 +139,7 @@ def check_github_auth(console: Console) -> None:
             "[ERROR] GitHub CLI ('gh') is required but not found. Please install it.",
             fg=typer.colors.RED
         )
-        raise typer.Exit(code=1)
+        return False
 
     # Check if already authenticated via gh
     gh_status = subprocess.run(
@@ -153,7 +154,7 @@ def check_github_auth(console: Console) -> None:
     if gh_logged_in and secret_exists:
         typer.secho("[OK] GitHub access already configured (CLI & MCP).", fg=typer.colors.GREEN)
         if not typer.confirm("Would you like to re-configure?", default=False):
-            return
+            return True
 
     typer.echo("\n[INFO] We will now configure GitHub access for both the Agent (MCP) and CLI (gh).")
     typer.echo("You will need a GitHub Personal Access Token (PAT) with scopes: repo, read:org")
@@ -161,7 +162,7 @@ def check_github_auth(console: Console) -> None:
     token = getpass.getpass("GitHub PAT: ")  # no-preflight-check
     if not token:
         typer.secho("[WARN] No token provided. Skipping GitHub configuration.", fg=typer.colors.YELLOW)
-        return
+        return False
 
     # 1. Configure MCP Secret
     try:
@@ -208,6 +209,7 @@ def check_github_auth(console: Console) -> None:
          typer.secho(f"  - [ERROR] Failed to run gh auth: {e}", fg=typer.colors.RED)
 
     typer.secho("[OK] GitHub access configuration complete.", fg=typer.colors.GREEN)
+    return True
 
 
 def ensure_agent_directory(console: Console, project_root: Path = None) -> None:

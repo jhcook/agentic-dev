@@ -33,11 +33,13 @@ tracer = trace.get_tracer(__name__)
 # Proxies for testing backward compatibility and logic isolation
 def check_dependencies() -> None:
     """Proxy for check_dependencies step."""
-    steps.check_dependencies(console)
+    if not steps.check_dependencies(console):
+        raise typer.Exit(code=1)
 
 def check_github_auth() -> None:
     """Proxy for check_github_auth step."""
-    steps.check_github_auth(console)
+    if not steps.check_github_auth(console):
+        raise typer.Exit(code=1)
 
 def ensure_agent_directory(project_root: Path = None) -> None:
     """Proxy for ensure_agent_directory step."""

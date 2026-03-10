@@ -29,19 +29,17 @@ def console():
 @patch("agent.core.onboard.steps.shutil.which")
 @patch("importlib.util.find_spec")
 def test_check_dependencies_success(mock_find_spec, mock_which, console):
-    """Test check_dependencies succeeds when all found."""
+    """Test check_dependencies returns True when all found."""
     mock_which.return_value = "/usr/bin/tool"
     mock_find_spec.return_value = True
 
-    try:
-        steps.check_dependencies(console)
-    except typer.Exit:
-        pytest.fail("check_dependencies raised typer.Exit unexpectedly!")
+    result = steps.check_dependencies(console)
+    assert result is True
 
 @patch("agent.core.onboard.steps.shutil.which")
 @patch("importlib.util.find_spec")
 def test_check_dependencies_missing_binary(mock_find_spec, mock_which, console):
-    """Test check_dependencies raises an exit when a binary is missing."""
+    """Test check_dependencies returns False when a binary is missing."""
     mock_find_spec.return_value = True
     
     # Missing git
@@ -52,9 +50,8 @@ def test_check_dependencies_missing_binary(mock_find_spec, mock_which, console):
     
     mock_which.side_effect = which_side_effect
 
-    with pytest.raises(typer.Exit) as excinfo:
-        steps.check_dependencies(console)
-    assert excinfo.value.exit_code == 1
+    result = steps.check_dependencies(console)
+    assert result is False
 
 def test_ensure_agent_directory_creates_dir(console, tmp_path):
     """Test ensure_agent_directory creates a missing directory."""

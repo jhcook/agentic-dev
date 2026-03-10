@@ -48,6 +48,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 - **Components touched**: `commands/onboard.py` (refactor, thinned), `core/onboard/steps.py` (new), `core/onboard/__init__.py` (new).
 - **Workflows affected**: `agent onboard` command, any CI bootstrap script invoking onboarding steps.
 - **Risks identified**: `check_dependencies` uses `shutil.which` and `subprocess` — mocking strategy in tests must be consistent across old and new locations.
+- **Out-of-Scope Changes**: Unrelated update to `README.md` documenting Python 3.13 incompatibility on macOS x86_64 architecture.
 
 ## Test Strategy
 
