@@ -281,7 +281,7 @@ def configure_agent_settings(prompter: Prompter) -> None:
         prompter.echo(f"[OK] Default provider set to '{provider}'.")
         
         # Now lets try to select model
-        select_default_model(console, provider, data, agent_config_path)
+        select_default_model(prompter, provider, data, agent_config_path)
 
     # 3. Select Panel Engine (INFRA-061)
     # Reload data after model selection may have saved

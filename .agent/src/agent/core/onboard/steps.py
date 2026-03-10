@@ -325,7 +325,7 @@ def setup_frontend(prompter: Prompter) -> None:
              
              if process.stdout:
                  for line in process.stdout:
-                     console.print(line, end="")
+                     prompter.echo(line.strip())
             
              process.wait()
              
