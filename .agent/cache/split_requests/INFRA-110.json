@@ -1,9 +1,0 @@
-{
-  "SPLIT_REQUEST": true,
-  "reason": "Decomposing the ~1,000 LOC preflight() function and the 1,597 LOC check.py module into core sub-modules exceeds the 400-line change threshold.",
-  "suggestions": [
-    "INFRA-110-A: Extract Governance Council orchestration and ADK agent logic from preflight() to core/check/orchestrator.py",
-    "INFRA-110-B: Extract preflight report formatting, Rich console logic, and UI helpers to core/check/reporting.py",
-    "INFRA-110-C: Refactor commands/check.py into a thin Typer router (<= 500 LOC) to achieve ADR-041 compliance"
-  ]
-}

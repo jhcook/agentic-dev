@@ -196,7 +196,7 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     blocks: List[Dict[str, str]] = []
     for match in re.finditer(r'```[\w]+:([\w/\.\-_]+)\n(.*?)```', content, re.DOTALL):
         blocks.append({"file": match.group(1).strip(), "content": match.group(2).strip()})
-    p2 = r'(?:File|Modify|Create):\s*`?([^\n`]+)`?\s*\n```[\w]*\n(.*?)```'
+    p2 = r'(?:(?:File|Modify|Create):\s*|####\s*\[(?:NEW|MODIFY|ADD)\]\s*)`?([^\n`]+?)`?\s*\n```[\w]*\n(.*?)```'
     for match in re.finditer(p2, content, re.DOTALL | re.IGNORECASE):
         fp = match.group(1).strip()
         if not any(b["file"] == fp for b in blocks):
@@ -224,7 +224,7 @@ def parse_search_replace_blocks(content: str) -> List[Dict[str, str]]:
     """
     blocks: List[Dict[str, str]] = []
     file_sections = re.split(
-        r'(?:^|\n)(?:File|Modify):\s*`?([^\n`]+)`?\s*\n',
+        r'(?:^|\n)(?:(?:File|Modify):\s*|####\s*\[MODIFY\]\s*)`?([^\n`]+?)`?\s*\n',
         content, flags=re.IGNORECASE,
     )
     for i in range(1, len(file_sections), 2):

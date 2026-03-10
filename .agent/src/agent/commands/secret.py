@@ -34,6 +34,8 @@ from agent.core.secrets import (
     get_secret_manager,
 )
 
+from agent.core.auth.utils import validate_password_strength
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -57,28 +59,6 @@ def _prompt_password(confirm: bool = False) -> str:
             raise typer.Exit(code=1)
     
     return password
-
-
-def _validate_password_strength(password: str) -> bool:
-    """Validate master password meets minimum requirements."""
-    if len(password) < 12:
-        console.print(
-            "[bold red]Error:[/bold red] Password must be at least 12 characters."
-        )
-        return False
-    
-    has_upper = any(c.isupper() for c in password)
-    has_lower = any(c.islower() for c in password)
-    has_digit = any(c.isdigit() for c in password)
-    
-    if not (has_upper and has_lower and has_digit):
-        console.print(
-            "[bold red]Error:[/bold red] Password must contain uppercase, "
-            "lowercase, and numbers."
-        )
-        return False
-    
-    return True
 
 
 def _unlock_manager(manager: SecretManager) -> None:
@@ -115,7 +95,9 @@ def init(
     
     password = _prompt_password(confirm=True)
     
-    if not _validate_password_strength(password):
+    is_valid, err_msg = validate_password_strength(password)
+    if not is_valid:
+        console.print(f"[bold red]Error:[/bold red] {err_msg}")
         raise typer.Exit(code=1)
     
     try:
@@ -147,7 +129,9 @@ def rotate_key():
         
     console.print("\n2. Enter NEW password.")
     new_pass = _prompt_password(confirm=True)
-    if not _validate_password_strength(new_pass):
+    is_valid, err_msg = validate_password_strength(new_pass)
+    if not is_valid:
+        console.print(f"[bold red]Error:[/bold red] {err_msg}")
         raise typer.Exit(1)
         
     try:

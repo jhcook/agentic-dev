@@ -34,7 +34,10 @@ dependencies = [
     "langchain-chroma>=0.1.0",
     "langchain-community>=0.4.1",
     "langchain-huggingface>=1.2.0",
-    "sentence-transformers>=2.2.0",
+    "sentence-transformers>=2.2.0,<3.0.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
+    "sentence-transformers>=2.2.0,<3.0.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version >= '3.13'",
+    "torch>=2.0.0,<2.4.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
+    "torch>=2.0.0,<2.4.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version >= '3.13'",
     "openai>=1.0.0",
     "anthropic>=0.3.0",
     "google-genai>=0.1.0",
@@ -52,15 +55,16 @@ voice = [
     "deepgram-sdk>=3.0",
     "google-cloud-speech>=2.0.0",
     "google-cloud-texttospeech>=2.0.0",
-    "azure-cognitiveservices-speech>=1.33.0",
-    "numpy>=1.26.0",
+    "numpy>=1.26.0,<2.0.0 ; python_version < '3.13'",
+    "numpy>=1.26.0,<2.0.0 ; python_version >= '3.13'",
     "soundfile>=0.12.1",
     "scipy>=1.11.0",
     
     # Local Voice (INFRA-030) - Disabled due to Python 3.14 incompatibility
-    "kokoro-onnx>=0.3.1",
-    "onnxruntime>=1.16.0",
-    "webrtcvad>=2.0.10",
+    "kokoro-onnx>=0.3.1 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "onnxruntime>=1.16.0,<1.24.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
+    "onnxruntime>=1.16.0,<1.24.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version >= '3.13'",
+    "webrtcvad>=2.0.10 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "faster-whisper>=1.0.0",
 ]
 
@@ -117,7 +121,8 @@ norecursedirs = [
     "src"
 ]
 filterwarnings = [
-    "ignore::SyntaxWarning:passlib.*"
+    "ignore::SyntaxWarning:passlib.*",
+    "ignore:Your application has authenticated using end user credentials:UserWarning:google.auth._default",
 ]
 markers = [
     "requires_ai: requires AI optional deps (langchain, openai, anthropic, google-genai)",
