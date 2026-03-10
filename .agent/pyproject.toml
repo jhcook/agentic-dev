@@ -55,9 +55,8 @@ voice = [
     "deepgram-sdk>=3.0",
     "google-cloud-speech>=2.0.0",
     "google-cloud-texttospeech>=2.0.0",
-    "azure-cognitiveservices-speech>=1.33.0",
-    "numpy>=1.26.0,<2.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
-    "numpy>=1.26.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version >= '3.13'",
+    "numpy>=1.26.0,<2.0 ; python_version < '3.13'",
+    "numpy>=1.26.0 ; python_version >= '3.13'",
     "soundfile>=0.12.1",
     "scipy>=1.11.0",
     

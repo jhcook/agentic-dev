@@ -30,6 +30,9 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 logging.getLogger("backoff").setLevel(logging.ERROR)
 
+warnings.filterwarnings("ignore", module="google.auth._default")
+warnings.filterwarnings("ignore", message=".*Failed to initialize NumPy.*")
+
 from agent.commands import (
     admin,
     adr,
