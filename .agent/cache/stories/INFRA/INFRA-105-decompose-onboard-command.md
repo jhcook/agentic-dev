@@ -45,7 +45,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 
 ## Impact Analysis Summary
 
-- **Components touched**: `commands/onboard.py` (refactor, thinned), `core/onboard/steps.py` (new), `core/onboard/__init__.py` (new).
+- **Components touched**: `commands/onboard.py`, `core/onboard/steps.py`, `core/onboard/settings.py`, `core/onboard/integrations.py`, `core/onboard/__init__.py`, `tests/cli/test_onboard_e2e.py`, `tests/cli/test_onboard_unit.py`, `tests/core/onboard/test_steps.py`.
 - **Workflows affected**: `agent onboard` command, any CI bootstrap script invoking onboarding steps.
 - **Risks identified**: `check_dependencies` uses `shutil.which` and `subprocess` — mocking strategy in tests must be consistent across old and new locations.
 - **Out-of-Scope Changes**: Unrelated updates to `README.md`, `pyproject.toml`, `src/agent/main.py`, and `src/agent/core/implement/orchestrator.py` to address Python 3.13 incompatibility and warning suppression.

@@ -10,7 +10,7 @@ The `agent onboard` command implementation is currently a 1,060-line monolith in
 
 ## Linked Journeys
 
-- JRN-015: Agent Onboarding Flow
+- JRN-014: Agent Onboarding Flow
 
 ## Panel Review Findings
 

@@ -16,22 +16,27 @@
 
 This module provides the Typer CLI commands for the `agent onboard` workflow.
 It serves as a thin facade, proxying all actual implementation logic to the
-`agent.core.onboard.steps` module to support independence and testability.
+`agent.core.onboard` library to support independence and testability.
 """
 
+# IMPORTANT: These imports MUST remain to support legacy test patching targets.
 import typer
 from pathlib import Path
 from typing import Dict, Optional
 from opentelemetry import trace
 from rich.console import Console
 
-from agent.core.onboard import steps
+from agent.core.config import config
+from agent.core.secrets import get_secret_manager
+
+from agent.core.onboard import steps, settings, integrations
 
 app = typer.Typer()
 console = Console()
 tracer = trace.get_tracer(__name__)
 
 # Proxies for testing backward compatibility and logic isolation
+
 def check_dependencies() -> None:
     """Proxy for check_dependencies step."""
     if not steps.check_dependencies(console):
@@ -52,27 +57,35 @@ def ensure_gitignore(project_root: Optional[Path] = None) -> None:
 
 def configure_api_keys() -> None:
     """Proxy for configure_api_keys step."""
-    steps.configure_api_keys(console)
+    settings.get_secret_manager = get_secret_manager
+    settings.configure_api_keys(console)
 
 def configure_agent_settings() -> None:
     """Proxy for configure_agent_settings step."""
-    steps.configure_agent_settings(console)
+    settings.config = config
+    settings.configure_agent_settings(console)
 
 def select_default_model(provider: str, config_data: Dict, config_path: Path) -> None:
     """Proxy for select_default_model step."""
-    steps.select_default_model(console, provider, config_data, config_path)
+    settings.config = config
+    settings.select_default_model(console, provider, config_data, config_path)
 
 def configure_voice_settings() -> None:
     """Proxy for configure_voice_settings step."""
-    steps.configure_voice_settings(console)
+    integrations.config = config
+    integrations.get_secret_manager = get_secret_manager
+    integrations.configure_voice_settings(console)
 
 def configure_notion_settings() -> None:
     """Proxy for configure_notion_settings step."""
-    steps.configure_notion_settings(console)
+    integrations.config = config
+    integrations.get_secret_manager = get_secret_manager
+    integrations.configure_notion_settings(console)
 
 def configure_mcp_settings() -> None:
     """Proxy for configure_mcp_settings step."""
-    steps.configure_mcp_settings(console)
+    integrations.config = config
+    integrations.configure_mcp_settings(console)
 
 def setup_frontend() -> None:
     """Proxy for setup_frontend step."""
@@ -104,7 +117,6 @@ def onboard() -> None:
         setup_frontend()
         run_verification()
         
-        import typer
         typer.secho(
             "\n[SUCCESS] Onboarding complete! The agent is ready to use.",
             fg=typer.colors.GREEN,
