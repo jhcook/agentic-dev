@@ -126,7 +126,7 @@ class TestPathTraversal:
             repo_root=str(tmp_path),
         )
         with patch("agent.core.config.config", cfg), \
-             patch("agent.tui.app.logger") as mock_logger:
+             patch("agent.tui.chat.logger") as mock_logger:
             prompt = app._build_system_prompt()
             mock_logger.warning.assert_called()
             call_args = mock_logger.warning.call_args
