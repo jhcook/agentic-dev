@@ -21,6 +21,7 @@ It serves as a thin facade, proxying all actual implementation logic to the
 
 # IMPORTANT: These imports MUST remain to support legacy test patching targets.
 import typer
+import getpass
 from pathlib import Path
 from typing import Dict, Optional
 from opentelemetry import trace
@@ -30,74 +31,117 @@ from agent.core.config import config
 from agent.core.secrets import get_secret_manager
 
 from agent.core.onboard import steps, settings, integrations
+from agent.core.onboard.prompter import Prompter
 
 app = typer.Typer()
 console = Console()
 tracer = trace.get_tracer(__name__)
 
+class TyperPrompter:
+    def echo(self, message: str) -> None:
+        typer.echo(message)
+        
+    def secho(self, message: str, color: Optional[str] = None, dim: bool = False, bold: bool = False) -> None:
+        # Map our simple color strings back to typer colors if possible, else rely on typer parsing
+        typer.secho(message, fg=color, dim=dim, bold=bold)
+        
+    def confirm(self, message: str, default: bool = False) -> bool:
+        return typer.confirm(message, default=default)
+        
+    def prompt(self, message: str, default: str = "") -> str:
+        return typer.prompt(message, default=default)
+        
+    def getpass(self, message: str) -> str:
+        return getpass.getpass(message)  # no-preflight-check
+        
+    def prompt_password_strength(self) -> str:
+        from agent.commands.secret import _prompt_password, _validate_password_strength
+        while True:
+            password = _prompt_password(confirm=True)  # no-preflight-check
+            if _validate_password_strength(password):
+                return password
+            typer.echo("Password does not meet requirements. Please try again.")
+
+    def exit(self, code: int = 1) -> None:
+        raise typer.Exit(code=code)
+
+    def print_table(self, title: str, columns: list[str], rows: list[list[str]]) -> None:
+        from rich.table import Table
+        table = Table(title=title)
+        for col in columns:
+            if col == "#":
+                table.add_column(col, style="dim")
+            else:
+                table.add_column(col, style="cyan")
+        for row in rows:
+            table.add_row(*row)
+        console.print(table)
+
+prompter = TyperPrompter()
+
 # Proxies for testing backward compatibility and logic isolation
 
 def check_dependencies() -> None:
     """Proxy for check_dependencies step."""
-    if not steps.check_dependencies(console):
+    if not steps.check_dependencies(prompter):
         raise typer.Exit(code=1)
 
 def check_github_auth() -> None:
     """Proxy for check_github_auth step."""
-    if not steps.check_github_auth(console):
+    if not steps.check_github_auth(prompter):
         raise typer.Exit(code=1)
 
 def ensure_agent_directory(project_root: Optional[Path] = None) -> None:
     """Proxy for ensure_agent_directory step."""
-    steps.ensure_agent_directory(console, project_root)
+    steps.ensure_agent_directory(prompter, project_root)
 
 def ensure_gitignore(project_root: Optional[Path] = None) -> None:
     """Proxy for ensure_gitignore step."""
-    steps.ensure_gitignore(console, project_root)
+    steps.ensure_gitignore(prompter, project_root)
 
 def configure_api_keys() -> None:
     """Proxy for configure_api_keys step."""
     settings.get_secret_manager = get_secret_manager
-    settings.configure_api_keys(console)
+    settings.configure_api_keys(prompter)
 
 def configure_agent_settings() -> None:
     """Proxy for configure_agent_settings step."""
     settings.config = config
-    settings.configure_agent_settings(console)
+    settings.configure_agent_settings(prompter)
 
 def select_default_model(provider: str, config_data: Dict, config_path: Path) -> None:
     """Proxy for select_default_model step."""
     settings.config = config
-    settings.select_default_model(console, provider, config_data, config_path)
+    settings.select_default_model(prompter, provider, config_data, config_path)
 
 def configure_voice_settings() -> None:
     """Proxy for configure_voice_settings step."""
     integrations.config = config
     integrations.get_secret_manager = get_secret_manager
-    integrations.configure_voice_settings(console)
+    integrations.configure_voice_settings(prompter)
 
 def configure_notion_settings() -> None:
     """Proxy for configure_notion_settings step."""
     integrations.config = config
     integrations.get_secret_manager = get_secret_manager
-    integrations.configure_notion_settings(console)
+    integrations.configure_notion_settings(prompter)
 
 def configure_mcp_settings() -> None:
     """Proxy for configure_mcp_settings step."""
     integrations.config = config
-    integrations.configure_mcp_settings(console)
+    integrations.configure_mcp_settings(prompter)
 
 def setup_frontend() -> None:
     """Proxy for setup_frontend step."""
-    steps.setup_frontend(console)
+    steps.setup_frontend(prompter)
 
 def run_verification() -> None:
     """Proxy for run_verification step."""
-    steps.run_verification(console)
+    steps.run_verification(prompter)
 
 def display_next_steps() -> None:
     """Proxy for display_next_steps step."""
-    steps.display_next_steps(console)
+    steps.display_next_steps(prompter)
 
 @app.command()
 def onboard() -> None:

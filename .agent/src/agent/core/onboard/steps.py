@@ -20,20 +20,18 @@ separate from the Typer CLI facade, they can be tested independently and
 invoked programmatically by bootstrap scripts.
 """
 
-import getpass
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
 
-import typer
 from opentelemetry import trace
+from agent.core.onboard.prompter import Prompter
+
 
 
 # Note: This command requires `typer` and `python-dotenv`.
 # Ensure they are added to your project's dependencies.
-from rich.console import Console
-from rich.table import Table
 
 # from agent.core.ai.service import PROVIDERS, AIService, ai_service # Moved to local imports
 from agent.core.config import config
@@ -55,10 +53,10 @@ AGENT_DIR: Path = PROJECT_ROOT / ".agent"
 ENV_FILE: Path = PROJECT_ROOT / ".env"
 GITIGNORE_FILE: Path = PROJECT_ROOT / ".gitignore"
 
-def check_dependencies(console: Console) -> bool:
+def check_dependencies(prompter: Prompter) -> bool:
     """Verifies that required system dependencies are installed."""
     logger.info("Starting dependency check", extra={"step": "check_dependencies"})
-    typer.echo("[INFO] Checking for required system dependencies...")
+    prompter.echo("[INFO] Checking for required system dependencies...")
     # As per @Security review, add any binary dependencies here. e.g., `git`
     dependencies = ["git", "python3", "gh"]
     recommended = ["node", "npm"]
@@ -66,13 +64,13 @@ def check_dependencies(console: Console) -> bool:
     all_found = True
     for dep in dependencies:
         if not shutil.which(dep):
-            typer.secho(
+            prompter.secho(
                 f"[ERROR] Binary dependency not found: '{dep}'. Please install it.",
-                fg=typer.colors.RED,
+                color="red",
             )
             all_found = False
         else:
-            typer.secho(f"  - Found binary: {dep}", fg=typer.colors.GREEN)
+            prompter.secho(f"  - Found binary: {dep}", color="green")
 
     # Check Python dependencies
     python_deps = [
@@ -84,14 +82,14 @@ def check_dependencies(console: Console) -> bool:
     import importlib.util
     for module_name, package_name in python_deps:
         if not importlib.util.find_spec(module_name):
-            typer.secho(
+            prompter.secho(
                 f"[ERROR] Python dependency not found: '{package_name}' ({module_name}).\n"
                 f"        Please run: pip install -e .agent",
-                fg=typer.colors.RED,
+                color="red",
             )
             all_found = False
         else:
-            typer.secho(f"  - Found module: {module_name}", fg=typer.colors.GREEN)
+            prompter.secho(f"  - Found module: {module_name}", color="green")
 
     if not all_found:
         return False
@@ -99,42 +97,42 @@ def check_dependencies(console: Console) -> bool:
     # Check recommended
     for dep in recommended:
         if not shutil.which(dep):
-            typer.secho(
+            prompter.secho(
                 f"[WARN] Recommended dependency not found: '{dep}'. Some features may be limited.",
-                fg=typer.colors.YELLOW,
+                color="yellow",
             )
         else:
-            typer.secho(f"  - Found {dep} (recommended)", fg=typer.colors.GREEN)
+            prompter.secho(f"  - Found {dep} (recommended)", color="green")
             
     # Check linting tools
     if not shutil.which("markdownlint"):
-         typer.secho("[INFO] markdownlint-cli not found. It is recommended for documentation checks.", fg=typer.colors.BLUE)
-         if typer.confirm("Install markdownlint-cli globally via npm?", default=True):
+         prompter.secho("[INFO] markdownlint-cli not found. It is recommended for documentation checks.", color="blue")
+         if prompter.confirm("Install markdownlint-cli globally via npm?", default=True):
              if shutil.which("npm"):
                  try:
                      subprocess.run(["npm", "install", "-g", "markdownlint-cli"], check=True)
-                     typer.secho("[OK] markdownlint-cli installed.", fg=typer.colors.GREEN)
+                     prompter.secho("[OK] markdownlint-cli installed.", color="green")
                  except Exception as e:
-                     typer.secho(f"[ERROR] Failed to install markdownlint-cli: {e}", fg=typer.colors.RED)
+                     prompter.secho(f"[ERROR] Failed to install markdownlint-cli: {e}", color="red")
              else:
-                 typer.secho("[WARN] npm not found. Cannot install markdownlint-cli automatically.", fg=typer.colors.YELLOW)
+                 prompter.secho("[WARN] npm not found. Cannot install markdownlint-cli automatically.", color="yellow")
     else:
-         typer.secho("  - Found tool: markdownlint", fg=typer.colors.GREEN)
+         prompter.secho("  - Found tool: markdownlint", color="green")
 
-    typer.secho("[OK] System dependencies check passed.", fg=typer.colors.GREEN)
+    prompter.secho("[OK] System dependencies check passed.", color="green")
     return True
 
 
-def check_github_auth(console: Console) -> bool:
+def check_github_auth(prompter: Prompter) -> bool:
     """Checks GitHub authentication via MCP and CLI (Unified)."""
     logger.info("Configuring GitHub Auth", extra={"step": "check_github_auth"})
-    typer.echo("\n[INFO] Configuring GitHub Access...")
+    prompter.echo("\n[INFO] Configuring GitHub Access...")
 
     # Ensure gh is available
     if not shutil.which("gh"):
-        typer.secho(
+        prompter.secho(
             "[ERROR] GitHub CLI ('gh') is required but not found. Please install it.",
-            fg=typer.colors.RED
+            color="red"
         )
         return False
 
@@ -149,29 +147,29 @@ def check_github_auth(console: Console) -> bool:
     secret_exists = manager.is_initialized() and manager.is_unlocked() and manager.has_secret("github", "token")
 
     if gh_logged_in and secret_exists:
-        typer.secho("[OK] GitHub access already configured (CLI & MCP).", fg=typer.colors.GREEN)
-        if not typer.confirm("Would you like to re-configure?", default=False):
+        prompter.secho("[OK] GitHub access already configured (CLI & MCP).", color="green")
+        if not prompter.confirm("Would you like to re-configure?", default=False):
             return True
 
-    typer.echo("\n[INFO] We will now configure GitHub access for both the Agent (MCP) and CLI (gh).")
-    typer.echo("You will need a GitHub Personal Access Token (PAT) with scopes: repo, read:org")
+    prompter.echo("\n[INFO] We will now configure GitHub access for both the Agent (MCP) and CLI (gh).")
+    prompter.echo("You will need a GitHub Personal Access Token (PAT) with scopes: repo, read:org")
 
-    token = getpass.getpass("GitHub PAT: ")  # no-preflight-check
+    token = prompter.getpass("GitHub PAT: ")  # no-preflight-check
     if not token:
-        typer.secho("[WARN] No token provided. Skipping GitHub configuration.", fg=typer.colors.YELLOW)
+        prompter.secho("[WARN] No token provided. Skipping GitHub configuration.", color="yellow")
         return False
 
     # 1. Configure MCP Secret
     try:
         if manager.is_initialized():
              if not manager.is_unlocked():
-                  typer.echo("Secret manager is locked. Please unlock to save access token.")
+                  prompter.echo("Secret manager is locked. Please unlock to save access token.")
                   # We rely on previous steps ensuring it's unlocked or prompt
                   # But actually onboard runs sequentially, so it should be unlocked.
                   pass
              
              manager.set_secret("github", "token", token)  # no-preflight-check
-             typer.secho("  - [OK] Agent MCP token saved securely.", fg=typer.colors.GREEN)
+             prompter.secho("  - [OK] Agent MCP token saved securely.", color="green")
              
              # Set generic config to 'mcp' as primary tool for agent, though 'gh' is also available
              agent_config_path = config.etc_dir / "agent.yaml"
@@ -183,7 +181,7 @@ def check_github_auth(console: Console) -> bool:
              config.save_yaml(agent_config_path, data)
              
     except Exception as e:
-        typer.secho(f"  - [ERROR] Failed to save MCP token: {e}", fg=typer.colors.RED)
+        prompter.secho(f"  - [ERROR] Failed to save MCP token: {e}", color="red")
 
     # 2. Configure gh CLI
     try:
@@ -198,76 +196,76 @@ def check_github_auth(console: Console) -> bool:
         stdout, stderr = process.communicate(input=token)
         
         if process.returncode == 0:
-            typer.secho("  - [OK] GitHub CLI authenticated.", fg=typer.colors.GREEN)
+            prompter.secho("  - [OK] GitHub CLI authenticated.", color="green")
         else:
-             typer.secho(f"  - [ERROR] GitHub CLI login failed: {stderr.strip() if stderr else 'Unknown error'}", fg=typer.colors.RED)
+             prompter.secho(f"  - [ERROR] GitHub CLI login failed: {stderr.strip() if stderr else 'Unknown error'}", color="red")
              
     except Exception as e:
-         typer.secho(f"  - [ERROR] Failed to run gh auth: {e}", fg=typer.colors.RED)
+         prompter.secho(f"  - [ERROR] Failed to run gh auth: {e}", color="red")
 
-    typer.secho("[OK] GitHub access configuration complete.", fg=typer.colors.GREEN)
+    prompter.secho("[OK] GitHub access configuration complete.", color="green")
     return True
 
 
-def ensure_agent_directory(console: Console, project_root: Optional[Path] = None) -> None:
+def ensure_agent_directory(prompter: Prompter, project_root: Optional[Path] = None) -> None:
     """Ensures the .agent directory exists and is a directory."""
     logger.info("Ensuring agent workspace exists", extra={"step": "ensure_agent_directory"})
     root = project_root or Path(".").resolve()
     agent_dir = root / ".agent"
 
-    typer.echo("\n[INFO] Checking for '.agent' workspace directory...")
+    prompter.echo("\n[INFO] Checking for '.agent' workspace directory...")
     try:
         if agent_dir.exists() and not agent_dir.is_dir():
-            typer.secho(
+            prompter.secho(
                 "[ERROR] A file named '.agent' exists. Please remove it and run again.",
-                fg=typer.colors.RED,
+                color="red",
             )
-            raise typer.Exit(code=1)
+            prompter.exit(1)
         agent_dir.mkdir(exist_ok=True)
-        typer.secho("[OK] '.agent' directory is present.", fg=typer.colors.GREEN)
+        prompter.secho("[OK] '.agent' directory is present.", color="green")
     except OSError as e:
-        typer.secho(f"[ERROR] Failed to create '.agent' directory: {e}", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        prompter.secho(f"[ERROR] Failed to create '.agent' directory: {e}", color="red")
+        prompter.exit(1)
 
 
-def ensure_gitignore(console: Console, project_root: Optional[Path] = None) -> None:
+def ensure_gitignore(prompter: Prompter, project_root: Optional[Path] = None) -> None:
     """Ensures .env is listed in .gitignore to prevent accidental secret exposure."""
     logger.info("Ensuring agent metadata is gitignored", extra={"step": "ensure_gitignore"})
     root = project_root or Path(".").resolve()
     gitignore_file = root / ".gitignore"
 
-    typer.echo("\n[INFO] Verifying '.gitignore' configuration...")
+    prompter.echo("\n[INFO] Verifying '.gitignore' configuration...")
     try:
         if not gitignore_file.exists():
             gitignore_file.touch()
-            typer.echo("[INFO] Created missing '.gitignore' file.")
+            prompter.echo("[INFO] Created missing '.gitignore' file.")
 
         with gitignore_file.open("r+") as f:
             lines = f.readlines()
             # Check if '.env' is on a line by itself
             is_present = any(line.strip() == ".env" for line in lines)
             if not is_present:
-                typer.echo("[INFO] Adding '.env' to '.gitignore'.")
+                prompter.echo("[INFO] Adding '.env' to '.gitignore'.")
                 f.seek(0, 2)  # Go to end of file
                 if lines and not lines[-1].endswith("\n"):
                     f.write("\n")
                 f.write("\n# Agent secrets\n.env\n")
             else:
-                typer.secho(
-                    "[OK] '.env' is already in '.gitignore'.", fg=typer.colors.GREEN, dim=True
+                prompter.secho(
+                    "[OK] '.env' is already in '.gitignore'.", color="green", dim=True
                 )
     except PermissionError:
-        typer.secho(
+        prompter.secho(
             "[ERROR] Could not write to '.gitignore'. Please check file permissions.",
-            fg=typer.colors.RED,
+            color="red",
         )
-        raise typer.Exit(code=1)
+        prompter.exit(1)
     except OSError as e:
-        typer.secho(f"[ERROR] Failed to read or write '.gitignore': {e}", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        prompter.secho(f"[ERROR] Failed to read or write '.gitignore': {e}", color="red")
+        prompter.exit(1)
 
 
-def setup_frontend(console: Console) -> None:
+def setup_frontend(prompter: Prompter) -> None:
     """
     Installs frontend dependencies using npm.
     
@@ -277,29 +275,29 @@ def setup_frontend(console: Console) -> None:
     - No PII is captured.
     """
     logger.info("Setting up admin console frontend", extra={"step": "setup_frontend"})
-    typer.echo("\n[INFO] Setting up Frontend...")
+    prompter.echo("\n[INFO] Setting up Frontend...")
 
     web_dir = AGENT_DIR / "src" / "web"
     
     # 1. Check if npm is installed
     if not shutil.which("npm"):
-        typer.secho(
+        prompter.secho(
             "[WARN] 'npm' not found. Skipping frontend setup.",
-            fg=typer.colors.YELLOW
+            color="yellow"
         )
-        typer.echo("The Agent Admin Console frontend may not work until you install Node.js and run 'npm install' manually.")
+        prompter.echo("The Agent Admin Console frontend may not work until you install Node.js and run 'npm install' manually.")
         return
 
     # 2. Check directory
     if not web_dir.exists():
-        typer.secho(
+        prompter.secho(
             f"[WARN] Web directory not found at {web_dir}. Skipping frontend setup.",
-            fg=typer.colors.YELLOW
+            color="yellow"
         )
         return
 
     # 3. Install dependencies
-    typer.echo("Installing Node dependencies... (this may take a minute)")
+    prompter.echo("Installing Node dependencies... (this may take a minute)")
     try:
         with tracer.start_as_current_span("agent.onboard.setup_frontend.npm_install") as span:
              span.set_attribute("cwd", str(web_dir))
@@ -311,11 +309,11 @@ def setup_frontend(console: Console) -> None:
              )
              span.set_attribute("status", "success")
              
-        typer.secho("[OK] Frontend dependencies installed.", fg=typer.colors.GREEN)
+        prompter.secho("[OK] Frontend dependencies installed.", color="green")
         
         # 4. Security Audit
         # 4. Security Audit
-        typer.echo("Running security audit on dependencies...")
+        prompter.echo("Running security audit on dependencies...")
         try:
              process = subprocess.Popen(
                 ["npm", "audit", "--audit-level=high"],
@@ -332,21 +330,21 @@ def setup_frontend(console: Console) -> None:
              process.wait()
              
         except Exception:
-             typer.secho("[WARN] Failed to run security audit.", fg=typer.colors.YELLOW)
+             prompter.secho("[WARN] Failed to run security audit.", color="yellow")
              
     except subprocess.CalledProcessError as e:
-        typer.secho(
+        prompter.secho(
             f"[ERROR] Failed to run 'npm install': {e}",
-            fg=typer.colors.RED
+            color="red"
         )
-        typer.echo("You may need to resolve this manually to use the Admin Console.")
+        prompter.echo("You may need to resolve this manually to use the Admin Console.")
 
 
 
-def run_verification(console: Console) -> None:
+def run_verification(prompter: Prompter) -> None:
     """Verifies AI connectivity with a Hello World prompt."""
     logger.info("Verifying AI connectivity", extra={"step": "run_verification"})
-    typer.echo("\n[INFO] Verifying AI connectivity...")
+    prompter.echo("\n[INFO] Verifying AI connectivity...")
     
     # Reload env vars
     # Reload env vars
@@ -382,38 +380,32 @@ def run_verification(console: Console) -> None:
             user_prompt="Reply with exactly 'Hello World'",
         )
         if "Hello World" in response or "Hello" in response:
-            typer.secho(
+            prompter.secho(
                 "[SUCCESS] AI Connectivity Verified! 🚀",
-                fg=typer.colors.GREEN,
+                color="green",
                 bold=True
             )
         else:
-            typer.secho(
+            prompter.secho(
                 f"[WARN] AI returned unexpected response: {response}",
-                fg=typer.colors.YELLOW
+                color="yellow"
             )
     except Exception as e:
-        typer.secho(f"[ERROR] Verification failed: {e}", fg=typer.colors.RED)
+        prompter.secho(f"[ERROR] Verification failed: {e}", color="red")
 
 
-def display_next_steps(console: Console) -> None:
+def display_next_steps(prompter: Prompter) -> None:
     """Displays a guided tour of next steps."""
-    console.print(
-        "\n[bold cyan]🎉 You are all set! "
-        "Here is a quick tour of what you can do:[/bold cyan]"
-    )
+    prompter.echo("\n🎉 You are all set! Here is a quick tour of what you can do:")
     
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Command", style="green")
-    table.add_column("Description")
+    columns = ["Command", "Description"]
+    rows = [
+        ["agent story", "Start a new feature or bugfix (creates a Story artifact)"],
+        ["agent preflight", "Run governance checks (preflight) on your code"],
+        ["agent pr", "Create a Pull Request with all checks passing"],
+        ["agent list-models", "See available AI models"],
+        ["agent config list", "View your current configuration"],
+    ]
     
-    table.add_row(
-        "agent story", "Start a new feature or bugfix (creates a Story artifact)"
-    )
-    table.add_row("agent preflight", "Run governance checks (preflight) on your code")
-    table.add_row("agent pr", "Create a Pull Request with all checks passing")
-    table.add_row("agent list-models", "See available AI models")
-    table.add_row("agent config list", "View your current configuration")
-    
-    console.print(table)
-    console.print("\n[dim]Tip: Use --help on any command for more info.[/dim]")
+    prompter.print_table("Next Steps Tour", columns, rows)
+    prompter.echo("\nTip: Use --help on any command for more info.")

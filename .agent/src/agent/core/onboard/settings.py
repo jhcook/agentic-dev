@@ -20,18 +20,16 @@ separate from the Typer CLI facade, they can be tested independently and
 invoked programmatically by bootstrap scripts.
 """
 
-import getpass
 from pathlib import Path
 from typing import Dict
 
-import typer
 from opentelemetry import trace
+from agent.core.onboard.prompter import Prompter
+
 
 
 # Note: This command requires `typer` and `python-dotenv`.
 # Ensure they are added to your project's dependencies.
-from rich.console import Console
-from rich.table import Table
 
 # from agent.core.ai.service import PROVIDERS, AIService, ai_service # Moved to local imports
 from agent.core.config import config
@@ -55,51 +53,56 @@ AGENT_DIR: Path = PROJECT_ROOT / ".agent"
 ENV_FILE: Path = PROJECT_ROOT / ".env"
 GITIGNORE_FILE: Path = PROJECT_ROOT / ".gitignore"
 
-def configure_api_keys(console: Console) -> None:
+def configure_api_keys(prompter: Prompter) -> None:
     """Prompts for API keys and saves them to the secret manager."""
     logger.info("Configuring API keys", extra={"step": "configure_api_keys"})
-    typer.echo("\n[INFO] Configuring API keys in Secret Manager...")
+    prompter.echo("\n[INFO] Configuring API keys in Secret Manager...")
 
     manager = get_secret_manager()
 
     # 1. Initialize if needed
     if not manager.is_initialized():
-        typer.echo("Secret Manager is not initialized.")
-        typer.echo("You need to set a master password to encrypt your API keys.")
-        from agent.commands.secret import _prompt_password, _validate_password_strength
+        prompter.echo("Secret Manager is not initialized.")
+        prompter.echo("You need to set a master password to encrypt your API keys.")
+        from agent.core.auth.utils import validate_password_strength
 
         while True:
-            password = _prompt_password(confirm=True)  # no-preflight-check
-            if _validate_password_strength(password):
+            password = prompter.getpass("Master password: ")
+            password_confirm = prompter.getpass("Confirm password: ")
+            if password != password_confirm:
+                prompter.secho("[ERROR] Passwords do not match.", color="red")
+                continue
+
+            is_valid, err_msg = validate_password_strength(password)
+            if is_valid:
                 try:
                     manager.initialize(password)
-                    typer.echo("[OK] Secret Manager initialized.")
+                    prompter.echo("[OK] Secret Manager initialized.")
                     break
                 except Exception as e:
-                    typer.secho(f"[ERROR] Initialization failed: {e}", fg=typer.colors.RED)
-                    raise typer.Exit(code=1)
+                    prompter.secho(f"[ERROR] Initialization failed: {e}", color="red")
+                    prompter.exit(1)
             else:
-                 typer.echo("Password does not meet requirements. Please try again.")
+                 prompter.echo(f"Password does not meet requirements: {err_msg}")
 
     # 2. Unlock if needed
     if not manager.is_unlocked():
-        typer.echo("Please unlock the Secret Manager.")
-        from agent.commands.secret import _prompt_password
+        prompter.echo("Please unlock the Secret Manager.")
 
         while True:
             try:
-                password = _prompt_password(confirm=False)  # no-preflight-check
+                password = prompter.getpass("Master password: ")
                 manager.unlock(password)
-                typer.echo("[OK] Secret Manager unlocked.")
+                prompter.echo("[OK] Secret Manager unlocked.")
                 break
             except InvalidPasswordError:
-                 typer.secho("[ERROR] Incorrect password. Try again.", fg=typer.colors.RED)
+                 prompter.secho("[ERROR] Incorrect password. Try again.", color="red")
             except Exception as e:
-                 typer.secho(f"[ERROR] Failed to unlock: {e}", fg=typer.colors.RED)
-                 raise typer.Exit(code=1)
+                 prompter.secho(f"[ERROR] Failed to unlock: {e}", color="red")
+                 prompter.exit(1)
 
-    typer.echo("Please provide API keys for the providers you wish to use.")
-    typer.echo("(Leave blank to skip a provider)")
+    prompter.echo("Please provide API keys for the providers you wish to use.")
+    prompter.echo("(Leave blank to skip a provider)")
 
 
     from agent.core.ai.service import PROVIDERS, ai_service  # ADR-025: lazy init
@@ -122,80 +125,80 @@ def configure_api_keys(console: Console) -> None:
             
             migrated = False
             if env_val:
-                typer.secho(f"\n[WARN] {display_name} key found in environment but not in secure storage.", fg=typer.colors.YELLOW)
-                if typer.confirm("Would you like to migrate this key to the Secret Manager?", default=True):
+                prompter.secho(f"\n[WARN] {display_name} key found in environment but not in secure storage.", color="yellow")
+                if prompter.confirm("Would you like to migrate this key to the Secret Manager?", default=True):
                     try:
                         manager.set_secret(service_name, key_name, env_val)  # no-preflight-check
-                        typer.secho(
+                        prompter.secho(
                             f"[OK] Migrated {display_name} key to secure storage.",
-                            fg=typer.colors.GREEN
+                            color="green"
                         )
                         migrated = True
                     except Exception as e:
-                         typer.secho(
+                         prompter.secho(
                              f"[ERROR] Failed to migrate secret: {e}",
-                             fg=typer.colors.RED
+                             color="red"
                          )
             
             if not migrated:
                 if service_name == "vertex":
-                    if typer.confirm(f"\nDo you want to configure {display_name}?", default=False):
-                        typer.secho("\n[INFO] For setup instructions, see: docs/getting_started.md", dim=True)
-                        typer.echo(f"{display_name} (Google Cloud Project ID):")  # no-preflight-check
+                    if prompter.confirm(f"\nDo you want to configure {display_name}?", default=False):
+                        prompter.secho("\n[INFO] For setup instructions, see: docs/getting_started.md", dim=True)
+                        prompter.echo(f"{display_name} (Google Cloud Project ID):")  # no-preflight-check
                         try:
-                            value = typer.prompt("Project ID")
+                            value = prompter.prompt("Project ID")
                             if value:
                                 try:
                                     manager.set_secret(service_name, key_name, value)  # no-preflight-check
-                                    typer.secho(f"[OK] Saved {display_name} project ID.", fg=typer.colors.GREEN)
+                                    prompter.secho(f"[OK] Saved {display_name} project ID.", color="green")
                                 except Exception as e:
-                                    typer.secho(f"[ERROR] Failed to save secret: {e}", fg=typer.colors.RED)
+                                    prompter.secho(f"[ERROR] Failed to save secret: {e}", color="red")
                             else:
-                                typer.secho(f"[WARN] Skipping {display_name} configuration.", fg=typer.colors.YELLOW, dim=True)
+                                prompter.secho(f"[WARN] Skipping {display_name} configuration.", color="yellow", dim=True)
                         except (KeyboardInterrupt, EOFError):
-                            typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
-                            raise typer.Exit(code=1)
+                            prompter.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
+                            prompter.exit(1)
                     else:
-                        typer.secho(f"[WARN] Skipping {display_name} configuration.", fg=typer.colors.YELLOW, dim=True)
+                        prompter.secho(f"[WARN] Skipping {display_name} configuration.", color="yellow", dim=True)
                 else:
-                    typer.echo(f"\n{display_name} ({key_name}):")
+                    prompter.echo(f"\n{display_name} ({key_name}):")
                     try:
                         # Use getpass for masked input
-                        value = getpass.getpass("Value: ")  # no-preflight-check
+                        value = prompter.getpass("Value: ")  # no-preflight-check
                         if value:
                              try:
                                 manager.set_secret(service_name, key_name, value)  # no-preflight-check
-                                typer.secho(
+                                prompter.secho(
                                     f"[OK] Saved {display_name} key.",
-                                    fg=typer.colors.GREEN
+                                    color="green"
                                 )
                              except Exception as e:
-                                typer.secho(
+                                prompter.secho(
                                     f"[ERROR] Failed to save secret: {e}",
-                                    fg=typer.colors.RED
+                                    color="red"
                                 )
                         else:
-                            typer.secho(
+                            prompter.secho(
                                 f"[WARN] Skipping {display_name}.",
-                                fg=typer.colors.YELLOW, dim=True
+                                color="yellow", dim=True
                             )
                     except (KeyboardInterrupt, EOFError):
-                        typer.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
-                        raise typer.Exit(code=1)
+                        prompter.secho("\n[INFO] Onboarding cancelled by user.", dim=True)
+                        prompter.exit(1)
         else:
-            typer.secho(
+            prompter.secho(
                 f"[OK] {display_name} key is already configured.",
-                fg=typer.colors.GREEN, dim=True
+                color="green", dim=True
             )
     
     # Reload the AI service to pick up new keys
     ai_service.reload()
 
 
-def configure_agent_settings(console: Console) -> None:
+def configure_agent_settings(prompter: Prompter) -> None:
     """Configures default agent settings (provider, model)."""
     logger.info("Configuring Agent defaults", extra={"step": "configure_agent_settings"})
-    typer.echo("\n[INFO] Configuring Agent defaults...")
+    prompter.echo("\n[INFO] Configuring Agent defaults...")
     
     agent_config_path = config.etc_dir / "agent.yaml"
     
@@ -214,16 +217,16 @@ def configure_agent_settings(console: Console) -> None:
     should_configure_model = True
 
     if current_provider:
-        typer.secho(f"[OK] Default AI provider is already set to '{current_provider}'.", fg=typer.colors.GREEN)
-        if not typer.confirm("Would you like to re-configure?", default=False):
+        prompter.secho(f"[OK] Default AI provider is already set to '{current_provider}'.", color="green")
+        if not prompter.confirm("Would you like to re-configure?", default=False):
             should_configure_provider = False
             provider = current_provider
             
             # Check model config if skipping provider
             current_model = config.get_value(data, f"agent.models.{current_provider}")
             if current_model:
-                 typer.secho(f"[OK] Default model for {current_provider} is set to '{current_model}'.", fg=typer.colors.GREEN)
-                 if not typer.confirm(f"Would you like to re-configure model for {current_provider}?", default=False):
+                 prompter.secho(f"[OK] Default model for {current_provider} is set to '{current_model}'.", color="green")
+                 if not prompter.confirm(f"Would you like to re-configure model for {current_provider}?", default=False):
                      should_configure_model = False
 
     if should_configure_provider: 
@@ -235,21 +238,21 @@ def configure_agent_settings(console: Console) -> None:
         # Better to offer all but warn if key missing? 
         # For now, just offer all supported.
         
-        typer.echo("Select your default AI provider:")
+        prompter.echo("Select your default AI provider:")
         for i, p in enumerate(drivers, 1):
-            typer.echo(f"{i}. {p}")
+            prompter.echo(f"{i}. {p}")
             
         provider = None
         while not provider:
-            choice = typer.prompt("Enter number", default="1")
+            choice = prompter.prompt("Enter number", default="1")
             try:
                 idx = int(choice) - 1
                 if 0 <= idx < len(drivers):
                     provider = drivers[idx]
                 else:
-                    typer.echo("Invalid selection.")
+                    prompter.echo("Invalid selection.")
             except ValueError:
-                typer.echo("Invalid input.")
+                prompter.echo("Invalid input.")
 
 
 
@@ -265,7 +268,7 @@ def configure_agent_settings(console: Console) -> None:
         except ImportError:
             pass
         
-        typer.echo(f"\n[INFO] Fetching available models for {provider}...")
+        prompter.echo(f"\n[INFO] Fetching available models for {provider}...")
         try:
             from agent.core.ai.service import ai_service  # ADR-025: lazy init
             if provider not in ai_service.clients:
@@ -275,7 +278,7 @@ def configure_agent_settings(console: Console) -> None:
 
         # Save back to file
         config.save_yaml(agent_config_path, data)
-        typer.echo(f"[OK] Default provider set to '{provider}'.")
+        prompter.echo(f"[OK] Default provider set to '{provider}'.")
         
         # Now lets try to select model
         select_default_model(console, provider, data, agent_config_path)
@@ -291,8 +294,8 @@ def configure_agent_settings(console: Console) -> None:
     should_configure_engine = True
 
     if current_engine:
-        typer.secho(f"[OK] Panel engine is already set to '{current_engine}'.", fg=typer.colors.GREEN)
-        if not typer.confirm("Would you like to re-configure?", default=False):
+        prompter.secho(f"[OK] Panel engine is already set to '{current_engine}'.", color="green")
+        if not prompter.confirm("Would you like to re-configure?", default=False):
             should_configure_engine = False
 
     if should_configure_engine:
@@ -300,25 +303,25 @@ def configure_agent_settings(console: Console) -> None:
             ("native", "Sequential panel (default)"),
             ("adk", "Multi-agent via Google ADK (requires google-adk)"),
         ]
-        typer.echo("\nSelect panel engine:")
+        prompter.echo("\nSelect panel engine:")
         for i, (key, desc) in enumerate(engines, 1):
-            typer.echo(f"{i}. {key} — {desc}")
+            prompter.echo(f"{i}. {key} — {desc}")
 
-        choice = typer.prompt("Enter number", default="1")
+        choice = prompter.prompt("Enter number", default="1")
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(engines):
                 selected_engine = engines[idx][0]
                 config.set_value(data, "panel.engine", selected_engine)
                 config.save_yaml(agent_config_path, data)
-                typer.secho(f"[OK] Panel engine set to '{selected_engine}'.", fg=typer.colors.GREEN)
+                prompter.secho(f"[OK] Panel engine set to '{selected_engine}'.", color="green")
             else:
-                typer.echo("Invalid selection. Keeping default.")
+                prompter.echo("Invalid selection. Keeping default.")
         except ValueError:
-            typer.echo("Invalid input. Keeping default.")
+            prompter.echo("Invalid input. Keeping default.")
 
 
-def select_default_model(console: Console, provider: str, config_data: Dict, config_path: Path) -> None:
+def select_default_model(prompter: Prompter, provider: str, config_data: Dict, config_path: Path) -> None:
     """Prompts user to select a default model for the provider."""
     logger.info(f"Selecting default model for {provider}", extra={"step": "select_default_model"})
     try:
@@ -348,25 +351,24 @@ def select_default_model(console: Console, provider: str, config_data: Dict, con
         models = ai_service.get_available_models(provider)
         
         if not models:
-            typer.echo(
+            prompter.echo(
                 "[WARN] No models found or unable to query API. "
                 "Skipping default model selection."
             )
             return
 
-        table = Table(title=f"Available Models ({provider})")
-        table.add_column("#", style="dim")
-        table.add_column("ID", style="cyan")
+        columns = ["#", "ID"]
+        rows = []
         
         # Limit to first 20 to avoid spam
         display_models = models[:20]
         
         for i, m in enumerate(display_models, 1):
-            table.add_row(str(i), m['id'])
+            rows.append([str(i), m['id']])
             
-        console.print(table)
+        prompter.print_table(f"Available Models ({provider})", columns, rows)
         
-        choice = typer.prompt(
+        choice = prompter.prompt(
             "Select default model (number) or press Enter to skip", default=""
         )
         if choice:
@@ -381,16 +383,16 @@ def select_default_model(console: Console, provider: str, config_data: Dict, con
                     
                     config.set_value(config_data, f"agent.models.{provider}", model_id)
                     config.save_yaml(config_path, config_data)
-                    typer.echo(
+                    prompter.echo(
                         f"[OK] Default model for {provider} set to '{model_id}'."
                     )
             except ValueError:
                 pass
                 
     except Exception as e:
-        typer.secho(
+        prompter.secho(
             f"[WARN] Could not list models: {e}. Skipping model selection.",
-            fg=typer.colors.YELLOW
+            color="yellow"
         )
 
 
