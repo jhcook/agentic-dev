@@ -54,6 +54,31 @@ As a Backend Engineer, I want to create `agent/tui/chat.py` to house the `Select
 
 Revert to previous commit.
 
+## Panel Consultation Advice
+
+### @Architect
+- Ensure `tui/chat.py` does not import UI execution logic back from `app.py` to avoid circular dependencies.
+- Define a strict, decoupled "public" interface for `app.py` to use (e.g., a structured event payload), keeping internal chunk parsing private to `chat.py`.
+
+### @Security
+- Verify that the test coverage for secret scrubbing (`tests/tui/`) is comprehensive before moving the logic.
+- Ensure any new logging introduced around the provider handoff logic continues to mask API keys and potentially sensitive provider configurations.
+
+### @QA
+- Add specific unit tests for `tui/chat.py` to validate chunk assembly mechanisms independently of the UI.
+- Mock the provider handoff logic in isolation to confirm error chunk processing behaves correctly under simulated failure conditions.
+
+### @Product
+- Double-check that "Public interface defined for app.py to push chunks" fully covers the desired integration before executing the code changes.
+
+### @Backend
+- Leverage Python's `asyncio` generators (`async def yield_chunks()`) to represent the stream if not already doing so.
+- Explicitly type the new public interface in `tui/chat.py` using Python type hints to ensure `app.py` interacts with it.
+
+### @Observability
+- Consider adding structured `.debug()` or `.info()` logs when the provider handoff occurs to make debugging context clearer.
+- Maintain existing structured logging formats so current dashboards remain intact.
+
 ## Copyright
 
 Copyright 2026 Justin Cook
