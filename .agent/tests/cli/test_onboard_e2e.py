@@ -52,7 +52,7 @@ def mock_getpass():
 
 @pytest.fixture
 def mock_config(tmp_path):
-    with patch("agent.commands.onboard.config") as mock:
+    with patch("agent.core.onboard.steps.config") as mock:
         mock.etc_dir = tmp_path / "etc"
         mock.load_yaml.return_value = {}
         yield mock
@@ -78,7 +78,7 @@ def mock_ai_service():
 
 @pytest.fixture
 def mock_subprocess_run():
-    with patch("agent.commands.onboard.subprocess.run") as mock:
+    with patch("agent.core.onboard.steps.subprocess.run") as mock:
         yield mock
 
 @pytest.fixture
@@ -88,8 +88,8 @@ def mock_check_dependencies():
 
 @pytest.fixture
 def mock_user_input():
-    with patch("agent.commands.onboard.getpass.getpass") as mock_pass, \
-         patch("agent.commands.onboard.typer.prompt") as mock_prompt:
+    with patch("agent.core.onboard.steps.getpass.getpass") as mock_pass, \
+         patch("agent.core.onboard.steps.typer.prompt") as mock_prompt:
              
         # Create a combined side_effect handler or mock object
         # But the tests treat mock_user_input as a single mock with side_effect
@@ -157,7 +157,7 @@ def test_onboard_dependencies_missing(test_app, mock_shutil_which):
 
 @pytest.fixture
 def mock_secret_manager():
-    with patch("agent.commands.onboard.get_secret_manager") as mock1, \
+    with patch("agent.core.onboard.steps.get_secret_manager") as mock1, \
          patch("agent.core.secrets.get_secret_manager") as mock2:
         manager = MagicMock()
         mock1.return_value = manager
@@ -227,7 +227,7 @@ def test_onboard_happy_path(
     # Ensure get_value returns None so it doesn't think provider is configured
     mock_config.get_value.return_value = None
 
-    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+    with patch("agent.core.onboard.steps.typer.confirm", return_value=False):
         result = mock_runner.invoke(test_app, [])
     
     # Print output for debugging if it fails
@@ -286,7 +286,7 @@ def test_onboard_skip_keys(
     # Ensure get_value returns None
     mock_config.get_value.return_value = None
 
-    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+    with patch("agent.core.onboard.steps.typer.confirm", return_value=False):
         result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
@@ -326,7 +326,7 @@ def test_check_github_auth_authenticated(
     # 3 Keys (skip), Provider 1, Model 1
     mock_user_input.side_effect = ["", "", "", "1", "1"]
     
-    with patch("agent.commands.onboard.typer.confirm", return_value=False):
+    with patch("agent.core.onboard.steps.typer.confirm", return_value=False):
         result = mock_runner.invoke(test_app, [])
         
     assert result.exit_code == 0
@@ -359,12 +359,10 @@ def test_check_github_auth_not_authenticated_yes(
     # Note: explicit confirm mock handles the "Yes" to login,
     # so we don't need input for that?
     # Typer confirm usually uses stdin? Or uses typer.confirm?
-    # We patch typer.confirm below.
-    # So we just need the standard flow inputs.
     mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1", "1"]
     
     # We also need to mock subprocess.Popen for the login attempt
-    with patch("agent.commands.onboard.subprocess.Popen") as mock_popen:
+    with patch("agent.core.onboard.steps.subprocess.Popen") as mock_popen:
         mock_process = MagicMock()
         mock_process.communicate.return_value = ("Logged in", "")
         mock_process.returncode = 0
@@ -375,7 +373,7 @@ def test_check_github_auth_not_authenticated_yes(
                 return False
             return True
 
-        with patch("agent.commands.onboard.typer.confirm", side_effect=confirm_side_effect):
+        with patch("agent.core.onboard.steps.typer.confirm", side_effect=confirm_side_effect):
             result = mock_runner.invoke(test_app, [])
     
     assert result.exit_code == 0
@@ -439,7 +437,7 @@ def test_verification_uses_configured_provider(
         mock_user_input.side_effect = ["", "", "", "2", "1"]
         
         # Patch confirm to return False (No to reconfigure)
-        with patch("agent.commands.onboard.typer.confirm", return_value=False):
+        with patch("agent.core.onboard.steps.typer.confirm", return_value=False):
             result = mock_runner.invoke(test_app, [])
         
         # Verify provider config was NOT updated (early return)
@@ -506,7 +504,7 @@ def test_onboard_migration(
                 return False
             return True
 
-        with patch("agent.commands.onboard.typer.confirm", side_effect=confirm_side_effect):
+        with patch("agent.core.onboard.steps.typer.confirm", side_effect=confirm_side_effect):
             result = mock_runner.invoke(test_app, [])
             
         assert result.exit_code == 0

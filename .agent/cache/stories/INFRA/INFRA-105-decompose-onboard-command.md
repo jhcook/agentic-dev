@@ -2,7 +2,7 @@
 
 ## State
 
-IN_PROGRESS
+ACCEPTED
 
 ## Parent Plan
 
@@ -18,15 +18,15 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `commands/onboard.py` is reduced to a thin Typer CLI facade ≤500 LOC that calls step functions from `core/onboard/steps.py`.
-- [ ] **AC-2**: `core/onboard/steps.py` contains all step implementations: `check_dependencies`, `setup_env_file`, `configure_gitignore`, `init_secrets_vault`, `install_git_hooks`, and any helper utilities — ≤500 LOC.
-- [ ] **AC-3**: `core/onboard/__init__.py` re-exports the public step API.
-- [ ] **AC-4**: Step functions accept a `console: Console` parameter rather than creating their own, enabling injection for testing.
-- [ ] **AC-5**: All existing tests in `tests/commands/test_onboard.py` pass without modification.
-- [ ] **AC-6**: No circular imports — `python -c "import agent.cli"` succeeds.
-- [ ] **AC-7**: New unit tests in `tests/core/onboard/test_steps.py` covering each step function with mocked filesystem and subprocess calls.
-- [ ] **AC-8**: All new modules include PEP-484 type hints and PEP-257 docstrings.
-- [ ] **Negative Test**: `check_dependencies` logs a clear warning and returns `False` (rather than raising) when a required binary is missing from `PATH`.
+- [x] **AC-1**: `commands/onboard.py` is reduced to a thin Typer CLI facade ≤500 LOC that calls step functions from `core/onboard/steps.py`.
+- [x] **AC-2**: `core/onboard/steps.py` contains all step implementations: `check_dependencies`, `setup_env_file`, `configure_gitignore`, `init_secrets_vault`, `install_git_hooks`, and any helper utilities — ≤500 LOC.
+- [x] **AC-3**: `core/onboard/__init__.py` re-exports the public step API.
+- [x] **AC-4**: Step functions accept a `console: Console` parameter rather than creating their own, enabling injection for testing.
+- [x] **AC-5**: All existing tests in `tests/commands/test_onboard.py` pass without modification.
+- [x] **AC-6**: No circular imports — `python -c "import agent.cli"` succeeds.
+- [x] **AC-7**: New unit tests in `tests/core/onboard/test_steps.py` covering each step function with mocked filesystem and subprocess calls.
+- [x] **AC-8**: All new modules include PEP-484 type hints and PEP-257 docstrings.
+- [x] **Negative Test**: `check_dependencies` logs a clear warning and returns `False` (rather than raising) when a required binary is missing from `PATH`.
 
 ## Non-Functional Requirements
 
