@@ -19,9 +19,9 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 ## Acceptance Criteria
 
 - [x] **AC-1**: `commands/onboard.py` is reduced to a thin Typer CLI facade ≤500 LOC that calls step functions from `core/onboard/steps.py`.
-- [x] **AC-2**: `core/onboard/steps.py` contains all step implementations: `check_dependencies`, `setup_env_file`, `configure_gitignore`, `init_secrets_vault`, `install_git_hooks`, and any helper utilities — ≤500 LOC.
+- [x] **AC-2**: `core/onboard/steps.py`, `settings.py`, and `integrations.py` contain all step implementations: `check_dependencies`, `setup_env_file`, `configure_gitignore`, `init_secrets_vault`, `install_git_hooks`, and any helper utilities — ≤500 LOC each.
 - [x] **AC-3**: `core/onboard/__init__.py` re-exports the public step API.
-- [x] **AC-4**: Step functions accept a `console: Console` parameter rather than creating their own, enabling injection for testing.
+- [x] **AC-4**: Step functions accept a `prompter: Prompter` parameter rather than creating their own, enabling dependency injection for testing.
 - [x] **AC-5**: All existing tests in `tests/commands/test_onboard.py` pass without modification.
 - [x] **AC-6**: No circular imports — `python -c "import agent.cli"` succeeds.
 - [x] **AC-7**: New unit tests in `tests/core/onboard/test_steps.py` covering each step function with mocked filesystem and subprocess calls.
@@ -45,7 +45,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic onboard command 
 
 ## Impact Analysis Summary
 
-- **Components touched**: `commands/onboard.py`, `commands/secret.py`, `core/auth/utils.py`, `core/onboard/steps.py`, `core/onboard/settings.py`, `core/onboard/integrations.py`, `core/onboard/__init__.py`, `tests/cli/test_onboard_e2e.py`, `tests/cli/test_onboard_unit.py`, `tests/core/onboard/test_steps.py`.
+- **Components touched**: `commands/onboard.py`, `commands/secret.py`, `core/auth/utils.py`, `core/onboard/steps.py`, `core/onboard/settings.py`, `core/onboard/integrations.py`, `core/onboard/prompter.py`, `core/onboard/__init__.py`, `tests/cli/test_onboard_e2e.py`, `tests/cli/test_onboard_unit.py`, `tests/core/auth/test_utils.py`, `tests/core/onboard/test_steps.py`, `tests/core/onboard/test_settings.py`, `tests/core/onboard/test_integrations.py`.
 - **Workflows affected**: `agent onboard` command, any CI bootstrap script invoking onboarding steps.
 - **Risks identified**: `check_dependencies` uses `shutil.which` and `subprocess` — mocking strategy in tests must be consistent across old and new locations.
 - **Out-of-Scope Changes**: Unrelated updates to `README.md`, `pyproject.toml`, and `src/agent/main.py` to address Python 3.13 incompatibility, as well as `src/agent/core/implement/orchestrator.py` to address regex parsing bugs for code blocks.
