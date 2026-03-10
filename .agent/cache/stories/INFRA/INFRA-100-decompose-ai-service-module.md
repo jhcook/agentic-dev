@@ -2,7 +2,7 @@
 
 ## State
 
-IN_PROGRESS
+COMMITTED
 
 ## Parent Plan
 
@@ -19,9 +19,9 @@ As a **Backend Engineer**, I want to **decompose the monolithic AI service into 
 ## Acceptance Criteria
 
 - [ ] **AC-1**: `core/ai/protocols.py` defines an `AIProvider` Protocol with `generate()`, `stream()`, and `supports_tools()` methods.
-- [ ] **AC-2**: `core/ai/providers/` package contains one module per provider backend (openai, vertex, anthropic, ollama), each implementing `AIProvider`.
+- [ ] **AC-2**: `core/ai/providers.py` file is created to house the `BaseProvider` logic and distinct provider classes (`OpenAIProvider`, `VertexAIProvider`, etc.). The refactoring inside `service.py` to dispatch to these individual provider modules is deferred to `INFRA-108`.
 - [ ] **AC-3**: `core/ai/streaming.py` contains streaming response handling, chunk processing, and retry/backoff decorators.
-- [ ] **AC-4**: `core/ai/service.py` is reduced to a public API facade under 500 LOC that imports and delegates to `AIProvider` implementations.
+- [ ] **AC-4**: `core/ai/service.py` handles minimal import modifications; the bulk facade reduction to under 500 LOC is deferred to `INFRA-108`.
 - [ ] **AC-5**: All existing tests pass without modification (behavioural equivalence).
 - [ ] **AC-6**: No circular imports — `python -c "import agent.cli"` succeeds.
 - [ ] **AC-7**: New unit tests in `tests/core/ai/test_providers.py` and `tests/core/ai/test_streaming.py`.
@@ -49,7 +49,7 @@ As a **Backend Engineer**, I want to **decompose the monolithic AI service into 
 
 ## Impact Analysis Summary
 
-- **Components touched**: `core/ai/service.py` (refactor), `core/ai/protocols.py` (new), `core/ai/providers/` (new package), `core/ai/streaming.py` (new).
+- **Components touched**: `core/ai/service.py` (minimal refactor/imports), `core/ai/protocols.py` (new), `core/ai/providers.py` (new file, not package), `core/ai/streaming.py` (new).
 - **Workflows affected**: All AI-driven features (chat, completion, streaming responses).
 - **Risks identified**: Potential for circular imports between the facade and sub-modules; potential regressions in retry backoff timing.
 

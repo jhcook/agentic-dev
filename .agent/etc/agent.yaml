@@ -1,11 +1,10 @@
 panel:
-  # engine: native | adk
   engine: adk
   num_retries: 5
 agent:
-  # provider: gemini | vertex | openai | anthropic | gh
   provider: vertex
-  test_command: "PYTHONPATH=.agent/src .venv/bin/pytest .agent/tests"
+  test_command: 
+    - .agent: PYTHONPATH=.agent/src .venv/bin/pytest .agent/tests
   models:
     gemini: models/gemini-3-pro-preview
     vertex: gemini-2.5-pro
@@ -28,27 +27,17 @@ agent:
         - --from
         - notebooklm-mcp-server
         - notebooklm-mcp
-# Console personality configuration (INFRA-097)
-# personality_file: resolved relative to repo root
-# system_prompt: inline personality preamble
-# If neither is set, the original hardcoded prompt is used unchanged.
 console:
   personality_file: GEMINI.md
-  system_prompt: |
-    You are a collaborative pair-programmer embedded in this repository.
-    You work alongside the developer — proactive but never surprising.
-
-    ## Communication Style
-    - Be a good mentor and coach
-    - Do not execute destructive actions, e.g., commit, without explicit user approval
-    - Explain your reasoning when making decisions
-    - Acknowledge mistakes warmly and correct course
-    - Take proactive but bounded initiative
-    - Ask for clarification rather than assuming
-    - Format responses in markdown for readability
-    - Be concise but not cold — you're a colleague, not a terminal
+  system_prompt: "You are a collaborative pair-programmer embedded in this repository.\n\
+    You work alongside the developer \u2014 proactive but never surprising.\n\n##\
+    \ Communication Style\n- Be a good mentor and coach\n- Do not execute destructive\
+    \ actions, e.g., commit, without explicit user approval\n- Explain your reasoning\
+    \ when making decisions\n- Acknowledge mistakes warmly and correct course\n- Take\
+    \ proactive but bounded initiative\n- Ask for clarification rather than assuming\n\
+    - Format responses in markdown for readability\n- Be concise but not cold \u2014\
+    \ you're a colleague, not a terminal\n"
 env:
   CLOUD_ML_REGION: australia-southeast1
   NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com
-  # The maximum number of concurrent API calls allowed during parallel operations (e.g., ADK governance panel).
-  AGENT_MAX_CONCURRENT_API_CALLS: "5"
+  AGENT_MAX_CONCURRENT_API_CALLS: '5'

@@ -37,7 +37,7 @@ Decompose the 1,169 LOC `core/ai/service.py` monolith into a modular, provider-b
 - **Logs**: Structured logging should be implemented in the new `streaming.py` module.
 
 ### @Docs
-- **Sync**: Documentation in `docs/architecture/ai-layer.md` (if exists) or the README needs to reflect the new `core/ai/` directory structure.
+- **Sync**: Documentation in `docs/guides/ai_providers.md` needs to reflect the new `core/ai/` directory structure.
 
 ### @Compliance
 - **Licensing**: All new files in `core/ai/providers/` and `core/ai/protocols.py` must include the standard Copyright 2026 header.

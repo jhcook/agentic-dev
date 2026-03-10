@@ -351,10 +351,11 @@ def preflight(
             import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
             from rich.status import Status
-            console.print("[dim]Synchronizing NotebookLM Context...[/dim]")
-            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
+            
+            console.print("Synchronizing NotebookLM Context...")
+            with Status("Starting sync...", console=console) as _sync_status:
                 def _update_notebooklm_status_2(msg: str):
-                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                    _sync_status.update(f"[dim]{msg}[/dim]")
                     # For non-interactive/piped environments (like agent console)
                     if not console.is_terminal:
                         console.print(f"  [dim]• {msg}[/dim]")
@@ -423,15 +424,15 @@ def preflight(
             console.print(f"[yellow]⚠️  Notion sync unreachable: {e}. Oracle Pattern may have stale context.[/yellow]")
             
         notebooklm_ready = False
-        console.print("\n[bold blue]🔄 Synchronizing NotebookLM Context (Oracle Pattern)...[/bold blue]")
         try:
             import asyncio
             from agent.sync.notebooklm import ensure_notebooklm_sync
             from rich.status import Status
             
-            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
+            console.print("Synchronizing NotebookLM Context (Oracle Pattern)...")
+            with Status("Starting sync...", console=console) as _sync_status:
                 def _update_notebooklm_status(msg: str):
-                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                    _sync_status.update(f"[dim]{msg}[/dim]")
                 
                 sync_status = asyncio.run(ensure_notebooklm_sync(progress_callback=_update_notebooklm_status))
                 

@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools
+"""
+Contains provider-agnostic retry decorators and stream processing helpers.
+"""
 import asyncio
 import logging
 import random
@@ -53,7 +55,7 @@ def ai_retry(max_retries: int = 3, base_delay: float = 1.0):
                         final_delay,
                         attempt + 1,
                         max_retries,
-                        extra={"attempt": attempt, "error": str(e)},
+                        extra={"attempt": attempt, "error_type": type(e).__name__},
                     )
                     await asyncio.sleep(final_delay)
             raise last_error or RuntimeError("Retry loop exited without result or error")

@@ -84,9 +84,13 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                         result = await client.call_tool("notebook_create", {"title": f"agentic-dev ({config.repo_root.name})"}, session=mcp_session)
                         result_text = "\n".join([c.text for c in result.content if hasattr(c, "text")])
                         notebook_id = extract_uuid(result_text)
-                        
                         if not notebook_id:
-                            if "Unknown tool" in result_text:
+                            from agent.core.net_utils import check_ssl_error
+                            ssl_msg = check_ssl_error(Exception(result_text), url="notebooklm.google.com")
+
+                            if ssl_msg:
+                                logger.error(ssl_msg)
+                            elif "Unknown tool" in result_text:
                                 logger.warning("NotebookLM tool not found (often due to missing authentication).")
                                 logger.warning("Please run: agent mcp auth notebooklm")
                             elif "authentication" in result_text.lower() or "expired" in result_text.lower():
@@ -95,8 +99,13 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                                 logger.error(f"Failed to extract notebook ID from response: {result_text}")
                             return "FAILED"
                     except Exception as e:
-                        logger.warning("NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
-                        logger.debug(f"Details: {e}")
+                        from agent.core.net_utils import check_ssl_error
+                        ssl_msg = check_ssl_error(e, url="notebooklm.google.com")
+                        if ssl_msg:
+                            logger.error(ssl_msg)
+                        else:
+                            logger.warning("NotebookLM tool call failed (often due to missing authentication). Please run: `agent mcp auth notebooklm`")
+                            logger.debug(f"Details: {e}")
                         return "FAILED"
                         
                     state["notebook_id"] = notebook_id
@@ -154,7 +163,12 @@ async def _sync_notebook(progress_callback: Optional[Callable[[str], None]] = No
                         synced_files[file_key] = mtime
                         state["synced_files"] = synced_files
                     except Exception as e:
-                        logger.error(f"Failed to sync file {file_path}: {e}")
+                        from agent.core.net_utils import check_ssl_error
+                        ssl_msg = check_ssl_error(e, url="notebooklm.google.com")
+                        if ssl_msg:
+                            logger.error(ssl_msg)
+                        else:
+                            logger.error(f"Failed to sync file {file_path}: {e}")
 
                 upsert_artifact(id="notebooklm_state", type="state", content=json.dumps(state), author="system")
                 logger.info("NotebookLM sync completed.")
@@ -222,7 +236,12 @@ async def flush_notebooklm() -> bool:
                         logger.info(f"Notebook deleted: {result_text.strip()}")
                         success = True
                     except Exception as e:
-                        logger.error(f"Failed to delete notebook {notebook_id}: {e}")
+                        from agent.core.net_utils import check_ssl_error
+                        ssl_msg = check_ssl_error(e, url="notebooklm.google.com")
+                        if ssl_msg:
+                            logger.error(ssl_msg)
+                        else:
+                            logger.error(f"Failed to delete notebook {notebook_id}: {e}")
             else:
                 logger.info("No active NotebookLM notebook found in local state to delete.")
                 success = True

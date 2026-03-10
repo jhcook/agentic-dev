@@ -12,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Contains the dynamic provider registry, the factory pattern dispatch, and concrete backend implementations (e.g. Anthropic).
+"""
+
 import logging
 from typing import Optional, List, Dict, Any, AsyncGenerator, Type
 from agent.core.ai.protocols import AIProvider, AIRateLimitError, AIConnectionError, AIConfigurationError
 from agent.core.ai.streaming import ai_retry
+
+try:
+    from opentelemetry import trace
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +49,26 @@ class OpenAIProvider(BaseProvider):
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a complete response using the OpenAI API (stub; full dispatch in INFRA-108)."""
         logger.debug("Generating response using OpenAI", extra={"model": self.model_name})
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.generate") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "openai")
+                return f"[OpenAI {self.model_name}] Response to: {prompt[:20]}..."
         return f"[OpenAI {self.model_name}] Response to: {prompt[:20]}..."
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Stream a response token-by-token using the OpenAI API (stub; full dispatch in INFRA-108)."""
         logger.debug("Streaming response using OpenAI", extra={"model": self.model_name})
         chunks = ["This ", "is ", "a ", "streamed ", "OpenAI ", "response."]
-        for chunk in chunks:
-            yield chunk
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.stream") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "openai")
+                for chunk in chunks:
+                    yield chunk
+        else:
+            for chunk in chunks:
+                yield chunk
 
 class VertexAIProvider(BaseProvider):
     """Vertex AI implementation of AIProvider."""
@@ -55,12 +77,23 @@ class VertexAIProvider(BaseProvider):
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a complete response using the Vertex AI (Gemini) API (stub; full dispatch in INFRA-108)."""
         logger.debug("Generating response using VertexAI", extra={"model": self.model_name})
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.generate") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "vertex")
+                return f"[Vertex {self.model_name}] Response to: {prompt[:20]}..."
         return f"[Vertex {self.model_name}] Response to: {prompt[:20]}..."
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Stream a response token-by-token using the Vertex AI API (stub; full dispatch in INFRA-108)."""
         logger.debug("Streaming response using VertexAI", extra={"model": self.model_name})
-        yield f"[Vertex {self.model_name}] Streamed response"
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.stream") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "vertex")
+                yield f"[Vertex {self.model_name}] Streamed response"
+        else:
+            yield f"[Vertex {self.model_name}] Streamed response"
 
 class MockProvider(BaseProvider):
     """Mock provider for testing purposes."""
@@ -68,14 +101,29 @@ class MockProvider(BaseProvider):
     @ai_retry()
     async def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> str:
         """Generate a mock response, optionally raising AIRateLimitError for testing."""
-        if "force_error" in kwargs:
-            raise AIRateLimitError("Mock rate limit")
-        return "Mock response"
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.generate") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "mock")
+                if "force_error" in kwargs:
+                    raise AIRateLimitError("Mock rate limit")
+                return "Mock response"
+        else:
+            if "force_error" in kwargs:
+                raise AIRateLimitError("Mock rate limit")
+            return "Mock response"
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Yield mock stream chunks for testing."""
-        yield "Mock "
-        yield "stream"
+        if tracer:
+            with tracer.start_as_current_span("ai_provider.stream") as span:
+                span.set_attribute("model_name", self.model_name)
+                span.set_attribute("provider", "mock")
+                yield "Mock "
+                yield "stream"
+        else:
+            yield "Mock "
+            yield "stream"
 
 # Registry for providers
 _PROVIDER_REGISTRY: Dict[str, Type[AIProvider]] = {

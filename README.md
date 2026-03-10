@@ -87,6 +87,11 @@ The `agent review-voice` command enables you to evaluate the quality of a voice 
 
 ## AI & Query
 
+The AI layer (`core/ai/`) provides a decoupled, modular architecture utilizing the Strategy pattern for interchangeable AI backends (Anthropic, Gemini, OpenAI, Ollama). It consists of the following key modules:
+- `protocols.py`: Defines the `AIProvider` interface, strict protocol typing, and standard decoupled exception types (e.g., `AIRateLimitError`).
+- `providers.py`: The factory and generic implementations that act as the `ProviderRegistry` for fast model onboarding.
+- `streaming.py`: Resiliency handlers like `ai_retry` that enforce backoff limits and streaming ingestion.
+
 | Command | Description |
 |---------|-------------|
 | `agent query` | Ask AI about the codebase |

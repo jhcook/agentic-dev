@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Exports core AI components and exceptions for the modular core.ai package."""
+
 from .service import AIService, ai_service
 from .protocols import AIProvider, AIError, AIRateLimitError, AIConnectionError
 

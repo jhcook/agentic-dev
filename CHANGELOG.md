@@ -7,17 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **INFRA-110**: Decomposed `check.py` command into modular components in `core/check/`, separating concerns like preflight orchestration, reporting, syncing, and testing.
+- **INFRA-103**: Decomposed `commands/check.py` (1,768 LOC) into a thin CLI
+  facade plus `core/check/system.py` (credential validation, story schema,
+  journey linkage) and `core/check/quality.py` (journey coverage). All existing
+  callers and mock-patch paths remain unaffected via re-exports. New unit tests
+  added in `tests/core/check/`.
+
+### Changed
+
+- Decomposed `commands/implement.py` into focused modules under `core/implement/`:
+  - `circuit_breaker.py`: Tracks LOC edits and enforces thresholds.
+  - `guards.py`: Handles docstring enforcement and safe-apply size guards.
+  - `orchestrator.py`: Manages path resolution, block parsing, and chunking logic.
+- Retained `commands/implement.py` as a facade re-exporting symbols for backward compatibility with existing tests.
+- Fixed uninitialised-variable bug in `apply_chunk` logic.
+- **`agent implement` reliability**: Runbooks with explicit `File:`/`<<<SEARCH` blocks are now applied directly without AI regeneration, making them deterministic and CI-safe.
+- **`resolve_path` trusted-prefix fix** (INFRA-109): Paths starting with `.agent/`, `agent/`, `backend/`, `web/`, or `mobile/` now bypass fuzzy filename search, preventing silent misdirection to same-named files elsewhere in the repo.
+
+### Added
+- Unit tests for governance roles and package facade.
+- New `agent.core.governance` package structure.
+
+### Changed
+- Refactor: Extract governance roles module from legacy monolith into `agent.core.governance.roles` (INFRA-101).
+- Decomposed monolithic `core/governance.py` into a package structure `core/governance/`.
+
+### Changed
+- refactor: decompose monolithic governance module into package structure (INFRA-101)
+- refactor: extract governance roles management into `core.governance.roles` (INFRA-101)
+
 ### Added
 - Decomposed AI service into modular providers using Strategy pattern (INFRA-100).
 - New `AIProvider` protocol and standard error types in `core/ai/protocols.py`.
 - Isolated streaming and retry logic with exponential backoff in `core/ai/streaming.py`.
 - Unified provider registry in `core/ai/providers.py`.
 
-### AI Core
-- Decomposed monolithic `AIService` into a modular, provider-based architecture using the Strategy pattern (INFRA-100).
-- Introduced `AIProvider` Protocol for standardized model interactions.
-- Extracted retry and backoff logic into a dedicated `streaming` module.
-- Consolidated provider dispatch logic in `providers.py` to support future multi-backend extensibility.
 
 ### Added
 - INFRA-107: Added targeted codebase introspection to `agent new-runbook`.
@@ -54,3 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Refactored `agent implement` chunked processing loop to support atomic save points and size enforcement.
+
+## Copyright
+
+Copyright 2026 Justin Cook

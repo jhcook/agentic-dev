@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Defines interfaces, protocols, and standard exceptions for the AI layer, serving as the static contract for all providers.
+"""
+
 from typing import Protocol, runtime_checkable, AsyncGenerator, Optional, List, Dict, Any
 
 class AIError(Exception):

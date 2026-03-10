@@ -24,6 +24,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 warnings.filterwarnings("ignore", module="huggingface_hub.*")
+warnings.filterwarnings("ignore", message=".*Your application has authenticated using end user credentials from Google Cloud SDK without a quota project.*")
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
