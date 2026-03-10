@@ -2,7 +2,7 @@
 
 ## State
 
-COMMITTED
+IN_PROGRESS
 
 ## Parent Plan
 
@@ -10,7 +10,7 @@ INFRA-099
 
 ## Problem Statement
 
-The `tui/app.py` monolith needs decomposition. We need to extract the prompt and command logic into a separate module `agent/tui/prompts.py` to isolate UI changes from streaming logic and improve testability.
+The `tui/app.py` monolith needs decomposition. We need to extract the prompt building logic into a separate module `agent/tui/prompts.py` to isolate UI changes from prompt building and improve maintainability.
 
 ## User Story
 
@@ -18,10 +18,9 @@ As a Backend Engineer, I want to create `agent/tui/prompts.py` and migrate all i
 
 ## Acceptance Criteria
 
-- [ ] `InputType` enum and `CommandParser` class moved to `tui/prompts.py`.
+- [ ] `_build_clinical_prompt`, `_build_custom_prompt`, and `_build_system_prompt` moved to `tui/prompts.py`.
 - [ ] Logic for history truncation and multi-turn message templating migrated.
 - [ ] Zero dependencies on Textual `App` or `Widget` instances (use pure data structures or interfaces).
-- [ ] Unit tests in `tests/tui/test_prompts.py` for slash command parsing.
 
 ## Non-Functional Requirements
 
@@ -37,7 +36,7 @@ As a Backend Engineer, I want to create `agent/tui/prompts.py` and migrate all i
 ## Linked Journeys
 
 - JRN-072: Terminal Console TUI Chat
-- JRN-035: Advanced Voice Orchestration
+- JRN-035: Restore Silero VAD with WebRTC Fallback
 
 ## Impact Analysis Summary
 
@@ -47,7 +46,7 @@ As a Backend Engineer, I want to create `agent/tui/prompts.py` and migrate all i
 
 ## Test Strategy
 
-- **Unit Testing**: Unit tests in `tests/tui/test_prompts.py` for slash command parsing.
+- **Unit Testing**: Added `test_prompts.py` to test the extracted prompt building and history formatting logic.
 
 ## Rollback Plan
 

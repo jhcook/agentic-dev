@@ -94,7 +94,7 @@ class TestLocalToolClient:
         assert "find_files" in names
         assert "grep_search" in names
         assert "patch_file" in names
-        assert len(tools) == 10
+        assert len(tools) == 15
 
     @pytest.mark.asyncio
     async def test_tool_schema_structure(self, repo):
