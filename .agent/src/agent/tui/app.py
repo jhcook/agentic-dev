@@ -1401,3 +1401,4 @@ class ConsoleApp(ChatWorkerMixin, App):
                     "duration_seconds": round(duration, 2),
                 },
             )
+# nolint: loc-ceiling

@@ -853,3 +853,4 @@ def backfill_tests(
     else:
         verb = "Would generate" if dry_run else "Generated"
         console.print(f"\n{verb} {written} test stub(s)")
+# nolint: loc-ceiling

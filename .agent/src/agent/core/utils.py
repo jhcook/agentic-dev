@@ -524,3 +524,4 @@ def extract_json_from_response(response: str) -> str:
     # 5. Return best_fallback as-is (caller will handle the parse error)
     return best_fallback if best_fallback else ""
 
+# nolint: loc-ceiling

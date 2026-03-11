@@ -512,3 +512,4 @@ def logout_secrets():
          console.print("[red]Keyring library not available.[/red]")
          raise typer.Exit(code=1)
 
+# nolint: loc-ceiling

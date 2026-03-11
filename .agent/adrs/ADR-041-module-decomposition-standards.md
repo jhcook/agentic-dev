@@ -31,8 +31,14 @@ and ensures the console and voice agents can share a common interface layer.
 
 ### 1. Module Size Ceiling
 
-No Python source file in `.agent/src/` shall exceed **500 lines of code**
-(excluding blank lines and comments). Test files and generated code are exempt.
+No Python source file in `.agent/src/` shall exceed **500 physical lines of code**
+(total lines, not logical statements). The check is strictly enforced by CI.
+
+**Exceptions:**
+- `migrations/` directories
+- Files containing `# nolint: loc-ceiling`
+
+An architectural exception record must be documented when using the nolint tag.
 
 **Rationale:** 500 LOC is large enough to contain a complete subsystem but small
 enough to be understood in a single reading session. It forces developers to
@@ -155,7 +161,7 @@ All new modules created during decomposition must include:
 
 ### 7. Enforcement
 
-- **Pre-commit check:** A LOC counter script rejects files exceeding 500 lines
+- **Pre-commit check:** A strict LOC counter (`scripts/check_loc.py`) and import checker (`scripts/check_imports.py`) run as pre-commit hooks and via `agent preflight --gate quality`.
 - **Preflight gate:** @architect role validates module boundaries and protocol usage
 - **CI validation:** `python -c "import agent.cli"` catches circular imports
 - **Protocol coverage:** Every package in `core/` must expose at least one Protocol

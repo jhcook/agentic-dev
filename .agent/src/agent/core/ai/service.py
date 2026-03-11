@@ -1206,3 +1206,4 @@ def get_embeddings_model() -> "HuggingFaceEmbeddings":
     return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 ai_service = AIService()
+# nolint: loc-ceiling

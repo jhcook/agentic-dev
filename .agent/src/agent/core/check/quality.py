@@ -42,6 +42,37 @@ class JourneyCoverageResult(TypedDict):
     missing_ids: List[str]
 
 
+import time
+from agent.commands.gates import GateResult
+import subprocess
+
+def check_code_quality() -> GateResult:
+    """Run LOC and Import checks.
+    
+    Returns:
+        A GateResult indicating pass/fail status of quality checks.
+    """
+    start = time.time()
+    
+    from agent.core.config import config
+    root_dir = config.repo_root
+    scripts_dir = root_dir / "scripts"
+    
+    loc_res = subprocess.run(["python3", str(scripts_dir / "check_loc.py")], capture_output=True, text=True, cwd=root_dir)
+    import_res = subprocess.run(["python3", str(scripts_dir / "check_imports.py")], capture_output=True, text=True, cwd=root_dir)
+    
+    success = loc_res.returncode == 0 and import_res.returncode == 0
+    message = (loc_res.stdout + import_res.stdout).strip() or "All quality checks passed."
+    
+    elapsed = time.time() - start
+    return GateResult(
+        name="Code Quality",
+        passed=success,
+        elapsed_seconds=elapsed,
+        details=message
+    )
+
+
 def check_journey_coverage(
     repo_root: Optional[Path] = None,
 ) -> JourneyCoverageResult:

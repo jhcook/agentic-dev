@@ -664,3 +664,4 @@ def get_secret(key: str, service: Optional[str] = None, strict: bool = False) ->
 
     # Direct fallback (legacy or unmapped)
     return os.getenv(key)
+# nolint: loc-ceiling

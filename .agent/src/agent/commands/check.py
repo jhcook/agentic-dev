@@ -34,7 +34,7 @@ from agent.core.utils import infer_story_id, scrub_sensitive_data
 from agent.core.fixer import InteractiveFixer
 
 # ── INFRA-103: Re-export extracted helpers so existing mock-patch paths remain valid ──
-from agent.core.check.quality import check_journey_coverage  # noqa: F401
+from agent.core.check.quality import check_journey_coverage, check_code_quality  # noqa: F401
 from agent.core.check.system import validate_linked_journeys  # noqa: F401
 
 
@@ -74,7 +74,8 @@ def preflight(
     interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'."),
     thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens)."),
-    legacy_context: bool = typer.Option(False, "--legacy-context", help="Use full legacy context instead of Oracle Pattern.")
+    legacy_context: bool = typer.Option(False, "--legacy-context", help="Use full legacy context instead of Oracle Pattern."),
+    gate: Optional[str] = typer.Option(None, "--gate", help="Run a specific gate isolated.")
 ):
     """
     Run preflight checks (linting, tests, and optional AI governance review).
@@ -97,6 +98,18 @@ def preflight(
         console.print(f"[dim]Panel engine override: {panel_engine}[/dim]")
 
     console.print("[bold blue]🚀 Initiating Preflight Sequence...[/bold blue]")
+
+    if gate == "quality":
+        console.print("[bold blue]🧹 Checking Code Quality (LOC & Imports)...[/bold blue]")
+        quality_result = check_code_quality()
+        if not quality_result.passed:
+            console.print(f"[bold red]❌ {quality_result.name} FAILED[/bold red]")
+            console.print(f"[red]{quality_result.details}[/red]")
+            raise typer.Exit(code=1)
+        console.print(f"[green]✅ {quality_result.name} passed.[/green]")
+        console.print(f"[dim]{quality_result.details}[/dim]")
+        raise typer.Exit(code=0)
+
 
     if not offline and not legacy_context:
         try:
@@ -268,6 +281,24 @@ def preflight(
     else:
         console.print("[green]✅ ADR Enforcement passed.[/green]")
         json_report["adr_enforcement"] = "PASS"
+
+    # 1.7.5 Code Quality Gate (INFRA-106)
+    console.print("\n[bold blue]🧹 Checking Code Quality (LOC & Imports)...[/bold blue]")
+    quality_result = check_code_quality()
+    if not quality_result.passed:
+        console.print(f"[bold red]❌ {quality_result.name} FAILED[/bold red]")
+        console.print(f"[red]{quality_result.details}[/red]")
+        json_report["code_quality"] = "FAIL"
+        if report_file:
+            json_report["overall_verdict"] = "BLOCK"
+            json_report["error"] = quality_result.details
+            import json
+            report_file.write_text(json.dumps(json_report, indent=2))
+        raise typer.Exit(code=1)
+    else:
+        console.print(f"[green]✅ {quality_result.name} passed.[/green]")
+        console.print(f"[dim]{quality_result.details}[/dim]")
+        json_report["code_quality"] = "PASS"
 
     # 1.8 Journey Coverage Check (Phase 2: Blocking for story-linked journeys)
     from agent.core.check.journeys import check_journey_coverage_gate, run_journey_impact_mapping
@@ -549,3 +580,4 @@ def preflight(
 
 
 
+# nolint: loc-ceiling

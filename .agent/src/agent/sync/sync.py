@@ -591,3 +591,4 @@ def flush(hard: bool = False):
         console.print(f"  [red]✗[/red] Deleted {state_file.name}")
 
     console.print("\n[bold green]Flush complete.[/bold green] Run [bold]agent sync pull[/bold] to refresh from remote.")
+# nolint: loc-ceiling

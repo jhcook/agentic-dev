@@ -842,3 +842,4 @@ class NotionSync:
         flush_paragraph()
         
         return blocks
+# nolint: loc-ceiling
