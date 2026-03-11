@@ -42,6 +42,7 @@ Bottom-up: start with the least-dependent modules and move toward the UI layer.
 
 | Story | Target File | Decomposition |
 |---|---|---|
+| **INFRA-104** | `core/ai/protocols.py` | Protocol Foundation and Exception Hierarchy (INFRA-108 chunk 1) |
 | **INFRA-108** | `core/ai/providers.py` (812 LOC) | Protocol-based refactor → `providers/{openai,vertex,anthropic,ollama,gh}.py` + factory |
 | **INFRA-109** | `core/implement/orchestrator.py` | Fix `resolve_path` trusted-prefix short-circuit to prevent fuzzy match overwrites |
 | **INFRA-110** | `commands/check.py` | Complete check.py decomposition to ≤500 LOC; ADC fallback, diff truncation, provider warning (AC-4/5/6 done in INFRA-103) |
@@ -70,6 +71,7 @@ INFRA-111 ──> INFRA-112 ──> INFRA-113 ──> INFRA-114 ──> INFRA-11
 
 After all above:
   └── INFRA-106 (LOC enforcement script)
+        └── INFRA-104 (Protocol Foundation and Exception Hierarchy)
        └── INFRA-108 (Final Protocol Refactor)
 ```
 
