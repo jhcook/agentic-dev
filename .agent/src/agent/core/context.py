@@ -354,7 +354,7 @@ class ContextLoader:
 
         result = scrub_sensitive_data(impact)
         logger.debug(
-            "Test impact: %d affected files found, %d chars",
+            "Test impact count: %d affected files found, %d chars",
             test_count, len(result),
         )
         return result
@@ -396,7 +396,7 @@ class ContextLoader:
                 continue
 
         result = scrub_sensitive_data(contracts)
-        logger.debug("Behavioral contracts: %d chars extracted", len(result))
+        logger.debug("Behavioral contract count: %d chars extracted", len(result))
         return result
 
     def _load_source_snippets(self, budget: int = 0) -> str:
