@@ -1,13 +1,14 @@
 panel:
-  engine: adk
+  engine: native
   num_retries: 5
 agent:
-  provider: vertex
+  provider: openai
   test_commands:
     .agent/: cd .agent/src && python -m pytest agent/ -q --tb=short
   models:
     gemini: models/gemini-3-pro-preview
     vertex: gemini-2.5-pro
+    openai: gpt-4o
   github:
     tool: mcp
   mcp:
