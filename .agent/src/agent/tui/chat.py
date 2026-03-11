@@ -55,7 +55,7 @@ class SelectionLog(VerticalScroll):
         if scroll_end:
             self.scroll_end(animate=False)
 
-    def add_selection(self, text: str, source: str):
+    def add_selection(self, text: str, source: str) -> None:
         """Add a new selection to the log with scrubbing."""
         scrubbed = scrub_sensitive_data(text)
         self._history.append({"text": scrubbed, "source": source})
@@ -138,6 +138,7 @@ class DisconnectModal(ModalScreen[str]):
         self.error_msg = error_msg
 
     def compose(self) -> ComposeResult:
+        """Compose the layout of the disconnect modal."""
         with Container(id="disconnect-dialog"):
             yield Static(
                 f"[bold red]⚠ Provider Disconnected[/bold red]\n\n"
@@ -149,6 +150,7 @@ class DisconnectModal(ModalScreen[str]):
                 yield Button("Cancel", variant="error", id="btn-cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events for the disconnect modal."""
         action_map = {
             "btn-retry": "retry",
             "btn-switch": "switch",
@@ -187,6 +189,7 @@ class ConfirmToolModal(ModalScreen[str]):
         self._details = details
 
     def compose(self) -> ComposeResult:
+        """Compose the layout of the confirm tool modal."""
         with Container(id="tool-confirm-dialog"):
             yield Static(
                 f"[bold yellow]⚠ Agent wants to execute {self._tool_name}[/bold yellow]\n\n"
@@ -198,6 +201,7 @@ class ConfirmToolModal(ModalScreen[str]):
                 yield Button("Deny", variant="error", id="btn-tool-no")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events for the confirm tool modal."""
         if event.button.id == "btn-tool-yes":
             self.dismiss("yes")
         elif event.button.id == "btn-tool-session":
@@ -423,6 +427,7 @@ class ChatWorkerMixin:
         future: asyncio.Future[Any] = asyncio.Future()
         
         def on_dismiss(result: Any) -> None:
+            """Callback when the modal screen is dismissed."""
             if not future.done():
                 future.set_result(result)
                 
@@ -434,6 +439,7 @@ class ChatWorkerMixin:
         """Show the disconnect recovery modal."""
 
         async def handle_result(action: str) -> None:
+            """Handle the result selected from the disconnect modal."""
             if action == "retry":
                 self._write_system("\n[yellow]Retrying...[/yellow]")
                 await self._stream_response(

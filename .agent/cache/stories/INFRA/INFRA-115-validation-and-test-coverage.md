@@ -36,7 +36,7 @@ As a Backend Engineer, I want to implement missing unit tests for the new module
 
 ## Linked Journeys
 
-- N/A
+- JRN-072
 
 ## Impact Analysis Summary
 

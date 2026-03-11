@@ -28,3 +28,18 @@ def run_cli_command():
     # Placeholder for Typer CliRunner logic if needed
     from typer.testing import CliRunner
     return CliRunner()
+@pytest.fixture(autouse=True)
+def isolate_secrets_dir(tmp_path, monkeypatch):
+    """Ensure no tests touch the live .agent/secrets directory by default."""
+    import agent.core.secrets
+    secrets_dir = tmp_path / "secrets"
+    # Overwrite the default constructor
+    original_init = agent.core.secrets.SecretManager.__init__
+    
+    def mock_init(self, dir_path=None):
+        original_init(self, secrets_dir)
+        
+    monkeypatch.setattr(agent.core.secrets.SecretManager, "__init__", mock_init)
+    
+    # Reset singleton to force recreation using the mocked init
+    monkeypatch.setattr(agent.core.secrets, "_secret_manager", None)

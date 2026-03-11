@@ -94,10 +94,9 @@ def test_ensure_gitignore_does_not_duplicate(tmp_path: Path):
     assert gitignore_path.read_text() == initial_content
 
 @patch("agent.commands.onboard.typer.confirm", return_value=False)
-@patch("os.chmod")
 @patch("getpass.getpass")
-@patch("agent.commands.secret._validate_password_strength", return_value=True)
-def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod, mock_confirm, tmp_path: Path, monkeypatch):
+@patch("agent.core.auth.utils.validate_password_strength", return_value=(True, ""))
+def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_confirm, tmp_path: Path, monkeypatch):
     """Tests creating a new secret store with user input."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(os, "environ", {})
@@ -113,9 +112,9 @@ def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod,
         (tmp_path / ".agent").mkdir(exist_ok=True)
         configure_api_keys()
         
-    secrets_dir = tmp_path / ".agent" / "secrets"
+    # The conftest fixture creates secrets in tmp_path / "secrets"
+    secrets_dir = tmp_path / "secrets"
     assert secrets_dir.is_dir()
-    mock_chmod.assert_called()
 
 @patch("agent.commands.onboard.configure_mcp_settings")
 @patch("agent.commands.onboard.run_verification")

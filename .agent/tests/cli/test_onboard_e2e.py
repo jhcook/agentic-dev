@@ -52,10 +52,14 @@ def mock_getpass():
 
 @pytest.fixture
 def mock_config(tmp_path):
-    with patch("agent.commands.onboard.config") as mock:
-        mock.etc_dir = tmp_path / "etc"
-        mock.load_yaml.return_value = {}
-        yield mock
+    mock_instance = MagicMock()
+    mock_instance.etc_dir = tmp_path / "etc"
+    mock_instance.load_yaml.return_value = {}
+    
+    with patch("agent.commands.onboard.config", new=mock_instance), \
+         patch("agent.core.onboard.settings.config", new=mock_instance, create=True), \
+         patch("agent.core.onboard.steps.config", new=mock_instance, create=True):
+        yield mock_instance
 
 @pytest.fixture
 def mock_ai_service():
@@ -78,7 +82,7 @@ def mock_ai_service():
 
 @pytest.fixture
 def mock_subprocess_run():
-    with patch("agent.commands.onboard.subprocess.run") as mock:
+    with patch("agent.core.onboard.steps.subprocess.run") as mock:
         yield mock
 
 @pytest.fixture
@@ -158,10 +162,14 @@ def test_onboard_dependencies_missing(test_app, mock_shutil_which):
 @pytest.fixture
 def mock_secret_manager():
     with patch("agent.commands.onboard.get_secret_manager") as mock1, \
-         patch("agent.core.secrets.get_secret_manager") as mock2:
+         patch("agent.core.secrets.get_secret_manager") as mock2, \
+         patch("agent.core.onboard.settings.get_secret_manager") as mock3, \
+         patch("agent.core.onboard.steps.get_secret_manager", create=True) as mock4:
         manager = MagicMock()
         mock1.return_value = manager
         mock2.return_value = manager
+        mock3.return_value = manager
+        mock4.return_value = manager
         
         manager.is_initialized.return_value = True
         manager.is_unlocked.return_value = True
@@ -187,8 +195,8 @@ def mock_prompt_password():
 
 @pytest.fixture
 def mock_validate_password():
-    with patch("agent.commands.secret._validate_password_strength") as mock:
-        mock.return_value = True
+    with patch("agent.core.auth.utils.validate_password_strength") as mock:
+        mock.return_value = (True, "")
         yield mock
 
 def test_onboard_happy_path(
@@ -364,7 +372,7 @@ def test_check_github_auth_not_authenticated_yes(
     mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1", "1"]
     
     # We also need to mock subprocess.Popen for the login attempt
-    with patch("agent.commands.onboard.subprocess.Popen") as mock_popen:
+    with patch("agent.core.onboard.steps.subprocess.Popen") as mock_popen:
         mock_process = MagicMock()
         mock_process.communicate.return_value = ("Logged in", "")
         mock_process.returncode = 0
