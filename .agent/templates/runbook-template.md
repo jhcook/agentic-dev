@@ -47,12 +47,17 @@ PROPOSED
 > action markers below, followed by concrete content the CLI can apply verbatim.
 > Do NOT write prose instructions — the tool applies these literally.
 >
-> - **`#### [MODIFY] <path>`** — change an existing file.
+> - **`#### [MODIFY] <path>`** — change an **existing** file.
 >   Follow with one or more `<<<SEARCH / === / >>>` blocks. The SEARCH text must be
 >   copied verbatim from the current file (use the Codebase Introspection section above).
+>   ⚠️  NEVER follow `[MODIFY]` with a full fenced code block — only `<<<SEARCH` blocks.
 >
-> - **`#### [NEW] <path>`** — create a new file.
+> - **`#### [NEW] <path>`** — create a **brand-new** file that does not yet exist.
 >   Follow with the complete file content in a fenced code block. No placeholders.
+>   ⚠️  If the file may already exist (e.g. from a prior partial run), use `[MODIFY]`
+>   with a `<<<SEARCH` block instead, so the apply is idempotent.
+>   ⚠️  Every module, class, and function MUST have a PEP-257 docstring — including
+>   inner/closure functions. The docstring gate will reject files missing them.
 >
 > - **`#### [DELETE] <path>`** — remove a file.
 >   Follow with a one-line rationale comment. No code block needed.

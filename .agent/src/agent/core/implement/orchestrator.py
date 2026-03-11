@@ -196,11 +196,18 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     blocks: List[Dict[str, str]] = []
     for match in re.finditer(r'```[\w]+:([\w/\.\-_]+)\n(.*?)```', content, re.DOTALL):
         blocks.append({"file": match.group(1).strip(), "content": match.group(2).strip()})
-    p2 = r'(?:(?:File|Modify|Create):\s*|####\s*\[(?:NEW|MODIFY|ADD)\]\s*)`?([^\n`]+?)`?\s*\n```[\w]*\n(.*?)```'
+    # [NEW] only — [MODIFY] blocks are handled exclusively by parse_search_replace_blocks.
+    # This prevents double-processing and avoids the docstring gate rejecting S/R-only steps.
+    p2 = r'(?:(?:File|Create):\s*|####\s*\[(?:NEW|ADD)\]\s*)`?([^\n`]+?)`?\s*\n```[\w]*\n(.*?)```'
     for match in re.finditer(p2, content, re.DOTALL | re.IGNORECASE):
         fp = match.group(1).strip()
+        block_content = match.group(2).strip()
+        # Skip no-op placeholder blocks (e.g. runbook uses S/R inside a [NEW] header
+        # for idempotency — the real work is done by parse_search_replace_blocks).
+        if block_content.startswith("<<<SEARCH"):
+            continue
         if not any(b["file"] == fp for b in blocks):
-            blocks.append({"file": fp, "content": match.group(2).strip()})
+            blocks.append({"file": fp, "content": block_content})
     return blocks
 
 
@@ -223,8 +230,10 @@ def parse_search_replace_blocks(content: str) -> List[Dict[str, str]]:
         List of dicts with ``'file'``, ``'search'``, ``'replace'`` keys.
     """
     blocks: List[Dict[str, str]] = []
+    # Accept [MODIFY] and [NEW] headers — [NEW] with S/R blocks inside is valid
+    # for idempotent creation (file may already exist from a prior partial run).
     file_sections = re.split(
-        r'(?:^|\n)(?:(?:File|Modify):\s*|####\s*\[MODIFY\]\s*)`?([^\n`]+?)`?\s*\n',
+        r'(?:^|\n)(?:(?:File|Modify):\s*|####\s*\[(?:MODIFY|NEW)\]\s*)`?([^\n`]+?)`?\s*\n',
         content, flags=re.IGNORECASE,
     )
     for i in range(1, len(file_sections), 2):

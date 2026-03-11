@@ -130,3 +130,75 @@ class TestOrchestrator:
         _, modified = orch.apply_chunk(chunk, step_index=1)
         assert "bad_module.py" in orch.rejected_files
         assert modified == []
+
+
+class TestParseCodeBlocksRegressions:
+    """Regression tests for INFRA-106 parser bugs."""
+
+    def test_modify_header_not_parsed_as_full_file_block(self):
+        """[MODIFY] headers must NEVER appear in parse_code_blocks output.
+
+        Regression: previously [MODIFY] leaked into parse_code_blocks because
+        the regex included MODIFY in its alternation. This caused files to be
+        sent through the docstring gate and rejected even when they had valid
+        S/R blocks.
+        """
+        content = (
+            "#### [MODIFY] src/agent/core/check/quality.py\n\n"
+            "```\n"
+            "<<<SEARCH\n"
+            "def check_journey_coverage(\n"
+            "===\n"
+            "def check_code_quality():\n"
+            "    pass\n\n"
+            "def check_journey_coverage(\n"
+            ">>>\n"
+            "```"
+        )
+        blocks = parse_code_blocks(content)
+        # [MODIFY] must not appear here — it belongs to parse_search_replace_blocks
+        assert all(b["file"] != "src/agent/core/check/quality.py" for b in blocks)
+
+    def test_new_header_with_search_replace_noop_not_parsed_as_full_file_block(self):
+        """[NEW] with a <<<SEARCH no-op block must not appear in parse_code_blocks.
+
+        Regression: when a runbook uses [NEW] with a <<<SEARCH no-op for
+        idempotency, parse_code_blocks was treating the <<<SEARCH text as the
+        file content, triggering empty-file or docstring-gate failures.
+        """
+        content = (
+            "#### [NEW] scripts/check_loc.py\n\n"
+            "```python\n"
+            "<<<SEARCH\n"
+            "MAX_LOC = 500\n"
+            "===\n"
+            "MAX_LOC = 500\n"
+            ">>>\n"
+            "```"
+        )
+        blocks = parse_code_blocks(content)
+        assert all(b["file"] != "scripts/check_loc.py" for b in blocks), (
+            "No-op <<<SEARCH block inside [NEW] must not be treated as full-file content"
+        )
+
+    def test_new_header_with_sr_blocks_parsed_by_sr_parser(self):
+        """[NEW] headers containing real S/R blocks are routed to parse_search_replace_blocks.
+
+        This is the idempotency pattern: a file that may already exist is updated
+        in-place via S/R even though the runbook marks it [NEW].
+        """
+        content = (
+            "#### [NEW] scripts/check_loc.py\n\n"
+            "```python\n"
+            "<<<SEARCH\n"
+            "MAX_LOC = 500\n"
+            "===\n"
+            "MAX_LOC = 500\n"
+            ">>>\n"
+            "```"
+        )
+        blocks = parse_search_replace_blocks(content)
+        assert len(blocks) == 1
+        assert blocks[0]["file"] == "scripts/check_loc.py"
+        assert blocks[0]["search"] == "MAX_LOC = 500"
+        assert blocks[0]["replace"] == "MAX_LOC = 500"
