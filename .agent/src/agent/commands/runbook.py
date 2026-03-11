@@ -274,7 +274,7 @@ INSTRUCTIONS:
 5. You MUST respect all Architectural Decision Records (ADRs) as codified decisions.
 6. You MUST follow the DETAILED ROLE INSTRUCTIONS for each role.
 7. You MUST use the SOURCE CODE CONTEXT to derive accurate file paths, existing patterns, and SDK usage. Do NOT invent file paths or SDK calls — use only what appears in the source tree and code outlines.
-8. You MUST copy actual function signatures from TARGETED FILE SIGNATURES into the Codebase Introspection section. Do NOT paraphrase or modify signatures.
+8. You MUST base your `<<<SEARCH` blocks exactly on the content provided in TARGETED FILE CONTENTS. Do NOT paraphrase, guess, or modify the lines you are searching for. They must exactly match the source.
 9. You MUST list all patch targets from TEST IMPACT MATRIX in the Test Impact Matrix section and specify the new patch target for each.
 10. You MUST preserve all BEHAVIORAL CONTRACTS. If a default value or invariant must change, explicitly document it in the runbook step.
 
@@ -318,7 +318,7 @@ SOURCE FILE TREE:
 SOURCE CODE OUTLINES:
 {source_code if source_code else "(No source files found)"}
 
-TARGETED FILE SIGNATURES (critical — actual signatures of files in scope):
+TARGETED FILE CONTENTS (critical — full source code of files in scope for your changes):
 {targeted_context if targeted_context else "(No targeted files identified in story)"}
 
 TEST IMPACT MATRIX (tests with patch targets for these modules — MUST be addressed):

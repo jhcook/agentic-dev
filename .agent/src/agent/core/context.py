@@ -234,7 +234,7 @@ class ContextLoader:
             dirnames[:] = sorted(
                 d for d in dirnames if d not in exclude_dirs
             )
-            rel = os.path.relpath(dirpath, src_dir)
+            rel = os.path.relpath(dirpath, config.repo_root)
             level = 0 if rel == "." else rel.count(os.sep) + 1
             indent = "  " * level
             dirname = os.path.basename(dirpath)
@@ -265,13 +265,14 @@ class ContextLoader:
             _re.MULTILINE,
         )
         
-        output = "TARGETED FILE SIGNATURES:\n"
+        output = "TARGETED FILE CONTENTS:\n"
         file_count = 0
         
         for path_str in sorted(paths):
             target_path = None
             # Resolution logic
             candidates = [
+                config.repo_root / path_str,
                 config.agent_dir / path_str,
                 config.agent_dir / "src" / path_str,
                 config.agent_dir / ".agent" / "src" / path_str,
@@ -282,40 +283,44 @@ class ContextLoader:
                     target_path = cand
                     break
             
-            if not target_path:
+            if target_path is None:
                 output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
                 continue
 
             try:
-                content = open(target_path, "r", errors="ignore").read()
-                rel_path = os.path.relpath(target_path, config.agent_dir)
+                with open(target_path, "r", errors="ignore") as f:
+                    content = f.read()
+                rel_path = os.path.relpath(target_path, config.repo_root)
                 
-                lines = []
-                # First 30 imports
-                import_lines = [
-                    l for l in content.splitlines() 
-                    if l.startswith(("import ", "from "))
-                ][:30]
-                lines.extend(import_lines)
+                # Provide the entire context inside the payload instead of just signatures
+                # Truncate slightly if absolutely massive, but most files easily fit the generous budget
+                if len(content) > 30000:
+                    lines = content.splitlines()
+                    head = "\n".join(lines[:300])
+                    tail = "\n".join(lines[-300:])
+                    content = f"{head}\n... ({len(lines) - 600} lines omitted) ...\n{tail}"
                 
-                # Signatures
-                for m in sig_pattern.finditer(content):
-                    lines.append(m.group(1))
-                
-                output += f"\n--- {rel_path} ---\n" + "\n".join(lines) + "\n"
+                output += f"\n--- {rel_path} ---\n{content}\n"
                 file_count += 1
-            except Exception:
+            except FileNotFoundError:
+                logger.warning("Targeted context file not found: %s", path_str)
+                output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
+            except Exception as e:
+                logger.error("Error reading targeted context file %s: %s", path_str, str(e))
                 output += f"\n--- {path_str} --- ERROR READING FILE\n"
 
         result = scrub_sensitive_data(output)
         logger.debug(
-            "Targeted context: %d files included, %d chars",
-            file_count, len(result),
+            "Targeted context size: %d chars, processed %d files",
+            len(result), file_count,
         )
         return result
 
     def _load_test_impact(self, story_content: str) -> str:
-        """Find tests that patch modules referenced in the story."""
+        """
+        Find tests that patch modules referenced in the story.
+        Builds a test impact matrix identifying all patch targets.
+        """
         modules = set()
         for path in _re.findall(r'([a-zA-Z0-9_/.-]+\.py)', story_content):
             dotted = path.replace('/', '.').replace('.py', '')
@@ -357,13 +362,16 @@ class ContextLoader:
 
         result = scrub_sensitive_data(impact)
         logger.debug(
-            "Test impact: %d affected files found, %d chars",
+            "Test impact count: %d affected files found, %d chars",
             test_count, len(result),
         )
         return result
 
     def _load_behavioral_contracts(self, story_content: str) -> str:
-        """Extract assertions and default parameter values from related tests."""
+        """
+        Extract assertions and default parameter values from related tests.
+        Returns behavioral contracts documenting known invariants.
+        """
         # Get module stems (e.g. 'service' from 'core/ai/service.py')
         stems = set()
         for path in _re.findall(r'([a-zA-Z0-9_-]+\.py)', story_content):
@@ -399,7 +407,7 @@ class ContextLoader:
                 continue
 
         result = scrub_sensitive_data(contracts)
-        logger.debug("Behavioral contracts: %d chars extracted", len(result))
+        logger.debug("Behavioral contract count: %d chars extracted", len(result))
         return result
 
     def _load_source_snippets(self, budget: int = 0) -> str:
@@ -451,7 +459,11 @@ class ContextLoader:
             except OSError:
                 continue
 
-            rel_path = py_file.relative_to(config.agent_dir)
+            try:
+                rel_path = py_file.relative_to(config.repo_root)
+            except ValueError:
+                # Fallback if somehow not under repo root
+                rel_path = py_file.relative_to(config.agent_dir)
             lines: list[str] = []
 
             # Imports (first 20 import lines max)

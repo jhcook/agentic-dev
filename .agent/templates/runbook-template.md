@@ -19,9 +19,9 @@ PROPOSED
 
 ## Codebase Introspection
 
-### Target File Signatures (from source)
+### Targeted File Contents (from source)
 
-(Agent: Copy actual function/class signatures from TARGETED FILE SIGNATURES context. Do NOT invent signatures.)
+(Agent: Use the full file content below to accurately construct <<<SEARCH blocks and copy relevant code. Do not invent code.)
 
 ### Test Impact Matrix
 
