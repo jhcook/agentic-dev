@@ -301,6 +301,8 @@ class ContextLoader:
                 
                 output += f"\n--- {rel_path} ---\n{content}\n"
                 file_count += 1
+            except FileNotFoundError:
+                output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
             except Exception:
                 output += f"\n--- {path_str} --- ERROR READING FILE\n"
 
