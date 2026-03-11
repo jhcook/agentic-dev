@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -35,13 +35,15 @@ As a Developer, I want descriptive, context-aware error messages when `agent imp
 
 ## Impact Analysis Summary
 
-- Components touched: `agent/core/implement/guards.py`, `agent/core/implement/orchestrator.py`
+- Components touched: `agent/core/implement/guards.py`, `agent/core/implement/orchestrator.py`, `tests/core/implement/test_guards.py`, `tests/core/implement/test_orchestrator.py`
 - Workflows affected: Runbook implementation phase.
 - Risks identified: Changes to exception routing or return types may affect existing `agent implement` unit tests which currently expect a boolean return from `apply_change_to_file`.
 
 ## Test Strategy
 
-Unit tests to ensure distinct failures result in correct, non-generic user hints in the terminal formatting.
+- **Unit Tests**: Add tests to `tests/core/implement/` simulating specific rejection paths (e.g., `FileSizeGuardViolation`, `DocstringGuardViolation`).
+- **Scenario Validation**: Assert that `[NEW]` and `[MODIFY]` blocks correctly parse size violations and docstring errors.
+- **Output Assertion**: Verify the specific string output produced by the generic catching block to ensure the correct context-aware hint is presented.
 
 ## Rollback Plan
 
