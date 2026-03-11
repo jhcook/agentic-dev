@@ -1,7 +1,7 @@
-panel:
-  engine: native
+panel:   # native | adk
+  engine: adk
   num_retries: 5
-agent:
+agent:     # anthropic | gemini | gh | ollama |openai | vertex
   provider: openai
   test_commands:
     .agent/: cd .agent/src && python -m pytest agent/ -q --tb=short
