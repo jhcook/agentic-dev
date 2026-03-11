@@ -26,7 +26,7 @@ As a developer running `agent new-runbook`, I want the generated runbook to incl
 
 ## Acceptance Criteria
 
-- [ ] **AC-1: Targeted Context**: Given a story that references files via `#### [MODIFY] path/to/file.py`, when `new-runbook` is invoked, then the AI prompt includes full function/class signatures for each referenced file (unlimited budget for targeted files).
+- [ ] **AC-1: Targeted Context**: Given a story that references files via `#### [MODIFY] path/to/file.py`, when `new-runbook` is invoked, then the AI prompt includes the full file content for each referenced file, not just signatures.
 - [ ] **AC-2: File Not Found Warning**: Given a story that references a file path that does not exist, then the targeted context includes a `FILE NOT FOUND (verify path!)` warning for that path.
 - [ ] **AC-3: Test Impact Matrix**: Given a story referencing module `agent.core.ai.service`, when `new-runbook` is invoked, then the AI prompt includes a list of all test files containing `patch("agent.core.ai.service.*")` targets, with the specific patch strings.
 - [ ] **AC-4: Behavioral Contracts**: Given a story touching a module, when `new-runbook` is invoked, then the AI prompt includes default parameter values and key assertions extracted from existing tests for that module.
@@ -58,9 +58,9 @@ As a developer running `agent new-runbook`, I want the generated runbook to incl
 ## Impact Analysis Summary
 
 **Components**: `context.py`, `runbook.py`, `runbook-template.md`
-**Files Changed**: 3
+**Files Changed**: 4
 **Blast Radius**: 🟢 Low — additive changes to context loader and runbook generation prompt
-**Risks**: Additional context could push token limits for smaller providers (mitigated by AC-3 configurable budget)
+**Risks**: Additional context could push token limits for smaller providers, which is mitigated by hardcoded truncation for large files.
 
 ## Test Strategy
 

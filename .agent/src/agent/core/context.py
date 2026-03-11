@@ -314,7 +314,10 @@ class ContextLoader:
         return result
 
     def _load_test_impact(self, story_content: str) -> str:
-        """Find tests that patch modules referenced in the story."""
+        """
+        Find tests that patch modules referenced in the story to satisfy AC-3.
+        Builds a test impact matrix identifying all patch targets.
+        """
         modules = set()
         for path in _re.findall(r'([a-zA-Z0-9_/.-]+\.py)', story_content):
             dotted = path.replace('/', '.').replace('.py', '')
@@ -362,7 +365,10 @@ class ContextLoader:
         return result
 
     def _load_behavioral_contracts(self, story_content: str) -> str:
-        """Extract assertions and default parameter values from related tests."""
+        """
+        Extract assertions and default parameter values from related tests to satisfy AC-4.
+        Returns behavioral contracts documenting known invariants.
+        """
         # Get module stems (e.g. 'service' from 'core/ai/service.py')
         stems = set()
         for path in _re.findall(r'([a-zA-Z0-9_-]+\.py)', story_content):
