@@ -18,9 +18,11 @@ import pytest
 
 from agent.core.implement.orchestrator import (
     Orchestrator,
+    detect_malformed_modify_blocks,
     parse_code_blocks,
     parse_search_replace_blocks,
     split_runbook_into_chunks,
+    validate_runbook_schema,
 )
 
 
@@ -202,3 +204,148 @@ class TestParseCodeBlocksRegressions:
         assert blocks[0]["file"] == "scripts/check_loc.py"
         assert blocks[0]["search"] == "MAX_LOC = 500"
         assert blocks[0]["replace"] == "MAX_LOC = 500"
+
+
+class TestDetectMalformedModifyBlocks:
+    """Tests for detect_malformed_modify_blocks — the silent no-op sentinel."""
+
+    def test_detects_modify_with_full_code_block_no_sr(self):
+        """Flags [MODIFY] + full code block with no <<<SEARCH as malformed.
+
+        This is the exact pattern that was previously a silent no-op:
+        parse_code_blocks excluded [MODIFY] and parse_search_replace_blocks
+        found no <<<SEARCH, so the file was transparently skipped.
+        """
+        content = (
+            "#### [MODIFY] src/agent/commands/check.py\n\n"
+            "```python\n"
+            "def some_fn():\n"
+            "    pass\n"
+            "```"
+        )
+        malformed = detect_malformed_modify_blocks(content)
+        assert "src/agent/commands/check.py" in malformed
+
+    def test_clean_modify_with_sr_block_not_flagged(self):
+        """A correctly-formatted [MODIFY] + S/R block is not flagged."""
+        content = (
+            "#### [MODIFY] src/agent/commands/check.py\n\n"
+            "```\n"
+            "<<<SEARCH\n"
+            "old code\n"
+            "===\n"
+            "new code\n"
+            ">>>\n"
+            "```"
+        )
+        malformed = detect_malformed_modify_blocks(content)
+        assert malformed == []
+
+    def test_new_block_not_flagged(self):
+        """[NEW] + full code block is valid and must never be flagged."""
+        content = (
+            "#### [NEW] scripts/check_loc.py\n\n"
+            "```python\n"
+            '"""Module docstring."""\n\n'
+            "def main():\n"
+            '    """Entry point."""\n'
+            "    pass\n"
+            "```"
+        )
+        malformed = detect_malformed_modify_blocks(content)
+        assert malformed == []
+
+    def test_empty_content_not_flagged(self):
+        """Empty string produces no false positives."""
+        assert detect_malformed_modify_blocks("") == []
+
+
+class TestValidateRunbookSchema:
+    """Tests for validate_runbook_schema — the pre-flight structural validator."""
+
+    VALID_RUNBOOK = (
+        "## Implementation Steps\n\n"
+        "### Step 1: Add something\n\n"
+        "#### [MODIFY] src/agent/commands/check.py\n\n"
+        "```\n<<<SEARCH\nold code\n===\nnew code\n>>>\n```\n\n"
+        "### Step 2: Create script\n\n"
+        "#### [NEW] scripts/check_loc.py\n\n"
+        "```python\n\"\"\"Module.\"\"\"\ndef main():\n    \"\"\"Run.\"\"\"\n    pass\n```\n\n"
+        "### Step 3: Remove old\n\n"
+        "#### [DELETE] scripts/old.py\n\n"
+        "<!-- Replaced by scripts/check_loc.py per INFRA-106 -->\n"
+    )
+
+    def test_valid_runbook_returns_no_violations(self):
+        """A correctly-formatted runbook produces zero violations."""
+        violations = validate_runbook_schema(self.VALID_RUNBOOK)
+        assert violations == [], f"Unexpected violations: {violations}"
+
+    def test_missing_implementation_steps_section(self):
+        """Runbook with no ## Implementation Steps section fails immediately."""
+        content = "## Goal Description\n\nDo something.\n"
+        violations = validate_runbook_schema(content)
+        assert any("Implementation Steps" in v for v in violations)
+
+    def test_modify_without_sr_block_is_violation(self):
+        """[MODIFY] with a full code block but no <<<SEARCH is a violation."""
+        content = (
+            "## Implementation Steps\n\n"
+            "#### [MODIFY] src/agent/core/check/quality.py\n\n"
+            "```python\n"
+            "def new_fn():\n"
+            "    pass\n"
+            "```\n"
+        )
+        violations = validate_runbook_schema(content)
+        assert any("MODIFY" in v and "quality.py" in v for v in violations)
+
+    def test_new_without_code_fence_is_violation(self):
+        """[NEW] block with no fenced code block is a violation."""
+        content = (
+            "## Implementation Steps\n\n"
+            "#### [NEW] scripts/check_loc.py\n\n"
+            "Just some prose, no code block.\n"
+        )
+        violations = validate_runbook_schema(content)
+        assert any("NEW" in v and "check_loc.py" in v for v in violations)
+
+    def test_new_with_sr_fence_is_not_a_violation(self):
+        """[NEW] + fenced <<<SEARCH block (idempotency pattern) is valid schema."""
+        content = (
+            "## Implementation Steps\n\n"
+            "#### [NEW] scripts/check_loc.py\n\n"
+            "```python\n"
+            "<<<SEARCH\n"
+            "MAX_LOC = 500\n"
+            "===\n"
+            "MAX_LOC = 500\n"
+            ">>>\n"
+            "```\n"
+        )
+        # The fence is present — schema is valid (the S/R noop is handled at parse time)
+        violations = validate_runbook_schema(content)
+        assert not any("check_loc.py" in v for v in violations)
+
+    def test_delete_without_rationale_is_violation(self):
+        """[DELETE] block with no body is a violation."""
+        content = (
+            "## Implementation Steps\n\n"
+            "#### [DELETE] scripts/old.py\n\n"
+            "#### [MODIFY] src/foo.py\n\n"
+            "```\n<<<SEARCH\nold\n===\nnew\n>>>\n```\n"
+        )
+        violations = validate_runbook_schema(content)
+        assert any("DELETE" in v and "old.py" in v for v in violations)
+
+    def test_multiple_violations_all_reported(self):
+        """All violations in a runbook are returned, not just the first."""
+        content = (
+            "## Implementation Steps\n\n"
+            "#### [MODIFY] src/a.py\n\n"
+            "```python\ndef a(): pass\n```\n"  # missing <<<SEARCH
+            "#### [NEW] scripts/b.py\n\n"
+            "Just prose.\n"  # missing code fence
+        )
+        violations = validate_runbook_schema(content)
+        assert len(violations) >= 2

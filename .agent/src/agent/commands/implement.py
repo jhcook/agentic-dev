@@ -64,12 +64,14 @@ from agent.core.implement.guards import (  # noqa: F401
 from agent.core.implement.orchestrator import (  # noqa: F401
     Orchestrator,
     build_source_context,
+    detect_malformed_modify_blocks,
     extract_modify_files,
     extract_story_id,
     parse_code_blocks,
     parse_search_replace_blocks,
     resolve_path,
     split_runbook_into_chunks,
+    validate_runbook_schema,
     _find_directories_in_repo as find_directories_in_repo,
     _find_file_in_repo as find_file_in_repo,
 )
@@ -477,7 +479,27 @@ def implement(
         )
 
     # ------------------------------------------------------------------
-    # 7. Verbatim-first: if the runbook contains explicit code blocks,
+    # 7. Schema validation — hard block before any file is touched.
+    #    A malformed runbook causes partial-apply failures that leave the
+    #    working tree in an inconsistent state. Fail fast with a full
+    #    violation list so the developer can fix the runbook first.
+    # ------------------------------------------------------------------
+    schema_violations = validate_runbook_schema(runbook_content_scrubbed)
+    if schema_violations:
+        console.print(
+            f"\n[bold red]❌ RUNBOOK SCHEMA INVALID "
+            f"— {len(schema_violations)} violation(s) found:[/bold red]"
+        )
+        for v in schema_violations:
+            console.print(f"  [red]• {v}[/red]")
+        console.print(
+            "\n[yellow]Fix the runbook then re-run 'agent implement'. "
+            "No files have been modified.[/yellow]"
+        )
+        raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------
+    # 8. Verbatim-first: if the runbook contains explicit code blocks,
     #    apply them directly — no AI call, no token cost.
     # ------------------------------------------------------------------
     _all_sr = parse_search_replace_blocks(runbook_content_scrubbed)

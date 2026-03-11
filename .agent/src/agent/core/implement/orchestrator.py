@@ -267,6 +267,119 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     return result
 
 
+def detect_malformed_modify_blocks(content: str) -> List[str]:
+    """Detect [MODIFY] headers that have a full code block but no S/R blocks.
+
+    [MODIFY] must always use <<<SEARCH/===/>>> blocks. A [MODIFY] with a full
+    code block is silently unreachable: parse_code_blocks excludes [MODIFY]
+    headers, and parse_search_replace_blocks finds no <<<SEARCH marker.
+    This function surfaces that contract violation loudly so the developer
+    knows their runbook is malformed rather than seeing a silent no-op.
+
+    Args:
+        content: Runbook or AI-generated chunk text.
+
+    Returns:
+        List of file paths where [MODIFY] + full code block exists without
+        any accompanying <<<SEARCH block.
+    """
+    malformed: List[str] = []
+    file_sections = re.split(
+        r'(?:^|\n)(?:(?:File|Modify):\s*|####\s*\[MODIFY\]\s*)`?([^\n`]+?)`?\s*\n',
+        content, flags=re.IGNORECASE,
+    )
+    for i in range(1, len(file_sections), 2):
+        filepath = file_sections[i].strip()
+        body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
+        has_sr = bool(re.search(r'<<<SEARCH', body))
+        has_full_block = bool(re.search(r'```[\w]*\n', body))
+        if has_full_block and not has_sr:
+            malformed.append(filepath)
+    return malformed
+
+
+def validate_runbook_schema(content: str) -> List[str]:
+    """Validate a runbook's implementation block structure against the format contract.
+
+    Checks every ``#### [MODIFY]``, ``#### [NEW]``, and ``#### [DELETE]``
+    block in the Implementation Steps section and returns a list of human-readable
+    violations. An empty list means the runbook is structurally valid.
+
+    Rules enforced:
+
+    - ``[MODIFY] <path>``: must have at least one ``<<<SEARCH`` block.
+      A bare fenced code block without ``<<<SEARCH`` is a contract violation.
+    - ``[NEW] <path>``: must have a fenced code block. A ``<<<SEARCH``
+      block without any code fence means the file content is missing.
+      (Note: ``[NEW]`` + ``<<<SEARCH`` inside a fence is valid for idempotency
+      and is handled by the S/R parser — it is not flagged here.)
+    - ``[DELETE] <path>``: must have a non-empty body (rationale required).
+    - The runbook must contain an ``## Implementation Steps`` section.
+
+    Args:
+        content: Full runbook markdown text.
+
+    Returns:
+        List of violation strings. Empty list means schema is valid.
+    """
+    violations: List[str] = []
+
+    # Rule 0: must have an implementation section
+    if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
+        violations.append(
+            "Missing '## Implementation Steps' section — runbook has no executable steps."
+        )
+        return violations  # No point checking individual blocks without the section
+
+    # Locate the implementation steps body
+    impl_match = re.search(
+        r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
+        re.DOTALL | re.MULTILINE,
+    )
+    body = impl_match.group(1) if impl_match else ""
+
+    # Split into individual action blocks: #### [ACTION] <path>
+    block_pattern = re.compile(
+        r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
+        re.IGNORECASE,
+    )
+    block_matches = list(block_pattern.finditer(body))
+
+    for idx, match in enumerate(block_matches):
+        action = match.group(1).upper()
+        filepath = match.group(2).strip()
+        # Block body is everything between this header and the next header (or end)
+        start = match.end()
+        end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(body)
+        block_body = body[start:end]
+
+        if action == "MODIFY":
+            has_sr = bool(re.search(r'<<<SEARCH', block_body))
+            if not has_sr:
+                violations.append(
+                    f"[MODIFY] '{filepath}': missing <<<SEARCH/===/>>> block. "
+                    f"[MODIFY] must use search/replace, never a full code block."
+                )
+
+        elif action == "NEW":
+            has_fence = bool(re.search(r'```[\w]*\n', block_body))
+            if not has_fence:
+                violations.append(
+                    f"[NEW] '{filepath}': missing fenced code block. "
+                    f"[NEW] must provide complete file content in a fenced block."
+                )
+
+        elif action == "DELETE":
+            stripped = block_body.strip()
+            if not stripped:
+                violations.append(
+                    f"[DELETE] '{filepath}': missing rationale. "
+                    f"Add a one-line comment explaining why this file is removed."
+                )
+
+    return violations
+
+
 def build_source_context(file_paths: List[str]) -> str:
     """Build a source-context string from current file contents.
 
@@ -401,6 +514,20 @@ class Orchestrator:
 
         step_loc = 0
         step_modified_files: List[str] = []
+
+        # Detect malformed runbook blocks before applying: a [MODIFY] header with
+        # a full code block but no <<<SEARCH blocks is silently unreachable.
+        # Surface this loudly so the developer knows to fix the runbook.
+        malformed = detect_malformed_modify_blocks(chunk_result)
+        for mf in malformed:
+            _console.print(
+                f"[bold yellow]⚠️  RUNBOOK FORMAT ERROR: '[MODIFY] {mf}' has a full "
+                f"code block but no <<<SEARCH blocks — this file will be SKIPPED.\n"
+                f"   Fix: replace the code block with <<<SEARCH/===/>>> blocks.[/bold yellow]"
+            )
+            logging.warning(
+                "malformed_modify_block file=%s step=%d", mf, step_index
+            )
 
         sr_blocks = parse_search_replace_blocks(chunk_result)
         sr_handled: set = set()

@@ -31,6 +31,7 @@ from agent.core.utils import (
     get_copyright_header,
 )
 from agent.core.context import context_loader
+from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.db.client import upsert_artifact
 
 logger = get_logger(__name__)
@@ -277,6 +278,13 @@ INSTRUCTIONS:
 8. You MUST base your `<<<SEARCH` blocks exactly on the content provided in TARGETED FILE CONTENTS. Do NOT paraphrase, guess, or modify the lines you are searching for. They must exactly match the source.
 9. You MUST list all patch targets from TEST IMPACT MATRIX in the Test Impact Matrix section and specify the new patch target for each.
 10. You MUST preserve all BEHAVIORAL CONTRACTS. If a default value or invariant must change, explicitly document it in the runbook step.
+11. CRITICAL — IMPLEMENTATION BLOCK FORMAT CONTRACT:
+    - `#### [MODIFY] <path>` MUST be followed by one or more `<<<SEARCH / === / >>>` blocks ONLY.
+      NEVER follow a [MODIFY] header with a fenced code block — it will be silently skipped by the parser.
+    - `#### [NEW] <path>` MUST be followed by a complete fenced code block — but ONLY if the file
+      does not already exist. If the file may already exist (partial run), use [MODIFY] + <<<SEARCH instead.
+    - All NEW Python files MUST have PEP-257 docstrings on the module, every class, every function,
+      and every inner/closure function. The docstring gate will hard-reject files missing any of these.
 
 INPUTS:
 1. User Story (Requirements)
@@ -386,6 +394,21 @@ Generate the runbook now.
     # 5. Write
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
+
+    # 5.1 Schema validation — warn immediately so the developer can iterate
+    schema_violations = validate_runbook_schema(content)
+    if schema_violations:
+        console.print(
+            f"\n[bold yellow]⚠️  RUNBOOK SCHEMA WARNINGS ({len(schema_violations)}):[/bold yellow]"
+        )
+        for v in schema_violations:
+            console.print(f"  [yellow]• {v}[/yellow]")
+        console.print(
+            "[dim]Fix the runbook before running 'agent implement'. "
+            "The implement command will refuse to apply a schema-invalid runbook.[/dim]"
+        )
+    else:
+        console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
     
     # Auto-sync
     runbook_id = f"{story_id}" # Using Story ID for Runbook ID as well, with type='runbook'
