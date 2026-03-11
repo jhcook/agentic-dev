@@ -55,7 +55,7 @@ class SelectionLog(VerticalScroll):
         if scroll_end:
             self.scroll_end(animate=False)
 
-    def add_selection(self, text: str, source: str):
+    def add_selection(self, text: str, source: str) -> None:
         """Add a new selection to the log with scrubbing."""
         scrubbed = scrub_sensitive_data(text)
         self._history.append({"text": scrubbed, "source": source})
