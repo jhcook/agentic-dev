@@ -29,10 +29,13 @@ and ensures the console and voice agents can share a common interface layer.
 
 ## Decision
 
-### 1. Module Size Ceiling
+### 1. Module Size Ceilings
 
-No Python source file in `.agent/src/` shall exceed **500 physical lines of code**
-(total lines, not logical statements). The check is strictly enforced by CI.
+No Python source file in `.agent/src/` shall exceed **1,000 physical lines of code** (total lines, not logical statements). This is a hard limit strictly enforced by CI. 
+
+Additionally, a **Warning Zone** starts at **500 physical lines of code**. Files exceeding 500 lines will generate warnings in the preflight checks, signaling that the file should be evaluated for logical "seams" to split.
+
+The target "Goldilocks Zone" for all modules is **100–300 lines**.
 
 **Exceptions:**
 - `migrations/` directories
@@ -40,9 +43,11 @@ No Python source file in `.agent/src/` shall exceed **500 physical lines of code
 
 An architectural exception record must be documented when using the nolint tag.
 
-**Rationale:** 500 LOC is large enough to contain a complete subsystem but small
-enough to be understood in a single reading session. It forces developers to
-think about decomposition naturally.
+**Rationale:** 
+Most style guides and automated linting tools suggest these thresholds:
+- The "Goldilocks" Zone (100–300 lines): Most well-architected files fall here. They are focused on a single responsibility.
+- The Warning Zone (500 lines): Many Google and Airbnb style guides suggest that at 500 lines, you should start looking for logical "seams" to split the file.
+- The Hard Limit (1,000 lines): This is often the default "error" threshold in CI/CD pipelines. Files larger than this are statistically more likely to contain bugs and are significantly harder for peer reviewers to parse.
 
 ### 2. Single Responsibility Modules
 
