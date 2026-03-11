@@ -24,6 +24,9 @@ import subprocess
 
 def match_story(
     files: Optional[str] = typer.Argument(None, help="List of changed files (space or newline separated). Defaults to staged git files."),
+    base: Optional[str] = typer.Option(
+        None, "--base", help="Base branch for comparison (e.g. main). Uses git diff origin/<base>...HEAD."
+    ),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
@@ -32,17 +35,21 @@ def match_story(
     AI-assisted story selection based on context.
     """
     if not files:
-        # Default to staged files
         try:
-            staged = subprocess.check_output(["git", "diff", "--name-only", "--cached"]).decode().strip()
-            if staged:
-                files = staged.replace("\n", " ")
-                console.print(f"[dim]Using staged files: {files}[/dim]")
+            if base:
+                cmd = ["git", "diff", "--name-only", f"origin/{base}...HEAD"]
+                console.print(f"[dim]Using diff against origin/{base}...[/dim]")
             else:
-                console.print("[red]❌ Error: No files provided and no staged changes found.[/red]")
+                cmd = ["git", "diff", "--name-only", "--cached"]
+            result = subprocess.check_output(cmd).decode().strip()
+            if result:
+                files = result.replace("\n", " ")
+                console.print(f"[dim]Changed files: {files}[/dim]")
+            else:
+                console.print("[red]❌ Error: No files provided and no changed files found.[/red]")
                 raise typer.Exit(code=1)
         except Exception as e:
-            console.print(f"[red]❌ Error detecting staged files: {e}[/red]")
+            console.print(f"[red]❌ Error detecting changed files: {e}[/red]")
             raise typer.Exit(code=1)
 
     if provider:
