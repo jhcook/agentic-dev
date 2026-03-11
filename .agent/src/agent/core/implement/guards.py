@@ -43,6 +43,18 @@ FILE_SIZE_GUARD_THRESHOLD: int = 200
 SOURCE_CONTEXT_MAX_LOC: int = 300
 SOURCE_CONTEXT_HEAD_TAIL: int = 100
 
+class ImplementGuardViolation(Exception):
+    """Base class for all implementation guard violations."""
+    pass
+
+class FileSizeGuardViolation(ImplementGuardViolation):
+    """Raised when a file change violates the size safety threshold."""
+    pass
+
+class DocstringGuardViolation(ImplementGuardViolation):
+    """Raised when a file change lacks required PEP-257 docstrings."""
+    pass
+
 _console = Console()
 
 
@@ -273,18 +285,14 @@ def apply_change_to_file(
         except Exception:
             existing_lines = 0
         if existing_lines > FILE_SIZE_GUARD_THRESHOLD:
-            _console.print(
-                f"\n[bold red]❌ Rejected full-file overwrite for {filepath} "
-                f"({existing_lines} LOC > {FILE_SIZE_GUARD_THRESHOLD} threshold).[/bold red]"
-            )
-            logging.warning(
-                "apply_change apply_mode=rejected file=%s file_loc=%d threshold=%d",
-                filepath, existing_lines, FILE_SIZE_GUARD_THRESHOLD,
-            )
             if span_ctx:
                 span_ctx.set_attribute("success", False)
                 span_ctx.end()
-            return False
+            raise FileSizeGuardViolation(
+                f"File '{filepath}' already exists and new content is {existing_lines} lines. "
+                f"Maximum allowed for full-file replace is {FILE_SIZE_GUARD_THRESHOLD} LOC. "
+                "Hint: Update runbook step to use <<<SEARCH/===/>>> blocks for incremental changes."
+            )
 
     _console.print(f"\n[bold cyan]📝 Changes for: {filepath}[/bold cyan]")
     if file_path.exists():

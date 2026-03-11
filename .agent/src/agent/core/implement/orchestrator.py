@@ -564,14 +564,25 @@ class Orchestrator:
 
             # AC-9 bug fix: initialise block_loc to 0 before each apply call
             block_loc = 0
-            success = apply_change_to_file(
-                block["file"], block["content"], self.yes,
-                legacy_apply=self.legacy_apply,
-            )
+            
+            from agent.core.implement.guards import FileSizeGuardViolation
+            try:
+                success = apply_change_to_file(
+                    block["file"], block["content"], self.yes,
+                    legacy_apply=self.legacy_apply,
+                )
+            except FileSizeGuardViolation as e:
+                success = False
+                self.rejected_files.append(block["file"])
+                _console.print(
+                    f"[bold red]❌ SIZE GUARD GATE: {block['file']} rejected. "
+                    f"{str(e)}[/bold red]"
+                )
+                
             if success:
                 block_loc = count_edit_distance(original_content, block["content"])
                 step_modified_files.append(block["file"])
-            else:
+            elif block["file"] not in self.rejected_files:
                 self.rejected_files.append(block["file"])
                 _console.print(
                     f"[bold yellow]⚠️  INCOMPLETE STEP: {block['file']} was not applied. "
@@ -596,9 +607,8 @@ class Orchestrator:
             for rf in self.rejected_files:
                 _console.print(f"  [red]• {rf}[/red]")
             _console.print(
-                "[yellow]Hint: update runbook step(s) to use "
-                "<<<SEARCH\n<exact lines>\n===\n<replacement>\n>>> blocks "
-                "then re-run `agent implement`.[/yellow]"
+                "[yellow]Hint: Review the specific rejection reasons above. You may need to add "
+                "missing docstrings or use <<<SEARCH/===/>>> blocks for large file mutations.[/yellow]"
             )
             logging.warning(
                 "implement_incomplete story=%s rejected_files=%r",
