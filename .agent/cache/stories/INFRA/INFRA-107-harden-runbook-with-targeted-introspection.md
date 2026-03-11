@@ -64,12 +64,12 @@ As a developer running `agent new-runbook`, I want the generated runbook to incl
 
 ## Test Strategy
 
-- **Unit test**: `_load_targeted_context()` returns signatures for files referenced in story content.
+- **Unit test**: `_load_targeted_context()` returns full file contents for files referenced in story content.
 - **Unit test**: `_load_targeted_context()` returns `FILE NOT FOUND` for nonexistent paths.
+- **Unit test**: `_load_targeted_context()` gracefully handles empty stories.
 - **Unit test**: `_load_test_impact()` finds `patch()` targets in test files matching story modules.
+- **Unit test**: `_load_test_impact()` gracefully returns header when tests directory is missing.
 - **Unit test**: `_load_behavioral_contracts()` extracts default values from test assertions.
-- **Unit test**: All three functions gracefully return empty strings when directories are missing.
-- **Integration test**: Generated runbook includes `## Codebase Introspection` and `## Test Impact Matrix` sections.
 
 ## Rollback Plan
 
