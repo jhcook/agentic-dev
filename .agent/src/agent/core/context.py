@@ -283,12 +283,13 @@ class ContextLoader:
                     target_path = cand
                     break
             
-            if not target_path:
+            if target_path is None:
                 output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
                 continue
 
             try:
-                content = open(target_path, "r", errors="ignore").read()
+                with open(target_path, "r", errors="ignore") as f:
+                    content = f.read()
                 rel_path = os.path.relpath(target_path, config.repo_root)
                 
                 # Provide the entire context inside the payload instead of just signatures
