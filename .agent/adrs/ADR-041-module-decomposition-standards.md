@@ -43,7 +43,7 @@ The target "Goldilocks Zone" for all modules is **100–300 lines**.
 
 An architectural exception record must be documented when using the nolint tag.
 
-**Rationale:**
+**Rationale:** 
 Most style guides and automated linting tools suggest these thresholds:
 - The "Goldilocks" Zone (100–300 lines): Most well-architected files fall here. They are focused on a single responsibility.
 - The Warning Zone (500 lines): Many Google and Airbnb style guides suggest that at 500 lines, you should start looking for logical "seams" to split the file.
