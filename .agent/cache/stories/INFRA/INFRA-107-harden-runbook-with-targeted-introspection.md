@@ -26,7 +26,7 @@ As a developer running `agent new-runbook`, I want the generated runbook to incl
 
 ## Acceptance Criteria
 
-- [ ] **AC-1: Targeted Context**: Given a story that references files via `#### [MODIFY] path/to/file.py`, when `new-runbook` is invoked, then the AI prompt includes the full file content for each referenced file, not just signatures.
+- [ ] **AC-1: Targeted Context**: Given a story that references files via `#### [MODIFY] path/to/file.py`, when `new-runbook` is invoked, then the AI prompt includes full function/class signatures for each referenced file (unlimited budget for targeted files).
 - [ ] **AC-2: File Not Found Warning**: Given a story that references a file path that does not exist, then the targeted context includes a `FILE NOT FOUND (verify path!)` warning for that path.
 - [ ] **AC-3: Test Impact Matrix**: Given a story referencing module `agent.core.ai.service`, when `new-runbook` is invoked, then the AI prompt includes a list of all test files containing `patch("agent.core.ai.service.*")` targets, with the specific patch strings.
 - [ ] **AC-4: Behavioral Contracts**: Given a story touching a module, when `new-runbook` is invoked, then the AI prompt includes default parameter values and key assertions extracted from existing tests for that module.
@@ -58,18 +58,18 @@ As a developer running `agent new-runbook`, I want the generated runbook to incl
 ## Impact Analysis Summary
 
 **Components**: `context.py`, `runbook.py`, `runbook-template.md`
-**Files Changed**: 4
+**Files Changed**: 3
 **Blast Radius**: 🟢 Low — additive changes to context loader and runbook generation prompt
-**Risks**: Additional context could push token limits for smaller providers, which is mitigated by hardcoded truncation for large files.
+**Risks**: Additional context could push token limits for smaller providers (mitigated by AC-3 configurable budget)
 
 ## Test Strategy
 
-- **Unit test**: `_load_targeted_context()` returns full file contents for files referenced in story content.
+- **Unit test**: `_load_targeted_context()` returns signatures for files referenced in story content.
 - **Unit test**: `_load_targeted_context()` returns `FILE NOT FOUND` for nonexistent paths.
-- **Unit test**: `_load_targeted_context()` gracefully handles empty stories.
 - **Unit test**: `_load_test_impact()` finds `patch()` targets in test files matching story modules.
-- **Unit test**: `_load_test_impact()` gracefully returns header when tests directory is missing.
 - **Unit test**: `_load_behavioral_contracts()` extracts default values from test assertions.
+- **Unit test**: All three functions gracefully return empty strings when directories are missing.
+- **Integration test**: Generated runbook includes `## Codebase Introspection` and `## Test Impact Matrix` sections.
 
 ## Rollback Plan
 
