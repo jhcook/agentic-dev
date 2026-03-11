@@ -50,6 +50,17 @@ agent preflight --story INFRA-001
 agent commit
 ```
 
+### Code Quality
+
+We enforce a 500 LOC ceiling per file and circular dependency checks.
+To run locally:
+```bash
+agent preflight --gate quality
+# OR
+python3 scripts/check_loc.py
+python3 scripts/check_imports.py
+```
+
 ## Core Workflows
 
 | Command | Description |

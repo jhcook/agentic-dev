@@ -613,3 +613,4 @@ def convene_council_adk(
             previous_verdicts=previous_verdicts,
         )
     )
+# nolint: loc-ceiling

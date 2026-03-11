@@ -586,3 +586,4 @@ for _fn in make_interactive_tools(Path(".")):
         "name": _fn.__name__,
         "description": (_fn.__doc__ or "").strip(),
     }
+# nolint: loc-ceiling

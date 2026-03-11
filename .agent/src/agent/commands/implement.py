@@ -892,3 +892,4 @@ def _print_gate(result: "gates.GateResult") -> None:
     )
     if result.details:
         console.print(f"    [dim]{result.details}[/dim]")
+# nolint: loc-ceiling

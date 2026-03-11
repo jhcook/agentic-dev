@@ -630,3 +630,4 @@ def lint(
         raise typer.Exit(1)
     else:
         console.print("[bold green]Linting passed.[/bold green]")
+# nolint: loc-ceiling

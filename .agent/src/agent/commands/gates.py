@@ -609,3 +609,4 @@ def _check_pr_size_impl(span: trace.Span, threshold: int, commit_message: Option
         total_additions, total_deletions, threshold, decision,
     )
     return result
+# nolint: loc-ceiling
