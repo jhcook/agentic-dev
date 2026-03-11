@@ -14,20 +14,39 @@
 
 from typing import Protocol, runtime_checkable, AsyncGenerator, Optional, List, Dict, Any
 
-class AIError(Exception):
+class AIProviderError(Exception):
     """Base exception for all AI provider errors."""
+    def __init__(self, message: str, provider: Optional[str] = None, raw_response: Optional[Any] = None, original_exception: Optional[Exception] = None):
+        self.message = message
+        self.provider = provider
+        self.raw_response = raw_response
+        self.original_exception = original_exception
+        super().__init__(message)
+
+class AIError(AIProviderError):
+    """Deprecated: Base exception for all AI provider errors (use AIProviderError)."""
     pass
 
-class AIConnectionError(AIError):
+class AIConnectionError(AIProviderError):
     """Raised when there is a network or connectivity issue with the provider."""
     pass
 
-class AIRateLimitError(AIError):
+class AIRateLimitError(AIProviderError):
     """Raised when the provider rate limits the request."""
+    def __init__(self, message: str, retry_after: Optional[int] = None, **kwargs: Any):
+        super().__init__(message, **kwargs)
+        self.retry_after = retry_after
+
+class AIConfigurationError(AIProviderError):
+    """Raised when provider configuration is missing or invalid."""
     pass
 
-class AIConfigurationError(AIError):
-    """Raised when provider configuration is missing or invalid."""
+class AIAuthenticationError(AIProviderError):
+    """Raised when authentication with the provider fails."""
+    pass
+
+class AIInvalidRequestError(AIProviderError):
+    """Raised when the request provided is invalid (e.g. malformed prompt)."""
     pass
 
 @runtime_checkable
