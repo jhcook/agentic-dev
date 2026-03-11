@@ -114,9 +114,9 @@ def preflight(
             from agent.sync.notebooklm import ensure_notebooklm_sync
             from rich.status import Status
             console.print("[dim]Synchronizing NotebookLM Context...[/dim]")
-            with Status("Synchronizing NotebookLM Context...", console=console) as _sync_status:
+            with Status("[dim]Starting sync...[/dim]", console=console) as _sync_status:
                 def _update_notebooklm_status_2(msg: str):
-                    _sync_status.update(f"Synchronizing NotebookLM Context... [dim]{msg}[/dim]")
+                    _sync_status.update(f"  [dim]{msg}[/dim]")
                     # For non-interactive/piped environments (like agent console)
                     if not console.is_terminal:
                         console.print(f"  [dim]• {msg}[/dim]")
