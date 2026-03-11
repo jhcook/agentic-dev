@@ -96,7 +96,7 @@ def test_ensure_gitignore_does_not_duplicate(tmp_path: Path):
 @patch("agent.commands.onboard.typer.confirm", return_value=False)
 @patch("os.chmod")
 @patch("getpass.getpass")
-@patch("agent.core.auth.utils.validate_password_strength", return_value=(True, ""))
+@patch("agent.commands.secret._validate_password_strength", return_value=True)
 def test_configure_api_keys_creates_new(mock_validate, mock_getpass, mock_chmod, mock_confirm, tmp_path: Path, monkeypatch):
     """Tests creating a new secret store with user input."""
     monkeypatch.chdir(tmp_path)

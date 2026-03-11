@@ -52,13 +52,10 @@ def mock_getpass():
 
 @pytest.fixture
 def mock_config(tmp_path):
-    with patch("agent.commands.onboard.config") as mock1, \
-         patch("agent.core.onboard.settings.config") as mock2:
-        mock1.etc_dir = tmp_path / "etc"
-        mock2.etc_dir = tmp_path / "etc"
-        mock1.load_yaml.return_value = {}
-        mock2.load_yaml.return_value = {}
-        yield mock2
+    with patch("agent.commands.onboard.config") as mock:
+        mock.etc_dir = tmp_path / "etc"
+        mock.load_yaml.return_value = {}
+        yield mock
 
 @pytest.fixture
 def mock_ai_service():
@@ -81,7 +78,7 @@ def mock_ai_service():
 
 @pytest.fixture
 def mock_subprocess_run():
-    with patch("subprocess.run") as mock:
+    with patch("agent.commands.onboard.subprocess.run") as mock:
         yield mock
 
 @pytest.fixture
@@ -161,12 +158,10 @@ def test_onboard_dependencies_missing(test_app, mock_shutil_which):
 @pytest.fixture
 def mock_secret_manager():
     with patch("agent.commands.onboard.get_secret_manager") as mock1, \
-         patch("agent.core.secrets.get_secret_manager") as mock2, \
-         patch("agent.core.onboard.settings.get_secret_manager") as mock3:
+         patch("agent.core.secrets.get_secret_manager") as mock2:
         manager = MagicMock()
         mock1.return_value = manager
         mock2.return_value = manager
-        mock3.return_value = manager
         
         manager.is_initialized.return_value = True
         manager.is_unlocked.return_value = True
@@ -186,13 +181,13 @@ def mock_env():
 
 @pytest.fixture
 def mock_prompt_password():
-    with patch("agent.core.secrets._prompt_password", create=True) as mock:
+    with patch("agent.commands.secret._prompt_password") as mock:
         mock.return_value = "Secret123!"
         yield mock
 
 @pytest.fixture
 def mock_validate_password():
-    with patch("agent.core.secrets._validate_password_strength", create=True) as mock:
+    with patch("agent.commands.secret._validate_password_strength") as mock:
         mock.return_value = True
         yield mock
 
@@ -227,8 +222,6 @@ def test_onboard_happy_path(
         "2",            # Select Gemini
         "1",            # Select Model (1st in list)
         "1",            # Select Panel Engine (native)
-        "No",           # Extra MCP input/other confirmation if prompted
-        "No",
     ]
 
     # Ensure get_value returns None so it doesn't think provider is configured
@@ -285,9 +278,10 @@ def test_onboard_skip_keys(
     mock_shutil_which.return_value = "/bin/tool"
     
     # User hits enter (empty) for all keys (3 keys)
-    # User inputs for optional keys
-    # 3 Keys (skip -> enter), Provider 4 (gh), Model 1 (skip default=1), Panel Engine 1
-    mock_user_input.side_effect = ["", "", "", "4", "1", "1", "1"]
+    # Select Provider (4. gh)
+    # Select Model (enter to skip)
+    # Select Panel Engine (1. native)
+    mock_user_input.side_effect = ["", "", "", "4", "", "1"]
     
     # Ensure get_value returns None
     mock_config.get_value.return_value = None
@@ -329,8 +323,8 @@ def test_check_github_auth_authenticated(
     mock_secret_manager.has_secret.return_value = True
 
     # Standard inputs
-    # 3 Keys (skip), Provider 4 (gh), Model 1, Panel 1
-    mock_user_input.side_effect = ["", "", "", "4", "1", "1", "1"]
+    # 3 Keys (skip), Provider 1, Model 1
+    mock_user_input.side_effect = ["", "", "", "1", "1"]
     
     with patch("agent.commands.onboard.typer.confirm", return_value=False):
         result = mock_runner.invoke(test_app, [])
@@ -361,16 +355,16 @@ def test_check_github_auth_not_authenticated_yes(
     mock_subprocess_run.return_value.returncode = 1
     
     # Standard inputs + YES to login
-    # 3 Keys (skip), Provider 1, Model 1, Panel 1
+    # 3 Keys (skip), Provider 1, Model 1
     # Note: explicit confirm mock handles the "Yes" to login,
     # so we don't need input for that?
     # Typer confirm usually uses stdin? Or uses typer.confirm?
     # We patch typer.confirm below.
     # So we just need the standard flow inputs.
-    mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1", "1", "1"]
+    mock_user_input.side_effect = ["", "", "", "dummy_token", "1", "1", "1"]
     
     # We also need to mock subprocess.Popen for the login attempt
-    with patch("subprocess.Popen") as mock_popen:
+    with patch("agent.commands.onboard.subprocess.Popen") as mock_popen:
         mock_process = MagicMock()
         mock_process.communicate.return_value = ("Logged in", "")
         mock_process.returncode = 0
@@ -439,10 +433,10 @@ def test_verification_uses_configured_provider(
         mock_inst.complete.return_value = "Hello World"
         mock_cls_local.return_value = mock_inst
 
-        # Inputs: 3 keys (skipping), Select Provider 2 (Gemini), Select Model 1, Select Panel 1
+        # Inputs: 3 keys (skipping), Select Provider 2 (Gemini), Select Model 1
         # BUT since we skip provider selection, inputs for provider/model selection 
         # are actually skipped if we match the "No" to reconfigure.
-        mock_user_input.side_effect = ["", "", "", "2", "1", "1", "1"]
+        mock_user_input.side_effect = ["", "", "", "2", "1"]
         
         # Patch confirm to return False (No to reconfigure)
         with patch("agent.commands.onboard.typer.confirm", return_value=False):
@@ -504,8 +498,8 @@ def test_onboard_migration(
         # Note regarding confirm: 
         # The code uses `typer.confirm`. We need to patch it to say Yes.
         
-        # Anthropic skip, Provider 4 (gh), Model 1, Panel Engine 1 + padding
-        mock_user_input.side_effect = ["", "4", "1", "1", "1"]
+        # Anthropic skip, Provider 1, Model 1, Panel Engine 1
+        mock_user_input.side_effect = ["", "1", "1", "1"]
         
         def confirm_side_effect(text, *args, **kwargs):
             if "Vertex" in text:
