@@ -31,7 +31,7 @@ and ensures the console and voice agents can share a common interface layer.
 
 ### 1. Module Size Ceilings
 
-No Python source file in `.agent/src/` shall exceed **1,000 physical lines of code** (total lines, not logical statements). This is a hard limit strictly enforced by CI. 
+No Python source file in `.agent/src/` shall exceed **1,000 physical lines of code** (total lines, not logical statements). This is a hard limit strictly enforced by CI.
 
 Additionally, a **Warning Zone** starts at **500 physical lines of code**. Files exceeding 500 lines will generate warnings in the preflight checks, signaling that the file should be evaluated for logical "seams" to split.
 
@@ -185,8 +185,8 @@ All new modules created during decomposition must include:
 - Existing documentation references become stale (addressed by INFRA-099 AC-10)
 
 ### Risks
-- Over-decomposition could lead to too many tiny files — the 500 LOC ceiling is a
-  maximum, not a target. Modules should be as large as their responsibility requires.
+- Over-decomposition could lead to too many tiny files — the 1000 LOC ceiling is a
+maximum, not a target. Modules should be as large as their responsibility requires.
 
 ## Related
 

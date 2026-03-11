@@ -1,8 +1,8 @@
 panel:   # native | adk
   engine: adk
   num_retries: 5
-agent:     # anthropic | gemini | gh | ollama |openai | vertex
-  provider: openai
+agent:     # anthropic | gemini | gh | ollama | openai | vertex
+  provider: vertex
   test_commands:
     .agent/: cd .agent/src && python -m pytest agent/ -q --tb=short
   models:

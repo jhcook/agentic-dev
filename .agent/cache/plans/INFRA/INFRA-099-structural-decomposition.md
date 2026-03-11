@@ -71,8 +71,8 @@ INFRA-111 ──> INFRA-112 ──> INFRA-113 ──> INFRA-114 ──> INFRA-11
 
 After all above:
   └── INFRA-106 (LOC enforcement script)
-        └── INFRA-104 (Protocol Foundation and Exception Hierarchy)
-       └── INFRA-108 (Final Protocol Refactor)
+      └── INFRA-104 (Protocol Foundation and Exception Hierarchy)
+      └── INFRA-108 (Final Protocol Refactor)
 ```
 
 ## Copyright
