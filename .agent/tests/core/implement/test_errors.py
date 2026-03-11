@@ -16,7 +16,6 @@
 
 import pytest
 from agent.core.implement.guards import (
-    check_file_size_guard,
     FileSizeGuardViolation,
     FILE_SIZE_GUARD_THRESHOLD,
     apply_change_to_file
@@ -25,7 +24,7 @@ from agent.core.implement.guards import (
 def test_file_size_guard_violation(tmp_path):
     """Verify that exceeding the LOC threshold raises FileSizeGuardViolation with a hint."""
     target_file = tmp_path / "large_file.py"
-    target_file.write_text("existing content\n" * 5)
+    target_file.write_text("existing content\n" * (FILE_SIZE_GUARD_THRESHOLD + 2))
     
     # Create content exceeding threshold
     large_content = "\n".join(["print('test')"] * (FILE_SIZE_GUARD_THRESHOLD + 1))
