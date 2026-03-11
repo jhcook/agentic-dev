@@ -32,6 +32,7 @@ def test_load_targeted_context_happy_path(loader: ContextLoader, tmp_path: Path)
     """Given a story with a [MODIFY] file annotation, _load_targeted_context returns actual signatures."""
     with patch("agent.core.context.config") as mock_config:
         mock_config.agent_dir = tmp_path
+        mock_config.repo_root = tmp_path
 
         # Create a dummy file at the canonical src/ path
         src_dir = tmp_path / "src" / "core" / "ai"
@@ -42,7 +43,7 @@ def test_load_targeted_context_happy_path(loader: ContextLoader, tmp_path: Path)
         story = "#### [MODIFY] core/ai/service.py"
         result = loader._load_targeted_context(story)
 
-        assert "TARGETED FILE SIGNATURES" in result
+        assert "TARGETED FILE CONTENTS" in result
         assert "core/ai/service.py" in result
         assert "def my_func()" in result
         assert "import os" in result
@@ -52,6 +53,7 @@ def test_load_targeted_context_file_not_found(loader: ContextLoader, tmp_path: P
     """Given a story referencing a nonexistent file, _load_targeted_context emits FILE NOT FOUND."""
     with patch("agent.core.context.config") as mock_config:
         mock_config.agent_dir = tmp_path
+        mock_config.repo_root = tmp_path
         story = "#### [MODIFY] non_existent.py"
         result = loader._load_targeted_context(story)
         assert "FILE NOT FOUND" in result
@@ -60,7 +62,7 @@ def test_load_targeted_context_file_not_found(loader: ContextLoader, tmp_path: P
 def test_load_targeted_context_empty_story(loader: ContextLoader) -> None:
     """Given empty story content, _load_targeted_context returns only the header."""
     result = loader._load_targeted_context("")
-    assert "TARGETED FILE SIGNATURES" in result
+    assert "TARGETED FILE CONTENTS" in result
     # Should only contain header if no matches
 
 

@@ -21,7 +21,7 @@ PROPOSED
 
 ### Target File Signatures (from source)
 
-(Agent: Copy actual function/class signatures from TARGETED FILE SIGNATURES context. Do NOT invent signatures.)
+(Agent: Copy actual function/class signatures from TARGETED FILE CONTENTS context. Do NOT invent signatures.)
 
 ### Test Impact Matrix
 

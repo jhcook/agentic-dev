@@ -234,7 +234,7 @@ class ContextLoader:
             dirnames[:] = sorted(
                 d for d in dirnames if d not in exclude_dirs
             )
-            rel = os.path.relpath(dirpath, src_dir)
+            rel = os.path.relpath(dirpath, config.repo_root)
             level = 0 if rel == "." else rel.count(os.sep) + 1
             indent = "  " * level
             dirname = os.path.basename(dirpath)
@@ -265,13 +265,14 @@ class ContextLoader:
             _re.MULTILINE,
         )
         
-        output = "TARGETED FILE SIGNATURES:\n"
+        output = "TARGETED FILE CONTENTS:\n"
         file_count = 0
         
         for path_str in sorted(paths):
             target_path = None
             # Resolution logic
             candidates = [
+                config.repo_root / path_str,
                 config.agent_dir / path_str,
                 config.agent_dir / "src" / path_str,
                 config.agent_dir / ".agent" / "src" / path_str,
@@ -288,21 +289,17 @@ class ContextLoader:
 
             try:
                 content = open(target_path, "r", errors="ignore").read()
-                rel_path = os.path.relpath(target_path, config.agent_dir)
+                rel_path = os.path.relpath(target_path, config.repo_root)
                 
-                lines = []
-                # First 30 imports
-                import_lines = [
-                    l for l in content.splitlines() 
-                    if l.startswith(("import ", "from "))
-                ][:30]
-                lines.extend(import_lines)
+                # Provide the entire context inside the payload instead of just signatures
+                # Truncate slightly if absolutely massive, but most files easily fit the generous budget
+                if len(content) > 30000:
+                    lines = content.splitlines()
+                    head = "\n".join(lines[:300])
+                    tail = "\n".join(lines[-300:])
+                    content = f"{head}\n... ({len(lines) - 600} lines omitted) ...\n{tail}"
                 
-                # Signatures
-                for m in sig_pattern.finditer(content):
-                    lines.append(m.group(1))
-                
-                output += f"\n--- {rel_path} ---\n" + "\n".join(lines) + "\n"
+                output += f"\n--- {rel_path} ---\n{content}\n"
                 file_count += 1
             except Exception:
                 output += f"\n--- {path_str} --- ERROR READING FILE\n"
@@ -451,7 +448,11 @@ class ContextLoader:
             except OSError:
                 continue
 
-            rel_path = py_file.relative_to(config.agent_dir)
+            try:
+                rel_path = py_file.relative_to(config.repo_root)
+            except ValueError:
+                # Fallback if somehow not under repo root
+                rel_path = py_file.relative_to(config.agent_dir)
             lines: list[str] = []
 
             # Imports (first 20 import lines max)
