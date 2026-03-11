@@ -1,0 +1,9 @@
+{
+  "SPLIT_REQUEST": true,
+  "reason": "Refactoring the central TUI application scaffold to under 500 LOC involves migrating extensive UI logic and event handling to sub-modules, which exceeds the 400-line modification threshold.",
+  "suggestions": [
+    "INFRA-114-A: Migrate Prompt and history logic from app.py to tui/prompts.py",
+    "INFRA-114-B: Migrate Chat orchestration and message processing to tui/chat.py",
+    "INFRA-114-C: Final refactor of app.py into a pure UI scaffold and layout definition"
+  ]
+}
