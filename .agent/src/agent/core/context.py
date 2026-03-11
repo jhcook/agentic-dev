@@ -316,7 +316,7 @@ class ContextLoader:
 
     def _load_test_impact(self, story_content: str) -> str:
         """
-        Find tests that patch modules referenced in the story to satisfy AC-3.
+        Find tests that patch modules referenced in the story.
         Builds a test impact matrix identifying all patch targets.
         """
         modules = set()
@@ -367,7 +367,7 @@ class ContextLoader:
 
     def _load_behavioral_contracts(self, story_content: str) -> str:
         """
-        Extract assertions and default parameter values from related tests to satisfy AC-4.
+        Extract assertions and default parameter values from related tests.
         Returns behavioral contracts documenting known invariants.
         """
         # Get module stems (e.g. 'service' from 'core/ai/service.py')

@@ -34,14 +34,14 @@ As a **DevOps Engineer**, I want **the AI to receive full file content and robus
 
 ## Impact Analysis Summary
 
-**Components touched**: `context.py`, `runbook-template.md`, `runbook.py` (indirectly context), `test_infra_107.py` (comments).
-**Files Changed**: 3
+**Components touched**: `context.py`, `runbook-template.md`, `runbook.py`, `test_infra_107.py`.
+**Files Changed**: 4
 **Blast Radius**: Low — additive changes to context loader.
 **Risks identified**: Potential to exceed LLM context window limits if files are exceptionally large.
 
 ## Test Strategy
 
-- **Unit Testing**: Tests updated in `test_infra_107.py`.
+- **Unit Testing**: Tests updated in `test_infra_107.py` including happy paths, file-not-found error cases, and a new edge case test assuring truncation for files >30k characters.
 
 ## Rollback Plan
 

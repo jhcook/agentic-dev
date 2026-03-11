@@ -109,3 +109,20 @@ def test_load_behavioral_contracts_extracts_defaults(loader: ContextLoader, tmp_
         assert "BEHAVIORAL CONTRACTS" in result
         assert "assert auto_fallback == True" in result
         assert "default_val=10" in result
+
+
+def test_load_targeted_context_truncates_large_files(loader: ContextLoader, tmp_path: Path) -> None:
+    """Given a file larger than 30k characters, it truncates the middle."""
+    with patch("agent.core.context.config") as mock_config:
+        mock_config.agent_dir = tmp_path
+        mock_config.repo_root = tmp_path
+
+        src_dir = tmp_path / "src" / "core"
+        src_dir.mkdir(parents=True)
+        test_file = src_dir / "large.py"
+        test_file.write_text("A\\n" * 31000)
+
+        story = "#### [MODIFY] core/large.py"
+        result = loader._load_targeted_context(story)
+
+        assert "lines omitted) ..." in result
