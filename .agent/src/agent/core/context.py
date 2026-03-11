@@ -303,8 +303,10 @@ class ContextLoader:
                 output += f"\n--- {rel_path} ---\n{content}\n"
                 file_count += 1
             except FileNotFoundError:
+                logger.warning("Targeted context file not found: %s", path_str)
                 output += f"\n--- {path_str} --- FILE NOT FOUND (verify path!)\n"
-            except Exception:
+            except Exception as e:
+                logger.error("Error reading targeted context file %s: %s", path_str, str(e))
                 output += f"\n--- {path_str} --- ERROR READING FILE\n"
 
         result = scrub_sensitive_data(output)
