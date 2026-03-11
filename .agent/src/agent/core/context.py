@@ -306,8 +306,8 @@ class ContextLoader:
 
         result = scrub_sensitive_data(output)
         logger.debug(
-            "Targeted context: %d files included, %d chars",
-            file_count, len(result),
+            "Targeted context size: %d chars, processed %d files",
+            len(result), file_count,
         )
         return result
 
