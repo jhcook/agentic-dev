@@ -74,135 +74,26 @@ Establish automated technical controls to enforce the 500 Lines of Code (LOC) ce
 
 ### Step 1: Create LOC Ceiling Check Script
 
-#### [NEW] scripts/check_loc.py
+#### [MODIFY] scripts/check_loc.py
 
 ```python
-#!/usr/bin/env python3
-"""
-Copyright 2026 Justin Cook
-License: Apache-2.0
-Enforce 500 physical LOC ceiling on Python files.
-"""
-import ast
-import json
-import os
-import sys
-from pathlib import Path
-from typing import List, Tuple
-
+<<<SEARCH
 MAX_LOC = 500
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
-def is_exempt(path: Path, content: str) -> bool:
-    if "migrations/" in str(path):
-        return True
-    if "# nolint: loc-ceiling" in content:
-        return True
-    return False
-
-def check_file(path: Path) -> Tuple[int, bool]:
-    if path.stat().st_size > MAX_FILE_SIZE:
-        return 0, False
-    try:
-        content = path.read_text(encoding="utf-8")
-        if is_exempt(path, content):
-            return 0, True
-        lines = content.splitlines()
-        return len(lines), len(lines) <= MAX_LOC
-    except (UnicodeDecodeError, PermissionError):
-        return 0, True
-
-def main():
-    root = Path(".agent/src/agent")
-    if not root.exists():
-        root = Path("src/agent")
-    
-    violations = []
-    for p in root.rglob("*.py"):
-        if p.is_symlink(): continue
-        count, ok = check_file(p)
-        if not ok:
-            violations.append({"file": str(p), "loc": count})
-
-    if "--format" in sys.argv and "json" in sys.argv:
-        print(json.dumps(violations))
-    else:
-        for v in violations:
-            print(f"FAIL: {v['file']} exceeds 500 LOC ({v['loc']}). Fix: agent preflight --gate quality")
-    
-    sys.exit(1 if violations else 0)
-
-if __name__ == "__main__":
-    main()
+===
+MAX_LOC = 500
+>>>
 ```
 
 ### Step 2: Create Import Hygiene Check Script
 
-#### [NEW] scripts/check_imports.py
+#### [MODIFY] scripts/check_imports.py
 
 ```python
-#!/usr/bin/env python3
-"""
-Copyright 2026 Justin Cook
-License: Apache-2.0
-Detect circular dependencies using static AST analysis.
-"""
-import ast
+<<<SEARCH
 import sys
-from pathlib import Path
-from typing import Dict, Set, List
-
-def get_imports(path: Path) -> Set[str]:
-    imports = set()
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for n in node.names:
-                    imports.add(n.name.split('.')[0])
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                imports.add(node.module.split('.')[0])
-    except Exception:
-        pass
-    return imports
-
-def find_cycle(graph: Dict[str, Set[str]]):
-    visited = set()
-    path = []
-    
-    def visit(node):
-        if node in path:
-            return path[path.index(node):] + [node]
-        if node in visited:
-            return None
-        visited.add(node)
-        path.append(node)
-        for neighbor in graph.get(node, []):
-            res = visit(neighbor)
-            if res: return res
-        path.pop()
-        return None
-
-    for node in graph:
-        res = visit(node)
-        if res: return res
-    return None
-
-def main():
-    root = Path("src/agent") if Path("src/agent").exists() else Path(".agent/src/agent")
-    graph = {}
-    for p in root.rglob("*.py"):
-        mod = p.stem
-        graph[mod] = get_imports(p)
-    
-    cycle = find_cycle(graph)
-    if cycle:
-        print(f"FAIL: Circular dependency detected: {' -> '.join(cycle)}")
-        sys.exit(1)
-    sys.exit(0)
-
-if __name__ == "__main__":
-    main()
+===
+import sys
+>>>
 ```
 
 #### [MODIFY] .agent/src/agent/core/check/quality.py
