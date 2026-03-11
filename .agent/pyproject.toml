@@ -3,7 +3,7 @@ name = "backend"
 version = "0.1.0"
 description = "Backend implementation"
 authors = [{ name = "Justin Cook", email = "jhcook@secnix.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<=3.13"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
@@ -56,7 +56,7 @@ voice = [
     "google-cloud-speech>=2.0.0",
     "google-cloud-texttospeech>=2.0.0",
     "numpy>=1.26.0,<2.0.0 ; python_version < '3.13'",
-    "numpy>=1.26.0,<2.0.0 ; python_version >= '3.13'",
+    "numpy>=2.1.0 ; python_version >= '3.13'",
     "soundfile>=0.12.1",
     "scipy>=1.11.0",
     
