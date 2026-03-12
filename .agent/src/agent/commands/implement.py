@@ -293,11 +293,11 @@ def get_current_branch() -> str:
 
 
 def is_git_dirty() -> bool:
-    """Return True when there are uncommitted changes in the working tree."""
+    """Return True when there are uncommitted (tracked) changes in the working tree."""
     try:
         return bool(
             subprocess.check_output(
-                ["git", "status", "--porcelain"],
+                ["git", "status", "--porcelain", "--untracked-files=no"],
                 stderr=subprocess.DEVNULL,
             ).strip()
         )
@@ -348,6 +348,7 @@ def implement(
     model: Optional[str] = typer.Option(None, "--model", help="Override AI model"),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force specific AI provider"),
     thorough: bool = typer.Option(False, "--thorough", help="Use thorough governance context"),
+    allow_dirty: bool = typer.Option(False, "--allow-dirty", help="Allow running with uncommitted changes"),
 ) -> None:
     """Implement a story from its accepted runbook.
 
@@ -360,10 +361,10 @@ def implement(
     # ------------------------------------------------------------------
     # 0. Git hygiene guards (tested by test_implement_branching.py)
     # ------------------------------------------------------------------
-    if is_git_dirty():
+    if not allow_dirty and is_git_dirty():
         console.print(
             "[bold red]❌ Uncommitted changes detected. "
-            "Commit or stash before implementing.[/bold red]"
+            "Commit or stash before implementing, or use --allow-dirty.[/bold red]"
         )
         raise typer.Exit(code=1)
 
