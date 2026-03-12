@@ -18,6 +18,8 @@ import pytest
 from unittest.mock import patch
 
 from agent.core.context import ContextLoader
+from agent.core.context_source import load_source_tree, load_source_snippets
+import asyncio
 
 
 @pytest.fixture
@@ -73,45 +75,40 @@ def no_src(tmp_path):
 
 class TestLoadSourceTree:
     def test_returns_tree_with_real_files(self, mock_src_tree):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            tree = loader._load_source_tree()
+            tree = load_source_tree()
 
         assert "config.py" in tree
         assert "service.py" in tree
         assert "SOURCE FILE TREE:" in tree
 
     def test_excludes_pycache(self, mock_src_tree):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            tree = loader._load_source_tree()
+            tree = load_source_tree()
 
         assert "__pycache__" not in tree
         assert ".pyc" not in tree
 
     def test_excludes_env_files(self, mock_src_tree):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            tree = loader._load_source_tree()
+            tree = load_source_tree()
 
         assert ".env" not in tree
         assert "SECRET_KEY" not in tree
 
     def test_returns_empty_when_no_src(self, no_src):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = no_src
-            assert loader._load_source_tree() == ""
+            assert load_source_tree() == ""
 
     def test_returns_tree_for_empty_src(self, empty_src):
         """Edge case: src/ exists but has no .py files (@QA advice)."""
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = empty_src
-            tree = loader._load_source_tree()
+            tree = load_source_tree()
 
         # Should still produce a tree header with the directory name
         assert "SOURCE FILE TREE:" in tree
@@ -120,10 +117,9 @@ class TestLoadSourceTree:
 
 class TestLoadSourceSnippets:
     def test_extracts_class_and_function_signatures(self, mock_src_tree):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            snippets = loader._load_source_snippets()
+            snippets = load_source_snippets()
 
         assert "class Config" in snippets
         assert "class AIService" in snippets
@@ -131,10 +127,9 @@ class TestLoadSourceSnippets:
         assert "from google import genai" in snippets
 
     def test_respects_budget(self, mock_src_tree):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            snippets = loader._load_source_snippets(budget=100)
+            snippets = load_source_snippets(budget=100)
 
         # Should be truncated
         assert "[...truncated...]" in snippets
@@ -142,25 +137,22 @@ class TestLoadSourceSnippets:
     def test_respects_env_var_budget(self, mock_src_tree, monkeypatch):
         """Verify AGENT_SOURCE_CONTEXT_CHAR_LIMIT env var is wired through (@Architect advice)."""
         monkeypatch.setenv("AGENT_SOURCE_CONTEXT_CHAR_LIMIT", "100")
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = mock_src_tree
-            snippets = loader._load_source_snippets()  # budget=0 -> reads env var
+            snippets = load_source_snippets()  # budget=0 -> reads env var
 
         assert "[...truncated...]" in snippets
 
     def test_returns_empty_when_no_src(self, no_src):
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = no_src
-            assert loader._load_source_snippets() == ""
+            assert load_source_snippets() == ""
 
     def test_empty_src_returns_header_only(self, empty_src):
         """Edge case: src/ exists but has no .py files (@QA advice)."""
-        loader = ContextLoader()
-        with patch("agent.core.context.config") as mock_config:
+        with patch("agent.core.context_source.config") as mock_config:
             mock_config.agent_dir = empty_src
-            snippets = loader._load_source_snippets()
+            snippets = load_source_snippets()
 
         assert snippets == "SOURCE CODE OUTLINES:\n"
 
@@ -173,7 +165,8 @@ class TestLoadContextIncludesSource:
             mock_config.rules_dir = mock_src_tree / "rules"
             mock_config.etc_dir = mock_src_tree / "etc"
             mock_config.instructions_dir = mock_src_tree / "instructions"
-            ctx = loader.load_context()
+            with patch("agent.core.context_source.config", mock_config):
+                ctx = asyncio.run(loader.load_context())
 
         assert "source_tree" in ctx
         assert "source_code" in ctx
@@ -187,7 +180,8 @@ class TestLoadContextIncludesSource:
             mock_config.rules_dir = mock_src_tree / "rules"
             mock_config.etc_dir = mock_src_tree / "etc"
             mock_config.instructions_dir = mock_src_tree / "instructions"
-            ctx = loader.load_context()
+            with patch("agent.core.context_source.config", mock_config):
+                ctx = asyncio.run(loader.load_context())
 
         assert len(ctx["source_tree"]) > 0
         assert "config.py" in ctx["source_tree"]
