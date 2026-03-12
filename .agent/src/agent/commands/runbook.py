@@ -285,6 +285,7 @@ INSTRUCTIONS:
       does not already exist in the SOURCE FILE TREE. If the file exists (even if you are rewriting it completely), you MUST use `[MODIFY]` with a `<<<SEARCH` block that matches the entire existing file contents.
     - All NEW Python files MUST have PEP-257 docstrings on the module, every class, every function,
       and every inner/closure function. The docstring gate will hard-reject files missing any of these.
+12. You MUST use full, repository-root-relative file paths for ALL files (e.g., STARTING with `.agent/src/` or similar, NOT just `src/`).
 
 INPUTS:
 1. User Story (Requirements)

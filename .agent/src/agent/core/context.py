@@ -237,7 +237,10 @@ class ContextLoader:
             rel = os.path.relpath(dirpath, config.repo_root)
             level = 0 if rel == "." else rel.count(os.sep) + 1
             indent = "  " * level
-            dirname = os.path.basename(dirpath)
+            if dirpath == str(src_dir):
+                dirname = rel
+            else:
+                dirname = os.path.basename(dirpath)
             tree += f"{indent}{dirname}/\n"
             sub_indent = "  " * (level + 1)
             for fname in sorted(filenames):

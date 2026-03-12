@@ -62,7 +62,7 @@ PROPOSED
 > - **`#### [DELETE] <path>`** — remove a file.
 >   Follow with a one-line rationale comment. No code block needed.
 >
-> Use the **full repo-relative path** from the repo root for every `<path>`.
+> Use the **full repo-relative path** from the repo root for every `<path>` (e.g., starting with `.agent/src/`, NOT just `src/`).
 > One logical concern per `### Step N` — split if in doubt.
 
 ### Step 1: < Descriptive title — what changes and why >
