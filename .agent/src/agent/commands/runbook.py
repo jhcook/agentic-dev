@@ -282,7 +282,7 @@ INSTRUCTIONS:
     - `#### [MODIFY] <path>` MUST be followed by one or more `<<<SEARCH / === / >>>` blocks ONLY.
       NEVER follow a [MODIFY] header with a fenced code block — it will be silently skipped by the parser.
     - `#### [NEW] <path>` MUST be followed by a complete fenced code block — but ONLY if the file
-      does not already exist. If the file may already exist (partial run), use [MODIFY] + <<<SEARCH instead.
+      does not already exist in the SOURCE FILE TREE. If the file exists (even if you are rewriting it completely), you MUST use `[MODIFY]` with a `<<<SEARCH` block that matches the entire existing file contents.
     - All NEW Python files MUST have PEP-257 docstrings on the module, every class, every function,
       and every inner/closure function. The docstring gate will hard-reject files missing any of these.
 
