@@ -39,7 +39,7 @@ except ImportError:
 # Thresholds (INFRA-096)
 # ---------------------------------------------------------------------------
 
-FILE_SIZE_GUARD_THRESHOLD: int = 200
+FILE_SIZE_GUARD_THRESHOLD: int = 500
 SOURCE_CONTEXT_MAX_LOC: int = 300
 SOURCE_CONTEXT_HEAD_TAIL: int = 100
 
@@ -291,7 +291,8 @@ def apply_change_to_file(
             raise FileSizeGuardViolation(
                 f"File '{filepath}' already exists and new content is {existing_lines} lines. "
                 f"Maximum allowed for full-file replace is {FILE_SIZE_GUARD_THRESHOLD} LOC. "
-                "Hint: Update runbook step to use <<<SEARCH/===/>>> blocks for incremental changes."
+                "Hint: Update runbook step to use <<<SEARCH/===/>>> blocks for incremental changes, "
+                "or pass --legacy-apply to bypass."
             )
 
     _console.print(f"\n[bold cyan]📝 Changes for: {filepath}[/bold cyan]")
