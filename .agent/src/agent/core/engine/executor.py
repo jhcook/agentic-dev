@@ -25,9 +25,15 @@ from agent.core.engine.typedefs import AgentAction, AgentFinish, AgentStep
 from agent.core.mcp.client import MCPClient, Tool
 from agent.core.security import scrub_sensitive_data
 
-from typing import TypedDict, Union, Literal
+from typing import TypedDict, Union, Literal, Optional
+
+from agent.core.config import ENABLE_LOOP_GUARDRAILS, LOOP_GUARDRAIL_EXCLUDE_TOOLS
+from agent.core.implement.guards import ExecutionGuardrail
+
 
 class MaxStepsExceeded(Exception):
+
+
     """Raised when the agent exceeds the maximum allowed steps without finishing."""
     pass
 
@@ -88,8 +94,11 @@ class AgentExecutor:
     """
     Executes an agent loop (ReAct) using an AIService for reasoning 
     and MCPClient for tool execution. The loop continues indefinitely until the
-    agent determines it has a final answer.
+    agent determines it has a final answer. It orchestrates safety guardrails 
+    to prevent infinite execution and redundant tool calls.
     """
+    guardrail: Optional["ExecutionGuardrail"]
+
     def __init__(
         self, 
         llm: AIService, 
@@ -109,8 +118,15 @@ class AgentExecutor:
         self.model = model
         self.max_steps = max_steps
         self.allowed_tools = allowed_tools
+        
+        self.guardrail = ExecutionGuardrail(
+            max_iterations=max_steps, 
+            excluded_tools=LOOP_GUARDRAIL_EXCLUDE_TOOLS
+        ) if ENABLE_LOOP_GUARDRAILS else None
+
 
     async def run(self, user_prompt: str) -> AsyncGenerator[AgentEvent, None]:
+
         """
         Run the agent loop, yielding events as they happen.
         """
@@ -237,37 +253,32 @@ class AgentExecutor:
                         yield {"type": "final_answer", "content": str(output)}
                         return
 
-                    # Loop detection: if the agent attempts the exact same
-                    # tool + input as the previous step, inject a hint instead
-                    # of re-executing. This breaks infinite read-file loops.
-                    if history:
-                        prev = history[-1]
-                        if (prev.action.tool == action.tool
-                                and prev.action.tool_input == action.tool_input):
-                            logger.info(
-                                f"Loop detected: {action.tool} called with "
-                                f"identical input twice consecutively."
-                            )
-                            hint = (
-                                f"Loop Detected: You already called "
-                                f"{action.tool} with these exact arguments "
-                                f"in the previous step. The result was:\n"
-                                f"{prev.observation[:500]}\n\n"
-                                f"Use this result to proceed. Do NOT repeat "
-                                f"the same tool call. Either process this "
-                                f"output, try a different tool, or provide "
-                                f"your Final Answer."
-                            )
-                            yield {"type": "thought", "content": "[Loop detected — reusing previous result]"}
-                            step = AgentStep(
-                                action=action,
-                                observation=hint,
-                            )
-                            history.append(step)
-                            consecutive_tool_calls += 1
-                            continue
+                    # Loop detection & iteration guard
+                    if self.guardrail:
+                        is_aborted, reason = self.guardrail.check_and_record(
+                            action.tool, action.tool_input
+                        )
+
+                        if is_aborted:
+                            logger.error("Execution Guardrail Aborted", extra={"reason": reason})
+                            yield {"type": "error", "content": f"Execution Guardrail Aborted: {reason}"}
+                            
+                            
+                            # Fallback answer based on last observation
+                            if "recursive loop" in reason:
+                                yield {"type": "thought", "content": "[Force-terminating — recursive loop detected]"}
+                                last_obs = "I was forced to terminate due to a repeating tool loop."
+                                yield {"type": "final_answer", "content": last_obs}
+                            elif "Maximum iteration limit" in reason:
+                                yield {"type": "thought", "content": "[Force-terminating — maximum iterations reached]"}
+                                last_obs = "I was forced to terminate after reaching the maximum number of allowed tool calls."
+                                yield {"type": "final_answer", "content": last_obs}
+                            return
+
+
 
                     # Stale-progress guard: if the agent has made too many
+
                     # consecutive tool calls without producing a Final Answer,
                     # force-terminate with a synthetic answer.
                     consecutive_tool_calls += 1

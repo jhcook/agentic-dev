@@ -19,15 +19,105 @@ Provides docstring enforcement (AC-10) and safe-apply file-size guards
 """
 
 import difflib
+import hashlib
+import json
 import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from opentelemetry import metrics
 from rich.console import Console
 from rich.syntax import Syntax
+
+logger = logging.getLogger(__name__)
+
+meter = metrics.get_meter("agent.guardrails")
+
+intervention_counter = meter.create_counter(
+    "guardrail_interventions_total",
+    description="Total number of tool execution loops aborted by guardrails",
+)
+
+class ExecutionGuardrail:
+    """
+    Monitors tool execution for infinite loops and iteration limits.
+
+    Attributes:
+        max_iterations: Maximum number of tool calls allowed in a session.
+        excluded_tools: Tools exempt from loop detection.
+        iteration_count: Current number of tool calls made.
+        call_history: Set of hashes representing (tool_name, parameters).
+    """
+
+    def __init__(self, max_iterations: int = 10, excluded_tools: Optional[List[str]] = None):
+        """
+        Initializes the guardrail state.
+
+        Args:
+            max_iterations: Max allowed tool calls before forced termination.
+            excluded_tools: Tools exempt from loop detection.
+        """
+        self.max_iterations: int = max_iterations
+        self.excluded_tools: List[str] = excluded_tools or []
+        self.iteration_count: int = 0
+        self.call_history: Set[str] = set()
+
+    def _generate_call_hash(self, tool_name: str, params: Union[Dict[str, Any], str]) -> str:
+        """
+        Generate a deterministic hash for a tool call.
+
+        Args:
+            tool_name: Name of the tool being called.
+            params: Parameters passed to the tool.
+
+        Returns:
+            A SHA-256 hash string.
+        """
+        # Sort keys to ensure deterministic hashing of parameters
+        if isinstance(params, dict):
+            param_str = json.dumps(params, sort_keys=True)
+        else:
+            param_str = str(params)
+        payload = f"{tool_name}:{param_str}".encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def check_and_record(self, tool_name: str, params: Union[Dict[str, Any], str]) -> Tuple[bool, Optional[str]]:
+
+        """
+        Checks if the current call violates guardrails.
+
+        Args:
+            tool_name: Name of the tool.
+            params: Tool arguments.
+
+        Returns:
+            Tuple of (is_aborted, reason).
+        """
+        self.iteration_count += 1
+
+        # 1. Check iteration limit
+        if self.iteration_count > self.max_iterations:
+            reason = f"Maximum iteration limit ({self.max_iterations}) reached."
+            intervention_counter.add(1, {"reason": "max_iterations"})
+            logger.warning("Guardrail aborted execution", extra={"iteration_count": self.iteration_count, "termination_reason": "max_iterations"})
+            return True, reason
+
+        # 2. Check for redundant loops (identical tool + params)
+        call_hash = self._generate_call_hash(tool_name, params)
+
+        if tool_name not in self.excluded_tools and call_hash in self.call_history:
+            reason = f"Detected recursive loop: {tool_name} called repeatedly with identical parameters."
+            intervention_counter.add(1, {"reason": "repeated_call"})
+            logger.warning("Guardrail aborted execution", extra={"iteration_count": self.iteration_count, "termination_reason": "repeated_call"})
+            return True, reason
+
+        self.call_history.add(call_hash)
+        logger.debug("Guardrail check passed", extra={"iteration_count": self.iteration_count})
+        return False, None
+
 
 try:
     from opentelemetry import trace
