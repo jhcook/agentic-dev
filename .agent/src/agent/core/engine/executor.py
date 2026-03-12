@@ -166,8 +166,29 @@ class AgentExecutor:
                 
                 # 2. PARSE
                 with tracer.start_as_current_span("agent.parse") as parse_span:
-                    parsed_result = self.parser.parse(llm_response)
-                    parse_span.set_attribute("parsed_result", str(parsed_result))
+                    from pydantic import ValidationError
+                    try:
+                        parsed_result = self.parser.parse(llm_response)
+                        parse_span.set_attribute("parsed_result", str(parsed_result))
+                    except (ValidationError, ValueError) as e:
+                        logger.warning(f"LLM output validation failed: {str(e)}")
+                        agent_errors_counter.add(1, {"error.type": "validation"})
+                        
+                        hint = (
+                            f"Validation Error: Your previous response was malformed or failed strict schema validation.\n"
+                            f"Error details: {str(e)}\n\n"
+                            f"Please correct your output to strictly match the expected format (either a valid 'Action' block with NO extra fields, or a Final Answer)."
+                        )
+                        yield {"type": "thought", "content": f"[Validation failed — requesting LLM correction: {str(e)}]"}
+                        
+                        fake_action = AgentAction(tool="system_validator", tool_input={"action": "validation"}, log=llm_response)
+                        step = AgentStep(
+                            action=fake_action,
+                            observation=hint,
+                        )
+                        history.append(step)
+                        consecutive_tool_calls += 1
+                        continue
 
                 # Yield thought only for Actions (tool calls)
                 # For Finish, we yield the final_answer directly below.

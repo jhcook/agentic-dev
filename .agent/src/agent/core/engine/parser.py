@@ -61,34 +61,36 @@ class ReActJsonParser(BaseParser):
 
         if action_data:
             tool = action_data.get("tool")
-            tool_input = action_data.get("tool_input")
-            if tool and tool_input is not None:
-                if isinstance(tool, dict):
-                    tool = tool.get("name") or str(tool)
-                elif not isinstance(tool, str):
-                    tool = str(tool)
-                # Extract the thought text (everything before the Action)
-                # If "Action:" is present, take everything before it.
-                # Otherwise, use a regex to find the start of the JSON block we parsed.
-                if "Action:" in text:
-                    thought = text.split("Action:")[0].strip()
-                else:
-                    # Find where the JSON starts
-                    json_str = json.dumps(action_data)
-                    # This is imprecise but better than nothing; 
-                    # usually it's "Thought: ... { JSON }"
-                    parts = text.split('{', 1)
-                    thought = parts[0].strip() if len(parts) > 1 else text[:200]
+            if isinstance(tool, dict):
+                action_data["tool"] = tool.get("name") or str(tool)
+            elif not isinstance(tool, str) and tool is not None:
+                action_data["tool"] = str(tool)
                 
-                # Strip "Thought:" prefix if present
-                thought = re.sub(r"^(Thought:\s*)+", "", thought, flags=re.IGNORECASE).strip()
-                
-                return AgentAction(
-                    tool=tool,
-                    tool_input=tool_input,
-                    log=thought,
-                )
+            # Extract the thought text (everything before the Action)
+            # If "Action:" is present, take everything before it.
+            # Otherwise, use a regex to find the start of the JSON block we parsed.
+            if "Action:" in text:
+                thought = text.split("Action:")[0].strip()
+            else:
+                # Find where the JSON starts
+                json_str = json.dumps(action_data)
+                # This is imprecise but better than nothing; 
+                # usually it's "Thought: ... { JSON }"
+                parts = text.split('{', 1)
+                thought = parts[0].strip() if len(parts) > 1 else text[:200]
+            
+            # Strip "Thought:" prefix if present
+            thought = re.sub(r"^(Thought:\s*)+", "", thought, flags=re.IGNORECASE).strip()
+            
+            return AgentAction(
+                log=thought,
+                **action_data
+            )
 
+        # If no action found but text contains Action markers, it's likely malformed JSON
+        if "Action:" in text and "Final Answer:" not in text:
+            raise ValueError("Found 'Action:' marker but could not parse a valid JSON/YAML structure.")
+            
         # If no action found, it's a Finish
         # Clean up the output by stripping "Final Answer:" or "Thought:"
         output = text

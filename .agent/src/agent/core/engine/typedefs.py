@@ -13,22 +13,25 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Union
+from pydantic import BaseModel, Field
 
-@dataclass
-class AgentAction:
+class AgentAction(BaseModel):
     tool: str
-    tool_input: Dict[str, Any]
+    tool_input: Union[Dict[str, Any], str]
     log: str  # The raw "Thought" leading to this action
+    
+    model_config = {"extra": "forbid"}
 
 @dataclass
 class AgentObservation:
     output: str  # The result from the tool
 
-@dataclass
-class AgentFinish:
+class AgentFinish(BaseModel):
     return_values: Dict[str, Any]
     log: str
+    
+    model_config = {"extra": "forbid"}
 
 @dataclass
 class AgentStep:
