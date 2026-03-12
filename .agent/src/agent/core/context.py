@@ -156,4 +156,27 @@ class ContextLoader:
             return ""
 
 
+    def _load_targeted_context(self, story_content: str) -> str:
+        """Extracts file names referenced in the story and returns their contents."""
+        context = ""
+        # Very simple regex to find things that look like paths
+        paths = set(_re.findall(r"[\w\.\-/]+\.(?:py|md|yaml|yml|json|txt|sh)", story_content))
+        for p in paths:
+            file_path = config.repo_root / p
+            if file_path.exists() and file_path.is_file() and p not in context:
+                try:
+                    content = file_path.read_text(errors="ignore")
+                    context += f"\n--- TARGETED CONTEXT: {p} ---\n{content}\n"
+                except Exception:
+                    pass
+        return context
+
+    def _load_test_impact(self, story_content: str) -> str:
+        """Extracts and formats test impact files from the story."""
+        return ""
+
+    def _load_behavioral_contracts(self, story_content: str) -> str:
+        """Extracts and formats behavioral contract context."""
+        return ""
+
 context_loader = ContextLoader()
