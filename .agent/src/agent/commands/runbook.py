@@ -282,9 +282,10 @@ INSTRUCTIONS:
     - `#### [MODIFY] <path>` MUST be followed by one or more `<<<SEARCH / === / >>>` blocks ONLY.
       NEVER follow a [MODIFY] header with a fenced code block — it will be silently skipped by the parser.
     - `#### [NEW] <path>` MUST be followed by a complete fenced code block — but ONLY if the file
-      does not already exist. If the file may already exist (partial run), use [MODIFY] + <<<SEARCH instead.
+      does not already exist in the SOURCE FILE TREE. If the file exists (even if you are rewriting it completely), you MUST use `[MODIFY]` with a `<<<SEARCH` block that matches the entire existing file contents.
     - All NEW Python files MUST have PEP-257 docstrings on the module, every class, every function,
       and every inner/closure function. The docstring gate will hard-reject files missing any of these.
+12. You MUST use full, repository-root-relative file paths for ALL files (e.g., STARTING with `.agent/src/` or similar, NOT just `src/`).
 
 INPUTS:
 1. User Story (Requirements)
@@ -339,8 +340,8 @@ Generate the runbook now.
 """
 
     console.print("[bold green]🤖 Panel is discussing...[/bold green]")
-    with console.status("[bold green]🤖 Panel is discussing...[/bold green]"):
-        content = ai_service.complete(system_prompt, user_prompt)
+    with console.status("[bold green]🤖 Panel is discussing...[/bold green]") as status:
+        content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
         
     if not content:
         console.print("[bold red]❌ AI returned empty response.[/bold red]")
@@ -375,8 +376,8 @@ Generate the runbook now.
                 )
                 # Re-generate without the SPLIT_REQUEST directive
                 console.print("[bold green]🤖 Panel is re-generating (no split directive)...[/bold green]")
-                with console.status("[bold green]🤖 Panel is re-generating...[/bold green]"):
-                    content = ai_service.complete(system_prompt, user_prompt)
+                with console.status("[bold green]🤖 Panel is re-generating...[/bold green]") as status:
+                    content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
                 if not content:
                     console.print("[bold red]❌ AI returned empty response on retry.[/bold red]")
                     raise typer.Exit(code=1)

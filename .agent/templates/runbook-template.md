@@ -52,17 +52,17 @@ PROPOSED
 >   copied verbatim from the current file (use the Codebase Introspection section above).
 >   ⚠️  NEVER follow `[MODIFY]` with a full fenced code block — only `<<<SEARCH` blocks.
 >
-> - **`#### [NEW] <path>`** — create a **brand-new** file that does not yet exist.
+> - **`#### [NEW] <path>`** — create a **brand-new** file that does not yet exist in the SOURCE FILE TREE.
 >   Follow with the complete file content in a fenced code block. No placeholders.
->   ⚠️  If the file may already exist (e.g. from a prior partial run), use `[MODIFY]`
->   with a `<<<SEARCH` block instead, so the apply is idempotent.
+>   ⚠️  If the file already exists in the repo (even if you are rewriting it completely), you MUST use `[MODIFY]`
+>   with a `<<<SEARCH` block that matches the entire existing file contents.
 >   ⚠️  Every module, class, and function MUST have a PEP-257 docstring — including
 >   inner/closure functions. The docstring gate will reject files missing them.
 >
 > - **`#### [DELETE] <path>`** — remove a file.
 >   Follow with a one-line rationale comment. No code block needed.
 >
-> Use the **full repo-relative path** from the repo root for every `<path>`.
+> Use the **full repo-relative path** from the repo root for every `<path>` (e.g., starting with `.agent/src/`, NOT just `src/`).
 > One logical concern per `### Step N` — split if in doubt.
 
 ### Step 1: < Descriptive title — what changes and why >

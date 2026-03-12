@@ -64,14 +64,18 @@ from agent.core.implement.guards import (  # noqa: F401
 from agent.core.implement.orchestrator import (  # noqa: F401
     Orchestrator,
     build_source_context,
+)
+from agent.core.implement.parser import (  # noqa: F401
     detect_malformed_modify_blocks,
     extract_modify_files,
-    extract_story_id,
     parse_code_blocks,
     parse_search_replace_blocks,
-    resolve_path,
     split_runbook_into_chunks,
     validate_runbook_schema,
+)
+from agent.core.implement.resolver import (  # noqa: F401
+    extract_story_id,
+    resolve_path,
     _find_directories_in_repo as find_directories_in_repo,
     _find_file_in_repo as find_file_in_repo,
 )
@@ -293,11 +297,11 @@ def get_current_branch() -> str:
 
 
 def is_git_dirty() -> bool:
-    """Return True when there are uncommitted changes in the working tree."""
+    """Return True when there are uncommitted (tracked) changes in the working tree."""
     try:
         return bool(
             subprocess.check_output(
-                ["git", "status", "--porcelain"],
+                ["git", "status", "--porcelain", "--untracked-files=no"],
                 stderr=subprocess.DEVNULL,
             ).strip()
         )
@@ -348,6 +352,7 @@ def implement(
     model: Optional[str] = typer.Option(None, "--model", help="Override AI model"),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force specific AI provider"),
     thorough: bool = typer.Option(False, "--thorough", help="Use thorough governance context"),
+    allow_dirty: bool = typer.Option(False, "--allow-dirty", help="Allow running with uncommitted changes"),
 ) -> None:
     """Implement a story from its accepted runbook.
 
@@ -360,10 +365,10 @@ def implement(
     # ------------------------------------------------------------------
     # 0. Git hygiene guards (tested by test_implement_branching.py)
     # ------------------------------------------------------------------
-    if is_git_dirty():
+    if not allow_dirty and is_git_dirty():
         console.print(
             "[bold red]❌ Uncommitted changes detected. "
-            "Commit or stash before implementing.[/bold red]"
+            "Commit or stash before implementing, or use --allow-dirty.[/bold red]"
         )
         raise typer.Exit(code=1)
 
@@ -511,7 +516,7 @@ def implement(
     run_modified_files: List[str] = []
     cumulative_loc = 0
 
-    if (_all_sr or _all_code) and apply:
+    if _all_sr or _all_code:
         console.print(
             f"[bold green]⚡ Verbatim runbook: "
             f"{len(_all_sr)} S/R + {len(_all_code)} full-file blocks "
@@ -519,42 +524,57 @@ def implement(
         )
         implementation_success = True
 
-        if _all_sr:
-            _sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-            for _b in _all_sr:
-                _sr_by_file[_b["file"]].append(_b)
-            for _fp, _blocks in _sr_by_file.items():
-                _orig = Path(_fp).read_text() if Path(_fp).exists() else ""
-                _ok, _final = apply_search_replace_to_file(_fp, _blocks, yes)
+        if apply:
+            if _all_sr:
+                _sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+                for _b in _all_sr:
+                    _sr_by_file[_b["file"]].append(_b)
+                for _fp, _blocks in _sr_by_file.items():
+                    _orig = Path(_fp).read_text() if Path(_fp).exists() else ""
+                    _ok, _final = apply_search_replace_to_file(_fp, _blocks, yes)
+                    if _ok:
+                        cumulative_loc += count_edit_distance(_orig, _final)
+                        run_modified_files.append(_fp)
+
+            _sr_done = {_b["file"] for _b in _all_sr}
+            for _b in _all_code:
+                if _b["file"] in _sr_done:
+                    continue
+                _viols = enforce_docstrings(_b["file"], _b["content"])
+                if _viols:
+                    rejected_files.append(_b["file"])
+                    console.print(
+                        f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
+                        f"({len(_viols)} violation(s))[/bold red]"
+                    )
+                    for _v in _viols:
+                        console.print(f"   [red]• {_v}[/red]")
+                    continue
+                _orig = Path(_b["file"]).read_text() if Path(_b["file"]).exists() else ""
+                _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
                 if _ok:
-                    cumulative_loc += count_edit_distance(_orig, _final)
-                    run_modified_files.append(_fp)
+                    cumulative_loc += count_edit_distance(_orig, _b["content"])
+                    run_modified_files.append(_b["file"])
+                else:
+                    rejected_files.append(_b["file"])
 
-        _sr_done = {_b["file"] for _b in _all_sr}
-        for _b in _all_code:
-            if _b["file"] in _sr_done:
-                continue
-            _viols = enforce_docstrings(_b["file"], _b["content"])
-            if _viols:
-                rejected_files.append(_b["file"])
-                console.print(
-                    f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
-                    f"({len(_viols)} violation(s))[/bold red]"
-                )
-                for _v in _viols:
-                    console.print(f"   [red]• {_v}[/red]")
-                continue
-            _orig = Path(_b["file"]).read_text() if Path(_b["file"]).exists() else ""
-            _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
-            if _ok:
-                cumulative_loc += count_edit_distance(_orig, _b["content"])
-                run_modified_files.append(_b["file"])
+            full_content = f"[verbatim: {len(run_modified_files)} file(s) applied]"
+            _micro_commit_step(story_id, 1, cumulative_loc, cumulative_loc, run_modified_files)
+            console.print(f"[green]✅ Verbatim apply complete ({cumulative_loc} LOC)[/green]")
+        else:
+            files_targeted = sorted(list({b["file"] for b in _all_sr} | {b["file"] for b in _all_code}))
+            if files_targeted:
+                files_list = "\n".join(f"- `{f}`" for f in files_targeted)
+                out_parts = [f"**Targeted Files:**\n{files_list}\n"]
+                for b in _all_code:
+                    out_parts.append(f"**File: {b['file']}**\n```python\n{b['content']}\n```")
+                for b in _all_sr:
+                    search = b.get("search", "")
+                    replace = b.get("replace", "")
+                    out_parts.append(f"**File: {b['file']}**\n```text\n<<<SEARCH\n{search}\n===\n{replace}\n>>>\n```")
+                full_content = "\n\n".join(out_parts)
             else:
-                rejected_files.append(_b["file"])
-
-        full_content = f"[verbatim: {len(run_modified_files)} file(s) applied]"
-        _micro_commit_step(story_id, 1, cumulative_loc, cumulative_loc, run_modified_files)
-        console.print(f"[green]✅ Verbatim apply complete ({cumulative_loc} LOC)[/green]")
+                full_content = ""
 
     # ------------------------------------------------------------------
     # 8. AI path: full-context attempt, then chunked fallback
@@ -618,8 +638,8 @@ ADRs:
         fallback_needed = False
         try:
             console.print("[bold green]🤖 AI coding (Full Context)...[/bold green]")
-            with console.status("[bold green]🤖 Working...[/bold green]"):
-                full_content = ai_service.complete(system_prompt, user_prompt, model=model)
+            with console.status("[bold green]🤖 Working...[/bold green]") as status:
+                full_content = ai_service.complete(system_prompt, user_prompt, model=model, rich_status=status)
             if not full_content:
                 raise ValueError("Empty AI response")
             implementation_success = True
@@ -709,9 +729,9 @@ ADRs:
                     console.print(
                         f"[bold green]🤖 AI coding task {idx+1}/{len(chunks)}...[/bold green]"
                     )
-                    with console.status("[bold green]🤖 Working...[/bold green]"):
+                    with console.status("[bold green]🤖 Working...[/bold green]") as status:
                         chunk_result = ai_service.complete(
-                            chunk_system, chunk_user, model=model
+                            chunk_system, chunk_user, model=model, rich_status=status
                         )
                 except Exception as exc:
                     console.print(f"[bold red]❌ Task {idx+1} failed: {exc}[/bold red]")

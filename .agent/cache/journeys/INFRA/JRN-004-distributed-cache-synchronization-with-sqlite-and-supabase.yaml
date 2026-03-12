@@ -78,6 +78,9 @@ implementation:
   - .agent/src/agent/commands/workflow.py
   - .agent/src/agent/core/config.py
   - .agent/src/agent/core/context.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/engine/parser.py
+  - .agent/src/agent/core/engine/typedefs.py
   - .agent/src/agent/core/formatters.py
   - .agent/src/agent/core/logger.py
   - .agent/src/agent/core/router.py

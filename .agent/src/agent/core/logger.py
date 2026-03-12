@@ -88,6 +88,6 @@ def configure_logging(verbosity: int = 0):
 # Create a custom logger (no file handler at import time)
 logger = logging.getLogger("agent")
 
-def get_logger(name: str):
+def get_logger(name: str) -> logging.Logger:
     """Get a logger instance with the specified name."""
     return logging.getLogger(f"agent.{name}")
