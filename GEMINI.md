@@ -59,6 +59,7 @@ The repository is governed by specific roles defined in `.agent/etc/agents.yaml`
 
 ## workflow: Story Creation
 When asked to create a story from conversation context:
-1.  Run `agent new-story <ID>`.
-2.  Read the generated file.
-3.  Populate it with the "Problem Statement", "User Story", "Acceptance Criteria" based on the chat history.
+1.  Run `agent new-story <ID>`. **CRITICAL RULE**: Story IDs must always be integers (e.g., `INFRA-118`, not `INFRA-118.1`). Do not use floating point numbers.
+2.  **CRITICAL RULE**: Plans and Stories share the exact same ID namespace and **cannot overlap**. If a Plan is `INFRA-118`, the accompanying stories must start at `INFRA-119`.
+3.  Read the generated file.
+4.  Populate it with the "Problem Statement", "User Story", "Acceptance Criteria" based on the chat history.
