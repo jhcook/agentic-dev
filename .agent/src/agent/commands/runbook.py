@@ -339,8 +339,8 @@ Generate the runbook now.
 """
 
     console.print("[bold green]🤖 Panel is discussing...[/bold green]")
-    with console.status("[bold green]🤖 Panel is discussing...[/bold green]"):
-        content = ai_service.complete(system_prompt, user_prompt)
+    with console.status("[bold green]🤖 Panel is discussing...[/bold green]") as status:
+        content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
         
     if not content:
         console.print("[bold red]❌ AI returned empty response.[/bold red]")
@@ -375,8 +375,8 @@ Generate the runbook now.
                 )
                 # Re-generate without the SPLIT_REQUEST directive
                 console.print("[bold green]🤖 Panel is re-generating (no split directive)...[/bold green]")
-                with console.status("[bold green]🤖 Panel is re-generating...[/bold green]"):
-                    content = ai_service.complete(system_prompt, user_prompt)
+                with console.status("[bold green]🤖 Panel is re-generating...[/bold green]") as status:
+                    content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
                 if not content:
                     console.print("[bold red]❌ AI returned empty response on retry.[/bold red]")
                     raise typer.Exit(code=1)

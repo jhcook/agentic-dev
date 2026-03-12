@@ -18,7 +18,7 @@ import os
 import subprocess
 import sys
 import time
-from typing import Generator, List, Optional
+from typing import Any, Generator, List, Optional
 import warnings
 
 from prometheus_client import Counter, Histogram
@@ -511,7 +511,8 @@ class AIService:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         stop_sequences: Optional[List[str]] = None,
-        auto_fallback: bool = False
+        auto_fallback: bool = False,
+        rich_status: Optional[Any] = None,
     ) -> str:
         """
         Sends a completion request with automatic fallback.
@@ -524,6 +525,7 @@ class AIService:
                 Use 0.0 for deterministic output (e.g. governance checks).
                 If None, uses each provider's default.
             auto_fallback: Whether to automatically switch providers on failure.
+            rich_status: Optional rich.status.Status object to update with pre-check message.
         """
         self._ensure_initialized()
         
@@ -554,9 +556,11 @@ class AIService:
              return ""
 
         # Security / Compliance Warning
-        console.print(
-            "[dim]🔒 Security Pre-check: Ensuring no PII/Secrets in context...[/dim]"
-        )
+        sec_msg = "[dim]🔒 Security Pre-check: Ensuring no PII/Secrets in context...[/dim]"
+        if rich_status:
+            rich_status.update(f"{rich_status.status}\n{sec_msg}")
+        else:
+            console.print(sec_msg)
         
         # Fallback Loop
         attempted_providers = set()

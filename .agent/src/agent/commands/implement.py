@@ -619,8 +619,8 @@ ADRs:
         fallback_needed = False
         try:
             console.print("[bold green]🤖 AI coding (Full Context)...[/bold green]")
-            with console.status("[bold green]🤖 Working...[/bold green]"):
-                full_content = ai_service.complete(system_prompt, user_prompt, model=model)
+            with console.status("[bold green]🤖 Working...[/bold green]") as status:
+                full_content = ai_service.complete(system_prompt, user_prompt, model=model, rich_status=status)
             if not full_content:
                 raise ValueError("Empty AI response")
             implementation_success = True
@@ -710,9 +710,9 @@ ADRs:
                     console.print(
                         f"[bold green]🤖 AI coding task {idx+1}/{len(chunks)}...[/bold green]"
                     )
-                    with console.status("[bold green]🤖 Working...[/bold green]"):
+                    with console.status("[bold green]🤖 Working...[/bold green]") as status:
                         chunk_result = ai_service.complete(
-                            chunk_system, chunk_user, model=model
+                            chunk_system, chunk_user, model=model, rich_status=status
                         )
                 except Exception as exc:
                     console.print(f"[bold red]❌ Task {idx+1} failed: {exc}[/bold red]")
