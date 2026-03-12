@@ -79,6 +79,10 @@ agent_errors_counter = meter.create_counter(
     "agent.errors",
     description="Counts the number of errors an agent encounters.",
 )
+agent_validation_recoveries_counter = meter.create_counter(
+    "agent.validation.recoveries",
+    description="Counts the number of times the agent successfully recovers from a validation error.",
+)
 
 class AgentExecutor:
     """
@@ -137,6 +141,9 @@ class AgentExecutor:
             
             # Track consecutive tool calls without a Final Answer
             consecutive_tool_calls = 0
+            
+            # Track consecutive validation errors to monitor recoveries
+            consecutive_validation_errors = 0
 
             while steps_taken < self.max_steps:
                 steps_taken += 1
@@ -170,13 +177,23 @@ class AgentExecutor:
                     try:
                         parsed_result = self.parser.parse(llm_response)
                         parse_span.set_attribute("parsed_result", str(parsed_result))
+                        
+                        # If we previously had errors, record this as a successful recovery
+                        if consecutive_validation_errors > 0:
+                            agent_validation_recoveries_counter.add(1)
+                            consecutive_validation_errors = 0
+                            
                     except (ValidationError, ValueError) as e:
-                        logger.warning(f"LLM output validation failed: {str(e)}")
+                        error_str = str(e)
+                        if len(error_str) > 500:
+                            error_str = error_str[:500] + "... [truncated]"
+                        logger.warning(f"LLM output validation failed: {error_str}")
                         agent_errors_counter.add(1, {"error.type": "validation"})
+                        consecutive_validation_errors += 1
                         
                         hint = (
                             f"Validation Error: Your previous response was malformed or failed strict schema validation.\n"
-                            f"Error details: {str(e)}\n\n"
+                            f"Error details: {error_str}\n\n"
                             f"Please correct your output to strictly match the expected format (either a valid 'Action' block with NO extra fields, or a Final Answer)."
                         )
                         yield {"type": "thought", "content": f"[Validation failed — requesting LLM correction: {str(e)}]"}
@@ -391,9 +408,18 @@ CRITICAL RULES:
 
     def _build_context(self, user_input: str, history: List[AgentStep]) -> str:
         from dataclasses import asdict
+        
+        hist_dicts = []
+        for step in history:
+            d = asdict(step)
+            # asdict doesn't automatically convert nested Pydantic models
+            if hasattr(step.action, "model_dump"):
+                d["action"] = step.action.model_dump()
+            hist_dicts.append(d)
+            
         context_str = json.dumps({
             "user_input": user_input,
-            "history": [asdict(step) for step in history],
+            "history": hist_dicts,
         })
         return context_str
 

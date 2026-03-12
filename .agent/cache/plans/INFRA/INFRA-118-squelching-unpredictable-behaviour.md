@@ -4,7 +4,7 @@
 IN_PROGRESS
 
 ## Related Story
-INFRA-119, INFRA-120, INFRA-121, INFRA-122
+INFRA-119, INFRA-120, INFRA-121, INFRA-122, INFRA-123
 
 ## Summary
 This plan outlines the implementation of a deterministic governance layer surrounding Large Language Model (LLM) interactions. By implementing a middleware-based architecture, we will enforce strict schema validation on inputs/outputs, inject runtime guardrails to prevent recursive loops, and integrate comprehensive OpenTelemetry tracing to provide visibility into non-deterministic failure modes.

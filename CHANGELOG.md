@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **INFRA-119**: Implemented strict JSON schema validation for LLM outputs with automatic retry loop. This includes Pydantic models for AgentAction and Finish, and robust JSON recovery parsing using ReActJsonParser.
+
 ### Refactored
 - **INFRA-110**: Decomposed `check.py` command into modular components in `core/check/`, separating concerns like preflight orchestration, reporting, syncing, and testing.
 - **INFRA-105**: Decomposed monolithic `commands/onboard.py` into a thin CLI facade plus a new module `core/onboard/steps.py`. Extracted standalone functions for checking dependencies, GitHub auth, and creating directories, making them independently testable.
