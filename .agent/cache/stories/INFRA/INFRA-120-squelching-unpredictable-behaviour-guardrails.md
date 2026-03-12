@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+IN_PROGRESS
 
 ## Problem Statement
 

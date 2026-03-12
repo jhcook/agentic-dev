@@ -30,6 +30,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Guardrail Defaults
+DEFAULT_MAX_ITERATIONS = int(os.environ.get("MAX_ITERATIONS", "10"))
+ENABLE_LOOP_GUARDRAILS = os.environ.get("ENABLE_LOOP_GUARDRAILS", "true").lower() == "true"
+LOOP_GUARDRAIL_EXCLUDE_TOOLS = os.environ.get("LOOP_GUARDRAIL_EXCLUDE_TOOLS", "").split(",")
+# If empty string provided, split() gives [""] which we should filter out
+LOOP_GUARDRAIL_EXCLUDE_TOOLS = [t for t in LOOP_GUARDRAIL_EXCLUDE_TOOLS if t]
+
+
 class ConsoleConfig(BaseModel):
     """Configuration for the agent console personality and system prompt."""
     personality_file: Optional[str] = None
