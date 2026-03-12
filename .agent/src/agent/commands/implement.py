@@ -64,14 +64,18 @@ from agent.core.implement.guards import (  # noqa: F401
 from agent.core.implement.orchestrator import (  # noqa: F401
     Orchestrator,
     build_source_context,
+)
+from agent.core.implement.parser import (  # noqa: F401
     detect_malformed_modify_blocks,
     extract_modify_files,
-    extract_story_id,
     parse_code_blocks,
     parse_search_replace_blocks,
-    resolve_path,
     split_runbook_into_chunks,
     validate_runbook_schema,
+)
+from agent.core.implement.resolver import (  # noqa: F401
+    extract_story_id,
+    resolve_path,
     _find_directories_in_repo as find_directories_in_repo,
     _find_file_in_repo as find_file_in_repo,
 )

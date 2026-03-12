@@ -16,8 +16,8 @@
 
 import pytest
 
-from agent.core.implement.orchestrator import (
-    Orchestrator,
+from agent.core.implement.orchestrator import Orchestrator
+from agent.core.implement.parser import (
     detect_malformed_modify_blocks,
     parse_code_blocks,
     parse_search_replace_blocks,

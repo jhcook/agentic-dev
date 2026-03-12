@@ -18,12 +18,12 @@ import pytest
 import logging
 from pathlib import Path
 from unittest.mock import patch
-from agent.core.implement.orchestrator import resolve_path, TRUSTED_ROOT_PREFIXES
+from agent.core.implement.resolver import resolve_path, TRUSTED_ROOT_PREFIXES
 
 def test_resolve_path_trusted_prefix_ac1():
     """AC-1: Paths with trusted prefixes should be returned as-is without fuzzy matching."""
     path = ".agent/tests/core/implement/test_orchestrator.py"
-    with patch("agent.core.implement.orchestrator._find_file_in_repo") as mock_find:
+    with patch("agent.core.implement.resolver._find_file_in_repo") as mock_find:
         result = resolve_path(path)
         assert result == Path(path)
         mock_find.assert_not_called()
@@ -33,8 +33,8 @@ def test_resolve_path_fuzzy_match_non_trusted_ac2():
     path = "test_orchestrator.py"
     expected = ".agent/tests/core/implement/test_orchestrator.py"
     
-    with patch("agent.core.implement.orchestrator._find_file_in_repo", return_value=[expected]):
-        with patch("agent.core.implement.orchestrator.logging") as mock_logging:
+    with patch("agent.core.implement.resolver._find_file_in_repo", return_value=[expected]):
+        with patch("agent.core.implement.resolver.logging") as mock_logging:
             result = resolve_path(path)
             assert result == Path(expected)
             mock_logging.warning.assert_called_once()
@@ -45,8 +45,8 @@ def test_resolve_path_fuzzy_match_non_trusted_ac2():
 def test_resolve_path_no_match_ac2():
     """Ensure non-trusted paths with no match are returned as-is."""
     path = "non_existent_script.py"
-    with patch("agent.core.implement.orchestrator._find_file_in_repo", return_value=[]):
-        with patch("agent.core.implement.orchestrator._find_directories_in_repo", return_value=[]):
+    with patch("agent.core.implement.resolver._find_file_in_repo", return_value=[]):
+        with patch("agent.core.implement.resolver._find_directories_in_repo", return_value=[]):
             result = resolve_path(path)
             assert result == Path(path)
 
@@ -54,7 +54,7 @@ def test_resolve_path_no_match_ac2():
 def test_all_trusted_prefixes(prefix):
     """Ensure all prefixes in TRUSTED_ROOT_PREFIXES trigger the short-circuit."""
     path = f"{prefix}some/file.txt"
-    with patch("agent.core.implement.orchestrator._find_file_in_repo") as mock_find:
+    with patch("agent.core.implement.resolver._find_file_in_repo") as mock_find:
         result = resolve_path(path)
         assert result == Path(path)
         mock_find.assert_not_called()
