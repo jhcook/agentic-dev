@@ -101,3 +101,73 @@ async def test_model_propagation():
     assert "model" in call_kwargs.kwargs or (
         len(call_kwargs.args) > 1 and call_kwargs.args[1] == "gemini-2.5-pro"
     ), f"model not propagated: {call_kwargs}"
+
+@pytest.mark.anyio
+async def test_executor_validation_retry():
+    """Verify that validation errors are caught and correct the LLM with a hint."""
+    mock_llm = MagicMock()
+    mock_mcp = AsyncMock()
+    mock_mcp.list_tools.return_value = [
+        Tool(name="my_tool", description="Does something", inputSchema={})
+    ]
+    
+    # 1. First LLM call returns bad text (violates Model structure)
+    response_broken = """Thought: Look up data.
+Action: { "invalid_key": "my_tool" }""" 
+    
+    # 2. Second LLM call returns proper Action
+    response_fixed = """Thought: Let me fix that.
+Action: { "tool": "my_tool", "tool_input": {"query": "foo"} }"""
+    
+    # 3. Third LLM call returns Finish
+    response_finish = """Thought: Done.
+Action: { "tool": "Final Answer", "tool_input": "Great success" }"""
+    
+    mock_llm.complete.side_effect = [response_broken, response_fixed, response_finish]
+    mock_mcp.call_tool.return_value = "Success output"
+    
+    executor = AgentExecutor(llm=mock_llm, mcp_client=mock_mcp, max_steps=5)
+    
+    events = []
+    async for event in executor.run("Do something"):
+        events.append(event)
+        
+    final = [e for e in events if e.get("type") == "final_answer"]
+    assert len(final) == 1
+    assert final[0]["content"] == "Great success"
+    
+    assert mock_llm.complete.call_count == 3
+    mock_mcp.call_tool.assert_called_with("my_tool", {"query": "foo"})
+    
+    # Verify that the LLM received the Validation Error in its context for the 2nd call
+    call_args_fixed = mock_llm.complete.call_args_list[1]
+    user_prompt_fixed = call_args_fixed.kwargs["user_prompt"]
+    assert "Validation Error:" in user_prompt_fixed
+    assert "system_validator" in user_prompt_fixed
+
+@pytest.mark.anyio
+async def test_persistent_malformed_output():
+    """Verify that persistent malformed output eventually hits max_steps instead of crashing."""
+    mock_llm = MagicMock()
+    mock_mcp = AsyncMock()
+    mock_mcp.list_tools.return_value = [
+        Tool(name="my_tool", description="Does something", inputSchema={})
+    ]
+    
+    # LLM always returns invalid output
+    malformed_response = """Action: { "tool": "broken" """ 
+    mock_llm.complete.return_value = malformed_response
+    mock_mcp.call_tool.return_value = "Should not be called"
+    
+    # Set max_steps small for testing
+    executor = AgentExecutor(llm=mock_llm, mcp_client=mock_mcp, max_steps=3)
+    
+    events = []
+    with pytest.raises(MaxStepsExceeded):
+        async for event in executor.run("Do something"):
+            events.append(event)
+            
+    # Verify no tools were actually called 
+    assert mock_mcp.call_tool.call_count == 0
+    # LLM should have been called max_steps times
+    assert mock_llm.complete.call_count == 3
