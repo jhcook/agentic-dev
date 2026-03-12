@@ -440,11 +440,40 @@ def preflight(
                 story_content = scrub_sensitive_data(story_content)
 
             console.print("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]")
-            with console.status("[bold cyan]🤖 Convening AI Governance Council (Running checks)...[/bold cyan]"):
+            from rich.progress import Progress, SpinnerColumn, TextColumn
+            import re
+            
+            progress = Progress(
+                SpinnerColumn(finished_text=" "),
+                TextColumn("{task.description}"),
+                console=console,
+                transient=False
+            )
+            
+            with progress:
+                tasks = {}
                 try:
                     def _progress(msg: str):
-                        # Ensure we print with a newline for the TUI to consume
-                        console.print(f"[dim]  - {msg}[/dim]")
+                        msg_stripped = msg.strip()
+                        # Start spinner on "is reviewing"
+                        start_match = re.search(r"🤖 @(\w+) is reviewing", msg)
+                        if start_match:
+                            role = start_match.group(1)
+                            task_id = progress.add_task(f"[dim]  - {msg_stripped}[/dim]", total=None)
+                            tasks[role] = task_id
+                            return
+                        
+                        # Complete spinner on final verdict
+                        complete_match = re.search(r"@(\w+):\s*(PASS|BLOCK|CONSULTED)$", msg_stripped)
+                        if complete_match and any(x in msg for x in ["✅", "❌", "ℹ️", "⚠️"]):
+                            role = complete_match.group(1)
+                            if role in tasks:
+                                color = "green" if "✅" in msg else "red" if "❌" in msg else "yellow"
+                                progress.update(tasks[role], description=f"  [{color}]- {msg_stripped}[/{color}]", completed=100)
+                                return
+                        
+                        # Normal log line
+                        progress.console.print(f"[dim]  - {msg_stripped}[/dim]")
 
                     result = convene_council_full(
                         story_id=story_id,
