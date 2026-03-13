@@ -19,11 +19,14 @@ Orchestration logic for runbook verification and LLM correction loops.
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
 from opentelemetry import metrics, trace
+import time
 
 from agent.core.logger import get_logger
 from agent.core.telemetry import get_tracer
 from agent.core.ai.service import AIService
 from agent.core.implement.verifier import RunbookVerifier, VerificationError
+from agent.core.implement.telemetry_helper import VerificationTelemetry
+from agent.core.implement.retry import retry_sync
 
 logger = get_logger(__name__)
 tracer = get_tracer()
@@ -68,6 +71,7 @@ class VerificationOrchestrator:
         self.verifier = verifier
         self.ai_service = ai_service
         self.max_retries = max_retries
+        self.telemetry = VerificationTelemetry("runbook_verification")
 
     def verify_and_correct(self, runbook_steps: List[RunbookStep]) -> Tuple[bool, List[RunbookStep]]:
         """
@@ -81,6 +85,7 @@ class VerificationOrchestrator:
 
         with tracer.start_as_current_span("verify_and_correct") as span:
             span.set_attribute("max_retries", self.max_retries)
+            self.telemetry.start()
             
             while attempts <= self.max_retries:
                 errors = self._verify_all_steps(current_steps)
@@ -90,6 +95,7 @@ class VerificationOrchestrator:
                     span.set_attribute("final_status", "success")
                     span.set_attribute("attempts", attempts)
                     success_counter.add(1)
+                    self.telemetry.emit("Success", {"attempts": attempts})
                     return True, current_steps
                 
                 if attempts == self.max_retries:
@@ -107,6 +113,7 @@ class VerificationOrchestrator:
             span.set_attribute("final_status", "failure")
             span.set_attribute("attempts", attempts)
             failure_counter.add(1)
+            self.telemetry.emit("Failed", {"attempts": attempts})
             return False, current_steps
 
     def _verify_all_steps(self, steps: List[RunbookStep]) -> List[VerificationError]:
@@ -141,7 +148,13 @@ class VerificationOrchestrator:
                     prompt += f"\\nContext from file:\\n{err.suggested_context}\\n"
             
             # Request rewrite using the ai_service
-            response = self.ai_service.complete(system_prompt="Fix search blocks. Return updated <<<SEARCH/===/>>> blocks.", user_prompt=prompt)
+            response = retry_sync(
+                self.ai_service.complete,
+                max_retries=self.max_retries,
+                initial_delay=1.0,
+                system_prompt="Fix search blocks. Return updated <<<SEARCH/===/>>> blocks.", 
+                user_prompt=prompt
+            )
             # Apply corrections
             if response:
                 from agent.core.implement.parser import parse_search_replace_blocks
