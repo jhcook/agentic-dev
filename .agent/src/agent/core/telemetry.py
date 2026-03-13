@@ -23,7 +23,7 @@ import os
 import time
 import functools
 import logging
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Dict, Optional, Callable, TypeVar, Coroutine, ParamSpec
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -88,6 +88,9 @@ def get_tracer() -> trace.Tracer:
     """
     return trace.get_tracer(_TRACER_NAME)
 
+P = ParamSpec('P')
+R = TypeVar('R')
+
 def trace_llm_call(model_name: str):
     """
     Decorator for instrumenting LLM gateway calls.
@@ -95,10 +98,10 @@ def trace_llm_call(model_name: str):
     Args:
         model_name: The name/version of the model being called.
     """
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[P, Coroutine[Any, Any, R]]) -> Callable[P, Coroutine[Any, Any, R]]:
         """The actual decorator."""
         @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """The wrapped function."""
             tracer = get_tracer()
             with tracer.start_as_current_span("llm_request") as span:
