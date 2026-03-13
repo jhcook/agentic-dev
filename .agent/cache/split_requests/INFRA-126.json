@@ -1,0 +1,8 @@
+{
+  "SPLIT_REQUEST": true,
+  "reason": "The implementation requires modifying 6 existing files (retry, telemetry, orchestrator, verifier, and two test suites), exceeding the 4-file modification threshold.",
+  "suggestions": [
+    "INFRA-126a: Implement Standardized Retry Decorators and Telemetry Metric Definitions",
+    "INFRA-126b: Integrate Resiliency and Metrics into Verification Workflows and Orchestration"
+  ]
+}
