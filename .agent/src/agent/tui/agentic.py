@@ -46,7 +46,7 @@ def supports_function_calling(provider: str) -> bool:
 
 @dataclass
 class _Tool:
-    """Lightweight tool descriptor matching MCPClient.Tool interface."""
+    """Lightweight tool descriptor matching JSON Schema tool interface."""
     name: str
     description: str
     inputSchema: Dict[str, Any]
@@ -54,18 +54,15 @@ class _Tool:
 
 @dataclass
 class _ToolResult:
-    """Lightweight result matching MCPClient.CallToolResult interface."""
+    """Lightweight result wrapper."""
     content: str
 
 
 class LocalToolClient:
-    """Adapts local Python tool functions to the AgentExecutor's interface.
+    """Adapts local Python tool functions to the AgentSession interface.
 
-    The AgentExecutor expects an object with:
-      - async list_tools() -> List[Tool]
-      - async call_tool(name, arguments) -> result with .content
-
-    This wraps make_tools() + make_interactive_tools() from agent.core.adk.tools.
+    This wraps make_tools() + make_interactive_tools() from agent.core.adk.tools,
+    outputting unified JSON schemas.
     """
 
     def __init__(

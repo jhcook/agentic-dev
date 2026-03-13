@@ -23,13 +23,17 @@ def mock_deps():
     # Patch where the classes are DEFINED, not where they are imported (since they are local imports)
     with patch("backend.voice.vad.VADProcessor") as MockVAD, \
          patch("backend.voice.orchestrator.get_voice_providers") as MockGetProviders, \
-         patch("backend.voice.orchestrator.GLOBAL_MEMORY", MemorySaver()): # Real memory saver
+         patch("backend.voice.orchestrator.AIService"), \
+         patch("agent.core.ai.providers.get_provider"), \
+         patch("backend.voice.orchestrator.get_unified_tools") as MockGetTools, \
+         patch("backend.voice.orchestrator.AgentSession"):
         
         mock_vad = MockVAD.return_value
         
         mock_stt = AsyncMock()
         mock_tts = AsyncMock()
         MockGetProviders.return_value = (mock_stt, mock_tts)
+        MockGetTools.return_value = ({}, {})
         
         yield mock_vad, mock_stt, mock_tts
 
@@ -37,11 +41,10 @@ def mock_deps():
 async def test_orchestrator_initialization(mock_deps):
     mock_vad, mock_stt, mock_tts = mock_deps
     
-    with patch("backend.voice.orchestrator._create_llm"):
-         orch = VoiceOrchestrator(session_id="test")
-         assert orch.vad == mock_vad
-         assert orch.stt == mock_stt
-         assert orch.tts == mock_tts
+    orch = VoiceOrchestrator(session_id="test")
+    assert orch.vad == mock_vad
+    assert orch.stt == mock_stt
+    assert orch.tts == mock_tts
 
 @pytest.mark.asyncio
 async def test_process_audio_chunk(mock_deps):
@@ -50,19 +53,17 @@ async def test_process_audio_chunk(mock_deps):
     # Simulate speech detection
     mock_vad.process.return_value = True 
     
-    with patch("backend.voice.orchestrator._create_llm"):
-        orch = VoiceOrchestrator(session_id="test")
-        
-        # Process a dummy chunk
-        # Since _process_audio_chunk is async
-        await orch._process_audio_chunk(b"audio_data")
-        
-        # Verify VAD was called
-        mock_vad.process.assert_called_with(b"audio_data")
+    orch = VoiceOrchestrator(session_id="test")
+    
+    # Process a dummy chunk
+    # Since _process_audio_chunk is async
+    await orch._process_audio_chunk(b"audio_data")
+    
+    # Verify VAD was called
+    mock_vad.process.assert_called_with(b"audio_data")
 
 @pytest.mark.asyncio
 async def test_heal_chat_history_called(mock_deps):
-     with patch("backend.voice.orchestrator._create_llm"), \
-          patch("backend.voice.orchestrator.VoiceOrchestrator._heal_chat_history") as mock_heal:
+     with patch("backend.voice.orchestrator.VoiceOrchestrator._heal_chat_history") as mock_heal:
         orch = VoiceOrchestrator(session_id="test")
         assert hasattr(orch, "_heal_chat_history")

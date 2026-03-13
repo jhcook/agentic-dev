@@ -259,7 +259,7 @@ console:
     ...
 
 env:                   # extra env vars injected for every agent subprocess
-  CLOUD_ML_REGION: us-central1
+  GOOGLE_CLOUD_LOCATION: us-central1
 ```
 
 ## Environment Variables

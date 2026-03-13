@@ -179,12 +179,13 @@ class AIService:
         from google import genai
         from google.genai import types
 
-        timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
+        timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 300000))
         http_options = types.HttpOptions(timeout=timeout_ms)
 
         if provider == "gemini":
             api_key = get_secret("api_key", service="gemini")
-            return genai.Client(api_key=api_key, http_options=http_options)
+            client = genai.Client(api_key=api_key, http_options=http_options)
+            return client
 
         if provider == "vertex":
             project = os.getenv("GOOGLE_CLOUD_PROJECT", "")
@@ -193,12 +194,13 @@ class AIService:
                 "Vertex AI client: project=%s, location=%s", project, location
             )
             try:
-                return genai.Client(
+                client = genai.Client(
                     vertexai=True,
                     project=project,
                     location=location,
                     http_options=http_options,
                 )
+                return client
             except Exception as e:
                 # Provide a helpful hint if it's an ADC auth issue
                 if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
@@ -950,7 +952,7 @@ class AIService:
 
                     bg_client = self._build_genai_client(provider)
                     
-                    timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
+                    timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 300000))
                     gen_config_kwargs = {
                         "system_instruction": system_prompt,
                         "http_options": types.HttpOptions(timeout=timeout_ms),

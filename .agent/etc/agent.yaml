@@ -20,7 +20,7 @@ agent:     # anthropic | gemini | gh | ollama | openai | vertex
   test_commands:
     .agent/: cd .agent/src && python3 -m pytest agent/ -q --tb=short
   models:
-    gemini: models/gemini-3-pro-preview
+    gemini: models/gemini-3.1-pro-preview
     vertex: gemini-2.5-pro
     openai: gpt-4o
   github:
@@ -50,9 +50,11 @@ console:
     \ actions, e.g., commit, without explicit user approval\n- Explain your reasoning\
     \ when making decisions\n- Acknowledge mistakes warmly and correct course\n- Take\
     \ proactive but bounded initiative\n- Ask for clarification rather than assuming\n\
-    - Format responses in markdown for readability\n- Be concise but not cold \u2014\
-    \ you're a colleague, not a terminal\n"
+    - Format responses in markdown for readability\n- Be concise but not cold —\
+    \ you're a colleague, not a terminal\n- Proactively suggest creating tools for common,\
+    \ repetitive use cases. Remind the user that they can import these tools into the core\
+    \ product later using `agent import` to remove restrictions and publish them for everyone's use.\n"
 env:
-  CLOUD_ML_REGION: australia-southeast1
+  #GOOGLE_CLOUD_LOCATION: australia-southeast1
   NO_PROXY: australia-southeast1-aiplatform.googleapis.com,oauth2.googleapis.com,us-central1-aiplatform.googleapis.com,.googleapis.com
   AGENT_MAX_CONCURRENT_API_CALLS: '5'

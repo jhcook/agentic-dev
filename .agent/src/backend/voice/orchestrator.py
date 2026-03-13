@@ -29,13 +29,13 @@ except ImportError:
     pass
 
 
-from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import ToolMessage, AIMessage
 from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
+from agent.core.session import AgentSession
+from agent.core.ai.service import AIService
 from backend.speech.factory import get_voice_providers
+from backend.voice.tools.registry import get_unified_tools
 from agent.core.config import config
 from agent.core.secrets import get_secret
 
@@ -148,88 +148,22 @@ def _create_llm():
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}. Use 'openai', 'anthropic', or 'gemini'.")
 
-
-# Global memory to persist across WebSocket reconnections (but reset on process restart)
-GLOBAL_MEMORY = MemorySaver()
-
-
 async def get_chat_history(session_id: str) -> list[dict]:
     """
-    Retrieve chat history for a session from Global Memory.
+    Retrieve chat history for a session from persistent storage.
     Returns list of {"role": "user"|"assistant", "text": "..."}
     """
-    if not GLOBAL_MEMORY:
-        return []
-        
-    thread_config = {"configurable": {"thread_id": session_id}}
-    # MemorySaver .get() returns a StateSnapshot
-    # We need to access .values['messages']
-    
-    # Since this is synchronous MemorySaver (or async?), wait, LangGraph AsyncSqliteSaver is async.
-    # MemorySaver is usually sync?
-    # Actually, GLOBAL_MEMORY = MemorySaver() is synchronous in LangGraph default.
-    # But let's assume async access pattern for future-proofing or if it supports aget.
-    
-    # MemorySaver has .get(config) -> StateSnapshot
-    snapshot = GLOBAL_MEMORY.get(thread_config)
-    logger.info(f"DEBUG[get_chat_history]: session={session_id} snapshot_found={bool(snapshot)}")
-    
     history = []
     
-    if snapshot:
-        # Correctly access messages from CheckpointTuple
-        # snapshot is a CheckpointTuple with .checkpoint (dict)
-        try:
-            messages = snapshot.checkpoint["channel_values"].get("messages", [])
-            logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in checkpoint['channel_values']")
-        except (AttributeError, KeyError):
-            # Fallback for alternative structures
-            try:
-                messages = snapshot.values.get("messages", [])
-                logger.info(f"DEBUG[get_chat_history]: Found {len(messages)} messages in snapshot.values")
-            except (AttributeError, TypeError):
-                logger.error(f"DEBUG[get_chat_history]: Failed to extract messages. Keys: {dir(snapshot)}")
-                messages = []
-                
-        for msg in messages:
-            # Convert LangChain/LangGraph messages to our format
-            role = "user" if msg.type == "human" else "assistant"
-            if msg.type == "ai": role = "assistant"
-            
-            # Skip system messages or tool calls if we only want chat
-            if msg.type not in ["human", "ai"]:
-                continue
-                
-            # Robust content handling (handle lists/multimodal)
-            content = msg.content
-            if isinstance(content, list):
-                # Extract text parts
-                text_parts = []
-                for part in content:
-                    if isinstance(part, str):
-                        text_parts.append(part)
-                    elif isinstance(part, dict) and "text" in part:
-                        text_parts.append(part["text"])
-                text = " ".join(text_parts)
-            else:
-                text = str(content) if content is not None else ""
-                
-            history.append({
-                "role": role,
-                "text": text
-            })
-            
-    # Fallback to Disk Persistence if in-memory is empty
-    if not history:
-        try:
-             storage_dir = config.agent_dir / "storage" / "voice_sessions"
-             file_path = storage_dir / f"{session_id}.json"
-             if file_path.exists():
-                 data = json.loads(file_path.read_text())
-                 history = data.get("history", [])
-                 logger.info(f"Loaded persistent history for {session_id} from disk: {len(history)} items")
-        except Exception as e:
-             logger.warning(f"Failed to load persistent history from disk: {e}")
+    try:
+         storage_dir = config.agent_dir / "storage" / "voice_sessions"
+         file_path = storage_dir / f"{session_id}.json"
+         if file_path.exists():
+             data = json.loads(file_path.read_text())
+             history = data.get("history", [])
+             logger.info(f"Loaded persistent history for {session_id} from disk: {len(history)} items")
+    except Exception as e:
+         logger.warning(f"Failed to load persistent history from disk: {e}")
         
     return history
 
@@ -300,22 +234,25 @@ class VoiceOrchestrator:
         self.loop = None # Will be set in run_background
         self.stt, self.tts = get_voice_providers()
         
-        # Initialize LLM (configurable via env)
-        llm = _create_llm()
+        # Initialize AI Provider
+        service = AIService()
+        service._ensure_initialized()
+        
+        provider_name = service.provider or "openai"
+        model_name = service.models.get(provider_name)
+        
+        from agent.core.ai.providers import get_provider
+        provider = get_provider(provider_name, client=service.clients.get(provider_name), model_name=model_name)
         
         # Configure tools
-        from backend.voice.tools.registry import get_all_tools
-        tools = get_all_tools()
+        tools_schema, tool_handlers = get_unified_tools()
         
-        # Use global checkpointer
-        self.checkpointer = GLOBAL_MEMORY
-        
-        # Create agent with system prompt and persistence
-        self.agent = create_react_agent(
-            llm, 
-            tools,
-            prompt=VOICE_SYSTEM_PROMPT,  # LangGraph system prompt
-            checkpointer=self.checkpointer
+        # Create unified AgentSession
+        self.agent_session = AgentSession(
+            provider=provider,
+            system_prompt=VOICE_SYSTEM_PROMPT,
+            tools=tools_schema,
+            tool_handlers=tool_handlers
         )
         
         # Injected dependencies
@@ -666,49 +603,9 @@ class VoiceOrchestrator:
 
     def _heal_chat_history(self, session_id: str):
         """
-        Detects all orphaned tool calls in history and injects error ToolMessages
-        to satisfy LangGraph validation requirements.
+        No-op for AgentSession. (Previously used to heal LangGraph state).
         """
-        config = {"configurable": {"thread_id": session_id}}
-        state = self.agent.get_state(config)
-        if not state or not state.values:
-            return
-
-        messages = state.values.get("messages", [])
-        if not messages:
-            return
-
-        # Track all tool call IDs seen in AIMessages vs fulfilled by ToolMessages
-        all_tool_call_ids = set()
-        fulfilled_tool_call_ids = set()
-
-        for msg in messages:
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    all_tool_call_ids.add(tc.get('id'))
-            elif isinstance(msg, ToolMessage):
-                fulfilled_tool_call_ids.add(msg.tool_call_id)
-
-        orphaned_ids = all_tool_call_ids - fulfilled_tool_call_ids
-        
-        if orphaned_ids:
-            logger.warning(
-                f"REPAIR: Found {len(orphaned_ids)} orphaned tool calls in session {session_id}. "
-                f"Injecting healing ToolMessages for IDs: {orphaned_ids}"
-            )
-            healing_messages = []
-            for tc_id in orphaned_ids:
-                if tc_id:
-                    healing_messages.append(ToolMessage(
-                        tool_call_id=tc_id,
-                        content="Error: Tool execution was interrupted by user or higher-level process.",
-                        status="error"
-                    ))
-            
-            if healing_messages:
-                # Update the state with the healing messages. 
-                # In LangGraph, update_state with as_node=None defaults to appending to 'messages'.
-                self.agent.update_state(config, {"messages": healing_messages})
+        pass
 
     async def _run_pipeline(self, audio_data: bytes, generation_id: int):
         """Execute the STT -> AI -> TTS pipeline and push to output_queue."""
@@ -827,7 +724,7 @@ class VoiceOrchestrator:
             self.silence_start_time = None
     
     async def _invoke_agent(self, user_input: str, emit_transcript: bool = True) -> AsyncGenerator[str, None]:
-        """Invoke LangGraph agent with streaming."""
+        """Invoke AgentSession with streaming."""
         start = time.time()
         status = "success"
         
@@ -837,52 +734,26 @@ class VoiceOrchestrator:
         try:
             safe_input = self._sanitize_user_input(user_input)
             
-            config = {
-                "configurable": {"thread_id": self.session_id},
-                "checkpointer": self.checkpointer
-            }
-            
             full_response = ""
             
-            async for chunk in self.agent.astream(
-                {"messages": [("user", safe_input)]},
-                config=config,
-                stream_mode="messages" 
-            ):
-                if isinstance(chunk, tuple):
-                    chunk = chunk[0]
-                
-                # CRITICAL FIX: Only speak AIMessages (actual agent text).
-                # Ignore ToolMessages (command outputs) and HumanMessages.
-                # Use string type check if import is tricky, but we imported AIMessage.
-                if not isinstance(chunk, AIMessage):
-                    continue
-
-                if hasattr(chunk, 'content') and chunk.content:
+            async for chunk in self.agent_session.stream_interaction(safe_input):
+                if chunk:
                     AGENT_TOKENS.labels(model=self.model_name, type="completion").inc(1)
-                    content = str(chunk.content)
-                    full_response += content
+                    full_response += chunk
                     
                     if self.on_event:
-                         self.on_event("transcript", {"role": "assistant", "text": content, "partial": True})
+                         self.on_event("transcript", {"role": "assistant", "text": chunk, "partial": True})
                          
-                    yield content
+                    yield chunk
             
             if self.on_event and full_response:
                 # Send one final non-partial event to solidify the text (optional, but good for sync)
                 self.on_event("transcript", {"role": "assistant", "text": full_response, "partial": False})
                 self.last_agent_text = full_response
                 
-                # Persist history for offline review (Directly from agent state)
+                # Persist history for offline review
                 try:
-                    state = self.agent.get_state(config)
-                    messages = state.values.get("messages", [])
-                    history = []
-                    for msg in messages:
-                        if msg.type not in ["human", "ai"]: continue
-                        role = "user" if msg.type == "human" else "assistant"
-                        history.append({"role": role, "text": str(msg.content)})
-                    _persist_session_history(self.session_id, history)
+                    _persist_session_history(self.session_id, self.agent_session.history)
                 except Exception as e:
                     logger.error(f"Failed to extract/persist history: {e}")
 

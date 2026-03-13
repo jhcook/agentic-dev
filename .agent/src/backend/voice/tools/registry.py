@@ -35,7 +35,7 @@ from langchain_core.tools import BaseTool
 
 def get_all_tools():
     """
-    Return a list of all initialized tools for the agent.
+    Return a list of all initialized Langchain BaseTools.
     Includes core tools and dynamically loaded custom tools.
     """
     base_tools = [
@@ -81,3 +81,30 @@ def get_all_tools():
                     print(f"Error loading custom tool {filename}: {e}")
 
     return base_tools
+
+def get_unified_tools() -> tuple[list[dict], dict]:
+    """
+    Returns tools as JSON Schemas and a handler dictionary for AgentSession.
+    """
+    base_tools = get_all_tools()
+    schemas = []
+    handlers = {}
+    
+    for tool in base_tools:
+        # Convert Langchain BaseTool to JSON schema format
+        schema = {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+            }
+        }
+        
+        if hasattr(tool, "args_schema") and tool.args_schema:
+            schema["function"]["parameters"] = tool.args_schema.schema()
+            
+        schemas.append(schema)
+        # Note: In a real async environment we would wrap `tool.arun` or `tool.run`
+        handlers[tool.name] = tool.run
+        
+    return schemas, handlers

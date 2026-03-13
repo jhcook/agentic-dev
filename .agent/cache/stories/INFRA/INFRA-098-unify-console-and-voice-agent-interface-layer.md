@@ -39,10 +39,14 @@ None yet — this story will likely produce an ADR for the shared AgentSession i
 
 **Components touched:**
 - `.agent/src/agent/core/session.py` (New — shared AgentSession interface)
-- `.agent/src/agent/tui/app.py` (Refactor — thin adapter over AgentSession)
+- `.agent/src/agent/tui/agentic.py` (Refactor — thin adapter over AgentSession)
 - `.agent/src/backend/voice/orchestrator.py` (Refactor — thin adapter over AgentSession)
-- `.agent/src/agent/core/ai/service.py` (Refactor — unified AI provider abstraction)
-- `.agent/src/agent/core/adk/tools.py` (Refactor — shared tool registry)
+- `.agent/src/agent/core/ai/service.py` (Refactor — unified AI provider abstraction and fixed timeout 300000ms stability issue)
+- `.agent/src/backend/voice/tools/registry.py` (Refactor — unified dynamic tool structure payload)
+- `.agent/docs/configuration.md` (Update — rename `CLOUD_ML_REGION` to `GOOGLE_CLOUD_LOCATION`)
+- `.agent/etc/agent.yaml` (Update — rename `CLOUD_ML_REGION` to `GOOGLE_CLOUD_LOCATION` and config updates)
+- `.agent/etc/prompts/voice_system_prompt.txt` (Update — added proactive tool creation suggestions)
+- `.agent/src/agent/core/engine/executor.py` (Fix — added "Thinking..." yield to prevent blocking waits)
 
 **Workflows affected:**
 - Tool registration and execution.
