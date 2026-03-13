@@ -2,7 +2,7 @@
 
 ## State
 
-OPEN
+COMMITTED
 
 ## Problem Statement
 

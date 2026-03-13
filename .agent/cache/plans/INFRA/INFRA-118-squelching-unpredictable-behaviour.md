@@ -1,7 +1,7 @@
 # INFRA-118: Squelching Unpredictable Behaviour
 
 ## State
-DONE
+COMMITTED
 
 ## Related Story
 INFRA-119, INFRA-120, INFRA-121, INFRA-122, INFRA-123, INFRA-125, INFRA-126

@@ -2,7 +2,7 @@
 
 ## State
 
-ACCEPTED (Pending Governance Re-validation)
+COMMITTED (Pending Governance Re-validation)
 
 ## Goal Description
 

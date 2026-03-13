@@ -2,7 +2,7 @@
 
 ## State
 
-ACTIVE
+COMMITTED
 
 ## Parent Story
 

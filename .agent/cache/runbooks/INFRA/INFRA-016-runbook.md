@@ -1,7 +1,7 @@
 # INFRA-016: visualize-project-artifacts
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 To create a new command `env -u VIRTUAL_ENV uv run agent visualize` that generates diagrammatic views of the project's governance artifacts (Plans, Stories, Runbooks) and code structure. This command will produce Mermaid syntax to visualize dependencies, helping developers and stakeholders better understand the project's architecture and task relationships.

@@ -2,7 +2,7 @@
 
 ## State
 
-PROPOSED
+COMMITTED
 
 ## Related Story
 

@@ -2,7 +2,7 @@
 
 ## State
 
-APPROVED
+COMMITTED
 
 ## Related Story
 

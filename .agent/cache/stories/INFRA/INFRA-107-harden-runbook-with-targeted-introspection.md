@@ -2,7 +2,7 @@
 
 ## State
 
-IN_PROGRESS
+COMMITTED
 
 ## Problem Statement
 

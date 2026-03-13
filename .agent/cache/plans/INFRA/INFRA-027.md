@@ -1,7 +1,7 @@
 # INFRA-027: Cloud Voice Integration (Unified Deepgram)
 
 ## State
-APPROVED
+COMMITTED
 
 ## Related Story
 INFRA-027

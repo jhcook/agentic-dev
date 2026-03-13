@@ -1,7 +1,7 @@
 # INFRA-020: Implement Agent Audit
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 Implement a comprehensive `env -u VIRTUAL_ENV uv run agent audit` command that enables compliance officers and lead developers to execute a governance audit of the repository. The audit will assess traceability, identify stagnant code, and flag orphaned governance artifacts to generate actionable compliance reports. This feature ensures better oversight, transparency, and management of "Governance as Code."

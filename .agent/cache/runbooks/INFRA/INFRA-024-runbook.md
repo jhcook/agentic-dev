@@ -1,7 +1,7 @@
 # INFRA-024: Agent List Models Command
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 To implement a command `env -u VIRTUAL_ENV uv run agent list-models` in the CLI tool, which queries and displays available AI models for a specified provider. These models should be filtered based on the user's active API key, provider configuration, and the availability status of the models. The goal is to enhance developer productivity by providing real-time visibility into available models and avoiding runtime API call errors (e.g., "404 Model Not Found").

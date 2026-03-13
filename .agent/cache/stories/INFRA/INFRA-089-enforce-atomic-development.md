@@ -2,7 +2,7 @@
 
 ## State
 
-DECOMPOSED
+COMMITTED
 
 ## Decomposition
 

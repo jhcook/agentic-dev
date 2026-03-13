@@ -1,7 +1,7 @@
 # INFRA-023: Agent Config Command
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 Provide a Command-Line Interface (CLI) tool for managing and modifying the agent's configuration without requiring manual edits to YAML files. This will include functionality for retrieving (`get`), modifying (`set`), and displaying (`list`) configuration settings, supporting dot-notation for nested keys (e.g. `models.gpt-4o.cost_per_1k_input`). The solution will primarily target `.agent/etc/router.yaml` but be extensible for other YAML configs.

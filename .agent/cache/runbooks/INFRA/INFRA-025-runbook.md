@@ -1,7 +1,7 @@
 # STORY-ID: INFRA-025: Integrate Anthropic Claude Provider
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 Integrate Anthropic Claude as a supported provider in the agent framework to enhance AI-assisted development workflows. This includes the addition of SDK support, configurable environment variables for API keys, router configurations for model metadata, and observability enhancements to track provider usage. This implementation will also improve resilience through added provider failover capabilities.

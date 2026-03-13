@@ -1,7 +1,7 @@
 # INFRA-030: Local Voice Integration (Kokoro + Whisper)
 
 ## State
-APPROVED
+COMMITTED
 
 ## Related Story
 INFRA-030

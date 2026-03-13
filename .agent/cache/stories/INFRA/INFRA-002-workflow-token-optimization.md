@@ -1,7 +1,7 @@
 # INFRA-002: Workflow Token Optimization
 
 ## State
-INFRA-002-002-002-002-002-002
+COMMITTED-002-002-002-002-002-002
 
 ## Problem Statement
 The current Agent workflows (`workflows/*.md`) are detailed manual instruction manuals. This causes the Agent to burn "reasoning tokens" simulating logic that already exists (or should exist) in the Python CLI (`agent` commands). This leads to:

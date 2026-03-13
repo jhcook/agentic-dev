@@ -2,7 +2,7 @@
 
 ## State
 
-PROPOSED
+COMMITTED
 
 ## Goal Description
 

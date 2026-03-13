@@ -1,7 +1,7 @@
 # INFRA-015: Create `env -u VIRTUAL_ENV uv run agent onboard` CLI command
 
 ## State
-ACCEPTED
+COMMITTED
 
 ## Goal Description
 To create a new CLI command, `env -u VIRTUAL_ENV uv run agent onboard`, that automates the initial setup for developers. This command will verify system dependencies, interactively and securely configure necessary API keys, initialize the required workspace directory structure, and perform a final health check to ensure the agent is ready for immediate use.
