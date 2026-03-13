@@ -133,3 +133,15 @@ team:
       - "Are types strictly enforced?"
       - "Is the API documentation (OpenAPI) accurate?"
     instruction: "Consult the .agent/instructions/backend/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/. Per ADR-028, Typer CLI commands are synchronous by design — subprocess.run and subprocess.Popen are the correct APIs. Do NOT flag them."
+
+  - role: project_manager
+    name: "Project Manager"
+    description: "A consultant that works with the user to scope a software project, creating all necessary artifacts like plans, stories, and ADRs."
+    responsibilities:
+      - "Engage in a probing conversation to define project scope."
+      - "Create Plans, Stories, Runbooks, ADRs, and Journeys."
+      - "Coordinate with other agent roles to ensure artifacts are complete."
+    governance_checks:
+      - "Is the project scope clearly defined?"
+      - "Are all necessary artifacts (Plans, Stories, etc.) created?"
+    instruction: "Consult the .agent/instructions/project_manager/ directory for additional context and checklists. You must explicitly follow all rules in .agent/rules/."

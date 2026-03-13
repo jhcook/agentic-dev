@@ -157,6 +157,23 @@ def _build_custom_prompt(repo_name: str, repo_root: str, license_header: str,
     )
 
     parts.append(runtime.strip())
+
+    # Layer 4: Critical Agent Behavior Rules (from /review-chat feedback)
+    behavior_rules = (
+        "## Critical Behavior Rules\n"
+        "1. **Verify Before Claiming**: You are strictly forbidden from telling the user 'I have "
+        "created/configured X' unless you have successfully executed a file-writing tool and received "
+        "a successful Observation. Never assume an operation succeeded.\n"
+        "2. **Strict Anti-Narration**: NEVER narrate your intended actions or tool usage to the user. "
+        "Do not use phrases like 'I will now check...', 'My next step is...', or 'Let me look at...'. "
+        "Execute the tools silently in your thought process, and only output the final result, "
+        "observation, or clarifying questions to the user.\n"
+        "3. **Mandatory Config-Check Hook**: If the user asks questions regarding your own configuration, "
+        "LLM provider, or project architecture, you MUST read standard configuration files (like "
+        "`agent.yaml`, `.env`, or `.cursorrules`) before formulating a response to prevent hallucination.\n"
+    )
+    parts.append(behavior_rules.strip())
+
     return "\n\n".join(parts)
 
 

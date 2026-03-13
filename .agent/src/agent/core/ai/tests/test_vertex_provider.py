@@ -109,10 +109,11 @@ class TestVertexCredentialValidation:
         validate_credentials()
 
     @patch.dict(os.environ, {}, clear=True)
+    @patch("agent.core.auth.credentials.Path.exists", return_value=False)
     @patch("agent.core.ai.ai_service")
     @patch("agent.core.auth.credentials.LLM_PROVIDER", "vertex")
     @patch("agent.core.auth.credentials.get_secret_manager")
-    def test_vertex_fails_without_project(self, mock_get_sm, mock_ai_service):
+    def test_vertex_fails_without_project(self, mock_get_sm, mock_ai_service, mock_path_exists):
         """validate_credentials should raise when GOOGLE_CLOUD_PROJECT is missing."""
         mock_ai_service.provider = "vertex"
         mock_sm = MagicMock()

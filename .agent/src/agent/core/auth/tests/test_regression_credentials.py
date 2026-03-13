@@ -249,7 +249,7 @@ class TestCLICredentialRegistration:
         import inspect
         import agent.main as main_module
         source = inspect.getsource(main_module)
-        assert "with_creds(check.impact)" in source, (
+        assert "with_creds(impact.impact)" in source, (
             "impact command must be wrapped with with_creds — it always needs AI."
         )
 
@@ -258,7 +258,7 @@ class TestCLICredentialRegistration:
         import inspect
         import agent.main as main_module
         source = inspect.getsource(main_module)
-        assert "with_creds(check.panel)" in source, (
+        assert "with_creds(panel.panel)" in source, (
             "panel command must be wrapped with with_creds — it always needs AI."
         )
 
