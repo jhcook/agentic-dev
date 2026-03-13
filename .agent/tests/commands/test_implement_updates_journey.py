@@ -41,7 +41,7 @@ def test_implement_updates_journey_yaml(tmp_path, monkeypatch):
     runbook_dir = tmp_path / "runbooks"
     runbook_dir.mkdir()
     runbook_file = runbook_dir / "INFRA-000-runbook.md"
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content")
+    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n\n## Implementation Steps\n\n1. Do something\n")
     
     agent_dir = tmp_path / ".agent"
     agent_dir.mkdir()
