@@ -300,12 +300,24 @@ def with_retry(
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,)
 ) -> Callable[[Callable[P, Any]], Callable[P, Any]]:
     """
-    Decorator for wrapping functions with retry logic, preserving signatures and return types.
+    Decorator for wrapping functions with retry logic, preserving signatures.
+
+    Args:
+        max_retries: Maximum number of retry attempts.
+        initial_delay: Initial delay in seconds.
+        multiplier: Multiplier for exponential backoff.
+        jitter: Jitter factor (fraction of delay).
+        retryable_exceptions: Tuple of exception types to retry on.
+
+    Returns:
+        The decorated function.
     """
     def decorator(func: Callable[P, Any]) -> Callable[P, Any]:
+        """Wrap the function with retry logic."""
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)
             async def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                """Async wrapper function."""
                 return await retry_async(
                     func, max_retries, initial_delay, multiplier, jitter, retryable_exceptions, *args, **kwargs
                 )
@@ -313,6 +325,7 @@ def with_retry(
         else:
             @functools.wraps(func)
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                """Sync wrapper function."""
                 return retry_sync(
                     func, max_retries, initial_delay, multiplier, jitter, retryable_exceptions, *args, **kwargs
                 )
@@ -381,6 +394,7 @@ def test_retry_sync_decorator():
     
     @with_retry(max_retries=1)
     def decorated_func() -> str:
+        """Mock decorated sync function."""
         return mock_func()
 
     with patch("time.sleep"):
