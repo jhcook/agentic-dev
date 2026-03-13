@@ -18,6 +18,24 @@ import logging
 # We do NOT call basicConfig here to avoid side effects on import.
 # Instead, we provide a setup function.
 
+class OTelFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            from opentelemetry import trace
+            span = trace.get_current_span()
+            if span and span.is_recording():
+                ctx = span.get_span_context()
+                record.trace_id = trace.format_trace_id(ctx.trace_id)
+                record.span_id = trace.format_span_id(ctx.span_id)
+            else:
+                record.trace_id = ""
+                record.span_id = ""
+        except ImportError:
+            record.trace_id = ""
+            record.span_id = ""
+        return True
+
+
 # Guard flag to prevent adding duplicate file handlers.
 _file_handler_added = False
 
@@ -52,12 +70,13 @@ def configure_logging(verbosity: int = 0):
         for handler in root.handlers:
             root.removeHandler(handler)
 
+    stream_handler = logging.StreamHandler()
+    stream_handler.addFilter(OTelFilter())
+
     logging.basicConfig(
         level=root_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-             logging.StreamHandler()
-        ]
+        format='%(asctime)s - %(name)s - %(levelname)s - [trace_id=%(trace_id)s span_id=%(span_id)s] - %(message)s',
+        handlers=[stream_handler]
     )
     
     # Set Agent level explicitly if different from root
@@ -73,8 +92,9 @@ def configure_logging(verbosity: int = 0):
             log_dir.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(log_dir / "agent.log")
             file_handler.setFormatter(
-                logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - [trace_id=%(trace_id)s span_id=%(span_id)s] - %(message)s')
             )
+            file_handler.addFilter(OTelFilter())
             logging.getLogger("agent").addHandler(file_handler)
             _file_handler_added = True
 

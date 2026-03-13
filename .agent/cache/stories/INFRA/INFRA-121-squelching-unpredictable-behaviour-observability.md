@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -45,6 +45,7 @@ As an **SRE**, I want **OpenTelemetry (OTel) traces covering prompt templates, t
 - LLM Gateway Service
 - Tool Orchestration Layer
 - OpenTelemetry Collector Configuration
+- `agent.core.logger` (Application-wide log format updated to include `trace_id` and `span_id`)
 
 **Workflows affected:**
 - Inference request pipeline
