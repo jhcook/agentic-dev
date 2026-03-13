@@ -1,0 +1,8 @@
+{
+  "SPLIT_REQUEST": true,
+  "reason": "The story requires refactoring two unrelated core monolithic modules and updating multiple dependent CLI commands for a breaking async change, exceeding the 4-file modification limit.",
+  "suggestions": [
+    "INFRA-123.1: Refactor context.py into sub-modules and update command callers for async support",
+    "INFRA-123.2: Refactor orchestrator.py into parser and resolver sub-modules"
+  ]
+}
