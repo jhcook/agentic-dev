@@ -21,14 +21,6 @@ from datetime import datetime
 import json
 from collections import deque
 
-import warnings
-try:
-    from langgraph.utils.warnings import LangGraphDeprecationWarning
-    warnings.filterwarnings("ignore", category=LangGraphDeprecationWarning)
-except ImportError:
-    pass
-
-
 from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
