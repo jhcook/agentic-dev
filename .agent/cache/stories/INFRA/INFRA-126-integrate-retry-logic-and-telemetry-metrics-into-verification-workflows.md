@@ -2,7 +2,7 @@
 
 ## State
 
-COMMITTED
+IN_PROGRESS
 
 ## Problem Statement
 
@@ -44,16 +44,16 @@ As a **DevOps Engineer**, I want **standardized retry logic and telemetry instru
 ## Test Strategy
 
 Verification will be conducted via:
-1.  **Unit Testing**: Validate exponential backoff calculations and retry count increments.
-2.  **Integration Testing**: Use a mock service to inject transient 5xx errors and verify successful recovery and metric emission.
-3.  **Load Testing**: Ensure telemetry instrumentation does not degrade throughput under peak load.
+1. **Unit Testing**: Validate exponential backoff calculations and retry count increments.
+2. **Integration Testing**: Use a mock service to inject transient 5xx errors and verify successful recovery and metric emission.
+3. **Load Testing**: Ensure telemetry instrumentation does not degrade throughput under peak load.
 
 ## Rollback Plan
 
 In the event of system instability:
-1.  Disable retry logic via Feature Flag `VERIFY_RETRY_ENABLED`.
-2.  Revert Workflow Orchestrator service to the previous stable container image (v1.25.x).
-3.  Flush telemetry buffers to prevent data congestion.
+1. Disable retry logic via Feature Flag `VERIFY_RETRY_ENABLED`.
+2. Revert Workflow Orchestrator service to the previous stable container image (v1.25.x).
+3. Flush telemetry buffers to prevent data congestion.
 
 ## Copyright
 

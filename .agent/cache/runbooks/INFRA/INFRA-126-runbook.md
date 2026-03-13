@@ -60,7 +60,8 @@ This story aims to increase the reliability and observability of verification wo
 
 | Test File | Current Patch Target | New Patch Target | Action Required |
 |-----------|---------------------|-----------------|-----------------|
-| `.agent/src/agent/core/implement/tests/test_verifier.py` | `Verifier` basic execution | `VerificationOrchestrator` retry & metrics | Add integration tests with mock 503 failures |
+| `.agent/src/agent/core/implement/tests/test_verification_orchestrator.py` | N/A | `VerificationOrchestrator` retry & metrics | Create new test suite for orchestrator logic including retry timing |
+| `.agent/src/agent/core/implement/tests/test_verifier.py` | `Verifier` basic execution | N/A | Ensure existing verifier tests pass with orchestrator integration |
 
 ### Behavioral Contracts
 
@@ -158,19 +159,17 @@ class VerificationTelemetry:
 
 ### Step 3: Update Verification Orchestrator
 
-Integrate the retry logic and telemetry helper into the main orchestrator.
+Integrate the retry logic and telemetry helper into the main orchestrator. Strict type enforcement is applied using `Callable`, and logging is enhanced to support SOC2 auditability by including `request_id` and timestamps.
 
 #### [MODIFY] .agent/src/agent/core/implement/verification_orchestrator.py
 
-```
-<<<SEARCH
-# Placeholder for implementation logic
-===
+```python
 """
 Orchestrates verification workflows with resiliency and telemetry.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable
+from datetime import datetime, timezone
 from agent.core.implement.retry import retry_sync
 from agent.core.implement.telemetry_helper import VerificationTelemetry
 from agent.core.logger import get_logger
@@ -187,59 +186,86 @@ class VerificationOrchestrator:
         self.max_retries = max_retries
         self.telemetry = VerificationTelemetry(workflow_type)
 
-    def run_verification(self, verifier_func: Any, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def run_verification(
+        self, 
+        verifier_func: Callable[..., Any], 
+        request_id: str,
+        *args: Any, 
+        **kwargs: Any
+    ) -> Dict[str, Any]:
         """
         Runs the verification with full instrumentation.
         
+        Args:
+            verifier_func: The verification logic to execute.
+            request_id: Unique identifier for SOC2 auditability.
+            
         Returns:
             Dict containing result and status metadata.
         """
         self.telemetry.start()
         
         try:
+            # retry_sync is expected to log individual attempts with timestamps
             result = retry_sync(
                 verifier_func,
                 max_retries=self.max_retries,
                 initial_delay=1.0,
+                request_id=request_id,
                 *args,
                 **kwargs
             )
             
             self.telemetry.emit(
                 status="Success",
-                metadata={"error_type": "None"}
+                metadata={"error_type": "None", "request_id": request_id}
             )
             
             return {
                 "status": "Success",
-                "data": result
+                "data": result,
+                "request_id": request_id
             }
         except Exception as error:
+            error_msg = scrub_sensitive_data(str(error))
+            
             self.telemetry.emit(
                 status="Failed",
-                metadata={"error_type": type(error).__name__}
+                metadata={"error_type": type(error).__name__, "request_id": request_id}
+            )
+            
+            logger.error(
+                "Verification failed after max retries",
+                extra={
+                    "request_id": request_id,
+                    "workflow": self.workflow_type,
+                    "error": error_msg,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
             )
             
             return {
                 "status": "Failed",
-                "error": scrub_sensitive_data(str(error))
+                "error": error_msg,
+                "request_id": request_id
             }
->>>
 ```
 
 ## Verification Plan
 
 ### Automated Tests
 
-- [ ] `pytest .agent/src/agent/core/implement/tests/test_verifier.py`: Verify that a function raising a `503` exception is retried 3 times (default).
-- [ ] `pytest .agent/src/agent/core/implement/tests/test_verifier.py`: Verify that `MaxRetriesExceeded` results in a "Failed" status and the final error is logged.
-- [ ] `pytest .agent/src/agent/core/implement/tests/test_verifier.py`: Verify that OpenTelemetry metrics are recorded with the correct attributes.
+- [ ] `pytest .agent/src/agent/core/implement/tests/test_verification_orchestrator.py`: Verify that a function raising a `503` exception is retried 3 times (default).
+- [ ] **Retry Storm Simulation**: `pytest .agent/src/agent/core/implement/tests/test_verification_orchestrator.py`: Verify exponential backoff timing by mocking `time.sleep` and asserting that delays increase progressively (e.g., 1s, 2s, 4s).
+- [ ] `pytest .agent/src/agent/core/implement/tests/test_verification_orchestrator.py`: Verify that `MaxRetriesExceeded` results in a "Failed" status and the final error is scrubbed and logged.
+- [ ] `pytest .agent/src/agent/core/implement/tests/test_verification_orchestrator.py`: Verify that OpenTelemetry metrics are recorded with the correct attributes (`workflow_type`, `status`).
+- [ ] `pytest .agent/src/agent/core/implement/tests/test_verification_orchestrator.py`: Verify that logs contain `request_id` and UTC timestamps for SOC2 compliance.
 
 ### Manual Verification
 
 - [ ] Run the agent with a mock verification step that fails twice and succeeds on the third: `agent check --story INFRA-126 --mock-fail 2`.
-- [ ] Inspect the logs to ensure "Transient failure detected, retrying..." appears twice and include the `scrubbed` error message.
-- [ ] Verify the `verification.attempt_count` metric in the local OTel collector/dashboard.
+- [ ] Inspect the logs to ensure "Transient failure detected, retrying..." appears twice and include the `scrubbed` error message, `request_id`, and `timestamp`.
+- [ ] Verify the `verification.execution_duration_ms` metric in the local OTel collector/dashboard.
 
 ## Definition of Done
 
@@ -251,11 +277,12 @@ class VerificationOrchestrator:
 ### Observability
 
 - [ ] Logs are structured and free of PII (using `scrub_sensitive_data`).
-- [ ] `extra=` dicts added to all retry and telemetry logs.
+- [ ] Audit logs include unique `request_id` and ISO UTC `timestamp` for SOC2 compliance.
+- [ ] `extra=` dicts added to all retry and telemetry logs for better searchability in logging platforms.
 
 ### Testing
 
-- [ ] Unit tests for `VerificationOrchestrator` cover edge cases (immediate success, immediate failure).
+- [ ] Unit tests for `VerificationOrchestrator` reside in a dedicated test file and cover edge cases (immediate success, immediate failure, backoff timing).
 - [ ] Integration tests verify the end-to-end flow with `retry_sync` utilities.
 
 ## Copyright
