@@ -212,141 +212,126 @@ class AIService:
 
         raise ValueError(f"Unsupported genai provider: {provider}")
 
-    def reload(self) -> None:
-        """Reloads providers from secrets/env."""
-        # 1. Check Gemini
-        gemini_key = get_secret("api_key", service="gemini")
-        if gemini_key:
-            try:
-                self.clients['gemini'] = self._build_genai_client("gemini")
-                logging.debug("Gemini provider initialized from secrets.")
-            except ImportError:
-                console.print(
-                    "[dim]ℹ️  Gemini key found but google-genai package not installed. "
-                    "Install with: pip install google-genai[/dim]"
-                )
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
-        else:
-            logging.debug("Skipping Gemini: GEMINI_API_KEY not found in environment or secrets.")
+    def _init_provider(self, provider: str) -> bool:
+        """Initializes a specific provider and returns True on success."""
+        if provider in self.clients:
+            return True
+            
+        if provider == 'gemini':
+            # 1. Check Gemini
+            gemini_key = get_secret("api_key", service="gemini")
+            if gemini_key:
+                try:
+                    self.clients['gemini'] = self._build_genai_client("gemini")
+                    logging.debug("Gemini provider initialized from secrets.")
+                    return True
+                except ImportError:
+                    console.print("[dim]ℹ️  Gemini key found but google-genai package not installed.[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️  Gemini initialization failed: {e}[/yellow]")
+            else:
+                logging.debug("Skipping Gemini: GEMINI_API_KEY not found in environment or secrets.")
+            return False
 
-        # 2. Check Vertex AI
-        # Prefer the env var, then the secrets store, then fall back to
-        # google.auth.default() which reads the quota_project_id from ADC
-        # (set by `gcloud auth application-default login`).
-        vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT") or get_secret("api_key", service="vertex")
-        if not vertex_proj:
-            try:
-                import google.auth
-                _, _adc_project = google.auth.default()
-                if _adc_project:
-                    vertex_proj = _adc_project
-                    logger.debug(
-                        "Vertex AI: project auto-detected from ADC",
-                        extra={"project_id": vertex_proj},
-                    )
-            except Exception:
-                pass
-        if vertex_proj:
-            # Set the env var so _build_genai_client finds it natively
-            os.environ["GOOGLE_CLOUD_PROJECT"] = vertex_proj
-            try:
-                self.clients['vertex'] = self._build_genai_client("vertex")
-                logging.debug(
-                    "Vertex AI provider initialized (project=%s)",
-                    vertex_proj,
-                )
-            except ImportError:
-                console.print(
-                    "[dim]ℹ️  GOOGLE_CLOUD_PROJECT set but google-genai package not installed. "
-                    "Install with: pip install google-genai[/dim]"
-                )
-            except Exception as e:
-                # Provide a helpful hint if it's an ADC auth issue
-                if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
-                    console.print("[yellow]⚠️  Vertex AI authentication missing (DefaultCredentialsError).[/yellow]")
-                    console.print("[yellow]   Please run: gcloud auth application-default login[/yellow]")
-                else:
-                    console.print(f"[yellow]⚠️  Vertex AI initialization failed: {e}[/yellow]")
-        else:
-            logging.debug("Skipping Vertex AI: GOOGLE_CLOUD_PROJECT not found in environment or secrets.")
+        elif provider == 'vertex':
+            # 2. Check Vertex AI
+            vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT") or get_secret("api_key", service="vertex")
+            if not vertex_proj:
+                try:
+                    import google.auth
+                    _, _adc_project = google.auth.default()
+                    if _adc_project:
+                        vertex_proj = _adc_project
+                        logger.debug("Vertex AI: project auto-detected from ADC", extra={"project_id": vertex_proj})
+                except Exception:
+                    pass
+            if vertex_proj:
+                os.environ["GOOGLE_CLOUD_PROJECT"] = vertex_proj
+                try:
+                    self.clients['vertex'] = self._build_genai_client("vertex")
+                    logging.debug("Vertex AI provider initialized (project=%s)", vertex_proj)
+                    return True
+                except ImportError:
+                     console.print("[dim]ℹ️  GOOGLE_CLOUD_PROJECT set but google-genai package not installed.[/dim]")
+                except Exception as e:
+                    if "DefaultCredentialsError" in str(getattr(e, '__class__', '')) or "default credentials" in str(e).lower():
+                        console.print("[yellow]⚠️  Vertex AI authentication missing (DefaultCredentialsError).[/yellow]")
+                        console.print("[yellow]   Please run: gcloud auth application-default login[/yellow]")
+                    else:
+                        console.print(f"[yellow]⚠️  Vertex AI initialization failed: {e}[/yellow]")
+            else:
+                logging.debug("Skipping Vertex AI: GOOGLE_CLOUD_PROJECT not found in environment or secrets.")
+            return False
 
-        # 3. Check OpenAI
-        openai_key = get_secret("api_key", service="openai")
-        if openai_key:
-            try:
-                from openai import OpenAI
-                # Set 120s timeout
-                self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
-                logging.debug("OpenAI provider initialized from secrets.")
-            except ImportError:
-                console.print(
-                    "[dim]ℹ️  OpenAI key found but openai package not installed. "
-                    "Install with: pip install openai[/dim]"
-                )
-            except Exception as e:
-                console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
-        else:
-            logging.debug("Skipping OpenAI: OPENAI_API_KEY not found in environment or secrets.")
-
-        # 4. Check GH CLI
-        if self._check_gh_cli():
-             self.clients['gh'] = "gh-cli" # Marker
-             logging.debug("GH provider initialized via local CLI installation.")
-        else:
-             logging.debug("Skipping GH provider: Local CLI not installed or missing models extension.")
-
-        # 5. Check Anthropic
-        anthropic_key = get_secret("api_key", service="anthropic")
-        if anthropic_key:
-            try:
-                from anthropic import Anthropic
-                # Set 120s timeout for large contexts
-                self.clients['anthropic'] = Anthropic(
-                    api_key=anthropic_key,
-                    timeout=120.0
-                )
-                logging.debug("Anthropic provider initialized from secrets.")
-            except ImportError:
-                console.print(
-                    "[dim]ℹ️  Anthropic key found but anthropic package not installed. "
-                    "Install with: pip install anthropic[/dim]"
-                )
-            except Exception as e:
-                console.print(
-                    f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]"
-                )
-        else:
-            logging.debug("Skipping Anthropic: ANTHROPIC_API_KEY not found in environment or secrets.")
-
-        # 6. Check Ollama (Self-hosted, no API key required)
-        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        # @Security: Guard against remote Ollama hosts to prevent data exfiltration
-        from urllib.parse import urlparse
-        parsed = urlparse(ollama_host)
-        if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
-            logger.warning(
-                "Skipping Ollama: remote host rejected for security",
-                extra={"ollama_host": ollama_host},
-            )
-        else:
-            try:
-                import httpx
-                resp = httpx.get(f"{ollama_host}/", timeout=2.0)
-                if resp.status_code == 200:
+        elif provider == 'openai':
+            # 3. Check OpenAI
+            openai_key = get_secret("api_key", service="openai")
+            if openai_key:
+                try:
                     from openai import OpenAI
-                    self.clients['ollama'] = OpenAI(
-                        base_url=f"{ollama_host}/v1",
-                        api_key="ollama",  # Dummy — Ollama ignores this but SDK requires it
-                        timeout=120.0,
-                    )
-                    logging.info("Ollama provider initialized at %s", ollama_host)
-                else:
-                    logging.info("Ollama health check failed (status %s)", resp.status_code)
-            except Exception:
-                logging.debug("Skipping Ollama: not reachable at %s", ollama_host)
+                    self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
+                    logging.debug("OpenAI provider initialized from secrets.")
+                    return True
+                except ImportError:
+                    console.print("[dim]ℹ️  OpenAI key found but openai package not installed.[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️  OpenAI initialization failed: {e}[/yellow]")
+            else:
+                logging.debug("Skipping OpenAI: OPENAI_API_KEY not found in environment or secrets.")
+            return False
 
-        # Default Priority: GH -> Gemini -> Vertex -> OpenAI -> Anthropic -> Ollama
+        elif provider == 'gh':
+            # 4. Check GH CLI
+            if self._check_gh_cli():
+                self.clients['gh'] = "gh-cli"
+                logging.debug("GH provider initialized via local CLI installation.")
+                return True
+            else:
+                logging.debug("Skipping GH provider: Local CLI not installed or missing models extension.")
+            return False
+
+        elif provider == 'anthropic':
+            anthropic_key = get_secret("api_key", service="anthropic")
+            if anthropic_key:
+                try:
+                    from anthropic import Anthropic
+                    self.clients['anthropic'] = Anthropic(api_key=anthropic_key, timeout=120.0)
+                    logging.debug("Anthropic provider initialized from secrets.")
+                    return True
+                except ImportError:
+                    console.print("[dim]ℹ️  Anthropic key found but anthropic package not installed.[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️  Anthropic initialization failed: {e}[/yellow]")
+            else:
+                logging.debug("Skipping Anthropic: ANTHROPIC_API_KEY not found in environment or secrets.")
+            return False
+
+        elif provider == 'ollama':
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            from urllib.parse import urlparse
+            parsed = urlparse(ollama_host)
+            if parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
+                logger.warning("Skipping Ollama: remote host rejected for security", extra={"ollama_host": ollama_host})
+            else:
+                try:
+                    import httpx
+                    resp = httpx.get(f"{ollama_host}/", timeout=2.0)
+                    if resp.status_code == 200:
+                        from openai import OpenAI
+                        self.clients['ollama'] = OpenAI(base_url=f"{ollama_host}/v1", api_key="ollama", timeout=120.0)
+                        logging.info("Ollama provider initialized at %s", ollama_host)
+                        return True
+                    else:
+                        logging.info("Ollama health check failed (status %s)", resp.status_code)
+                except Exception:
+                    logging.debug("Skipping Ollama: not reachable at %s", ollama_host)
+            return False
+
+        return False
+
+    def reload(self) -> None:
+        """Reloads providers from secrets/env lazily."""
+        self.clients.clear()
         self._set_default_provider()
 
     def _check_gh_cli(self) -> bool:
@@ -362,10 +347,6 @@ class AIService:
                 text=True
             )
             if auth_check.returncode != 0:
-                # Not logged in, so we can't use GH provider
-                # Does not print error, just returns False so we skip it in auto-detection
-                # But if forced, it might be an issue. 
-                # For lazy-load, we just silently skip adding it to clients.
                 return False
 
             # Check if models extension is installed
@@ -381,7 +362,6 @@ class AIService:
             
             return True
         except (FileNotFoundError, subprocess.CalledProcessError) as e:
-            # If we fail to install the extension, we can't use the provider
             if "extension install" in str(e):
                  console.print(
                      f"[red]❌ Failed to install gh-models extension: {e}[/red]"
@@ -396,9 +376,9 @@ class AIService:
         self._set_default_provider()
 
     def _set_default_provider(self) -> None:
-        # If the provider was forced (e.g. via CLI arg), do not overwrite it
-        # with default logic during lazy initialization.
         if self.is_forced and self.provider:
+            # Re-init if forced provider was cleared during reload
+            self._init_provider(self.provider)
             return
 
         # 1. Check configured default in agent.yaml
@@ -407,14 +387,11 @@ class AIService:
             agent_config = config.load_yaml(config.etc_dir / "agent.yaml")
             configured_provider = config.get_value(agent_config, "agent.provider")
             if configured_provider:
-                if configured_provider in self.clients:
+                if self._init_provider(configured_provider):
                     self.provider = configured_provider
+                    logger.debug("Provider set from agent.yaml: %s", configured_provider)
                     return
                 else:
-                    # Configured provider is not in the active client pool — it either
-                    # failed to initialise or is not configured (missing env var / secret).
-                    # Surface a clear, non-alarmist notice so operators know which
-                    # provider is being bypassed and why to look.
                     console.print(
                         f"[bold yellow]⚠️  Configured provider '{configured_provider}' "
                         f"is not available (initialisation failed or not configured). "
@@ -428,24 +405,12 @@ class AIService:
             pass
 
         # 2. Hardcoded Fallback Priority
-        # 'gh' is last: it is a free-tier, rate-limited provider. All configured
-        # providers (gemini, vertex, openai, anthropic) should be preferred.
-        # Context-length is not the concern — chunking handles that — but
-        # rate limits and model quality make gh an absolute last resort.
-        if 'gemini' in self.clients:
-            self.provider = 'gemini'
-        elif 'vertex' in self.clients:
-            self.provider = 'vertex'
-        elif 'openai' in self.clients:
-            self.provider = 'openai'
-        elif 'anthropic' in self.clients:
-            self.provider = 'anthropic'
-        elif 'ollama' in self.clients:
-            self.provider = 'ollama'
-        elif 'gh' in self.clients:
-            self.provider = 'gh'
-        else:
-            self.provider = None
+        for fallback_provider in ['gemini', 'vertex', 'openai', 'anthropic', 'ollama', 'gh']:
+            if self._init_provider(fallback_provider):
+                self.provider = fallback_provider
+                return
+        
+        self.provider = None
             
     def set_provider(self, provider_name: str) -> None:
         """
@@ -497,7 +462,7 @@ class AIService:
         start_search = current_idx + 1
         for i in range(start_search, len(fallback_chain)):
             candidate = fallback_chain[i]
-            if candidate in self.clients:
+            if self._init_provider(candidate):
                 self.provider = candidate
                 # Switching provider via fallback essentially "forces" the
                 # new path for this session
@@ -540,7 +505,7 @@ class AIService:
             route = router.route(user_prompt)
             if route:
                 routed_provider = route.get("provider")
-                if routed_provider in self.clients:
+                if self._init_provider(routed_provider):
                     provider_to_use = routed_provider
                     model_to_use = route.get("deployment_id")
                 else:
@@ -570,6 +535,26 @@ class AIService:
         
         while current_p and current_p not in attempted_providers:
             attempted_providers.add(current_p)
+            
+            if not self._init_provider(current_p):
+                logging.warning(
+                    f"Provider {current_p} not initialized. Falling back.",
+                    extra={"provider": current_p}
+                )
+                if auto_fallback and self.try_switch_provider(current_p):
+                    new_p = self.provider
+                    console.print(
+                        f"[yellow]⚠️ Provider {current_p} failed to initialize. "
+                        f"Falling back to {new_p}...[/yellow]"
+                    )
+                    current_p = new_p
+                    continue
+                else:
+                    console.print(
+                        f"[bold red]❌ AI provider {current_p} failed to initialize.[/bold red]"
+                    )
+                    return ""
+                    
             try:
                 start_time = time.time()
                 
@@ -706,6 +691,8 @@ class AIService:
         """
         self._ensure_initialized()
         provider = self.provider or "gemini"
+        if not self._init_provider(provider):
+            raise RuntimeError(f"Provider {provider} failed to initialize.")
         model_used = model or self.models.get(provider)
 
         timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 120000))
@@ -838,7 +825,7 @@ class AIService:
                 f"Must be one of: {', '.join(valid_providers)}"
             )
             
-        if target_provider not in self.clients:
+        if not self._init_provider(target_provider):
             raise RuntimeError(
                 f"Provider '{target_provider}' is not configured. "
                 f"Set the required API key."
