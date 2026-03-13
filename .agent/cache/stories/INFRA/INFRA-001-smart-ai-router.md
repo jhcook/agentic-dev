@@ -1,6 +1,7 @@
 # INFRA-001: Smart AI Router and Python Rewrite
 
-## Status
+## State
+
 COMMITTED
 
 ## Problem Statement
