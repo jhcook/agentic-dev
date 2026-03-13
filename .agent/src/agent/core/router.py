@@ -41,7 +41,11 @@ class SmartRouter:
             
         try:
             text = self.config_path.read_text()
-            return yaml.safe_load(text) or {}
+            parsed = yaml.safe_load(text)
+            if not isinstance(parsed, dict):
+                logger.warning(f"Router config at {self.config_path} is not a valid dictionary, using defaults.")
+                return {"models": {}, "settings": {}}
+            return parsed
         except Exception as e:
             logger.error(f"Failed to load router config: {e}")
             return {"models": {}, "settings": {}}

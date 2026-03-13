@@ -38,12 +38,12 @@ class TestReActJsonParser:
         assert "I need to check the weather" in result.log
 
     def test_parse_malformed_json(self):
-        """Malformed JSON falls back to AgentFinish."""
+        """Malformed JSON raises ValueError for retry logic."""
         parser = ReActJsonParser()
         llm_output = 'Action: { "tool": "broken" '  # Missing brace
-        result = parser.parse(llm_output)
-        assert isinstance(result, AgentFinish)
-        assert "broken" in result.log
+        import pytest
+        with pytest.raises(ValueError, match="Found 'Action:' marker but could not parse"):
+            parser.parse(llm_output)
 
     def test_parse_finish_no_action(self):
         parser = ReActJsonParser()

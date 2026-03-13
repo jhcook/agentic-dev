@@ -71,6 +71,7 @@ async def test_max_steps_exceeded():
     mock_mcp.call_tool.return_value = "looping"
     
     executor = AgentExecutor(llm=mock_llm, mcp_client=mock_mcp, max_steps=2)
+    executor.guardrail = None
     
     with pytest.raises(MaxStepsExceeded):
         async for _ in executor.run("Go"):

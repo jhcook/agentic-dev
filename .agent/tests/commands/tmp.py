@@ -120,7 +120,7 @@ def mock_deps(tmp_path):
         
         # Setup runbook
         rb_path = tmp_path / "INFRA-055-runbook.md"
-        rb_path.write_text("Status: ACCEPTED\n# Content\n## Implementation Steps\n1. Do something")
+        rb_path.write_text("Status: ACCEPTED\n# Content")
         mock_find_runbook.return_value = rb_path
         
         # Setup story
@@ -159,6 +159,8 @@ def test_implement_from_main_creates_branch(app, mock_deps):
     
     result = runner.invoke(app, ["INFRA-055"])
     
+    print("STDOUT:", result.stdout)
+
     assert result.exit_code == 0
     # Code passes the RAW title, create_branch handles sanitization
     mock_deps["create"].assert_called_once_with("INFRA-055", "Automate Stuff")

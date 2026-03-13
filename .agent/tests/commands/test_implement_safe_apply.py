@@ -381,7 +381,7 @@ class TestFileSizeGuard:
     def test_large_file_rejected_ac5(self, tmp_path):
         """Test 16: File over threshold — full-file overwrite rejected (AC-5)."""
         test_file = tmp_path / "large.py"
-        lines = [f"line_{i}" for i in range(250)]
+        lines = [f"line_{i}" for i in range(FILE_SIZE_GUARD_THRESHOLD + 1)]
         original = "\n".join(lines)
         test_file.write_text(original)
 
@@ -389,13 +389,14 @@ class TestFileSizeGuard:
             'agent.commands.implement.resolve_path',
             return_value=test_file,
         ):
-            result = apply_change_to_file(
-                str(test_file),
-                "completely new content\n",
-                yes=True,
-            )
+            from agent.core.implement.guards import FileSizeGuardViolation
+            with pytest.raises(FileSizeGuardViolation):
+                apply_change_to_file(
+                    str(test_file),
+                    "completely new content\n",
+                    yes=True,
+                )
 
-        assert result is False
         # File unchanged
         assert test_file.read_text() == original
 

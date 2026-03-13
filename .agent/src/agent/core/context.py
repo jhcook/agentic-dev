@@ -15,6 +15,7 @@
 import logging
 import os
 import re as _re
+from pathlib import Path
 from typing import Dict, Any
 
 import yaml
@@ -158,25 +159,74 @@ class ContextLoader:
 
     def _load_targeted_context(self, story_content: str) -> str:
         """Extracts file names referenced in the story and returns their contents."""
-        context = ""
-        # Very simple regex to find things that look like paths
+        context = "TARGETED FILE CONTENTS:\n"
         paths = set(_re.findall(r"[\w\.\-/]+\.(?:py|md|yaml|yml|json|txt|sh)", story_content))
         for p in paths:
             file_path = config.repo_root / p
-            if file_path.exists() and file_path.is_file() and p not in context:
+            if not file_path.exists():
+                # try to find it via rglob
+                name = Path(p).name
+                for cand in config.repo_root.rglob(name):
+                    if p in str(cand) or cand.name == name:
+                        file_path = cand
+                        break
+
+            if file_path.exists() and file_path.is_file():
                 try:
                     content = file_path.read_text(errors="ignore")
+                    if len(content) > 30000:
+                        half = 14000
+                        lines_omitted = (len(content) - 2 * half) // 50
+                        content = content[:half] + f"\n... ({lines_omitted} lines omitted) ...\n" + content[-half:]
                     context += f"\n--- TARGETED CONTEXT: {p} ---\n{content}\n"
                 except Exception:
                     pass
+            else:
+                context += f"\n--- TARGETED CONTEXT: {p} ---\n(FILE NOT FOUND)\n"
         return context
 
     def _load_test_impact(self, story_content: str) -> str:
         """Extracts and formats test impact files from the story."""
-        return ""
+        tests_dir = config.agent_dir / "tests"
+        if not tests_dir.exists():
+            return "No tests directory found."
+        
+        impact = "TEST IMPACT MATRIX:\n"
+        # Extract files mentioned in the story
+        paths = set(_re.findall(r"[\w\.\-/]+\.(?:py|md|yaml|yml|json|txt|sh)", story_content))
+        for p in paths:
+            module_path = p.replace("/", ".").replace(".py", "")
+            for test_file in tests_dir.rglob("test_*.py"):
+                try:
+                    content = test_file.read_text(errors="ignore")
+                    if module_path in content or test_file.name.replace("test_", "") in p:
+                        impact += f"\n--- IMPACTED TEST: {test_file.name} ---\n"
+                        # extract patch lines
+                        for line in content.splitlines():
+                            if module_path in line and ("patch" in line or "import" in line):
+                                impact += f"{line.strip()}\n"
+                except Exception:
+                    pass
+        return impact
 
     def _load_behavioral_contracts(self, story_content: str) -> str:
         """Extracts and formats behavioral contract context."""
-        return ""
+        tests_dir = config.agent_dir / "tests"
+        if not tests_dir.exists():
+            return ""
+
+        contracts = "BEHAVIORAL CONTRACTS:\n"
+        paths = set(_re.findall(r"[\w\.\-/]+\.(?:py|md|yaml|yml|json|txt|sh)", story_content))
+        for p in paths:
+            for test_file in tests_dir.rglob("test_*.py"):
+                if test_file.name.replace("test_", "") in p:
+                    try:
+                        content = test_file.read_text(errors="ignore")
+                        for line in content.splitlines():
+                            if "assert " in line or "=" in line and ("(" in line or "," in line):
+                                contracts += f"{line.strip()}\n"
+                    except Exception:
+                        pass
+        return contracts
 
 context_loader = ContextLoader()

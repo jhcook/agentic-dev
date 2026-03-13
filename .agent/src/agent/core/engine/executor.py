@@ -230,6 +230,23 @@ class AgentExecutor:
                         yield {"type": "thought", "content": parsed_result.log}
                 
                 if isinstance(parsed_result, AgentFinish):
+                    thought_text = getattr(parsed_result, "log", "").lower()
+                    trigger_words = ["search", "check", "run", "read", "investigate", "i will now"]
+                    if any(w in thought_text for w in trigger_words) and len(history) == 0:
+                        logger.warning(f"Intercepted hallucinated Final Answer: {thought_text}")
+                        hint = (
+                            "Validation Error: Your Thought indicates you intend to search, check, run, or read, "
+                            "but you provided a Final Answer instead of a valid Tool Call. "
+                            "If you intend to use a tool, you MUST output a valid Action block. "
+                            "Do NOT narrate your intent without executing the tool."
+                        )
+                        yield {"type": "thought", "content": "[Validation failed — hallucinated tool intent detected]"}
+                        fake_action = AgentAction(tool="system_validator", tool_input={"action": "validation"}, log=parsed_result.log or "")
+                        step = AgentStep(action=fake_action, observation=hint)
+                        history.append(step)
+                        consecutive_tool_calls += 1
+                        continue
+
                     logger.info("Agent decided to Finish.")
                     consecutive_tool_calls = 0
                     final_output = parsed_result.return_values.get("output", "")
@@ -413,6 +430,8 @@ CRITICAL RULES:
 8. **ACTION-FIRST**: You MUST call a tool to verify any state you claim to have changed. Never assume a command succeeded without seeing the output.
 9. **GROUNDING & NO HALLUCINATION**: Your Thoughts and Final Answer must be strictly grounded in the Observations. Do not hallucinate data that wasn't returned by a tool. Never fabricate the output of a command. If you have not executed a tool in the current turn, do not claim to know the exit code or specific output of that tool.
 10. **MANDATORY OUTPUT REPORTING**: After EVERY tool call, your next Thought MUST include a summary of what the tool returned. Never skip the Observation phase. If a tool returned no output or an error, say so explicitly. Do NOT execute a tool twice without explaining the result of the first attempt.
+11. **ANTI-NARRATION**: Do not narrate your intent. Do not use future tense to describe tool use (e.g., "I will now run..."). Simply execute the tool and report the results.
+12. **STATE VERIFICATION**: You are forbidden from making assertions about project architecture, running services, or port numbers without FIRST successfully executing `run_command` (e.g., with `ls`, `ps`, or `lsof`) or `read_file` in the current session.
 """.replace("{tool_desc}", tool_desc)
 
         return f"{base_prompt}\n\n{react_instructions}"

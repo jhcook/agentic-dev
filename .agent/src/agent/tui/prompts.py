@@ -108,6 +108,8 @@ def _build_clinical_prompt(repo_name: str, repo_root: str, license_header: str) 
             "- **Mandatory State Discovery**: NEVER report on environment state (modified files, git status, branch, env vars) without calling a discovery tool FIRST in the current turn. Do not rely on stale or memorized context for environment-dependent answers.\n"
             "- **Graceful Tool Failure**: If a non-essential file, template, or dependency is missing, proceed with the user's primary request using a sensible default instead of surfacing the raw error. Only stop if the CORE task is impossible.\n"
             "- **Intent Persistence**: Keep the user's original goal as your primary focus. If a tool returns an error or unexpected result, ask yourself: 'Does this block the user's actual request?' If not, work around it and complete the task.\n"
+            "- **No Narration**: Do not narrate your intent or explain what you are about to do. Do not use future tense to describe tool use. Stop talking and execute the tool.\n"
+            "- **Anti-Hallucination Barrier**: You are forbidden from asserting specific facts (like port numbers, file names, or process statuses) unless that exact string exists in your observation history from a tool call like `run_command` or `read_file`.\n"
         )
 
     return prompt

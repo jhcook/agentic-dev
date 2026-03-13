@@ -49,8 +49,17 @@ class SelectionLog(VerticalScroll):
 
     def write(self, renderable: Any, scroll_end: bool = False) -> None:
         """Write a new renderable to the selection log, optionally scrolling to the end."""
-        widget = Static(renderable)
-        widget._search_text = getattr(renderable, "markup", str(renderable))
+        from rich.markup import MarkupError
+        
+        try:
+            widget = Static(renderable)
+            widget._search_text = getattr(renderable, "markup", str(renderable))
+        except MarkupError:
+            # If the renderable is a string that contains brackets but isn't valid markup,
+            # Textual/Rich will raise a MarkupError. Fall back to literal text.
+            widget = Static(renderable, markup=False)
+            widget._search_text = str(renderable)
+            
         self.mount(widget)
         if scroll_end:
             self.scroll_end(animate=False)

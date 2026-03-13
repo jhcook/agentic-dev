@@ -367,11 +367,11 @@ class TestLoopDetection:
 
         # Should have a loop detection thought
         thoughts = [e for e in events if e.get("type") == "thought"]
-        loop_thoughts = [t for t in thoughts if "Loop detected" in t.get("content", "")]
+        loop_thoughts = [t for t in thoughts if "loop detected" in t.get("content", "").lower()]
         assert len(loop_thoughts) == 1
 
-        # Should still reach final answer
+        # Should still reach final answer via force-termination
         finals = [e for e in events if e.get("type") == "final_answer"]
         assert len(finals) == 1
-        assert finals[0]["content"] == "Done."
+        assert "repeating tool loop" in finals[0]["content"]
 

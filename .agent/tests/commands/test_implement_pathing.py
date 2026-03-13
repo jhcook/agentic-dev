@@ -27,11 +27,11 @@ def test_find_file_in_repo(mock_subprocess):
     assert "src/agent/main.py" in results
 
 @patch("agent.commands.implement.typer.confirm")
-@patch("agent.core.implement.orchestrator._find_file_in_repo")
+@patch("agent.core.implement.resolver._find_file_in_repo")
 @patch("pathlib.Path.exists")
 @patch("pathlib.Path.write_text")
-@patch("pathlib.Path.mkdir")
-def test_apply_auto_correct(mock_mkdir, mock_write, mock_exists, mock_find, mock_confirm):
+@patch("builtins.open")
+def test_apply_auto_correct(mock_open, mock_write, mock_exists, mock_find, mock_confirm):
     """apply_change_to_file succeeds when resolve_path auto-corrects to the unique match."""
     # Root "custom_script.py" does NOT exist ...
     mock_exists.return_value = False

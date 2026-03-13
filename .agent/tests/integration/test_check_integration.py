@@ -24,9 +24,9 @@ def mock_story(tmp_path):
     story_file = story_dir / "INFRA-TEST-001-test-story.md"
     return story_file
 
-@patch("agent.commands.check.config")
+@patch("agent.core.check.system.config")
 def test_validate_story_success(mock_config, mock_story):
-    """Test valid story returns True."""
+    """Test valid story returns None (success)."""
     # Setup Valid Content
     content = """
 ## Problem Statement
@@ -52,12 +52,12 @@ D
     mock_stories_dir.rglob.return_value = [mock_story]
     
     # Call
-    res = validate_story("INFRA-TEST-001", return_bool=True)
-    assert res is True
+    res = validate_story("INFRA-TEST-001")
+    assert res is None
 
-@patch("agent.commands.check.config")
+@patch("agent.core.check.system.config")
 def test_validate_story_missing_sections(mock_config, mock_story):
-    """Test invalid story raises Exit(1) or returns False."""
+    """Test invalid story raises Exit(1)."""
     # Invalid Content
     mock_story.write_text("## Problem Statement\nOnly one section.")
     
@@ -66,49 +66,7 @@ def test_validate_story_missing_sections(mock_config, mock_story):
     mock_config.stories_dir = mock_stories_dir
     mock_stories_dir.rglob.return_value = [mock_story]
     
-    # return_bool = True -> returns False
-    res = validate_story("INFRA-TEST-001", return_bool=True)
-    assert res is False
-    
-    # return_bool = False -> raises Typer Exit
-    with pytest.raises(Exit):
+    # return_bool removed -> raises Typer Exit
+    with pytest.raises(Exit) as exc:
         validate_story("INFRA-TEST-001")
-
-@patch("agent.commands.check.config")
-@patch("agent.commands.check.InteractiveFixer")
-@patch("agent.commands.check.Confirm")
-@patch("agent.commands.check.Prompt")
-def test_validate_story_interactive_trigger(mock_prompt, mock_confirm, mock_fixer_cls, mock_config, mock_story):
-    """Test that interactive mode triggers the Fixer."""
-    mock_story.write_text("Invalid content")
-    
-    mock_stories_dir = MagicMock()
-    mock_config.stories_dir = mock_stories_dir
-    mock_stories_dir.rglob.return_value = [mock_story]
-    
-    # Setup Fixer Mock
-    fixer_instance = mock_fixer_cls.return_value
-    fixer_instance.analyze_failure.return_value = [
-        {"title": "Fix 1", "description": "Desc", "patched_content": "Fixed"}
-    ]
-    fixer_instance.apply_fix.return_value = True
-    fixer_instance.verify_fix.return_value = True
-    
-    # Mock UI Interactions
-    mock_prompt.ask.return_value = "1" # Select Option 1
-    mock_confirm.ask.return_value = True # Confirm Apply
-    
-    # Run interactive
-    # Should raise Exit(1) or 0 depending on success flow?
-    # Logic: if verify_fix returns True, it returns True (if return_bool defaults to False, logic says check returns True)
-    # The existing code: 
-    # if fixer.verify_fix(check):
-    #    return True
-    
-    res = validate_story("INFRA-TEST-001", interactive=True)
-    assert res is True
-    
-    # Verify Fixer was called
-    fixer_instance.analyze_failure.assert_called()
-    fixer_instance.apply_fix.assert_called()
-    fixer_instance.verify_fix.assert_called()
+    assert exc.value.exit_code == 1
