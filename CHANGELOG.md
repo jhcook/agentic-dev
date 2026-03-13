@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **INFRA-121**: OpenTelemetry tracing for LLM flows and Langfuse integration.
+- **INFRA-125**: Standardized robust `@with_retry` decorator and utilities (sync and async) with OpenTelemetry backoff instrumentation per ADR-012.
 
 ### Changed
 - **INFRA-119**: Implemented strict JSON schema validation for LLM outputs with automatic retry loop. This includes Pydantic models for AgentAction and Finish, and robust JSON recovery parsing using ReActJsonParser.
