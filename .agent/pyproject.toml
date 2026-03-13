@@ -100,8 +100,8 @@ agent = "agent.main:app"
 
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.uv]
 # 'dev' dependency-group is installed by default — no config needed.
