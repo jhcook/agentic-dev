@@ -379,8 +379,9 @@ class ConsoleApp(ChatWorkerMixin, App):
 
     def _write_chunk(self, text: str) -> None:
         """Update the active streaming widget with new token."""
+        from rich.markup import escape
         self._streaming_text += text
-        self._stream_widget.update(self._streaming_text)
+        self._stream_widget.update(escape(self._streaming_text))
 
         # Throttle scroll_end to avoid flooding the event loop
         now = time.time()
