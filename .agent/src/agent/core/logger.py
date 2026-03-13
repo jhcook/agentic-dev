@@ -19,7 +19,7 @@ import logging
 # Instead, we provide a setup function.
 
 class OTelFilter(logging.Filter):
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         try:
             from opentelemetry import trace
             span = trace.get_current_span()
