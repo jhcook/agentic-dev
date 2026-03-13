@@ -163,6 +163,10 @@ OpenTelemetry instrumentation is available for LLM flows and spans.
 |----------|---------|-------------|
 | `ENABLE_OTEL_TRACING` | `false` | Enable/disable tracing. Needs `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 
+### Standardized Retries & Backoff
+
+To provide robust execution, a standardized `@with_retry` and `retry_async` / `retry_sync` utility is available. By default, it uses exponential backoff and safely interacts with telemetry. If a non-transient error occurs, raise `NonRetryableError` to immediately abort the retry loop.
+
 ## Documentation
 
 - [Onboarding Guide](docs/getting_started.md) — How to install and configure `.agent` in your repository
