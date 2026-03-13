@@ -281,7 +281,9 @@ def with_retry(
     multiplier: float = 2.0,
     jitter: float = 0.1,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,)
-) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]: ...
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """Overload for async functions."""
+    ...
 
 @overload
 def with_retry(
@@ -290,7 +292,9 @@ def with_retry(
     multiplier: float = 2.0,
     jitter: float = 0.1,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,)
-) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Overload for sync functions."""
+    ...
 
 def with_retry(
     max_retries: int = 3,
