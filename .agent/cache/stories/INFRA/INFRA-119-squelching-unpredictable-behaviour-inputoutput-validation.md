@@ -2,7 +2,7 @@
 
 ## State
 
-REVIEW_NEEDED
+COMMITTED
 
 ## Problem Statement
 
