@@ -155,6 +155,14 @@ agent query "how does the router work?" --provider ollama
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server address (localhost only) |
 | `OLLAMA_MODEL` | `llama3` | Default model to use |
 
+### OpenTelemetry Tracing
+
+OpenTelemetry instrumentation is available for LLM flows and spans.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_OTEL_TRACING` | `false` | Enable/disable tracing. Needs `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+
 ## Documentation
 
 - [Onboarding Guide](docs/getting_started.md) — How to install and configure `.agent` in your repository

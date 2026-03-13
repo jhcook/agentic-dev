@@ -47,6 +47,15 @@ async def test_trace_llm_call_scrubs_pii():
             mock_span.set_attribute.assert_any_call(ATTR_LLM_PROMPT, "REDACTED")
 
 @pytest.mark.asyncio
+async def test_record_validation_failure():
+    """Ensure record_validation_failure correctly sets the score."""
+    from agent.core.telemetry import record_validation_failure, ATTR_SCORE
+    mock_span = MagicMock()
+    record_validation_failure(span=mock_span)
+    mock_span.set_attribute.assert_called_with(ATTR_SCORE, 0)
+    mock_span.add_event.assert_called_with("validation_failed")
+
+@pytest.mark.asyncio
 async def test_trace_llm_call_records_latency():
     """
     Ensure that latency_ms is recorded as a float.

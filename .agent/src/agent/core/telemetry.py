@@ -95,10 +95,10 @@ def trace_llm_call(model_name: str):
     Args:
         model_name: The name/version of the model being called.
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable) -> Callable:
         """The actual decorator."""
         @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             """The wrapped function."""
             tracer = get_tracer()
             with tracer.start_as_current_span("llm_request") as span:
