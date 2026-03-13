@@ -180,8 +180,10 @@ def trace_llm_call(model_name: str):
         model_name: The name/version of the model being called.
     """
     def decorator(func: Callable):
+        """The actual decorator."""
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
+            """The wrapped function."""
             tracer = get_tracer()
             with tracer.start_as_current_span("llm_request") as span:
                 start_time = time.perf_counter()
@@ -345,6 +347,7 @@ async def test_trace_llm_call_scrubs_pii():
         
         @trace_llm_call(model_name="gpt-4o")
         async def mock_llm(prompt: str):
+            """Mock llm call."""
             return "Result"
 
         # Mock trace span
@@ -366,6 +369,7 @@ async def test_trace_llm_call_records_latency():
     """
     @trace_llm_call(model_name="gpt-4o")
     async def mock_llm(prompt: str):
+        """Mock llm call."""
         return "Result"
 
     with patch("agent.core.telemetry.get_tracer") as mock_tracer:
