@@ -2,7 +2,8 @@
 
 ## State
 
-COMMITTED
+ICEBOX 
+*(Rationale: Preserved for future addon. The local web platform introduces unnecessary tech stack complexity (Vite/React) that violates the new Reliability Plan's rule diet for the core engine.)*
 
 ## Problem Statement
 
