@@ -58,6 +58,7 @@ def test_new_runbook_success(mock_fs, app):
     
     # Mock AI
     with patch("agent.core.ai.ai_service.complete", return_value="Status: PROPOSED\n# Runbook Content"), \
+         patch("agent.commands.runbook.validate_runbook_schema", return_value=[]), \
          patch("agent.commands.runbook.upsert_artifact"): # Mock DB sync
          
         result = runner.invoke(app, [story_id])
@@ -84,6 +85,7 @@ def test_new_runbook_with_provider(mock_fs, app):
     
     with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
          patch("agent.core.ai.ai_service.complete", return_value="Status: PROPOSED\n# Content"), \
+         patch("agent.commands.runbook.validate_runbook_schema", return_value=[]), \
          patch("agent.commands.runbook.upsert_artifact"):
         
         result = runner.invoke(app, [story_id, "--provider", "openai"])

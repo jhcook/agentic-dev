@@ -90,6 +90,7 @@ def test_runbook_prompt_construction(mock_validate, mock_complete, mock_deps):
                  patch("agent.core.config.config.rules_dir", target_agent_dir / "rules"), \
                  patch("agent.core.config.config.templates_dir", templates_dir), \
                  patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "Architect Bot\nSec Bot", "checks": "Check ADRs\nCheck PII"}, "instructions": "", "adrs": ""}), \
+                 patch("agent.commands.runbook.validate_runbook_schema", return_value=[]), \
                  patch("agent.commands.runbook.upsert_artifact"):
                  
                 mock_complete.return_value = "Runbook Content"

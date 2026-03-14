@@ -15,7 +15,18 @@
 """Parser utilities for AI markdown and runbooks."""
 
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union, Optional
+
+from pydantic import ValidationError
+
+from agent.core.implement.models import (
+    RunbookSchema,
+    RunbookStep,
+    ModifyBlock,
+    NewBlock,
+    DeleteBlock,
+    SearchReplaceBlock,
+)
 
 try:
     from opentelemetry import trace
@@ -149,23 +160,85 @@ def detect_malformed_modify_blocks(content: str) -> List[str]:
     return malformed
 
 
+def _extract_runbook_data(content: str) -> List[dict]:
+    """Extract implementation steps from runbook markdown into Pydantic-ready dicts.
+
+    Parses ``## Implementation Steps`` to find ``### Step N`` headers,
+    then within each step finds ``#### [MODIFY|NEW|DELETE]`` blocks and
+    extracts their content into structured dictionaries.
+
+    Args:
+        content: Full runbook markdown text.
+
+    Returns:
+        List of step dicts suitable for ``RunbookSchema(steps=...)``.
+
+    Raises:
+        ValueError: If the ``## Implementation Steps`` section is missing.
+    """
+    if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
+        raise ValueError(
+            "Missing '## Implementation Steps' section — runbook has no executable steps."
+        )
+
+    impl_match = re.search(
+        r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
+        re.DOTALL | re.MULTILINE,
+    )
+    body = impl_match.group(1) if impl_match else ""
+
+    # Split into steps by ### headers
+    step_splits = re.split(r'\n### ', body)
+    steps: List[dict] = []
+
+    for raw_step in step_splits[1:]:  # skip preamble before first ###
+        title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
+        title = title_match.group(1).strip() if title_match else "Untitled Step"
+
+        block_pattern = re.compile(
+            r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
+            re.IGNORECASE,
+        )
+        block_matches = list(block_pattern.finditer(raw_step))
+        operations: List[dict] = []
+
+        for idx, match in enumerate(block_matches):
+            action = match.group(1).upper()
+            filepath = match.group(2).strip()
+            start = match.end()
+            end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
+            block_body = raw_step[start:end]
+
+            if action == "MODIFY":
+                sr_blocks = []
+                for sr in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', block_body, re.DOTALL):
+                    sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
+                operations.append({"path": filepath, "blocks": sr_blocks})
+
+            elif action == "NEW":
+                fence_match = re.search(r'```[\w]*\n(.*?)```', block_body, re.DOTALL)
+                file_content = fence_match.group(1).rstrip() if fence_match else ""
+                operations.append({"path": filepath, "content": file_content})
+
+            elif action == "DELETE":
+                rationale = block_body.strip()
+                # Strip HTML comments
+                rationale = re.sub(r'<!--\s*|\s*-->', '', rationale).strip()
+                operations.append({"path": filepath, "rationale": rationale or ""})
+
+        if operations:
+            steps.append({"title": title, "operations": operations})
+
+    return steps
+
+
 def validate_runbook_schema(content: str) -> List[str]:
-    """Validate a runbook's implementation block structure against the format contract.
+    """Validate a runbook's implementation block structure using Pydantic models.
 
-    Checks every ``#### [MODIFY]``, ``#### [NEW]``, and ``#### [DELETE]``
-    block in the Implementation Steps section and returns a list of human-readable
-    violations. An empty list means the runbook is structurally valid.
-
-    Rules enforced:
-
-    - ``[MODIFY] <path>``: must have at least one ``<<<SEARCH`` block.
-      A bare fenced code block without ``<<<SEARCH`` is a contract violation.
-    - ``[NEW] <path>``: must have a fenced code block. A ``<<<SEARCH``
-      block without any code fence means the file content is missing.
-      (Note: ``[NEW]`` + ``<<<SEARCH`` inside a fence is valid for idempotency
-      and is handled by the S/R parser — it is not flagged here.)
-    - ``[DELETE] <path>``: must have a non-empty body (rationale required).
-    - The runbook must contain an ``## Implementation Steps`` section.
+    Extracts the ``## Implementation Steps`` section, parses it into
+    structured dictionaries, and validates against :class:`RunbookSchema`.
+    Returns a list of human-readable violations preserving the ``List[str]``
+    contract expected by callers.
 
     Args:
         content: Full runbook markdown text.
@@ -175,58 +248,17 @@ def validate_runbook_schema(content: str) -> List[str]:
     """
     violations: List[str] = []
 
-    # Rule 0: must have an implementation section
-    if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
-        violations.append(
-            "Missing '## Implementation Steps' section — runbook has no executable steps."
-        )
-        return violations  # No point checking individual blocks without the section
-
-    # Locate the implementation steps body
-    impl_match = re.search(
-        r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
-        re.DOTALL | re.MULTILINE,
-    )
-    body = impl_match.group(1) if impl_match else ""
-
-    # Split into individual action blocks: #### [ACTION] <path>
-    block_pattern = re.compile(
-        r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
-        re.IGNORECASE,
-    )
-    block_matches = list(block_pattern.finditer(body))
-
-    for idx, match in enumerate(block_matches):
-        action = match.group(1).upper()
-        filepath = match.group(2).strip()
-        # Block body is everything between this header and the next header (or end)
-        start = match.end()
-        end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(body)
-        block_body = body[start:end]
-
-        if action == "MODIFY":
-            has_sr = bool(re.search(r'<<<SEARCH', block_body))
-            if not has_sr:
-                violations.append(
-                    f"[MODIFY] '{filepath}': missing <<<SEARCH/===/>>> block. "
-                    f"[MODIFY] must use search/replace, never a full code block."
-                )
-
-        elif action == "NEW":
-            has_fence = bool(re.search(r'```[\w]*\n', block_body))
-            if not has_fence:
-                violations.append(
-                    f"[NEW] '{filepath}': missing fenced code block. "
-                    f"[NEW] must provide complete file content in a fenced block."
-                )
-
-        elif action == "DELETE":
-            stripped = block_body.strip()
-            if not stripped:
-                violations.append(
-                    f"[DELETE] '{filepath}': missing rationale. "
-                    f"Add a one-line comment explaining why this file is removed."
-                )
+    try:
+        step_data = _extract_runbook_data(content)
+        RunbookSchema(steps=step_data)
+    except ValidationError as exc:
+        for error in exc.errors():
+            loc = " -> ".join(str(item) for item in error["loc"])
+            violations.append(f"[{loc}]: {error['msg']}")
+    except ValueError as exc:
+        violations.append(str(exc))
+    except Exception as exc:
+        violations.append(f"Structural error: {exc}")
 
     return violations
 

@@ -176,6 +176,7 @@ def test_normal_runbook_proceeds(mock_fs, app):
 
     with (
         patch("agent.core.ai.ai_service.complete", return_value=normal_content),
+        patch("agent.commands.runbook.validate_runbook_schema", return_value=[]),
         patch("agent.commands.runbook.upsert_artifact"),
     ):
         result = runner.invoke(app, [story_id])
