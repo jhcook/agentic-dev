@@ -15,7 +15,7 @@ As a **developer**, I want **runbooks to be validated by strict Pydantic schemas
 ## Acceptance Criteria
 
 - [ ] **AC-1**: `RunbookStep`, `ModifyBlock`, `SearchReplaceBlock`, `NewBlock`, and `DeleteBlock` Pydantic models are defined in a new `models.py` module under `.agent/src/agent/core/implement/`.
-- [ ] **AC-2**: `validate_runbook_schema()` in `parser.py` is replaced by a Pydantic-based validator that returns structured `ValidationError` objects instead of plain strings.
+- [ ] **AC-2**: `validate_runbook_schema()` in `parser.py` is replaced by a Pydantic-based validator that returns a `List[str]` of human-readable violation messages (preserving the existing contract) while using Pydantic models internally for structural validation.
 - [ ] **AC-3**: `runbook.py` parses AI output into the new Pydantic models before writing to disk. On `ValidationError`, the exact error is fed back to the LLM as a correction prompt (iterative retry, max 3 attempts per ADR-012).
 - [ ] **AC-4**: `ModifyBlock` validators enforce: (a) `<<<SEARCH` block is present, (b) search text is non-empty, (c) file path does not reference non-existent directories.
 - [ ] **AC-5**: `NewBlock` validators enforce: (a) fenced code block content is non-empty, (b) no `<<<SEARCH` blocks appear (these go to `ModifyBlock`).
@@ -42,6 +42,7 @@ As a **developer**, I want **runbooks to be validated by strict Pydantic schemas
 
 Components touched: `parser.py`, `runbook.py`, `orchestrator.py`, new `models.py`
 Workflows affected: `/runbook`, `/implement`
+Co-committed: Feature iceboxing changes from plan INFRA-129 are included in this branch.
 Risks identified: LLM may struggle with strict JSON/YAML output — mitigated by iterative retry with Pydantic error feedback.
 
 ## Test Strategy

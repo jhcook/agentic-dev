@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-134**: Shift-left runbook validation with Pydantic models. Replaces regex-based `validate_runbook_schema()` with structured Pydantic validators (`RunbookSchema`, `ModifyBlock`, `NewBlock`, `DeleteBlock`). Includes a self-correction retry loop (max 3 attempts) for AI-generated runbooks, OpenTelemetry tracing for validation latency, and dedicated unit tests.
 - **INFRA-098**: Unified the agent interface layer across TUI and Voice by introducing `agent.core.session.AgentSession` which relies entirely on protocol-based AIProvider and exposes a unified schema for tools.
 - **INFRA-126**: Intergrated standard retry logic and telemetry to verification orchestrator handling of rewrite requests.
 - **INFRA-121**: OpenTelemetry tracing for LLM flows and Langfuse integration.
