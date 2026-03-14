@@ -14,6 +14,7 @@
 
 """Parser utilities for AI markdown and runbooks."""
 
+import contextlib
 import re
 from typing import Dict, List, Tuple, Union, Optional
 
@@ -176,60 +177,65 @@ def _extract_runbook_data(content: str) -> List[dict]:
     Raises:
         ValueError: If the ``## Implementation Steps`` section is missing.
     """
-    if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
-        raise ValueError(
-            "Missing '## Implementation Steps' section — runbook has no executable steps."
+    span_ctx = _tracer.start_as_current_span("runbook.extract_data") if _tracer else contextlib.nullcontext()
+    with span_ctx as span:
+        if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
+            raise ValueError(
+                "Missing '## Implementation Steps' section — runbook has no executable steps."
+            )
+
+        impl_match = re.search(
+            r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
+            re.DOTALL | re.MULTILINE,
         )
+        body = impl_match.group(1) if impl_match else ""
 
-    impl_match = re.search(
-        r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
-        re.DOTALL | re.MULTILINE,
-    )
-    body = impl_match.group(1) if impl_match else ""
+        # Split into steps by ### headers (handle body with or without leading newline)
+        step_splits = re.split(r'(?:^|\n)### ', body)
+        steps: List[dict] = []
 
-    # Split into steps by ### headers (handle body with or without leading newline)
-    step_splits = re.split(r'(?:^|\n)### ', body)
-    steps: List[dict] = []
+        for raw_step in step_splits[1:]:  # skip preamble before first ###
+            title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
+            title = title_match.group(1).strip() if title_match else "Untitled Step"
 
-    for raw_step in step_splits[1:]:  # skip preamble before first ###
-        title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
-        title = title_match.group(1).strip() if title_match else "Untitled Step"
+            block_pattern = re.compile(
+                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
+                re.IGNORECASE,
+            )
+            block_matches = list(block_pattern.finditer(raw_step))
+            operations: List[dict] = []
 
-        block_pattern = re.compile(
-            r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
-            re.IGNORECASE,
-        )
-        block_matches = list(block_pattern.finditer(raw_step))
-        operations: List[dict] = []
+            for idx, match in enumerate(block_matches):
+                action = match.group(1).upper()
+                filepath = match.group(2).strip()
+                start = match.end()
+                end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
+                block_body = raw_step[start:end]
 
-        for idx, match in enumerate(block_matches):
-            action = match.group(1).upper()
-            filepath = match.group(2).strip()
-            start = match.end()
-            end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
-            block_body = raw_step[start:end]
+                if action == "MODIFY":
+                    sr_blocks = []
+                    for sr in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', block_body, re.DOTALL):
+                        sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
+                    operations.append({"path": filepath, "blocks": sr_blocks})
 
-            if action == "MODIFY":
-                sr_blocks = []
-                for sr in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', block_body, re.DOTALL):
-                    sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
-                operations.append({"path": filepath, "blocks": sr_blocks})
+                elif action == "NEW":
+                    fence_match = re.search(r'```[\w]*\n(.*?)```', block_body, re.DOTALL)
+                    file_content = fence_match.group(1).rstrip() if fence_match else ""
+                    operations.append({"path": filepath, "content": file_content})
 
-            elif action == "NEW":
-                fence_match = re.search(r'```[\w]*\n(.*?)```', block_body, re.DOTALL)
-                file_content = fence_match.group(1).rstrip() if fence_match else ""
-                operations.append({"path": filepath, "content": file_content})
+                elif action == "DELETE":
+                    rationale = block_body.strip()
+                    # Strip HTML comments
+                    rationale = re.sub(r'<!--\s*|\s*-->', '', rationale).strip()
+                    operations.append({"path": filepath, "rationale": rationale or ""})
 
-            elif action == "DELETE":
-                rationale = block_body.strip()
-                # Strip HTML comments
-                rationale = re.sub(r'<!--\s*|\s*-->', '', rationale).strip()
-                operations.append({"path": filepath, "rationale": rationale or ""})
+            if operations:
+                steps.append({"title": title, "operations": operations})
 
-        if operations:
-            steps.append({"title": title, "operations": operations})
+        if span:
+            span.set_attribute("runbook.step_count", len(steps))
 
-    return steps
+        return steps
 
 
 def validate_runbook_schema(content: str) -> List[str]:
@@ -247,18 +253,22 @@ def validate_runbook_schema(content: str) -> List[str]:
         List of violation strings. Empty list means schema is valid.
     """
     violations: List[str] = []
+    span_ctx = _tracer.start_as_current_span("runbook.validate_schema") if _tracer else contextlib.nullcontext()
+    with span_ctx as span:
+        try:
+            step_data = _extract_runbook_data(content)
+            RunbookSchema(steps=step_data)
+        except ValidationError as exc:
+            for error in exc.errors():
+                loc = " -> ".join(str(item) for item in error["loc"])
+                violations.append(f"[{loc}]: {error['msg']}")
+        except ValueError as exc:
+            violations.append(str(exc))
+        except Exception as exc:
+            violations.append(f"Structural error: {exc}")
 
-    try:
-        step_data = _extract_runbook_data(content)
-        RunbookSchema(steps=step_data)
-    except ValidationError as exc:
-        for error in exc.errors():
-            loc = " -> ".join(str(item) for item in error["loc"])
-            violations.append(f"[{loc}]: {error['msg']}")
-    except ValueError as exc:
-        violations.append(str(exc))
-    except Exception as exc:
-        violations.append(f"Structural error: {exc}")
+        if span:
+            span.set_attribute("runbook.violation_count", len(violations))
 
     return violations
 
