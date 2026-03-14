@@ -105,6 +105,14 @@ class TestNewBlock:
                 content="<<<SEARCH\nold_code\n===\nnew_code\n>>>",
             )
 
+    def test_absolute_path_rejected(self):
+        with pytest.raises(ValidationError, match="repository-relative"):
+            NewBlock(path="/etc/shadow", content="print('hello')")
+
+    def test_traversal_path_rejected(self):
+        with pytest.raises(ValidationError, match="repository-relative"):
+            NewBlock(path="../../etc/shadow", content="print('hello')")
+
 
 # ── DeleteBlock ──────────────────────────────────────────────
 
@@ -117,6 +125,14 @@ class TestDeleteBlock:
     def test_short_rationale_rejected(self):
         with pytest.raises(ValidationError, match="at least 5"):
             DeleteBlock(path="old.py", rationale="rm")
+
+    def test_absolute_path_rejected(self):
+        with pytest.raises(ValidationError, match="repository-relative"):
+            DeleteBlock(path="/etc/passwd", rationale="Security cleanup needed")
+
+    def test_traversal_path_rejected(self):
+        with pytest.raises(ValidationError, match="repository-relative"):
+            DeleteBlock(path="../../../etc/passwd", rationale="Security cleanup needed")
 
 
 # ── RunbookStep ──────────────────────────────────────────────

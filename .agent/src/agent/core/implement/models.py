@@ -62,6 +62,16 @@ class NewBlock(BaseModel):
     path: str = Field(..., description="Repository-relative path for the new file.")
     content: str = Field(..., min_length=1, description="Complete file content.")
 
+    @field_validator("path")
+    @classmethod
+    def validate_new_path(cls, v: str) -> str:
+        """Ensure path is repository-relative and safe."""
+        if not v:
+            raise ValueError("Path is required for NEW block.")
+        if ".." in v or v.startswith("/"):
+            raise ValueError(f"Path must be repository-relative and safe: {v}")
+        return v
+
     @field_validator("content")
     @classmethod
     def validate_content(cls, v: str) -> str:
@@ -81,6 +91,16 @@ class DeleteBlock(BaseModel):
     
     path: str = Field(..., description="Repository-relative path to delete.")
     rationale: str = Field(..., min_length=5, description="Rationale for deletion.")
+
+    @field_validator("path")
+    @classmethod
+    def validate_delete_path(cls, v: str) -> str:
+        """Ensure path is repository-relative and safe."""
+        if not v:
+            raise ValueError("Path is required for DELETE block.")
+        if ".." in v or v.startswith("/"):
+            raise ValueError(f"Path must be repository-relative and safe: {v}")
+        return v
 
 class RunbookStep(BaseModel):
     """A logical step in the implementation containing one or more operations."""
