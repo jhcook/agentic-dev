@@ -27,7 +27,6 @@ from typing import Any, Dict, Optional, Callable, TypeVar, Coroutine, ParamSpec
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 
 from agent.core.security import scrub_sensitive_data
@@ -71,6 +70,7 @@ def initialize_telemetry() -> None:
     
     # Langfuse expects OTLP traces. Headers should be set via environment variables.
     # OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64>"
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter  # ADR-025: lazy import
     exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
     processor = BatchSpanProcessor(exporter)
     provider.add_span_processor(processor)

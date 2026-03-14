@@ -112,7 +112,7 @@ class TestVertexCredentialValidation:
     @patch("agent.core.ai.ai_service")
     @patch("agent.core.auth.credentials.LLM_PROVIDER", "vertex")
     @patch("agent.core.auth.credentials.get_secret_manager")
-    def test_vertex_fails_without_project(self, mock_get_sm, mock_ai_service):
+    def test_vertex_fails_without_project(self, mock_get_sm, mock_ai_service, tmp_path):
         """validate_credentials should raise when GOOGLE_CLOUD_PROJECT is missing."""
         mock_ai_service.provider = "vertex"
         mock_sm = MagicMock()
@@ -121,8 +121,11 @@ class TestVertexCredentialValidation:
         mock_get_sm.return_value = mock_sm
         from agent.core.auth.credentials import validate_credentials, MissingCredentialsError
 
-        with pytest.raises(MissingCredentialsError):
-            validate_credentials()
+        # Mock Path.home so the ADC fallback doesn't find a real credentials file
+        with patch("agent.core.auth.credentials.Path") as mock_path:
+            mock_path.home.return_value = tmp_path
+            with pytest.raises(MissingCredentialsError):
+                validate_credentials()
 
 
 # ---------------------------------------------------------------------------

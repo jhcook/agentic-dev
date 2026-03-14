@@ -80,7 +80,38 @@ def run_smart_test_selection(base: str | None, skip_tests: bool, interactive: bo
             is_backend = str(f).startswith("backend/") or str(f).startswith(".agent/src/backend/")
             if not is_backend:
                 root_py_changes.append(f)
-    
+
+    # --- .agent/ Framework Strategy ---
+    # When .agent/ files are modified, run the framework's own test suite
+    # using the same test_commands config that `agent implement` uses.
+    # This closes the regression gap where the generic rglob filter below
+    # excludes .agent/ tests from smart selection.
+    agent_changes = [f for f in files if str(f).startswith(".agent/")]
+    if agent_changes:
+        try:
+            import yaml as _yaml
+            agent_cfg_path = Path(".agent/etc/agent.yaml")
+            if agent_cfg_path.exists():
+                agent_cfg = _yaml.safe_load(agent_cfg_path.read_text())
+                test_cmds = agent_cfg.get("agent", {}).get("test_commands", {})
+                agent_test_cmd = None
+                if isinstance(test_cmds, dict):
+                    agent_test_cmd = test_cmds.get(".agent/")
+                elif isinstance(test_cmds, str):
+                    agent_test_cmd = test_cmds
+                if agent_test_cmd:
+                    result["test_commands"].append({
+                        "name": "Agent Framework Tests",
+                        "cmd": ["bash", "-c", agent_test_cmd],
+                        "cwd": Path.cwd()
+                    })
+                    logger.info(
+                        "smart_test_selection agent_framework_tests enabled, "
+                        "changed_agent_files=%d", len(agent_changes)
+                    )
+        except Exception as e:
+            logger.warning("Could not load agent.yaml test config: %s", e)
+
     # --- Python / Backend Strategy ---
     if backend_changes or root_py_changes:
         all_test_files = list(Path.cwd().rglob("test_*.py")) + list(Path.cwd().rglob("*_test.py"))
@@ -91,6 +122,7 @@ def run_smart_test_selection(base: str | None, skip_tests: bool, interactive: bo
             
             if "node_modules" in parts or ".venv" in parts or "venv" in parts:
                 continue
+            # .agent/ tests are handled by the dedicated strategy above
             if ".agent" in parts:
                 continue
                 

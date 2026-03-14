@@ -34,32 +34,35 @@ from agent.core.implement.retry import (
     retry_counter
 )
 
-@pytest.mark.asyncio
-async def test_retry_async_success():
+def test_retry_async_success():
     """Verify that a successful call returns immediately without retries."""
     mock_func = AsyncMock(return_value="success")
-    result = await retry_async(mock_func)
+    result = asyncio.run(retry_async(mock_func))
     assert result == "success"
     assert mock_func.call_count == 1
 
-@pytest.mark.asyncio
-async def test_retry_async_eventual_success():
+def test_retry_async_eventual_success():
     """Verify that a function eventually succeeds after retries."""
     mock_func = AsyncMock()
     mock_func.side_effect = [ValueError("fail"), ValueError("fail"), "success"]
 
-    with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
-        result = await retry_async(mock_func, max_retries=3)
-        assert result == "success"
-        assert mock_func.call_count == 3
-        assert mock_sleep.call_count == 2
+    async def _run():
+        """Run the retry with mocked sleep."""
+        with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
+            result = await retry_async(mock_func, max_retries=3)
+            assert mock_sleep.call_count == 2
+            return result
 
-@pytest.mark.asyncio
-async def test_retry_async_non_retryable_error():
+    result = asyncio.run(_run())
+    assert result == "success"
+    assert mock_func.call_count == 3
+
+def test_retry_async_non_retryable_error():
     """Verify that NonRetryableError stops execution immediately."""
     mock_func = AsyncMock(side_effect=NonRetryableError("fatal"))
+
     with pytest.raises(NonRetryableError):
-        await retry_async(mock_func)
+        asyncio.run(retry_async(mock_func))
     assert mock_func.call_count == 1
 
 def test_retry_sync_decorator():
@@ -86,14 +89,18 @@ def test_retry_sync_metrics_emission():
                 1, {"exception": "ValueError", "mode": "sync"}
             )
 
-@pytest.mark.asyncio
-async def test_jitter_and_backoff_calculation():
+def test_jitter_and_backoff_calculation():
     """Verify that the delay increases and includes jitter."""
     mock_func = AsyncMock(side_effect=[ValueError("1"), ValueError("2"), "ok"])
 
-    with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
-        with patch("random.uniform", return_value=0.0):
-            await retry_async(mock_func, max_retries=2, initial_delay=1.0, multiplier=2.0, jitter=0.1)
-            # 1.0 -> 2.0
-            assert mock_sleep.call_args_list[0][0][0] == 1.0
-            assert mock_sleep.call_args_list[1][0][0] == 2.0
+    async def _run():
+        """Run the retry with mocked sleep and jitter."""
+        with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
+            with patch("random.uniform", return_value=0.0):
+                result = await retry_async(mock_func, max_retries=2, initial_delay=1.0, multiplier=2.0, jitter=0.1)
+                # 1.0 -> 2.0
+                assert mock_sleep.call_args_list[0][0][0] == 1.0
+                assert mock_sleep.call_args_list[1][0][0] == 2.0
+                return result
+
+    asyncio.run(_run())
