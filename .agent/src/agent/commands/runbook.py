@@ -365,8 +365,13 @@ Generate the runbook now.
             break
             
         logger.warning(
-            "runbook_validation_fail attempt=%d story=%s errors=%d",
-            attempt, story_id, len(schema_violations)
+            "runbook_validation_fail",
+            extra={
+                "attempt": attempt,
+                "story_id": story_id,
+                "error_count": len(schema_violations),
+                "validation_error": schema_violations,
+            },
         )
         
         if attempt < max_attempts:
