@@ -471,18 +471,18 @@ def validate_runbook_schema(content: str) -> List[str]:
 
 ### Documentation
 
-- [ ] CHANGELOG.md updated with INFRA-134.
-- [ ] `agent/core/implement/models.py` contains PEP-257 docstrings for all models.
+- [x] CHANGELOG.md updated with INFRA-134.
+- [x] `agent/core/implement/models.py` contains PEP-257 docstrings for all models.
 
 ### Observability
 
-- [ ] Logs show `runbook_validation_fail` with structured error counts.
-- [ ] Telemetry traces include validation latency.
+- [x] Logs show `runbook_validation_fail` with structured error counts.
+- [x] Telemetry traces include validation latency.
 
 ### Testing
 
-- [ ] All existing parser tests pass.
-- [ ] New unit tests added for `RunbookSchema` in `models.py`.
+- [x] All existing parser tests pass.
+- [x] New unit tests added for `RunbookSchema` in `models.py`.
 
 ## Copyright
 
