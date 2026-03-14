@@ -2,7 +2,8 @@
 
 ## State
 
-COMMITTED
+ICEBOX 
+*(Rationale: Preserved for future addon. Attempts to unify Voice and TUI layers into a rigid abstraction created unnecessary complexity for the core engine. Drift is now managed via Pydantic input/output validation (INFRA-119) and unified Observability (INFRA-121).)*
 
 ## Problem Statement
 
