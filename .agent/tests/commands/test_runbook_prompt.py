@@ -92,7 +92,12 @@ def test_runbook_prompt_construction(mock_validate, mock_complete, mock_deps):
                  patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "Architect Bot\nSec Bot", "checks": "Check ADRs\nCheck PII"}, "instructions": "", "adrs": ""}), \
                  patch("agent.commands.runbook.upsert_artifact"):
                  
-                mock_complete.return_value = "Runbook Content"
+                mock_complete.return_value = (
+                    "# Runbook\n\n## Implementation Steps\n\n"
+                    "### Step 1: Create module\n\n"
+                    "#### [NEW] `module.py`\n\n"
+                    "```python\ndef hello(): pass\n```\n"
+                )
                  
                 result = runner.invoke(app, ["new-runbook", "STORY-PROMPT"])
              

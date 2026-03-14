@@ -340,12 +340,54 @@ Generate the runbook now.
 """
 
     console.print("[bold green]🤖 Panel is discussing...[/bold green]")
-    with console.status("[bold green]🤖 Panel is discussing...[/bold green]") as status:
-        content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
+    
+    max_attempts = 3
+    attempt = 0
+    content = ""
+    current_user_prompt = user_prompt
+
+    while attempt < max_attempts:
+        attempt += 1
+        with console.status(f"[bold green]🤖 Panel is discussing (Attempt {attempt}/{max_attempts})...[/bold green]") as status:
+            content = ai_service.complete(system_prompt, current_user_prompt, rich_status=status)
+            
+        if not content:
+            console.print("[bold red]❌ AI returned empty response.[/bold red]")
+            raise typer.Exit(code=1)
+
+        # -- SPLIT_REQUEST Fallback (INFRA-094) --
+        if "SPLIT_REQUEST" in content:
+            break  # Let the split logic below handle it
+
+        # Schema validation (AC-3)
+        schema_violations = validate_runbook_schema(content)
+        if not schema_violations:
+            break
+            
+        logger.warning(
+            "runbook_validation_fail",
+            extra={
+                "attempt": attempt,
+                "story_id": story_id,
+                "error_count": len(schema_violations),
+                "validation_error": schema_violations,
+            },
+        )
         
-    if not content:
-        console.print("[bold red]❌ AI returned empty response.[/bold red]")
-        raise typer.Exit(code=1)
+        if attempt < max_attempts:
+            error_msg = "\n".join([f"- {v}" for v in schema_violations])
+            console.print(f"[yellow]⚠️  Attempt {attempt} failed validation. Asking for correction...[/yellow]")
+            current_user_prompt = (
+                f"{user_prompt}\n\n"
+                f"### SCHEMA VALIDATION FAILED ON PREVIOUS ATTEMPT ###\n"
+                f"Your previous output had the following violations:\n{error_msg}\n\n"
+                f"Please correct these errors and generate the full runbook again."
+            )
+        else:
+            console.print(f"[bold red]❌ Failed to generate a valid runbook after {max_attempts} attempts.[/bold red]")
+            for v in schema_violations:
+                console.print(f"  [red]• {v}[/red]")
+            raise typer.Exit(code=1)
 
     # -- SPLIT_REQUEST Fallback (INFRA-094) --
     if "SPLIT_REQUEST" in content:
@@ -396,20 +438,8 @@ Generate the runbook now.
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
 
-    # 5.1 Schema validation — warn immediately so the developer can iterate
-    schema_violations = validate_runbook_schema(content)
-    if schema_violations:
-        console.print(
-            f"\n[bold yellow]⚠️  RUNBOOK SCHEMA WARNINGS ({len(schema_violations)}):[/bold yellow]"
-        )
-        for v in schema_violations:
-            console.print(f"  [yellow]• {v}[/yellow]")
-        console.print(
-            "[dim]Fix the runbook before running 'agent implement'. "
-            "The implement command will refuse to apply a schema-invalid runbook.[/dim]"
-        )
-    else:
-        console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
+    # 5.1 Schema validation status
+    console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
     
     # Auto-sync
     runbook_id = f"{story_id}" # Using Story ID for Runbook ID as well, with type='runbook'

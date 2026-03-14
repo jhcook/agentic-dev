@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 import pytest
 import typer
@@ -21,6 +21,26 @@ from typer.testing import CliRunner
 from agent.commands.runbook import new_runbook
 
 runner = CliRunner()
+
+# Valid runbook content that passes Pydantic schema validation
+VALID_RUNBOOK_CONTENT = """# Runbook for INFRA-001
+
+## Implementation Steps
+
+### Step 1: Create the new module
+
+#### [NEW] `new_module.py`
+
+```python
+# New module content
+def hello():
+    return "world"
+```
+"""
+
+# Invalid runbook content missing Implementation Steps section
+INVALID_RUNBOOK_CONTENT = "Status: PROPOSED\n# Runbook without implementation steps"
+
 
 @pytest.fixture
 def app():
@@ -51,14 +71,13 @@ def mock_fs(tmp_path):
         yield tmp_path
 
 def test_new_runbook_success(mock_fs, app):
-    # Setup Committed Story
+    """Valid AI output passes schema validation on first attempt."""
     story_id = "INFRA-001"
     story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
     story_file.write_text("## State\nCOMMITTED\n# Story Content")
     
-    # Mock AI
-    with patch("agent.core.ai.ai_service.complete", return_value="Status: PROPOSED\n# Runbook Content"), \
-         patch("agent.commands.runbook.upsert_artifact"): # Mock DB sync
+    with patch("agent.core.ai.ai_service.complete", return_value=VALID_RUNBOOK_CONTENT), \
+         patch("agent.commands.runbook.upsert_artifact"):
          
         result = runner.invoke(app, [story_id])
         
@@ -78,15 +97,46 @@ def test_new_runbook_not_committed(mock_fs, app):
     assert "is not COMMITTED" in result.stdout
 
 def test_new_runbook_with_provider(mock_fs, app):
+    """Provider flag is respected and valid runbook passes validation."""
     story_id = "INFRA-003"
     story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
     story_file.write_text("## State\nCOMMITTED\n# Story Content")
     
     with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
-         patch("agent.core.ai.ai_service.complete", return_value="Status: PROPOSED\n# Content"), \
+         patch("agent.core.ai.ai_service.complete", return_value=VALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
         
         result = runner.invoke(app, [story_id, "--provider", "openai"])
         
         assert result.exit_code == 0
         mock_set_provider.assert_called_once_with("openai")
+
+def test_new_runbook_retry_on_invalid_schema(mock_fs, app):
+    """Invalid AI output triggers retry loop; exits code 1 after max attempts."""
+    story_id = "INFRA-004"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n# Story Content")
+    
+    with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
+         patch("agent.commands.runbook.upsert_artifact"):
+        
+        result = runner.invoke(app, [story_id])
+        
+        assert result.exit_code == 1
+        assert "Failed to generate a valid runbook after 3 attempts" in result.stdout
+
+def test_new_runbook_self_corrects(mock_fs, app):
+    """AI self-corrects on second attempt after initial schema failure."""
+    story_id = "INFRA-005"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n# Story Content")
+    
+    # First call returns invalid, second returns valid
+    with patch("agent.core.ai.ai_service.complete", side_effect=[INVALID_RUNBOOK_CONTENT, VALID_RUNBOOK_CONTENT]), \
+         patch("agent.commands.runbook.upsert_artifact"):
+        
+        result = runner.invoke(app, [story_id])
+        
+        assert result.exit_code == 0
+        assert "Attempt 1 failed validation" in result.stdout
+        assert "Runbook generated" in result.stdout
