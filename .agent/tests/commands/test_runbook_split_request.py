@@ -172,11 +172,16 @@ def test_normal_runbook_proceeds(mock_fs, app):
     story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
     story_file.write_text("## State\nCOMMITTED\n# Normal Story\n- [ ] Step 1")
 
-    normal_content = "# INFRA-NORMAL Runbook\n\n## Goal\nDo the thing."
+    normal_content = (
+        "# INFRA-NORMAL Runbook\n\n## Goal\nDo the thing.\n\n"
+        "## Implementation Steps\n\n"
+        "### Step 1: Create file\n\n"
+        "#### [NEW] `thing.py`\n\n"
+        "```python\ndef do_thing(): pass\n```\n"
+    )
 
     with (
         patch("agent.core.ai.ai_service.complete", return_value=normal_content),
-        patch("agent.commands.runbook.validate_runbook_schema", return_value=[]),
         patch("agent.commands.runbook.upsert_artifact"),
     ):
         result = runner.invoke(app, [story_id])

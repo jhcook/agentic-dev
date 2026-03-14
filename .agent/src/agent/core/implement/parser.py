@@ -187,8 +187,8 @@ def _extract_runbook_data(content: str) -> List[dict]:
     )
     body = impl_match.group(1) if impl_match else ""
 
-    # Split into steps by ### headers
-    step_splits = re.split(r'\n### ', body)
+    # Split into steps by ### headers (handle body with or without leading newline)
+    step_splits = re.split(r'(?:^|\n)### ', body)
     steps: List[dict] = []
 
     for raw_step in step_splits[1:]:  # skip preamble before first ###

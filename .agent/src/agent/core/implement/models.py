@@ -47,6 +47,13 @@ class ModifyBlock(BaseModel):
         # Basic relative path safety
         if ".." in self.path or self.path.startswith("/"):
             raise ValueError(f"Path must be repository-relative and safe: {self.path}")
+        # AC-4(c): parent directory must exist
+        parent = Path(self.path).parent
+        if str(parent) != "." and not parent.exists():
+            raise ValueError(
+                f"[MODIFY] '{self.path}': parent directory '{parent}' does not exist. "
+                f"Check for hallucinated paths."
+            )
         return self
 
 class NewBlock(BaseModel):
@@ -57,10 +64,16 @@ class NewBlock(BaseModel):
 
     @field_validator("content")
     @classmethod
-    def content_not_empty(cls, v: str) -> str:
-        """Ensure new file content is not empty."""
+    def validate_content(cls, v: str) -> str:
+        """Validate new file content is non-empty and doesn't contain SEARCH blocks."""
         if not v.strip():
             raise ValueError("NEW file content cannot be empty.")
+        # AC-5(b): NEW blocks must not contain <<<SEARCH blocks
+        if "<<<SEARCH" in v:
+            raise ValueError(
+                "[NEW] file content must not contain <<<SEARCH blocks. "
+                "Use [MODIFY] with search/replace instead."
+            )
         return v
 
 class DeleteBlock(BaseModel):
