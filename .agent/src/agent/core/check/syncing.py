@@ -66,15 +66,18 @@ def sync_oracle_pattern() -> SyncOraclePatternResult:
         logger.warning("NotebookLM sync unreachable", extra={"error": str(e)})
         result["notebooklm_status"] = f"NotebookLM sync unreachable: {e}."
 
-    if not result["notebooklm_ready"]:
+    if not result["notebooklm_ready"] or result["notebooklm_status"] == "NotebookLM sync not configured.":
         try:
             from agent.db.journey_index import JourneyIndex
             idx = JourneyIndex()
+            # AC-4: Ensure fallback activates even in non-interactive environments
             idx.build()
             result["vector_db_ready"] = True
-            result["vector_db_status"] = "Local Vector DB ready."
+            result["vector_db_status"] = "Local Vector DB ready (Oracle Pattern fallback active)."
+            logger.info("ChromaDB fallback activated", extra={"status": "READY"})
         except Exception as e:
-            logger.error("Local Vector DB build failed", extra={"error": str(e)})
-            result["vector_db_status"] = f"Local Vector DB build failed: {e}."
+            # We don't fail the whole sync, but log the failure to activate fallback
+            logger.error("Local Vector DB fallback activation failed", extra={"error": str(e)})
+            result["vector_db_status"] = f"Local Vector DB fallback failed: {e}."
 
     return result

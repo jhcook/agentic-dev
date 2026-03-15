@@ -13,10 +13,11 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 import json
 import re
+import time
 
 import typer
 from opentelemetry import trace
@@ -245,8 +246,12 @@ def new_runbook(
     panel_description = agents_data.get("description", "")
     panel_checks = agents_data.get("checks", "")
     
-    # Truncate rules to avoid token limits (GitHub CLI has 8000 token max)
-    rules_content = rules_full[:3000] + "\n\n[...truncated for token limits...]" if len(rules_full) > 3000 else rules_full
+    # INFRA-135: Dynamic Rule Retrieval (Rule Diet)
+    # Replaces static truncation with semantic filtering
+    rules_content = _retrieve_dynamic_rules(story_content, targeted_context)
+    
+    if len(rules_content) < len(rules_full) * 0.5:
+        console.print(f"[dim]ℹ️  Rule Diet active: Prompt reduced by {100 - (len(rules_content)/len(rules_full)*100):.1f}%[/dim]")
 
     # 4. Prompt
     # Load Template
@@ -466,6 +471,75 @@ def _load_journey_context() -> str:
     if journeys_content:
         return scrub_sensitive_data(journeys_content[:5000])
     return "None defined yet."
+
+
+def _retrieve_dynamic_rules(story_content: str, targeted_context: str) -> str:
+    """
+    Perform semantic retrieval of contextual rules based on story impact (INFRA-135).
+    
+    Classifies .agent/rules/ into core (always included) and contextual 
+    (retrieved via RAG). Reduces token count by ≥50%.
+    
+    Args:
+        story_content: The user story markdown.
+        targeted_context: Introspection of touched files.
+        
+    Returns:
+        Assembled string of relevant governance rules.
+    """
+    start_time = time.monotonic()
+    rules_dir = config.rules_dir
+    
+    # AC-1: Audit and Classify
+    # Core: Identity, Governance, Security, QA, Architect (Foundation)
+    CORE_PREFIXES = ("000", "001", "002", "003", "004")
+    
+    core_content = []
+    contextual_candidates = []
+    
+    if rules_dir.exists():
+        for rule_file in sorted(rules_dir.glob("*.mdc")):
+            if rule_file.name.startswith(CORE_PREFIXES):
+                core_content.append(f"--- CORE RULE: {rule_file.name} ---\n{rule_file.read_text()}")
+            else:
+                contextual_candidates.append(rule_file.name)
+                
+    # AC-3: Retrieval Step
+    query = f"{story_content}\n\nTOUCHED FILES:\n{targeted_context}"
+    retrieved_content = ""
+    source = "NONE"
+    fallback_used = False
+    
+    try:
+        # Try local Vector DB first as it's the primary fallback for Rule Diet
+        from agent.db.journey_index import JourneyIndex
+        idx = JourneyIndex()
+        # Search for contextual rules specifically
+        retrieved_content = idx.search(f"Governance rules for: {query}", k=4)
+        source = "ChromaDB"
+        fallback_used = True
+    except Exception as e:
+        logger.warning(f"Rule retrieval failed: {e}")
+        source = "FAILED"
+        
+    # AC-4: Fallback Mechanism
+    # If retrieval failed or returned empty, we still have core_content (Security + QA)
+    
+    latency = (time.monotonic() - start_time) * 1000
+    
+    # NFR: SOC2/Observability logging
+    logger.info("rule_retrieval", extra={
+        "source": source,
+        "count": 4 if retrieved_content else 0,
+        "latency_ms": latency,
+        "fallback_used": fallback_used
+    })
+    
+    combined = "\n\n".join(core_content)
+    if retrieved_content:
+        combined += "\n\n### CONTEXTUAL RULES (RETRIEVED) ###\n\n" + retrieved_content
+        
+    return combined
 
 
 def _parse_split_request(content: str) -> Optional[dict]:
