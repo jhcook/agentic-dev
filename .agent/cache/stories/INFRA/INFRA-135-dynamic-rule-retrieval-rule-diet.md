@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+REVIEW_NEEDED
 
 ## Problem Statement
 
@@ -36,10 +36,21 @@ As a **developer**, I want **only the rules relevant to my current change to be 
 
 - JRN-065
 
+## Known Bugs
+
+- **ChromaDB fallback regression** *(FIXED)*: The local ChromaDB vector DB fallback (implemented under INFRA-074 AC-7, in `journey_index.py` and `syncing.py`) previously worked but had regressed. When NotebookLM credentials are unavailable (e.g. during non-interactive `agent preflight` runs), ChromaDB should activate as the fallback for context retrieval, but was not activating. Fixed by broadening the fallback condition in `syncing.py` to trigger on "not configured" status.
+
+- **CWD path resolution — systemic reliability bug**: All `agent` CLI commands execute from `.agent/` (via `cd .agent && uv run agent ...`) but runbook paths are repo-root-relative (e.g. `.agent/src/agent/commands/runbook.py`). This causes paths to resolve as `.agent/.agent/src/...` which don't exist. This has broken:
+  - `agent implement`: cannot find target files for search/replace
+  - `ModifyBlock` Pydantic validator: AC-4(c) parent directory check failed (removed as workaround)
+  - `agent preflight`: test commands fail with `cd .agent/src: No such file or directory`
+  
+  **Root cause**: There is no single canonical path resolution strategy. Some code assumes CWD is repo root, other code assumes CWD is `.agent/`. All paths should be resolved relative to repo root unconditionally, enforced by a single `config.repo_root`-based resolution function.
+
 ## Impact Analysis Summary
 
-Components touched: `runbook.py`, `context.py`, `context_builder.py`, `.agent/rules/*`, NotebookLM MCP
-Workflows affected: `/runbook`
+Components touched: `runbook.py`, `context.py`, `context_builder.py`, `journey_index.py`, `syncing.py`, `.agent/rules/*`, NotebookLM MCP
+Workflows affected: `/runbook`, `/preflight`
 Risks identified: Retrieval failure could miss critical governance checks — mitigated by fallback static core set.
 
 ## Test Strategy

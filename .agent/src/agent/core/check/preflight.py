@@ -21,6 +21,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from agent.core.config import config
 from agent.core.logger import get_logger
 from agent.core.utils import scrub_sensitive_data
 from opentelemetry import trace
@@ -77,7 +78,7 @@ def execute_preflight(story_id: str, story_content: str) -> PreflightResult:
 
 def _load_previous_verdicts() -> str:
     """Loads previous verdicts from the .preflight_result file if it exists."""
-    path = Path(".preflight_result")
+    path = config.cache_dir / ".preflight_result"
     if path.exists():
         try:
             return path.read_text()
@@ -88,7 +89,7 @@ def _load_previous_verdicts() -> str:
 def _persist_result(result: PreflightResult) -> None:
     """Persists the preflight result to a local file."""
     try:
-        Path(".preflight_result").write_text(json.dumps(result, indent=2))
+        (config.cache_dir / ".preflight_result").write_text(json.dumps(result, indent=2))
     except Exception as e:
         logger.error("Failed to persist .preflight_result", extra={"error": str(e)})
 

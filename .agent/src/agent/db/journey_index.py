@@ -302,7 +302,14 @@ class JourneyIndex:
 
     def search(self, query: str, k: int = 4) -> str:
         """
-        Retrieve relevant context via embeddings.
+        Retrieve relevant context via semantic search.
+        
+        Args:
+            query: The search string.
+            k: Number of results to return.
+            
+        Returns:
+            Formatted string of relevant documentation chunks.
         """
         import logging
         from opentelemetry import trace
@@ -313,8 +320,13 @@ class JourneyIndex:
         with tracer.start_as_current_span("vector_db.similarity_search") as span:
             span.set_attribute("query", query)
             try:
+                # Ensure vectorstore is initialized and has documents
+                if not hasattr(self, "vectorstore") or self.vectorstore is None:
+                    return ""
+                
                 results = self.vectorstore.similarity_search(query, k=k)
                 if not results:
+                    logger.debug("Vector DB search returned no results for query.")
                     return ""
                     
                 formatted_chunks = []
@@ -324,5 +336,6 @@ class JourneyIndex:
                     
                 return "\n\n".join(formatted_chunks)
             except Exception as e:
-                logger.debug(f"Error searching vector db: {e}")
-                return "Local vector DB context search failed."
+                logger.warning(f"Error searching vector db: {e}")
+                return ""
+
