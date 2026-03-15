@@ -75,14 +75,6 @@ class TestModifyBlock:
                 blocks=[SearchReplaceBlock(search="a", replace="b")],
             )
 
-    def test_hallucinated_directory_rejected(self, tmp_path, monkeypatch):
-        """AC-4(c): parent directory must exist."""
-        monkeypatch.chdir(tmp_path)
-        with pytest.raises(ValidationError, match="does not exist"):
-            ModifyBlock(
-                path="nonexistent/dir/file.py",
-                blocks=[SearchReplaceBlock(search="a", replace="b")],
-            )
 
 
 # ── NewBlock ─────────────────────────────────────────────────

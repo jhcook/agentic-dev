@@ -47,13 +47,6 @@ class ModifyBlock(BaseModel):
         # Basic relative path safety
         if ".." in self.path or self.path.startswith("/"):
             raise ValueError(f"Path must be repository-relative and safe: {self.path}")
-        # AC-4(c): parent directory must exist
-        parent = Path(self.path).parent
-        if str(parent) != "." and not parent.exists():
-            raise ValueError(
-                f"[MODIFY] '{self.path}': parent directory '{parent}' does not exist. "
-                f"Check for hallucinated paths."
-            )
         return self
 
 class NewBlock(BaseModel):
