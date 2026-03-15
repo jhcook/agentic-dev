@@ -38,7 +38,14 @@ As a **developer**, I want **only the rules relevant to my current change to be 
 
 ## Known Bugs
 
-- **ChromaDB fallback regression**: The local ChromaDB vector DB fallback (implemented under INFRA-074 AC-7, in `journey_index.py` and `syncing.py`) previously worked but has regressed. When NotebookLM credentials are unavailable (e.g. during non-interactive `agent preflight` runs), ChromaDB should activate as the fallback for context retrieval, but currently does not. This regression must be diagnosed and fixed as part of this story's fallback mechanism work (AC-4).
+- **ChromaDB fallback regression** *(FIXED)*: The local ChromaDB vector DB fallback (implemented under INFRA-074 AC-7, in `journey_index.py` and `syncing.py`) previously worked but had regressed. When NotebookLM credentials are unavailable (e.g. during non-interactive `agent preflight` runs), ChromaDB should activate as the fallback for context retrieval, but was not activating. Fixed by broadening the fallback condition in `syncing.py` to trigger on "not configured" status.
+
+- **CWD path resolution — systemic reliability bug**: All `agent` CLI commands execute from `.agent/` (via `cd .agent && uv run agent ...`) but runbook paths are repo-root-relative (e.g. `.agent/src/agent/commands/runbook.py`). This causes paths to resolve as `.agent/.agent/src/...` which don't exist. This has broken:
+  - `agent implement`: cannot find target files for search/replace
+  - `ModifyBlock` Pydantic validator: AC-4(c) parent directory check failed (removed as workaround)
+  - `agent preflight`: test commands fail with `cd .agent/src: No such file or directory`
+  
+  **Root cause**: There is no single canonical path resolution strategy. Some code assumes CWD is repo root, other code assumes CWD is `.agent/`. All paths should be resolved relative to repo root unconditionally, enforced by a single `config.repo_root`-based resolution function.
 
 ## Impact Analysis Summary
 
