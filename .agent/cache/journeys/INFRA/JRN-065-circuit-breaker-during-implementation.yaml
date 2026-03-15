@@ -178,9 +178,15 @@ depends_on:
 implementation:
   routes: []
   files:
+  - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/gates.py
   - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/core/adk/orchestrator.py
   - .agent/src/agent/core/implement/orchestrator.py
   - .agent/src/agent/core/implement/parser.py
+  - .agent/tests/commands/test_gates.py
+  - .agent/tests/commands/test_implement_updates_journey.py
+  - .agent/tests/core/check/test_implement_gate.py
   - .agent/tests/core/implement/test_scope_guard.py
   tests:
   - .agent/tests/journeys/test_jrn_065.py

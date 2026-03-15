@@ -859,9 +859,7 @@ ADRs:
             gate_results.append(qa)
             _print_gate(qa)
 
-        docs = gates.run_docs_check(modified_paths)
-        gate_results.append(docs)
-        _print_gate(docs)
+        # INFRA-137: run_docs_check removed — enforced at source (INFRA-136).
 
         pr_size = gates.check_pr_size(commit_message=story_title)
         gate_results.append(pr_size)

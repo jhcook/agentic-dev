@@ -101,7 +101,6 @@ class TestImplementGateAsWarning:
             failing = _make_gate_result(False, "QA")
             mock_gates.run_qa_gate.return_value = failing
             mock_gates.run_security_scan.return_value = _make_gate_result(True)
-            mock_gates.run_docs_check.return_value = _make_gate_result(True)
             mock_gates.check_pr_size.return_value = _make_gate_result(True)
 
             # Reproduce the gate aggregation logic inline (without invoking the full CLI)

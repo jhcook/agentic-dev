@@ -332,14 +332,81 @@ async def _orchestrate_async(
             "_parsed": parsed,  # carry for report generation
         }
 
-    # Dispatch all agents concurrently
+    # ── INFRA-137: Skip roles that already PASS'd on this commit ──────────
+    _head_sha = ""
+    try:
+        import subprocess as _sp
+        _head_sha = _sp.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
+    except Exception:
+        pass
+
+    _cached_commit = ""
+    _cached_verdicts = previous_verdicts or {}
+    if _cached_verdicts:
+        try:
+            import json as _cj
+            _marker = config.cache_dir / ".preflight_result"
+            if _marker.exists():
+                _cached_commit = _cj.loads(_marker.read_text()).get("commit", "")
+        except Exception:
+            pass
+
+    agents_to_run = []
+    cached_results = []
+    for agent in agents:
+        role_name = agent.name
+        cached_rv = _cached_verdicts.get(role_name, {})
+        # Skip only if: same commit AND previous verdict was PASS
+        if (
+            _head_sha
+            and _head_sha == _cached_commit
+            and cached_rv.get("verdict") == "PASS"
+        ):
+            if progress_callback:
+                progress_callback(
+                    f"⏭️  @{role_name}: PASS (cached — same commit)"
+                )
+            cached_results.append({
+                "name": role_name,
+                "verdict": "PASS",
+                "summary": cached_rv.get("summary", "Cached from previous run"),
+                "findings": [],
+                "required_changes": [],
+                "references": {"cited": [], "valid": [], "invalid": []},
+                "finding_validation": {"total": 0, "validated": 0, "filtered": 0},
+                "_cached": True,
+            })
+        else:
+            agents_to_run.append(agent)
+
+    # Dispatch remaining agents concurrently
     if progress_callback:
+        skipped = len(agents) - len(agents_to_run)
         progress_callback(
-            f"🚀 Dispatching {len(agents)} agents in parallel..."
+            f"🚀 Dispatching {len(agents_to_run)} agents in parallel"
+            f" ({skipped} cached)..."
         )
-    agent_results = await asyncio.gather(
-        *[_run_single_agent(agent) for agent in agents]
+    live_results = await asyncio.gather(
+        *[_run_single_agent(agent) for agent in agents_to_run]
     )
+
+    # Merge cached + live results in original agent order
+    _live_iter = iter(live_results)
+    _cached_iter = iter(cached_results)
+    agent_results = []
+    for agent in agents:
+        role_name = agent.name
+        cached_rv = _cached_verdicts.get(role_name, {})
+        if (
+            _head_sha
+            and _head_sha == _cached_commit
+            and cached_rv.get("verdict") == "PASS"
+        ):
+            agent_results.append(next(_cached_iter))
+        else:
+            agent_results.append(next(_live_iter))
 
     # Aggregate results (deterministic order — same as input)
     # Import validation helpers from native governance path

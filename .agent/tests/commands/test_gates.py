@@ -26,7 +26,6 @@ from agent.commands.gates import (
     check_commit_size,
     check_domain_isolation,
     log_skip_audit,
-    run_docs_check,
     run_qa_gate,
     run_security_scan,
 )
@@ -147,40 +146,7 @@ class TestRunQaGate:
             assert call_args[0][0] == "pytest"
 
 
-# ── Docs Check ────────────────────────────────────────────────
-
-
-class TestRunDocsCheck:
-    def test_documented_functions_pass(self, clean_py_file: Path):
-        result = run_docs_check([clean_py_file])
-        assert result.passed is True
-        assert result.name == "Documentation Check"
-
-    def test_undocumented_functions_blocked(self, bad_py_file: Path):
-        result = run_docs_check([bad_py_file])
-        assert result.passed is False
-        assert "undocumented" in result.details
-
-    def test_private_functions_ignored(self, tmp_path: Path):
-        """Private functions (starting with _) should not be checked."""
-        f = tmp_path / "private.py"
-        f.write_text(
-            "def _helper():\n"
-            "    return 42\n"
-        )
-        result = run_docs_check([f])
-        assert result.passed is True
-
-    def test_no_python_files(self, tmp_path: Path):
-        txt = tmp_path / "readme.txt"
-        txt.write_text("hello")
-        result = run_docs_check([txt])
-        assert result.passed is True
-        assert "No Python files" in result.details
-
-    def test_empty_file_list(self):
-        result = run_docs_check([])
-        assert result.passed is True
+# ── INFRA-137: TestRunDocsCheck removed — enforced at source (INFRA-136). ──
 
 
 # ── Composability ─────────────────────────────────────────────
@@ -195,9 +161,8 @@ class TestGatesComposable:
         """Each gate can run independently and results are composable."""
         sec = run_security_scan([clean_py_file], security_patterns_file)
         qa = run_qa_gate("true")
-        docs = run_docs_check([clean_py_file])
 
-        results = [sec, qa, docs]
+        results = [sec, qa]
         assert all(isinstance(r, GateResult) for r in results)
         assert all(r.passed for r in results)
         assert all(r.elapsed_seconds >= 0 for r in results)
