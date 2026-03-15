@@ -26,13 +26,13 @@ from agent.core.implement.orchestrator import Orchestrator
 SAMPLE_RUNBOOK = (
     "## Implementation Steps\n\n"
     "### Step 1: Modify config\n\n"
-    "[MODIFY] .agent/src/agent/core/config.py\n\n"
+    "#### [MODIFY] .agent/src/agent/core/config.py\n\n"
     "```\n<<<SEARCH\nold\n===\nnew\n>>>\n```\n\n"
     "### Step 2: Create helper\n\n"
-    "[NEW] .agent/src/agent/core/helper.py\n\n"
+    "#### [NEW] .agent/src/agent/core/helper.py\n\n"
     '```python\n"""Helper."""\ndef helper():\n    """Help."""\n    pass\n```\n\n'
     "### Step 3: Remove legacy\n\n"
-    "[DELETE] .agent/src/agent/core/old.py\n\n"
+    "#### [DELETE] .agent/src/agent/core/old.py\n\n"
     "<!-- Replaced by helper.py -->\n"
 )
 
