@@ -22,6 +22,8 @@ from typing import List, Optional
 
 from rich.console import Console
 
+from agent.core.config import config
+
 _console = Console()
 
 COMMON_FILES = {"__init__.py", "main.py", "config.py", "utils.py", "conftest.py"}
@@ -89,10 +91,13 @@ def resolve_path(filepath: str) -> Optional[Path]:
 
     Resolution order:
 
-    1. Exact match — return as-is.
+    1. Exact match against repo_root — return anchored path.
     2. Single unique file match in repo — auto-redirect.
     3. New file with trusted root prefix — trust the full path.
     4. New file with unknown prefix — fuzzy-search directory by directory.
+
+    All existence checks are anchored to ``config.repo_root`` (INFRA-138),
+    eliminating CWD-dependency.
 
     Args:
         filepath: Repo-relative file path (may be AI-generated).
@@ -100,18 +105,20 @@ def resolve_path(filepath: str) -> Optional[Path]:
     Returns:
         Resolved :class:`pathlib.Path`, or ``None`` if ambiguous/invalid.
     """
-    file_path = Path(filepath)
+    repo_root = config.repo_root
+    file_path = repo_root / filepath
     if file_path.exists():
         return file_path
 
     # Trusted paths know exactly where they want to live — skip fuzzy search.
     is_trusted = any(filepath.startswith(p) for p in TRUSTED_ROOT_PREFIXES)
     if is_trusted:
-        return file_path
+        return repo_root / filepath
 
-    if file_path.name not in COMMON_FILES:
-        candidates = _find_file_in_repo(file_path.name)
-        exact = [c for c in candidates if Path(c).name == file_path.name]
+    bare_path = Path(filepath)
+    if bare_path.name not in COMMON_FILES:
+        candidates = _find_file_in_repo(bare_path.name)
+        exact = [c for c in candidates if Path(c).name == bare_path.name]
         if len(exact) == 1:
             new_path = exact[0]
             if new_path != filepath:
@@ -124,13 +131,13 @@ def resolve_path(filepath: str) -> Optional[Path]:
                         "resolved_path": new_path
                     }
                 )
-            return Path(new_path)
+            return repo_root / new_path
         if len(exact) > 1:
             _console.print(f"[bold red]❌ Ambiguous file path '{filepath}'. Found {len(exact)} matches.[/bold red]")
             return None
 
-    parts = file_path.parts
-    current_check = Path(".")
+    parts = bare_path.parts
+    current_check = repo_root
 
     for i, part in enumerate(parts[:-1]):
         next_check = current_check / part
@@ -142,7 +149,7 @@ def resolve_path(filepath: str) -> Optional[Path]:
                 return None
             if len(dir_candidates) == 1:
                 rest = Path(*parts[i + 1:])
-                new_full = Path(dir_candidates[0]) / rest
+                new_full = repo_root / dir_candidates[0] / rest
                 _console.print(f"[yellow]⚠️  Path Auto-Correct (Dir): '{filepath}' -> '{new_full}'[/yellow]")
                 logging.warning(
                     "Path auto-corrected via fuzzy match",
@@ -157,4 +164,4 @@ def resolve_path(filepath: str) -> Optional[Path]:
             return None
         current_check = next_check
 
-    return file_path
+    return repo_root / filepath
