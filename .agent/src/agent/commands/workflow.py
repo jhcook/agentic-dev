@@ -46,67 +46,78 @@ def pr(
     target_branch = "main"
     
     preflight_passed = True
-    if skip_preflight:
-        # Check if a previous preflight already passed
+
+    # INFRA-138: Shared cache check — used by both --skip-preflight and normal mode
+    def _check_preflight_cache() -> bool:
+        """Return True if a recent preflight pass is cached for this story."""
         from agent.core.config import config
         _marker_path = config.cache_dir / ".preflight_result"
-        _prior_pass = False
-        if _marker_path.exists():
-            try:
-                import json as _json
-                from datetime import datetime as _dt
+        if not _marker_path.exists():
+            return False
+        try:
+            import json as _json
+            from datetime import datetime as _dt
 
-                _marker = _json.loads(_marker_path.read_text())
-                if _marker.get("verdict") == "PASS":
-                    # Strategy 1: git ancestry (same branch, no divergence)
-                    _head_sha = subprocess.check_output(
-                        ["git", "rev-parse", "HEAD"], text=True
-                    ).strip()
-                    if _marker.get("commit"):
-                        _is_ancestor = subprocess.run(
-                            ["git", "merge-base", "--is-ancestor", _marker["commit"], _head_sha],
-                            capture_output=True,
-                        ).returncode == 0
-                        if _is_ancestor:
-                            _prior_pass = True
+            _marker = _json.loads(_marker_path.read_text())
+            if _marker.get("verdict") != "PASS":
+                return False
 
-                    # Strategy 2: time + story match (handles branch merges/switches)
-                    if not _prior_pass and _marker.get("timestamp") and _marker.get("story_id"):
-                        _marker_story = _marker["story_id"]
-                        _story_match = story_id and _marker_story == story_id
-                        try:
-                            _marker_time = _dt.fromisoformat(_marker["timestamp"])
-                            _age_seconds = (_dt.now() - _marker_time).total_seconds()
-                            _is_recent = _age_seconds < 3600  # 1 hour
-                        except (ValueError, TypeError):
-                            _is_recent = False
-                        if _story_match and _is_recent:
-                            _prior_pass = True
-            except Exception:
-                pass
+            # Strategy 1: git ancestry (same branch, no divergence)
+            _head_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True
+            ).strip()
+            if _marker.get("commit"):
+                _is_ancestor = subprocess.run(
+                    ["git", "merge-base", "--is-ancestor", _marker["commit"], _head_sha],
+                    capture_output=True,
+                ).returncode == 0
+                if _is_ancestor:
+                    return True
 
-        if _prior_pass:
+            # Strategy 2: time + story match (handles branch merges/switches)
+            if _marker.get("timestamp") and _marker.get("story_id"):
+                _marker_story = _marker["story_id"]
+                _story_match = story_id and _marker_story == story_id
+                try:
+                    _marker_time = _dt.fromisoformat(_marker["timestamp"])
+                    _age_seconds = (_dt.now() - _marker_time).total_seconds()
+                    _is_recent = _age_seconds < 3600  # 1 hour
+                except (ValueError, TypeError):
+                    _is_recent = False
+                if _story_match and _is_recent:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    if skip_preflight:
+        if _check_preflight_cache():
             console.print(f"[green]✅ Preflight previously passed (skipping re-run)[/green]")
             preflight_passed = True
         else:
             console.print(f"[yellow]⚠️  Preflight SKIPPED at {time.strftime('%Y-%m-%dT%H:%M:%S')} (--skip-preflight)[/yellow]")
             preflight_passed = False
     elif story_id:
-        console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
-        try:
-             preflight(
-                 story_id=story_id, 
-                 base=target_branch, 
-                 offline=True, 
-                 provider=provider, 
-                 report_file=None,
-                 skip_tests=False,
-                 ignore_tests=False
-             )
-        except typer.Exit as e:
-            if e.exit_code != 0:
-                console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")
-                raise typer.Exit(code=1)
+        # INFRA-138: Check cache before re-running preflight
+        if _check_preflight_cache():
+            console.print(f"[green]✅ Preflight previously passed (cached — skipping re-run)[/green]")
+            preflight_passed = True
+        else:
+            console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
+            try:
+                 preflight(
+                     story_id=story_id, 
+                     base=target_branch, 
+                     offline=True, 
+                     provider=provider, 
+                     report_file=None,
+                     skip_tests=False,
+                     ignore_tests=False
+                 )
+            except typer.Exit as e:
+                if e.exit_code != 0:
+                    console.print("[bold red]❌ Preflight failed. Aborting PR creation.[/bold red]")
+                    raise typer.Exit(code=1)
     else:
         console.print("[yellow]⚠️  Skipping preflight (no Story ID).[/yellow]")
         preflight_passed = False

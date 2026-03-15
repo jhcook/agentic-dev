@@ -266,7 +266,7 @@ class TestValidateRunbookSchema:
     VALID_RUNBOOK = (
         "## Implementation Steps\n\n"
         "### Step 1: Add something\n\n"
-        "#### [MODIFY] src/agent/commands/check.py\n\n"
+        "#### [MODIFY] .agent/src/agent/commands/check.py\n\n"
         "```\n<<<SEARCH\nold code\n===\nnew code\n>>>\n```\n\n"
         "### Step 2: Create script\n\n"
         "#### [NEW] scripts/check_loc.py\n\n"

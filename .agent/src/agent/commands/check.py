@@ -45,6 +45,29 @@ logger = get_logger(__name__)
 from agent.core.check.reporting import print_reference_summary as _print_reference_summary
 
 
+def _write_preflight_cache(story_id: str, verdict: str) -> None:
+    """Write preflight result to cache for `agent pr` to detect (INFRA-138).
+
+    Uses the same schema that ``workflow.py`` reads: ``verdict``, ``story_id``,
+    ``commit``, and ``timestamp``.
+    """
+    try:
+        import json as _json
+        import time as _time
+        _marker_path = config.cache_dir / ".preflight_result"
+        _head_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
+        _marker_path.write_text(_json.dumps({
+            "story_id": story_id,
+            "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "commit": _head_sha,
+            "verdict": verdict,
+        }, indent=2))
+    except Exception:
+        pass  # Best-effort, non-critical
+
+
 
 def validate_story(
     story_id: str = typer.Argument(..., help="Story ID to validate, e.g. INFRA-103"),
@@ -360,6 +383,8 @@ def preflight(
              json_report["error"] = "No files to review"
              import json
              report_file.write_text(json.dumps(json_report, indent=2))
+        # INFRA-138: Write cache so `agent pr` knows preflight passed
+        _write_preflight_cache(story_id, "PASS")
         return
         
     console.print(f"[bold blue]🔍 Running preflight checks for {story_id}...[/bold blue]")
@@ -594,8 +619,9 @@ def preflight(
     
     console.print("[bold green]✅ Preflight checks passed![/bold green]")
 
-
-
+    # INFRA-138: Always write cache on successful completion so `agent pr`
+    # can detect the pass without re-running preflight.
+    _write_preflight_cache(story_id, "PASS")
 
     if report_file:
          import json
