@@ -19,13 +19,14 @@ import logging
 from pathlib import Path
 from unittest.mock import patch
 from agent.core.implement.resolver import resolve_path, TRUSTED_ROOT_PREFIXES
+from agent.core.config import config
 
 def test_resolve_path_trusted_prefix_ac1():
     """AC-1: Paths with trusted prefixes should be returned as-is without fuzzy matching."""
     path = ".agent/tests/core/implement/test_orchestrator.py"
     with patch("agent.core.implement.resolver._find_file_in_repo") as mock_find:
         result = resolve_path(path)
-        assert result == Path(path)
+        assert result == config.repo_root / path
         mock_find.assert_not_called()
 
 def test_resolve_path_fuzzy_match_non_trusted_ac2():
@@ -36,19 +37,19 @@ def test_resolve_path_fuzzy_match_non_trusted_ac2():
     with patch("agent.core.implement.resolver._find_file_in_repo", return_value=[expected]):
         with patch("agent.core.implement.resolver.logging") as mock_logging:
             result = resolve_path(path)
-            assert result == Path(expected)
+            assert result == config.repo_root / expected
             mock_logging.warning.assert_called_once()
             _, kwargs = mock_logging.warning.call_args
             assert kwargs["extra"]["original_path"] == path
             assert kwargs["extra"]["resolved_path"] == expected
 
 def test_resolve_path_no_match_ac2():
-    """Ensure non-trusted paths with no match are returned as-is."""
+    """Ensure non-trusted paths with no match are returned anchored to repo_root."""
     path = "non_existent_script.py"
     with patch("agent.core.implement.resolver._find_file_in_repo", return_value=[]):
         with patch("agent.core.implement.resolver._find_directories_in_repo", return_value=[]):
             result = resolve_path(path)
-            assert result == Path(path)
+            assert result == config.repo_root / path
 
 @pytest.mark.parametrize("prefix", [p for p in TRUSTED_ROOT_PREFIXES])
 def test_all_trusted_prefixes(prefix):
@@ -56,5 +57,5 @@ def test_all_trusted_prefixes(prefix):
     path = f"{prefix}some/file.txt"
     with patch("agent.core.implement.resolver._find_file_in_repo") as mock_find:
         result = resolve_path(path)
-        assert result == Path(path)
+        assert result == config.repo_root / path
         mock_find.assert_not_called()

@@ -37,6 +37,10 @@ As a developer using the agent CLI, I want all path resolution to be determinist
 - **Backward compatibility**: Existing runbooks and paths continue to work.
 - **Observability**: Log a warning when a path would have resolved differently under the old CWD-dependent behavior (migration aid).
 
+## Linked Journeys
+
+- JRN-062: Implement Oracle Preflight Pattern
+
 ## Linked ADRs
 
 - ADR-005: AI-Driven Governance Preflight

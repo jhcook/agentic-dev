@@ -452,6 +452,32 @@ def get_provider_config(provider_name: str) -> Optional[Dict[str, Optional[str]]
     return {"api_key": api_key}
 
 
+def resolve_repo_path(relative: str) -> Path:
+    """Resolve a repo-relative path against config.repo_root (AC-1).
+
+    This is the canonical path resolver for the entire agent framework.
+    All file operations must use this instead of bare ``Path(relative)``.
+
+    Args:
+        relative: Repository-relative path (e.g. ``.agent/src/agent/config.py``).
+
+    Returns:
+        Absolute :class:`Path` anchored to ``config.repo_root``.
+
+    Raises:
+        ValueError: If path contains ``..`` traversal or is absolute.
+    """
+    if ".." in relative:
+        raise ValueError(f"Path traversal not allowed: {relative}")
+    if relative.startswith("/"):
+        raise ValueError(f"Absolute paths not allowed: {relative}")
+    resolved = (config.repo_root / relative).resolve()
+    # Ensure the resolved path is still within repo_root (belt-and-suspenders)
+    if not str(resolved).startswith(str(config.repo_root.resolve())):
+        raise ValueError(f"Path escapes repo root: {relative}")
+    return resolved
+
+
 def get_valid_providers() -> List[str]:
     """
     Returns list of valid AI provider names.

@@ -52,14 +52,14 @@ class TestSearchReplaceBlock:
 class TestModifyBlock:
     def test_valid_modify(self):
         block = ModifyBlock(
-            path="src/main.py",
+            path=".agent/src/agent/core/config.py",
             blocks=[SearchReplaceBlock(search="old", replace="new")],
         )
-        assert block.path == "src/main.py"
+        assert block.path == ".agent/src/agent/core/config.py"
 
     def test_empty_blocks_rejected(self):
         with pytest.raises(ValidationError, match="at least 1 item"):
-            ModifyBlock(path="src/main.py", blocks=[])
+            ModifyBlock(path=".agent/src/agent/core/config.py", blocks=[])
 
     def test_absolute_path_rejected(self):
         with pytest.raises(ValidationError, match="repository-relative"):

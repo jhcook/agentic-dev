@@ -18,6 +18,7 @@ from typing import List, Union, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 import os
 from pathlib import Path
+from agent.core.config import resolve_repo_path
 
 class SearchReplaceBlock(BaseModel):
     """A single SEARCH/REPLACE pair within a MODIFY operation."""
@@ -44,9 +45,17 @@ class ModifyBlock(BaseModel):
         """Verify the path is valid for a modification."""
         if not self.path:
             raise ValueError("Path is required for MODIFY block.")
-        # Basic relative path safety
-        if ".." in self.path or self.path.startswith("/"):
-            raise ValueError(f"Path must be repository-relative and safe: {self.path}")
+        # AC-3: Use canonical resolver for traversal + absolute path safety
+        try:
+            resolved = resolve_repo_path(self.path)
+        except ValueError as e:
+            raise ValueError(f"Path must be repository-relative and safe: {self.path}") from e
+        # AC-3: Re-enable parent directory check via config.repo_root (INFRA-138)
+        if not resolved.parent.exists():
+            raise ValueError(
+                f"Parent directory does not exist: {resolved.parent} "
+                f"(from path '{self.path}')"
+            )
         return self
 
 class NewBlock(BaseModel):

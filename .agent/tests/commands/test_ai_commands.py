@@ -99,7 +99,13 @@ def test_new_runbook_command(mock_complete, mock_deps):
                  patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "", "checks": ""}, "instructions": "", "adrs": ""}), \
                  patch("agent.commands.runbook.upsert_artifact"):
                  
-                mock_complete.return_value = "# Runbook Content"
+                mock_complete.return_value = (
+                    "# Runbook Content\n\n"
+                    "## Implementation Steps\n\n"
+                    "### Step 1: Update module\n\n"
+                    "#### [MODIFY] .agent/src/agent/core/config.py\n\n"
+                    "```\n<<<SEARCH\nold code\n===\nnew code\n>>>\n```\n"
+                )
                 
                 result = runner.invoke(app, ["new-runbook", "STORY-123"])
                 

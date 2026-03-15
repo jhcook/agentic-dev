@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-138**: Canonical CWD path resolution. Adds `resolve_repo_path()` utility to anchor all file operations to `config.repo_root`, eliminating CWD-dependent failures when the CLI is invoked from `.agent/`. Fixes `resolver.py`, `orchestrator.py`, and re-enables parent directory validation in `ModifyBlock` using the canonical resolver.
 - **INFRA-135**: Dynamic Rule Retrieval (Rule Diet). Replaces static 3000-char rule truncation with semantic retrieval via ChromaDB. Classifies `.agent/rules/` into core (always-included: 000-004) and contextual (retrieved on demand). Fixes ChromaDB fallback regression so local vector DB activates when NotebookLM is unavailable. Adds structured `rule_retrieval` log events for SOC2 compliance.
 - **INFRA-134**: Shift-left runbook validation with Pydantic models. Replaces regex-based `validate_runbook_schema()` with structured Pydantic validators (`RunbookSchema`, `ModifyBlock`, `NewBlock`, `DeleteBlock`). Includes a self-correction retry loop (max 3 attempts) for AI-generated runbooks, OpenTelemetry tracing for validation latency, and dedicated unit tests.
 - **INFRA-098**: Unified the agent interface layer across TUI and Voice by introducing `agent.core.session.AgentSession` which relies entirely on protocol-based AIProvider and exposes a unified schema for tools.

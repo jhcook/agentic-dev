@@ -163,7 +163,7 @@ class Orchestrator:
             for block in sr_blocks:
                 sr_by_file[block["file"]].append(block)
             for sr_filepath, file_blocks in sr_by_file.items():
-                fp = Path(sr_filepath)
+                fp = resolve_path(sr_filepath) or Path(sr_filepath)
                 original_content = fp.read_text() if fp.exists() else ""
                 success, final_content = apply_search_replace_to_file(
                     sr_filepath, file_blocks, self.yes
@@ -186,7 +186,7 @@ class Orchestrator:
                     _console.print(f"   [red]• {v}[/red]")
                 continue
 
-            fp = Path(block["file"])
+            fp = resolve_path(block["file"]) or Path(block["file"])
             original_content = fp.read_text() if fp.exists() else ""
 
             # AC-9 bug fix: initialise block_loc to 0 before each apply call
