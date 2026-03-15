@@ -177,7 +177,11 @@ depends_on:
 - JRN-064
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/core/implement/orchestrator.py
+  - .agent/src/agent/core/implement/parser.py
+  - .agent/tests/core/implement/test_scope_guard.py
   tests:
   - .agent/tests/journeys/test_jrn_065.py
 test_hints:

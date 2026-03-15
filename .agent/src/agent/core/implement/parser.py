@@ -16,7 +16,7 @@
 
 import contextlib
 import re
-from typing import Dict, List, Tuple, Union, Optional
+from typing import Dict, List, Set, Tuple, Union, Optional
 
 from pydantic import ValidationError
 
@@ -122,12 +122,63 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     """
     seen: set = set()
     result: List[str] = []
-    for path in re.findall(r'\[MODIFY\]\s*`?([^\n`]+)`?', runbook_content, re.IGNORECASE):
+    masked = _mask_fenced_blocks(runbook_content)
+    for path in re.findall(r'####\s*\[MODIFY\]\s*`?([^\n`]+)`?', masked, re.IGNORECASE):
         path = path.strip()
         if path not in seen:
             seen.add(path)
             result.append(path)
     return result
+
+
+def extract_approved_files(runbook_content: str) -> Set[str]:
+    """Extract all declared file paths from [MODIFY], [NEW], and [DELETE] headers.
+
+    This is the approved file set for scope-bounding (INFRA-136 AC-2).
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Set of file path strings declared in the runbook.
+    """
+    paths: Set[str] = set()
+    masked = _mask_fenced_blocks(runbook_content)
+    for match in re.findall(
+        r'####\s*\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
+        masked, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    return paths
+
+
+def extract_cross_cutting_files(runbook_content: str) -> Set[str]:
+    """Extract file paths annotated with cross_cutting: true (INFRA-136 AC-4).
+
+    Recognises ``<!-- cross_cutting: true -->`` on the line before or after
+    a ``[MODIFY]``/``[NEW]`` header.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Set of file path strings with cross_cutting relaxation.
+    """
+    paths: Set[str] = set()
+    masked = _mask_fenced_blocks(runbook_content)
+    for match in re.findall(
+        r'<!--\s*cross_cutting:\s*true\s*-->\s*\n'
+        r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?',
+        masked, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    for match in re.findall(
+        r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?\s*\n'
+        r'\s*<!--\s*cross_cutting:\s*true\s*-->',
+        masked, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    return paths
 
 
 def detect_malformed_modify_blocks(content: str) -> List[str]:
@@ -159,6 +210,31 @@ def detect_malformed_modify_blocks(content: str) -> List[str]:
         if has_full_block and not has_sr:
             malformed.append(filepath)
     return malformed
+
+
+def _mask_fenced_blocks(text: str) -> str:
+    """Replace fenced code block content with spaces to preserve character offsets.
+
+    This prevents ``#### [MODIFY|NEW|DELETE]`` patterns inside code blocks
+    (e.g. test data or documentation) from being matched as real operation
+    headers during step parsing.
+
+    Uses start-of-line anchoring for fence delimiters so backticks inside
+    code block content (e.g. Python string literals) don't cause premature
+    fence closure.
+
+    Args:
+        text: Raw markdown text.
+
+    Returns:
+        Same-length string with code block interiors replaced by spaces.
+    """
+    def _replacer(m: re.Match) -> str:
+        return ' ' * len(m.group(0))
+    return re.sub(
+        r'(?:^|\n)```[\w]*\n.*?(?:^|\n)```',
+        _replacer, text, flags=re.DOTALL | re.MULTILINE,
+    )
 
 
 def _extract_runbook_data(content: str) -> List[dict]:
@@ -198,11 +274,14 @@ def _extract_runbook_data(content: str) -> List[dict]:
             title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
             title = title_match.group(1).strip() if title_match else "Untitled Step"
 
+            # Mask fenced code blocks so embedded #### [MODIFY] etc. in
+            # file content (e.g. test data) are not matched as operations.
+            masked_step = _mask_fenced_blocks(raw_step)
             block_pattern = re.compile(
-                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
+                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?[ \t]*\n',
                 re.IGNORECASE,
             )
-            block_matches = list(block_pattern.finditer(raw_step))
+            block_matches = list(block_pattern.finditer(masked_step))
             operations: List[dict] = []
 
             for idx, match in enumerate(block_matches):

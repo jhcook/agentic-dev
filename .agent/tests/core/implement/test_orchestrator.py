@@ -357,3 +357,27 @@ class TestValidateRunbookSchema:
         )
         violations = validate_runbook_schema(content)
         assert len(violations) >= 2
+
+    def test_new_file_with_embedded_runbook_syntax(self):
+        """[NEW] files containing #### [MODIFY] in their content must not cause false violations.
+
+        Regression test for _mask_fenced_blocks: test data or documentation
+        inside a [NEW] code block may contain runbook-like headers.
+        """
+        content = (
+            "## Implementation Steps\n\n"
+            "### Step 1: Add test file\n\n"
+            "#### [NEW] .agent/tests/core/implement/test_example.py\n\n"
+            '```python\n'
+            '"""Tests."""\n\n'
+            'SAMPLE = (\n'
+            '    "#### [MODIFY] .agent/src/agent/core/config.py\\n\\n"\n'
+            '    "```\\n<<<SEARCH\\nold\\n===\\nnew\\n>>>\\n```\\n"\n'
+            '    "#### [NEW] .agent/src/agent/core/helper.py\\n\\n"\n'
+            '    "```python\\ndef helper(): pass\\n```\\n"\n'
+            '    "#### [DELETE] .agent/src/agent/core/old.py\\n\\n"\n'
+            ')\n'
+            '```\n'
+        )
+        violations = validate_runbook_schema(content)
+        assert violations == [], f"Embedded runbook syntax caused false violations: {violations}"
