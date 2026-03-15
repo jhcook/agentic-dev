@@ -161,6 +161,31 @@ def detect_malformed_modify_blocks(content: str) -> List[str]:
     return malformed
 
 
+def _mask_fenced_blocks(text: str) -> str:
+    """Replace fenced code block content with spaces to preserve character offsets.
+
+    This prevents ``#### [MODIFY|NEW|DELETE]`` patterns inside code blocks
+    (e.g. test data or documentation) from being matched as real operation
+    headers during step parsing.
+
+    Uses start-of-line anchoring for fence delimiters so backticks inside
+    code block content (e.g. Python string literals) don't cause premature
+    fence closure.
+
+    Args:
+        text: Raw markdown text.
+
+    Returns:
+        Same-length string with code block interiors replaced by spaces.
+    """
+    def _replacer(m: re.Match) -> str:
+        return ' ' * len(m.group(0))
+    return re.sub(
+        r'(?:^|\n)```[\w]*\n.*?(?:^|\n)```',
+        _replacer, text, flags=re.DOTALL | re.MULTILINE,
+    )
+
+
 def _extract_runbook_data(content: str) -> List[dict]:
     """Extract implementation steps from runbook markdown into Pydantic-ready dicts.
 
@@ -198,11 +223,14 @@ def _extract_runbook_data(content: str) -> List[dict]:
             title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
             title = title_match.group(1).strip() if title_match else "Untitled Step"
 
+            # Mask fenced code blocks so embedded #### [MODIFY] etc. in
+            # file content (e.g. test data) are not matched as operations.
+            masked_step = _mask_fenced_blocks(raw_step)
             block_pattern = re.compile(
-                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*\n',
+                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?[ \t]*\n',
                 re.IGNORECASE,
             )
-            block_matches = list(block_pattern.finditer(raw_step))
+            block_matches = list(block_pattern.finditer(masked_step))
             operations: List[dict] = []
 
             for idx, match in enumerate(block_matches):
