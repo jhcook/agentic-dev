@@ -97,14 +97,11 @@ def test_hello():
          patch("agent.commands.implement.subprocess.run") as mock_run, \
          patch("agent.core.ai.ai_service.complete", return_value=mock_llm_response), \
          patch("agent.commands.implement.gates.run_security_scan") as mock_sec, \
-         patch("agent.commands.implement.gates.run_qa_gate") as mock_qa, \
-         patch("agent.commands.implement.gates.run_docs_check") as mock_docs:
-         
+         patch("agent.commands.implement.gates.run_qa_gate") as mock_qa:
         # Mock gates to pass
         from agent.commands.gates import GateResult
         mock_sec.return_value = GateResult("Security", True, 0.1, "")
         mock_qa.return_value = GateResult("QA", True, 0.1, "")
-        mock_docs.return_value = GateResult("Docs", True, 0.1, "")
 
         # Run command with --yes and --apply to force immediate application
         result = runner.invoke(test_app, ["INFRA-000", "--apply", "--yes"])
