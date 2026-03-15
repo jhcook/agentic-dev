@@ -115,6 +115,9 @@ def preflight(
         thorough: Enable thorough AI review with full-file context and post-processing validation.
         legacy_context: Use full legacy context instead of Oracle Pattern.
     """
+    import time as _pf_time
+    _preflight_start = _pf_time.time()
+
     # Apply panel engine override (INFRA-061)
     if panel_engine:
         config._panel_engine_override = panel_engine
@@ -617,7 +620,20 @@ def preflight(
                 report_file.write_text(json.dumps(json_report, indent=2))
             raise typer.Exit(code=1)
     
-    console.print("[bold green]✅ Preflight checks passed![/bold green]")
+    _preflight_duration_ms = int((_pf_time.time() - _preflight_start) * 1000)
+    logger.info(
+        "preflight_timing",
+        extra={
+            "story_id": story_id,
+            "duration_ms": _preflight_duration_ms,
+            "verdict": "PASS",
+        },
+    )
+
+    console.print(
+        f"[bold green]✅ Preflight checks passed![/bold green] "
+        f"[dim]({_preflight_duration_ms}ms)[/dim]"
+    )
 
     # INFRA-138: Always write cache on successful completion so `agent pr`
     # can detect the pass without re-running preflight.

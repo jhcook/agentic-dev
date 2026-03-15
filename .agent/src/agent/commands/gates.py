@@ -223,61 +223,8 @@ def run_qa_gate(
     )
 
 
-def run_docs_check(filepaths: List[Path]) -> GateResult:
-    """Verify that new/modified Python files have docstrings on public functions.
-
-    Uses AST parsing — only checks top-level and class-level function definitions
-    whose names do not start with ``_``.
-
-    Args:
-        filepaths: List of Python file paths to check.
-
-    Returns:
-        GateResult with pass/fail and list of undocumented functions.
-    """
-    start = time.time()
-    missing: List[str] = []
-
-    py_files = [f for f in filepaths if f.suffix == ".py" and f.exists()]
-    if not py_files:
-        elapsed = time.time() - start
-        return GateResult(
-            name="Documentation Check",
-            passed=True,
-            elapsed_seconds=elapsed,
-            details="No Python files to check.",
-        )
-
-    for filepath in py_files:
-        try:
-            source = filepath.read_text(errors="ignore")
-            tree = ast.parse(source, filename=str(filepath))
-        except (SyntaxError, OSError) as exc:
-            logger.warning("Could not parse %s: %s", filepath.name, exc)
-            continue
-
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Only check public functions (not _private)
-                if node.name.startswith("_"):
-                    continue
-                if ast.get_docstring(node) is None:
-                    missing.append(f"{filepath.name}:{node.name}()")
-
-    elapsed = time.time() - start
-    if missing:
-        return GateResult(
-            name="Documentation Check",
-            passed=False,
-            elapsed_seconds=elapsed,
-            details=f"Missing docstrings: {', '.join(missing[:10])}",
-        )
-    return GateResult(
-        name="Documentation Check",
-        passed=True,
-        elapsed_seconds=elapsed,
-        details=f"Checked {len(py_files)} file(s) — all documented.",
-    )
+# INFRA-137: run_docs_check removed — now enforced at source by
+# guards.enforce_docstrings() (INFRA-136 AC-10).
 
 
 def log_skip_audit(gate_name: str, resource_id: str = "") -> None:
