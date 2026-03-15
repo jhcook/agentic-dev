@@ -24,11 +24,13 @@ import re
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from .parser import (
     parse_code_blocks,
     parse_search_replace_blocks,
     extract_modify_files,
+    extract_approved_files,
+    extract_cross_cutting_files,
     detect_malformed_modify_blocks,
     validate_runbook_schema,
     split_runbook_into_chunks,
@@ -103,19 +105,32 @@ class Orchestrator:
     tracking/thresholds to :class:`~agent.core.implement.circuit_breaker.CircuitBreaker`.
     """
 
-    def __init__(self, story_id: str, yes: bool = False, legacy_apply: bool = False) -> None:
+    def __init__(
+        self,
+        story_id: str,
+        yes: bool = False,
+        legacy_apply: bool = False,
+        approved_files: Optional[Set[str]] = None,
+        cross_cutting_files: Optional[Set[str]] = None,
+    ) -> None:
         """Initialise the Orchestrator.
 
         Args:
             story_id: Story ID used in commit messages and log fields.
             yes: Skip all confirmation prompts.
             legacy_apply: Bypass safe-apply size guard.
+            approved_files: Set of file paths declared in the runbook (AC-2).
+            cross_cutting_files: Files with cross_cutting relaxation (AC-4).
         """
         self.story_id = story_id
         self.yes = yes
         self.legacy_apply = legacy_apply
+        self.approved_files = approved_files
+        self.cross_cutting_files = cross_cutting_files or set()
         self.rejected_files: List[str] = []
         self.run_modified_files: List[str] = []
+        self.total_blocks: int = 0
+        self.scope_violations: int = 0
 
     def apply_chunk(self, chunk_result: str, step_index: int) -> Tuple[int, List[str]]:
         """Apply all blocks in a single AI-generated chunk.
@@ -125,6 +140,8 @@ class Orchestrator:
         writing. Fixes the block_loc uninitialised-variable bug (AC-9) by
         resetting ``block_loc`` to ``0`` before each apply call.
 
+        Wraps execution in a Langfuse/OTLP trace span (INFRA-136 AC-1).
+
         Args:
             chunk_result: Raw AI output for this step.
             step_index: 1-based step number (for logging).
@@ -132,6 +149,12 @@ class Orchestrator:
         Returns:
             Tuple of ``(step_loc, step_modified_files)``.
         """
+        span = None
+        if _tracer:
+            span = _tracer.start_span("implement.apply_chunk")
+            span.set_attribute("story_id", self.story_id)
+            span.set_attribute("step_index", step_index)
+
         from agent.core.implement.guards import (
             apply_search_replace_to_file,
             apply_change_to_file,
@@ -163,6 +186,9 @@ class Orchestrator:
             for block in sr_blocks:
                 sr_by_file[block["file"]].append(block)
             for sr_filepath, file_blocks in sr_by_file.items():
+                self.total_blocks += 1
+                if not self._check_scope(sr_filepath, step_index):
+                    continue
                 fp = resolve_path(sr_filepath) or Path(sr_filepath)
                 original_content = fp.read_text() if fp.exists() else ""
                 success, final_content = apply_search_replace_to_file(
@@ -175,6 +201,9 @@ class Orchestrator:
 
         code_blocks = [b for b in parse_code_blocks(chunk_result) if b["file"] not in sr_handled]
         for block in code_blocks:
+            self.total_blocks += 1
+            if not self._check_scope(block["file"], step_index):
+                continue
             violations = enforce_docstrings(block["file"], block["content"])
             if violations:
                 self.rejected_files.append(block["file"])
@@ -218,7 +247,51 @@ class Orchestrator:
             step_loc += block_loc
 
         self.run_modified_files.extend(step_modified_files)
+
+        if span:
+            span.set_attribute("files_modified", len(step_modified_files))
+            span.set_attribute("scope_violations", self.scope_violations)
+            span.set_attribute("hallucination_rate", self.get_hallucination_rate())
+            span.end()
+
         return step_loc, step_modified_files
+
+    def _check_scope(self, filepath: str, step_index: int) -> bool:
+        """Check if a file is within the approved scope (AC-2, AC-4, AC-5).
+
+        Args:
+            filepath: Repo-relative file path being modified.
+            step_index: 1-based step number for logging.
+
+        Returns:
+            True if the file is approved, False if scope-violated.
+        """
+        if self.approved_files is None:
+            return True  # No approved set → no scope enforcement
+        if filepath in self.approved_files or filepath in self.cross_cutting_files:
+            return True
+        self.scope_violations += 1
+        self.rejected_files.append(filepath)
+        _console.print(
+            f"[bold red]🚫 SCOPE VIOLATION: '{filepath}' is not declared in the "
+            f"runbook (step {step_index}). Skipping.[/bold red]"
+        )
+        logging.warning(
+            "scope_violation file=%s step=%d story=%s approved_files=%r",
+            filepath, step_index, self.story_id,
+            sorted(self.approved_files) if self.approved_files else [],
+        )
+        return False
+
+    def get_hallucination_rate(self) -> float:
+        """Compute the hallucination rate (AC-3).
+
+        Returns:
+            Ratio of scope violations to total blocks, or 0.0 if no blocks.
+        """
+        if self.total_blocks == 0:
+            return 0.0
+        return self.scope_violations / self.total_blocks
 
     def print_incomplete_summary(self) -> None:
         """Print the INCOMPLETE IMPLEMENTATION banner when files were rejected.

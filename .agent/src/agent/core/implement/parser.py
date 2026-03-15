@@ -130,6 +130,54 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     return result
 
 
+def extract_approved_files(runbook_content: str) -> set:
+    """Extract all declared file paths from [MODIFY], [NEW], and [DELETE] headers.
+
+    This is the approved file set for scope-bounding (INFRA-136 AC-2).
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Set of file path strings declared in the runbook.
+    """
+    paths: set = set()
+    for match in re.findall(
+        r'\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
+        runbook_content, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    return paths
+
+
+def extract_cross_cutting_files(runbook_content: str) -> set:
+    """Extract file paths annotated with cross_cutting: true (INFRA-136 AC-4).
+
+    Recognises ``<!-- cross_cutting: true -->`` on the line before or after
+    a ``[MODIFY]``/``[NEW]`` header.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Set of file path strings with cross_cutting relaxation.
+    """
+    paths: set = set()
+    for match in re.findall(
+        r'<!--\s*cross_cutting:\s*true\s*-->\s*\n'
+        r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?',
+        runbook_content, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    for match in re.findall(
+        r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?\s*\n'
+        r'\s*<!--\s*cross_cutting:\s*true\s*-->',
+        runbook_content, re.IGNORECASE,
+    ):
+        paths.add(match.strip())
+    return paths
+
+
 def detect_malformed_modify_blocks(content: str) -> List[str]:
     """Detect [MODIFY] headers that have a full code block but no S/R blocks.
 

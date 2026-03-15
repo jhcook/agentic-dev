@@ -67,6 +67,8 @@ from agent.core.implement.orchestrator import (  # noqa: F401
 )
 from agent.core.implement.parser import (  # noqa: F401
     detect_malformed_modify_blocks,
+    extract_approved_files,
+    extract_cross_cutting_files,
     extract_modify_files,
     parse_code_blocks,
     parse_search_replace_blocks,
@@ -663,7 +665,12 @@ ADRs:
                 ai_service.reset_provider()
 
             completed_steps = 0
-            orchestrator = Orchestrator(story_id, yes=yes, legacy_apply=legacy_apply)
+            _approved = extract_approved_files(runbook_content)
+            _cross_cutting = extract_cross_cutting_files(runbook_content)
+            orchestrator = Orchestrator(
+                story_id, yes=yes, legacy_apply=legacy_apply,
+                approved_files=_approved, cross_cutting_files=_cross_cutting,
+            )
 
             for idx, chunk in enumerate(chunks):
                 if len(chunks) > 1:
@@ -782,7 +789,10 @@ ADRs:
 
         # Apply full-context AI output to disk (if not chunked)
         if implementation_success and apply and not fallback_needed and _all_sr == [] and _all_code == []:
-            orchestrator_fc = Orchestrator(story_id, yes=yes, legacy_apply=legacy_apply)
+            orchestrator_fc = Orchestrator(
+                story_id, yes=yes, legacy_apply=legacy_apply,
+                approved_files=_approved, cross_cutting_files=_cross_cutting,
+            )
             step_loc, step_files = orchestrator_fc.apply_chunk(full_content, 1)
             cumulative_loc += step_loc
             run_modified_files.extend(step_files)
