@@ -36,10 +36,14 @@ As a **developer**, I want **only the rules relevant to my current change to be 
 
 - JRN-065
 
+## Known Bugs
+
+- **ChromaDB fallback regression**: The local ChromaDB vector DB fallback (implemented under INFRA-074 AC-7, in `journey_index.py` and `syncing.py`) previously worked but has regressed. When NotebookLM credentials are unavailable (e.g. during non-interactive `agent preflight` runs), ChromaDB should activate as the fallback for context retrieval, but currently does not. This regression must be diagnosed and fixed as part of this story's fallback mechanism work (AC-4).
+
 ## Impact Analysis Summary
 
-Components touched: `runbook.py`, `context.py`, `context_builder.py`, `.agent/rules/*`, NotebookLM MCP
-Workflows affected: `/runbook`
+Components touched: `runbook.py`, `context.py`, `context_builder.py`, `journey_index.py`, `syncing.py`, `.agent/rules/*`, NotebookLM MCP
+Workflows affected: `/runbook`, `/preflight`
 Risks identified: Retrieval failure could miss critical governance checks — mitigated by fallback static core set.
 
 ## Test Strategy
