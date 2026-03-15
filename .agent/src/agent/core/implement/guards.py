@@ -216,7 +216,8 @@ def backup_file(file_path: Path) -> Optional[Path]:
     """
     if not file_path.exists():
         return None
-    backup_dir = Path(".agent/backups")
+    from agent.core.config import resolve_repo_path
+    backup_dir = resolve_repo_path(".agent/backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = backup_dir / f"{file_path.name}.backup-{timestamp}"
@@ -247,7 +248,9 @@ def apply_search_replace_to_file(
         Tuple of (success, final_content). On failure, final_content is
         the original unchanged content.
     """
+    
     from agent.core.implement.orchestrator import resolve_path  # avoid circular at module level
+    from agent.core.config import resolve_repo_path
     import typer
 
     span_ctx = None
@@ -315,7 +318,7 @@ def apply_search_replace_to_file(
             "apply_change apply_mode=search_replace file=%s blocks=%d",
             filepath, len(blocks),
         )
-        log_file = Path(".agent/logs/implement_changes.log")
+        log_file = resolve_repo_path(".agent/logs/implement_changes.log")
         log_file.parent.mkdir(parents=True, exist_ok=True)
         with open(log_file, "a") as f:
             f.write(f"[{datetime.now().isoformat()}] SearchReplace: {filepath} ({len(blocks)} blocks)\n")
@@ -352,6 +355,7 @@ def apply_change_to_file(
         True if the file was written successfully, False otherwise.
     """
     from agent.core.implement.orchestrator import resolve_path
+    from agent.core.config import resolve_repo_path
 
     span_ctx = None
     if _tracer:
@@ -420,7 +424,7 @@ def apply_change_to_file(
             "apply_change apply_mode=full_file file=%s lines_changed=%d",
             filepath, len(content.splitlines()),
         )
-        log_file = Path(".agent/logs/implement_changes.log")
+        log_file = resolve_repo_path(".agent/logs/implement_changes.log")
         log_file.parent.mkdir(parents=True, exist_ok=True)
         with open(log_file, "a") as f:
             f.write(f"[{datetime.now().isoformat()}] Modified: {filepath}\n")
