@@ -28,7 +28,7 @@ As a **Platform Developer**, I want **filesystem and shell tools in dedicated do
 
 ## Linked ADRs
 
-- ADR to be created: Centralised ToolRegistry Interface
+- ADR-043: Tool Registry Foundation
 
 ## Linked Journeys
 

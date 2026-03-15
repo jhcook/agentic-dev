@@ -28,7 +28,7 @@ As a **Platform Developer**, I want **a `ToolRegistry` class with standard `Tool
 
 ## Linked ADRs
 
-- ADR to be created: Centralised ToolRegistry Interface
+- ADR-043: Tool Registry Foundation
 
 ## Linked Journeys
 

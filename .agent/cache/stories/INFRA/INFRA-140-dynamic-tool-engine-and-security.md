@@ -31,7 +31,7 @@ As a **Platform Developer**, I want **dynamic tool creation with AST security sc
 
 ## Linked ADRs
 
-- ADR to be created: Centralised ToolRegistry Interface
+- ADR-043: Tool Registry Foundation
 
 ## Linked Journeys
 

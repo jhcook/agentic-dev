@@ -30,7 +30,7 @@ As a **Platform Developer**, I want **legacy tool implementations and LangChain 
 
 ## Linked ADRs
 
-- ADR to be created: Centralised ToolRegistry Interface
+- ADR-043: Tool Registry Foundation
 
 ## Linked Journeys
 
