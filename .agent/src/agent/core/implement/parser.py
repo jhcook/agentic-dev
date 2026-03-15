@@ -122,7 +122,8 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     """
     seen: set = set()
     result: List[str] = []
-    for path in re.findall(r'\[MODIFY\]\s*`?([^\n`]+)`?', runbook_content, re.IGNORECASE):
+    masked = _mask_fenced_blocks(runbook_content)
+    for path in re.findall(r'####\s*\[MODIFY\]\s*`?([^\n`]+)`?', masked, re.IGNORECASE):
         path = path.strip()
         if path not in seen:
             seen.add(path)
@@ -142,9 +143,10 @@ def extract_approved_files(runbook_content: str) -> Set[str]:
         Set of file path strings declared in the runbook.
     """
     paths: Set[str] = set()
+    masked = _mask_fenced_blocks(runbook_content)
     for match in re.findall(
         r'####\s*\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
-        runbook_content, re.IGNORECASE,
+        masked, re.IGNORECASE,
     ):
         paths.add(match.strip())
     return paths
@@ -163,16 +165,17 @@ def extract_cross_cutting_files(runbook_content: str) -> Set[str]:
         Set of file path strings with cross_cutting relaxation.
     """
     paths: Set[str] = set()
+    masked = _mask_fenced_blocks(runbook_content)
     for match in re.findall(
         r'<!--\s*cross_cutting:\s*true\s*-->\s*\n'
         r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?',
-        runbook_content, re.IGNORECASE,
+        masked, re.IGNORECASE,
     ):
         paths.add(match.strip())
     for match in re.findall(
         r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?\s*\n'
         r'\s*<!--\s*cross_cutting:\s*true\s*-->',
-        runbook_content, re.IGNORECASE,
+        masked, re.IGNORECASE,
     ):
         paths.add(match.strip())
     return paths
