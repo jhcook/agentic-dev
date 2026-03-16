@@ -16,9 +16,12 @@
 
 import contextlib
 import re
+import logging
 from typing import Dict, List, Set, Tuple, Union, Optional
 
 from pydantic import ValidationError
+
+from agent.core.logger import get_logger
 
 from agent.core.implement.models import (
     RunbookSchema,
@@ -34,6 +37,27 @@ try:
     _tracer = trace.get_tracer(__name__)
 except ImportError:
     _tracer = None
+_logger = get_logger(__name__)
+
+
+def _unescape_path(path: str) -> str:
+    """Remove markdown escapes and styling from file paths.
+
+    Handles cases like `**path/to/__init__.py**` or `path/to/\_\_init\_\_.py`
+    by stripping markers and removing backslash escapes.
+
+    Args:
+        path: Raw path string from markdown header.
+
+    Returns:
+        Clean, technical file path.
+    """
+    if not path:
+        return ""
+    # Remove bold/italic and backticks
+    path = path.strip().strip('`*')
+    # Remove backslash escapes for markdown characters: _ * [ ] ( ) # + - . !
+    return re.sub(r'\\([_*[\]()#+\-.!])', r'\1', path)
 
 
 def parse_code_blocks(content: str) -> List[Dict[str, str]]:
@@ -57,13 +81,20 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
         List of dicts with ``'file'`` and ``'content'`` keys.
     """
     blocks: List[Dict[str, str]] = []
-    for match in re.finditer(r'```[\w]+:([\w/\.\-_]+)\n(.*?)```', content, re.DOTALL):
-        blocks.append({"file": match.group(1).strip(), "content": match.group(2).strip()})
+    # Pattern 1: ```lang:path format
+    # Uses (?P=fence) to ensure balanced detection (e.g. 4 backticks wrap 3)
+    p1 = r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]+:([\w/\.\-_]+)\n(.*?)\n\1(?P=fence)[ \t]*$'
+    for match in re.finditer(p1, content, re.DOTALL):
+        blocks.append({"file": _unescape_path(match.group(3)), "content": match.group(4).strip()})
+
     # [NEW] only — [MODIFY] blocks are handled exclusively by parse_search_replace_blocks.
-    # This prevents double-processing and avoids the docstring gate rejecting S/R-only steps.
-    p2 = r'(?:(?:File|Create):\s*|####\s*\[(?:NEW|ADD)\]\s*)`?([^\n`]+?)`?\s*\n```[\w]*\n(.*?)```'
+    # Pattern 2: Header followed by ``` code block
+    p2 = (
+        r'(?m)(?:(?:File|Create):\s*|####\s*\[(?:NEW|ADD)\]\s*)`?([^\n`]+?)`?\s*\n'
+        r'( {0,3})(?P<fence2>`{3,}|~{3,})[\w]*\n(.*?)\n\2(?P=fence2)[ \t]*$'
+    )
     for match in re.finditer(p2, content, re.DOTALL | re.IGNORECASE):
-        fp = match.group(1).strip()
+        fp = _unescape_path(match.group(1))
         block_content = match.group(2).strip()
         # Skip no-op placeholder blocks (e.g. runbook uses S/R inside a [NEW] header
         # for idempotency — the real work is done by parse_search_replace_blocks).
@@ -124,7 +155,7 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     result: List[str] = []
     masked = _mask_fenced_blocks(runbook_content)
     for path in re.findall(r'####\s*\[MODIFY\]\s*`?([^\n`]+)`?', masked, re.IGNORECASE):
-        path = path.strip()
+        path = _unescape_path(path)
         if path not in seen:
             seen.add(path)
             result.append(path)
@@ -148,7 +179,7 @@ def extract_approved_files(runbook_content: str) -> Set[str]:
         r'####\s*\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
         masked, re.IGNORECASE,
     ):
-        paths.add(match.strip())
+        paths.add(_unescape_path(match))
     return paths
 
 
@@ -171,13 +202,13 @@ def extract_cross_cutting_files(runbook_content: str) -> Set[str]:
         r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?',
         masked, re.IGNORECASE,
     ):
-        paths.add(match.strip())
+        paths.add(_unescape_path(match))
     for match in re.findall(
         r'####\s*\[(?:MODIFY|NEW)\]\s*`?([^\n`]+)`?\s*\n'
         r'\s*<!--\s*cross_cutting:\s*true\s*-->',
         masked, re.IGNORECASE,
     ):
-        paths.add(match.strip())
+        paths.add(_unescape_path(match))
     return paths
 
 
@@ -203,7 +234,7 @@ def detect_malformed_modify_blocks(content: str) -> List[str]:
         content, flags=re.IGNORECASE,
     )
     for i in range(1, len(file_sections), 2):
-        filepath = file_sections[i].strip()
+        filepath = _unescape_path(file_sections[i])
         body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
         has_sr = bool(re.search(r'<<<SEARCH', body))
         has_full_block = bool(re.search(r'```[\w]*\n', body))
@@ -219,9 +250,8 @@ def _mask_fenced_blocks(text: str) -> str:
     (e.g. test data or documentation) from being matched as real operation
     headers during step parsing.
 
-    Uses start-of-line anchoring for fence delimiters so backticks inside
-    code block content (e.g. Python string literals) don't cause premature
-    fence closure.
+    Uses balanced fence detection (length matching) and start-of-line anchoring
+    so nested blocks (common in ADRs) do not cause premature closure.
 
     Args:
         text: Raw markdown text.
@@ -231,10 +261,14 @@ def _mask_fenced_blocks(text: str) -> str:
     """
     def _replacer(m: re.Match) -> str:
         return ' ' * len(m.group(0))
-    return re.sub(
-        r'(?:^|\n)```[\w]*\n.*?(?:^|\n)```',
-        _replacer, text, flags=re.DOTALL | re.MULTILINE,
-    )
+
+    # (?m) for multiline mode (anchor ^ and $ to line starts/ends)
+    # 1. Matches 0-3 leading spaces followed by 3+ backticks or tildes.
+    # 2. Captures fence content in 'fence' group.
+    # 3. Matches content non-greedily.
+    # 4. Matches a closing fence of the SAME length at start-of-line.
+    pattern = r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[^\n]*\n(.*?)\n\1(?P=fence)[ \t]*(?:\n|$)'
+    return re.sub(pattern, _replacer, text, flags=re.DOTALL)
 
 
 def _extract_runbook_data(content: str) -> List[dict]:
@@ -286,20 +320,28 @@ def _extract_runbook_data(content: str) -> List[dict]:
 
             for idx, match in enumerate(block_matches):
                 action = match.group(1).upper()
-                filepath = match.group(2).strip()
+                filepath = _unescape_path(match.group(2))
                 start = match.end()
                 end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
                 block_body = raw_step[start:end]
 
                 if action == "MODIFY":
                     sr_blocks = []
-                    for sr in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', block_body, re.DOTALL):
+                    # Also require >>> to be at start of line for robustness
+                    sr_pattern = r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$'
+                    for sr in re.finditer(sr_pattern, block_body, re.DOTALL):
                         sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
+                    if not sr_blocks:
+                        _logger.debug(f"Header found for {filepath} but no valid SEARCH/REPLACE blocks detected in body.")
                     operations.append({"path": filepath, "blocks": sr_blocks})
 
                 elif action == "NEW":
-                    fence_match = re.search(r'```[\w]*\n(.*?)```', block_body, re.DOTALL)
-                    file_content = fence_match.group(1).rstrip() if fence_match else ""
+                    # Use balanced detection for NEW content as it often contains ADRs with code fences
+                    new_pattern = r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]*\n(.*?)\n\1(?P=fence)[ \t]*$'
+                    fence_match = re.search(new_pattern, block_body, re.DOTALL)
+                    file_content = fence_match.group(3).rstrip() if fence_match else ""
+                    if not file_content:
+                         _logger.debug(f"NEW block for {filepath} found but no balanced code fence matched in body.")
                     operations.append({"path": filepath, "content": file_content})
 
                 elif action == "DELETE":
