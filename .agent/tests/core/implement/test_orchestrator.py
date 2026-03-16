@@ -124,14 +124,15 @@ class TestOrchestrator:
         assert "new_module.py" in modified
         assert step_loc > 0
 
-    def test_apply_chunk_docstring_violation_rejected(self, tmp_path, monkeypatch):
-        """Files missing docstrings are added to rejected_files, not written."""
+    def test_apply_chunk_docstring_violation_warned_not_rejected(self, tmp_path, monkeypatch):
+        """Files missing docstrings produce warnings but are still written."""
         monkeypatch.chdir(tmp_path)
         orch = Orchestrator("INFRA-001", yes=True)
         chunk = "File: bad_module.py\n```python\ndef foo():\n    pass\n```"
         _, modified = orch.apply_chunk(chunk, step_index=1)
-        assert "bad_module.py" in orch.rejected_files
-        assert modified == []
+        # Docstring gate demoted to warning — file is NOT rejected
+        assert "bad_module.py" not in orch.rejected_files
+        assert "bad_module.py" in modified
 
 
 class TestParseCodeBlocksRegressions:

@@ -94,7 +94,7 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     )
     for match in re.finditer(p2, content, re.DOTALL | re.IGNORECASE):
         fp = _unescape_path(match.group(1))
-        block_content = match.group(2).strip()
+        block_content = match.group(4).strip()
         # Skip no-op placeholder blocks (e.g. runbook uses S/R inside a [NEW] header
         # for idempotency — the real work is done by parse_search_replace_blocks).
         if block_content.startswith("<<<SEARCH"):

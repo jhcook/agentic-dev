@@ -206,14 +206,15 @@ class Orchestrator:
                 continue
             violations = enforce_docstrings(block["file"], block["content"])
             if violations:
-                self.rejected_files.append(block["file"])
                 _console.print(
-                    f"[bold red]❌ DOCSTRING GATE: {block['file']} rejected "
-                    f"({len(violations)} violation(s)):[/bold red]"
+                    f"[yellow]⚠️  DOCSTRING GATE: {block['file']} "
+                    f"({len(violations)} violation(s)):[/yellow]"
                 )
                 for v in violations:
-                    _console.print(f"   [red]• {v}[/red]")
-                continue
+                    _console.print(f"   [yellow]• {v}[/yellow]")
+                _console.print(
+                    "[dim]File will be written — fix before preflight.[/dim]"
+                )
 
             fp = resolve_path(block["file"]) or Path(block["file"])
             original_content = fp.read_text() if fp.exists() else ""

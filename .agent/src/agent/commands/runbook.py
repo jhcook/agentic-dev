@@ -33,12 +33,14 @@ from agent.core.utils import (
 )
 from agent.core.context import context_loader
 from agent.core.implement.orchestrator import validate_runbook_schema
+from agent.utils.validation_formatter import format_runbook_errors
 from agent.db.client import upsert_artifact
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 app = typer.Typer()
 console = Console()
+error_console = Console(stderr=True)
 
 # Complexity Gatekeeper directive injected into the runbook system prompt (INFRA-094)
 SPLIT_REQUEST_DIRECTIVE = (
@@ -365,7 +367,10 @@ Generate the runbook now.
             break  # Let the split logic below handle it
 
         # Schema validation (AC-3)
-        schema_violations = validate_runbook_schema(content)
+        with tracer.start_as_current_span("validate_runbook_schema") as span:
+            schema_violations = validate_runbook_schema(content)
+            span.set_attribute("validation.passed", not bool(schema_violations))
+            span.set_attribute("validation.error_count", len(schema_violations) if schema_violations else 0)
         if not schema_violations:
             break
             
@@ -379,19 +384,22 @@ Generate the runbook now.
             },
         )
         
+        formatted_errors = format_runbook_errors(schema_violations)
+        
         if attempt < max_attempts:
-            error_msg = "\n".join([f"- {v}" for v in schema_violations])
             console.print(f"[yellow]⚠️  Attempt {attempt} failed validation. Asking for correction...[/yellow]")
             current_user_prompt = (
                 f"{user_prompt}\n\n"
-                f"### SCHEMA VALIDATION FAILED ON PREVIOUS ATTEMPT ###\n"
-                f"Your previous output had the following violations:\n{error_msg}\n\n"
+                f"{formatted_errors}\n\n"
                 f"Please correct these errors and generate the full runbook again."
             )
         else:
-            console.print(f"[bold red]❌ Failed to generate a valid runbook after {max_attempts} attempts.[/bold red]")
-            for v in schema_violations:
-                console.print(f"  [red]• {v}[/red]")
+            logger.error(
+                "runbook_generation_failed",
+                extra={"story_id": story_id, "attempts": max_attempts},
+            )
+            error_console.print(f"[bold red]❌ Failed to generate a valid runbook after {max_attempts} attempts.[/bold red]")
+            error_console.print(formatted_errors)
             raise typer.Exit(code=1)
 
     # -- SPLIT_REQUEST Fallback (INFRA-094) --

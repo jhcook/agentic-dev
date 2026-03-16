@@ -20,6 +20,8 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from opentelemetry import trace
+
 import typer
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
@@ -32,15 +34,19 @@ from agent.core.ai.prompts import generate_impact_prompt
 from agent.core.governance import convene_council_full
 from agent.core.check.reporting import print_reference_summary as _print_reference_summary
 from agent.core.context import context_loader
+from agent.core.implement.orchestrator import validate_runbook_schema
+from agent.utils.validation_formatter import format_runbook_errors
 
 console = Console()
+error_console = Console(stderr=True)
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 def panel(
     input_arg: Optional[str] = typer.Argument(None, help="Story ID OR a question/instruction for the panel."),
     base: Optional[str] = typer.Option(None, "--base", help="Base branch for comparison (e.g. main)."),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."),
-    apply: bool = typer.Option(False, "--apply", help="Automatically apply the panel's advice to the Story/Runbook."),
+    apply: bool = typer.Option(False, "--apply", help="Apply the AI's advice directly to the file. For runbooks, schema is validated before writing. Use with caution."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
 ):
     """
@@ -246,6 +252,26 @@ Return ONLY the full updated markdown content of the document.
         
         # Safety check: ensure content is not empty
         if updated_content and len(updated_content) > 100:
+            # INFRA-149: Schema validation for runbooks before applying
+            if "runbook" in target_file.name.lower():
+                with tracer.start_as_current_span("validate_runbook_schema") as span:
+                    violations = validate_runbook_schema(updated_content)
+                    span.set_attribute("validation.passed", not bool(violations))
+                    span.set_attribute("validation.error_count", len(violations) if violations else 0)
+                if violations:
+                    logger.warning(
+                        "panel_apply_validation_failed",
+                        extra={
+                            "file": target_file.name,
+                            "error_count": len(violations),
+                            "violations": violations,
+                        },
+                    )
+                    error_console.print(f"[bold red]❌ Validation failed for {target_file.name}:[/bold red]")
+                    error_console.print(format_runbook_errors(violations))
+                    error_console.print("[yellow]Aborting apply to prevent file corruption.[/yellow]")
+                    raise typer.Exit(code=1)
+            
             target_file.write_text(updated_content)
             console.print(f"[bold green]✅ Applied advice to {target_file.name}[/bold green]")
         else:

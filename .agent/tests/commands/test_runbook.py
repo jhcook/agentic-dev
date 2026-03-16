@@ -123,7 +123,7 @@ def test_new_runbook_retry_on_invalid_schema(mock_fs, app):
         result = runner.invoke(app, [story_id])
         
         assert result.exit_code == 1
-        assert "Failed to generate a valid runbook after 3 attempts" in result.stdout
+        assert "Failed to generate a valid runbook after 3 attempts" in result.output
 
 def test_new_runbook_self_corrects(mock_fs, app):
     """AI self-corrects on second attempt after initial schema failure."""
@@ -140,3 +140,34 @@ def test_new_runbook_self_corrects(mock_fs, app):
         assert result.exit_code == 0
         assert "Attempt 1 failed validation" in result.stdout
         assert "Runbook generated" in result.stdout
+
+
+def test_new_runbook_shows_formatted_errors(mock_fs, app):
+    """Final failure displays formatted error output via format_runbook_errors."""
+    story_id = "INFRA-006"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n# Story Content")
+
+    with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
+         patch("agent.commands.runbook.upsert_artifact"):
+
+        result = runner.invoke(app, [story_id])
+
+        assert result.exit_code == 1
+        # Formatted errors should contain the schema validation header
+        assert "SCHEMA VALIDATION FAILED" in result.output
+
+
+def test_new_runbook_no_file_on_failure(mock_fs, app):
+    """Runbook file must NOT be created when validation fails."""
+    story_id = "INFRA-007"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n# Story Content")
+
+    with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
+         patch("agent.commands.runbook.upsert_artifact"):
+
+        result = runner.invoke(app, [story_id])
+
+        assert result.exit_code == 1
+        assert not (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
