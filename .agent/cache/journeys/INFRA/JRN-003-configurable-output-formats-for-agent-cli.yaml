@@ -61,19 +61,19 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/docs/commands.md
   - .agent/etc/agents.yaml
   - .agent/pyproject.toml
   - .agent/src/agent/commands/check.py
   - .agent/src/agent/commands/lint.py
-  - .agent/src/agent/db/client.py
-  - .agent/src/agent/main.py
-  - .agent/src/agent/sync/sync.py
-  - .agent/src/backend/scripts/generate_openapi.py
   - .agent/src/agent/commands/list.py
   - .agent/src/agent/core/formatters.py
   - .agent/src/agent/core/logger.py
-  - .agent/docs/commands.md
-  - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/db/client.py
+  - .agent/src/agent/main.py
+  - .agent/src/agent/sync/sync.py
+  - .agent/src/agent/utils/validation_formatter.py
+  - .agent/src/backend/scripts/generate_openapi.py
   tests:
   - .agent/tests/commands/test_ai_commands.py
   - .agent/tests/commands/test_implement.py

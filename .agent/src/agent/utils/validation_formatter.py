@@ -12,13 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Formatting utilities for Pydantic validation errors in runbooks."""
+"""
+Formatting utilities for Pydantic validation errors in runbooks.
+
+This module is part of the CLI schema validation gate (INFRA-149). When a
+runbook fails Pydantic schema validation, the raw error list is passed to
+:func:`format_runbook_errors` which produces human-readable, Rich-compatible
+output for immediate display in the terminal.  It handles plain string
+errors, Pydantic ``ErrorDict`` structures (with ``loc`` / ``msg`` fields),
+and gracefully falls back for unexpected types.
+"""
 
 from typing import Any, Dict, List, Union
 
-
 def format_runbook_errors(errors: List[Union[str, Dict[str, Any]]]) -> str:
-    """Format a list of validation errors into a human-readable string.
+    """
+    Format a list of validation errors into a human-readable string.
 
     Handles both raw strings and Pydantic-style error dictionaries.
 
@@ -32,7 +41,7 @@ def format_runbook_errors(errors: List[Union[str, Dict[str, Any]]]) -> str:
         return ""
 
     lines = ["### SCHEMA VALIDATION FAILED ###"]
-
+    
     for i, err in enumerate(errors, 1):
         if isinstance(err, str):
             lines.append(f"{i}. {err}")
@@ -40,7 +49,7 @@ def format_runbook_errors(errors: List[Union[str, Dict[str, Any]]]) -> str:
             # Handle Pydantic ErrorDict (loc, msg, type)
             loc = " -> ".join(str(p) for p in err.get("loc", []))
             msg = err.get("msg", "Unknown error")
-
+            
             # Identify step index for implementation blocks
             step_marker = ""
             if "steps" in err.get("loc", []):
@@ -48,9 +57,9 @@ def format_runbook_errors(errors: List[Union[str, Dict[str, Any]]]) -> str:
                     if isinstance(p, int):
                         step_marker = f" (Step {p + 1})"
                         break
-
+            
             lines.append(f"{i}. [bold red]{loc}[/bold red]{step_marker}: {msg}")
         else:
             lines.append(f"{i}. {str(err)}")
-
+            
     return "\n".join(lines)
