@@ -2,7 +2,7 @@
 
 ## State
 
-COMMITTED
+DONE
 
 ## Problem Statement
 
@@ -41,9 +41,19 @@ As a **DevOps Engineer**, I want **the CLI to validate runbook schemas before fi
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py`
-- `agent/commands/panel.py`
+- `agent/commands/runbook.py` — validation gate, OTel span, stderr errors, structured logging
+- `agent/commands/panel.py` — `--apply` validation gate, OTel span, stderr errors, updated help text
 - New utility: `agent/utils/validation_formatter.py`
+- `tests/commands/test_panel.py` — 2 new integration tests (apply blocks/writes)
+- `tests/commands/test_runbook.py` — 2 new integration tests (errors, no file on fail)
+- `tests/core/implement/test_orchestrator.py` — updated docstring gate test
+- New tests: `tests/utils/test_validation_formatter.py` — 8 unit tests
+- `cache/journeys/INFRA/JRN-003-configurable-output-formats-for-agent-cli.yaml` — added `validation_formatter.py` to file list, restored license header
+- `cache/journeys/INFRA/JRN-007-implement-agent-impact-command.yaml` — added `validation_formatter.py` to file list, restored license header
+
+**Out-of-scope but co-committed** (discovered during validation gate work):
+- `agent/core/implement/orchestrator.py` — demoted docstring gate to warning; required to unblock `implement` phase which enforces the validation gate
+- `agent/core/implement/parser.py` — fixed `parse_code_blocks` regex capture group returning empty content for `[NEW]` files; discovered while testing the validation gate end-to-end
 
 **Workflows affected:**
 - Runbook creation (`new-runbook`)
