@@ -419,6 +419,16 @@ async def _orchestrate_async(
     _all_invalid_refs = []
 
     for role_data in agent_results:
+        # Cached results (same commit, previous PASS) have no _parsed key
+        # — they're pre-built with empty findings/references and need no
+        # further validation or reference checking.
+        if role_data.get("_cached"):
+            role_name = role_data["name"]
+            if progress_callback:
+                progress_callback(f"✅ @{role_name}: PASS (cached)")
+            report += f"### @{role_name}\n**Verdict**: ✅ PASS (cached)\n\nNo issues found.\n\n"
+            json_roles.append(role_data)
+            continue
         parsed = role_data.pop("_parsed")
         role_name = role_data["name"]
         role_verdict = parsed["verdict"]
