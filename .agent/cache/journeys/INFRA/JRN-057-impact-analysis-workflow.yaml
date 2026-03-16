@@ -22,9 +22,9 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: 'End-to-end impact analysis workflow. Developer runs `agent impact` to
+description: End-to-end impact analysis workflow. Developer runs `agent impact` to
   get static dependency analysis combined with AI-powered risk assessment. Optionally
-  updates the story''s Impact Analysis Summary section.'
+  updates the story's Impact Analysis Summary section.
 preconditions:
 - Agent CLI is installed and configured
 - Developer has staged or committed changes
@@ -86,6 +86,8 @@ implementation:
   routes: []
   files:
   - .agent/src/agent/commands/check.py
+  - .agent/src/agent/core/implement/models.py
+  - .agent/src/agent/core/implement/parser.py
   - .agent/workflows/impact.md
   tests:
   - .agent/tests/commands/test_impact.py

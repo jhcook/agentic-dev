@@ -24,11 +24,12 @@ from pydantic import ValidationError
 from agent.core.logger import get_logger
 
 from agent.core.implement.models import (
-    RunbookSchema,
-    RunbookStep,
+    DeleteBlock,
     ModifyBlock,
     NewBlock,
-    DeleteBlock,
+    ParsingError,
+    RunbookSchema,
+    RunbookStep,
     SearchReplaceBlock,
 )
 
@@ -331,16 +332,24 @@ def _extract_runbook_data(content: str) -> List[dict]:
                     for sr in re.finditer(sr_pattern, block_body, re.DOTALL):
                         sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
                     if not sr_blocks:
-                        _logger.debug(f"Header found for {filepath} but no valid SEARCH/REPLACE blocks detected in body.")
+                        raise ParsingError(
+                            f"MODIFY header for '{filepath}' found but no valid "
+                            "SEARCH/REPLACE blocks detected in body."
+                        )
                     operations.append({"path": filepath, "blocks": sr_blocks})
 
                 elif action == "NEW":
                     # Use balanced detection for NEW content as it often contains ADRs with code fences
-                    new_pattern = r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]*\n(.*?)\n\1(?P=fence)[ \t]*$'
+                    new_pattern = (
+                        r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]*\n(.*?)\n\1(?P=fence)[ \t]*$'
+                    )
                     fence_match = re.search(new_pattern, block_body, re.DOTALL)
                     file_content = fence_match.group(3).rstrip() if fence_match else ""
                     if not file_content:
-                         _logger.debug(f"NEW block for {filepath} found but no balanced code fence matched in body.")
+                        raise ParsingError(
+                            f"NEW header for '{filepath}' found but no balanced "
+                            "code fence matched in body."
+                        )
                     operations.append({"path": filepath, "content": file_content})
 
                 elif action == "DELETE":
