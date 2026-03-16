@@ -124,7 +124,7 @@ def _micro_commit_step(
         return True
     try:
         subprocess.run(
-            ["git", "add"] + modified_files,
+            ["git", "add", "--"] + modified_files,
             check=True, capture_output=True, timeout=30,
         )
         msg = (
@@ -347,6 +347,8 @@ def create_branch(story_id: str, title: str) -> None:
 def implement(
     story_id: str = typer.Argument(..., help="Story ID (e.g. INFRA-042)"),
     apply: bool = typer.Option(False, "--apply", help="Write changes to disk"),
+    stage: bool = typer.Option(False, "--stage", help="Stage modified files (git add) after successful apply"),
+    commit: bool = typer.Option(False, "--commit", help="Auto-commit each step after applying (implies --stage)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip QA gate (audit-logged)"),
     skip_security: bool = typer.Option(False, "--skip-security", help="Skip security scan (audit-logged)"),
@@ -561,7 +563,8 @@ def implement(
                     rejected_files.append(_b["file"])
 
             full_content = f"[verbatim: {len(run_modified_files)} file(s) applied]"
-            _micro_commit_step(story_id, 1, cumulative_loc, cumulative_loc, run_modified_files)
+            if commit:
+                _micro_commit_step(story_id, 1, cumulative_loc, cumulative_loc, run_modified_files)
             console.print(f"[green]✅ Verbatim apply complete ({cumulative_loc} LOC)[/green]")
         else:
             files_targeted = sorted(list({b["file"] for b in _all_sr} | {b["file"] for b in _all_code}))
@@ -693,7 +696,8 @@ ADRs:
                     cumulative_loc += step_loc
                     completed_steps = idx + 1
                     run_modified_files.extend(step_files)
-                    _micro_commit_step(story_id, idx + 1, step_loc, cumulative_loc, step_files)
+                    if commit:
+                        _micro_commit_step(story_id, idx + 1, step_loc, cumulative_loc, step_files)
                     console.print(
                         f"[green]✅ Step {idx+1} ({step_loc} LOC, "
                         f"{cumulative_loc} cumulative)[/green]"
@@ -754,9 +758,10 @@ ADRs:
                     cumulative_loc += step_loc
                     completed_steps = idx + 1
                     run_modified_files.extend(step_files)
-                    _micro_commit_step(
-                        story_id, idx + 1, step_loc, cumulative_loc, step_files
-                    )
+                    if commit:
+                        _micro_commit_step(
+                            story_id, idx + 1, step_loc, cumulative_loc, step_files
+                        )
                     console.print(
                         f"[green]✅ Step {idx+1} committed "
                         f"({step_loc} LOC, {cumulative_loc} cumulative)[/green]"
@@ -798,7 +803,8 @@ ADRs:
             run_modified_files.extend(step_files)
             rejected_files = orchestrator_fc.rejected_files
             orchestrator_fc.print_incomplete_summary()
-            _micro_commit_step(story_id, 1, step_loc, cumulative_loc, step_files)
+            if commit:
+                _micro_commit_step(story_id, 1, step_loc, cumulative_loc, step_files)
 
     # ------------------------------------------------------------------
     # 9. Surface incomplete summary
@@ -819,6 +825,21 @@ ADRs:
             story_id, rejected_files,
         )
         raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------
+    # 9b. Stage modified files (if --stage or --commit)
+    # ------------------------------------------------------------------
+    if apply and implementation_success and run_modified_files and (stage or commit):
+        try:
+            subprocess.run(
+                ["git", "add", "--"] + run_modified_files,
+                check=True, capture_output=True, timeout=30,
+            )
+            console.print(
+                f"[green]📦 Staged {len(run_modified_files)} file(s) for commit.[/green]"
+            )
+        except subprocess.CalledProcessError as e:
+            console.print(f"[yellow]⚠️  Failed to stage files: {e}[/yellow]")
 
     # ------------------------------------------------------------------
     # 10. Post-apply governance gates
@@ -911,13 +932,13 @@ ADRs:
             update_story_state(story_id, "DONE", context_prefix="Phase 10")
         else:
             console.print(
-                "\n[bold yellow]⚠️  Some governance gates produced warnings.[/bold yellow]"
+                f"\n[bold yellow]⚠️  Some governance gates produced warnings.[/bold yellow]"
             )
-            console.print(
-                f"[yellow]Code has been committed — run "
-                f"[bold]agent preflight --story {story_id}[/bold] "
+            hint = (
+                f"[yellow]Run [bold]agent preflight --story {story_id}[/bold] "
                 f"to resolve issues before opening a PR.[/yellow]"
             )
+            console.print(hint)
             update_story_state(story_id, "REVIEW_NEEDED", context_prefix="Phase 10")
 
     if not apply:

@@ -25,7 +25,7 @@ CONTEXT:
 WORKFLOW:
 
 0. **Ensure Changes Are Staged**
-    - If coming from `agent implement --apply`, files are already staged automatically.
+    - If coming from `agent implement --apply --stage`, files are already staged. If using `--apply` alone, run `git add` before preflight. (`--commit` implies staging.)
     - Otherwise, stage your changes: `git add -A` (or selectively stage specific files).
     - Preflight only reviews **staged** changes.
 

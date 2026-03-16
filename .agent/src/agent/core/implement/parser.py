@@ -43,8 +43,7 @@ _logger = get_logger(__name__)
 def _unescape_path(path: str) -> str:
     """Remove markdown escapes and styling from file paths.
 
-    Handles cases like `**path/to/__init__.py**` or `path/to/\_\_init\_\_.py`
-    by stripping markers and removing backslash escapes.
+    Strip markers and remove backslash escapes.
 
     Args:
         path: Raw path string from markdown header.
