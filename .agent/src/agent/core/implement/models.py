@@ -20,29 +20,52 @@ import os
 from pathlib import Path
 from agent.core.config import resolve_repo_path
 
+
+class ParsingError(ValueError):
+    """Raised when the runbook content cannot be parsed into the expected structure."""
+
+    pass
+
+
 class SearchReplaceBlock(BaseModel):
     """A single SEARCH/REPLACE pair within a MODIFY operation."""
-    
+
     search: str = Field(..., min_length=1, description="The exact text to find.")
     replace: str = Field(..., description="The replacement text.")
 
     @field_validator("search")
     @classmethod
     def search_must_not_be_empty(cls, v: str) -> str:
-        """Ensure search block is not just whitespace."""
-        if not v.strip():
+        """Ensure search block is not just whitespace and strip it."""
+        stripped = v.strip()
+        if not stripped:
             raise ValueError("SEARCH block cannot be empty or only whitespace.")
-        return v
+        return stripped
+
+    @field_validator("replace")
+    @classmethod
+    def replace_must_not_be_empty(cls, v: str) -> str:
+        """Reject whitespace-only replace blocks; permit empty strings (deletions)."""
+        if v == "":
+            return v
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("REPLACE block cannot contain only whitespace.")
+        return stripped
 
 class ModifyBlock(BaseModel):
     """An operation to modify an existing file."""
-    
+
     path: str = Field(..., description="Repository-relative path to existing file.")
     blocks: List[SearchReplaceBlock] = Field(..., min_length=1)
 
     @model_validator(mode="after")
-    def validate_modify_path(self) -> "ModifyBlock":
-        """Verify the path is valid for a modification."""
+    def validate_modify_contents(self) -> "ModifyBlock":
+        """Verify the block contains operations and the path is valid."""
+        if not self.blocks:
+            raise ValueError(
+                "MODIFY block must contain at least one valid SEARCH/REPLACE block."
+            )
         if not self.path:
             raise ValueError("Path is required for MODIFY block.")
         # AC-3: Use canonical resolver for traversal + absolute path safety
@@ -77,8 +100,9 @@ class NewBlock(BaseModel):
     @field_validator("content")
     @classmethod
     def validate_content(cls, v: str) -> str:
-        """Validate new file content is non-empty and doesn't contain SEARCH blocks."""
-        if not v.strip():
+        """Validate new file content is non-empty (stripping whitespace) and doesn't contain SEARCH blocks."""
+        stripped = v.strip()
+        if not stripped:
             raise ValueError("NEW file content cannot be empty.")
         # AC-5(b): NEW blocks must not contain <<<SEARCH blocks
         if "<<<SEARCH" in v:
@@ -86,7 +110,7 @@ class NewBlock(BaseModel):
                 "[NEW] file content must not contain <<<SEARCH blocks. "
                 "Use [MODIFY] with search/replace instead."
             )
-        return v
+        return stripped
 
 class DeleteBlock(BaseModel):
     """An operation to remove a file."""
