@@ -120,10 +120,27 @@ class ExecutionGuardrail:
 
 
 try:
-    from opentelemetry import trace
-    _tracer = trace.get_tracer(__name__)
+    from opentelemetry import trace as _otel_trace
+    _tracer = _otel_trace.get_tracer(__name__)
 except ImportError:
-    _tracer = None
+    import contextlib
+
+    class _NoOpSpan:
+        """Minimal no-op span compatible with OTel Span interface."""
+        def set_attribute(self, key: str, value: object) -> None:  # noqa: D401
+            """No-op."""
+        def __enter__(self) -> "_NoOpSpan":
+            return self
+        def __exit__(self, *_: object) -> None:
+            pass
+
+    class _NoOpTracer:
+        """Minimal no-op tracer used when opentelemetry is not installed."""
+        def start_as_current_span(self, name: str, **_: object) -> _NoOpSpan:  # noqa: D401
+            """Return a no-op span context manager."""
+            return _NoOpSpan()
+
+    _tracer: Any = _NoOpTracer()
 
 # ---------------------------------------------------------------------------
 # Thresholds (INFRA-096)
@@ -166,189 +183,188 @@ class ValidationResult:
 def validate_code_block(filepath: str, content: str) -> ValidationResult:
     """Run all code-level gates against a proposed code block.
 
-    Wrapped with OTel tracing for observability (INFRA-155).
+    Uses ``start_as_current_span`` so child spans from sub-validators are
+    correctly nested as children of this span in the trace hierarchy (INFRA-155).
     """
-    _span = _tracer.start_span("guards.validate_code_block") if _tracer else None
-    if _span:
-        _span.set_attribute("file", filepath)
+    with _tracer.start_as_current_span("guards.validate_code_block") as span:
+        span.set_attribute("file", filepath)
 
-    result = ValidationResult()
+        result = ValidationResult()
 
-    # `parse_code_blocks` strips trailing whitespace from extracted code as a
-    # markdown-parsing artefact.  Always normalise to a trailing newline before
-    # running AST-based checks — writing the file will restore the newline.
-    normalised = content if content.endswith("\n") else content + "\n"
+        # AC-1: Trailing newline is required (callers must supply content with \n).
+        if content and not content.endswith("\n"):
+            result.errors.append(f"{filepath}: missing trailing newline")
 
-    # Python-specific checks
-    if filepath.endswith(".py"):
-        doc_res = enforce_docstrings(filepath, normalised)
-        result.errors.extend(doc_res.errors)
-        result.warnings.extend(doc_res.warnings)
+        # Python-specific checks
+        if filepath.endswith(".py"):
+            doc_res = enforce_docstrings(filepath, content)
+            result.errors.extend(doc_res.errors)
+            result.warnings.extend(doc_res.warnings)
 
-        import_res = check_imports(filepath, normalised)
-        result.errors.extend(import_res.errors)
+            import_res = check_imports(filepath, content)
+            result.errors.extend(import_res.errors)
 
-    if _span:
-        _span.set_attribute("validation.passed", result.passed)
-        _span.set_attribute("validation.error_count", len(result.errors))
-        _span.end()
+        span.set_attribute("validation.passed", result.passed)
+        span.set_attribute("validation.error_count", len(result.errors))
     return result
 
 def enforce_docstrings(filepath: str, content: str) -> ValidationResult:  # noqa: C901
     """Check generated Python source for missing PEP-257 docstrings.
 
-    Wrapped with OTel tracing for observability (INFRA-155).
+    Uses ``start_as_current_span`` so this span appears as a child of
+    ``validate_code_block`` in the trace hierarchy (INFRA-155).
     """
-    _span = _tracer.start_span("guards.enforce_docstrings") if _tracer else None
-    if _span:
-        _span.set_attribute("file", filepath)
-
     import ast
-    result = ValidationResult()
-    
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return result
 
-    filename = Path(filepath).name
+    with _tracer.start_as_current_span("guards.enforce_docstrings") as span:
+        span.set_attribute("file", filepath)
 
-    def _has_docstring(node: ast.AST) -> bool:
-        """Return True if node's first body statement is a string literal."""
-        return (
-            bool(getattr(node, "body", None))
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        )
+        result = ValidationResult()
 
-    if not _has_docstring(tree):
-        result.errors.append(f"{filename}: module is missing a docstring")
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return result
 
-    class DocstringVisitor(ast.NodeVisitor):
-        """AST visitor to find missing docstrings at different nesting levels."""
+        filename = Path(filepath).name
 
-        context_stack: list  # Stack of AST scope nodes (ClassDef, FunctionDef)
+        def _has_docstring(node: ast.AST) -> bool:
+            """Return True if node's first body statement is a string literal."""
+            return (
+                bool(getattr(node, "body", None))
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+                and isinstance(node.body[0].value.value, str)
+            )
 
-        def __init__(self) -> None:
-            self.context_stack = []
+        if not _has_docstring(tree):
+            result.errors.append(f"{filename}: module is missing a docstring")
 
-        def visit_ClassDef(self, node: ast.ClassDef) -> None:
-            """Visit class and check for a class-level docstring."""
-            if not _has_docstring(node):
-                result.errors.append(f"{filename}: class {node.name} is missing a docstring")
-            self.context_stack.append(node)
-            self.generic_visit(node)
-            self.context_stack.pop()
+        # Union type used so the helper handles both FunctionDef and AsyncFunctionDef
+        # without requiring a type: ignore suppression.
+        _FuncNode = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 
-        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # type: ignore[override]
-            """Visit function and check docstring; nested functions are warnings only."""
-            if not _has_docstring(node):
-                is_nested = any(
-                    isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    for p in self.context_stack
-                )
-                if is_nested:
-                    result.warnings.append(
-                        f"{filename}: nested function {node.name}() is missing a docstring"
+        class DocstringVisitor(ast.NodeVisitor):
+            """AST visitor to find missing docstrings at different nesting levels."""
+
+            context_stack: List[ast.AST]  # Stack of scope nodes (ClassDef, FunctionDef…)
+
+            def __init__(self) -> None:
+                self.context_stack = []
+
+            def visit_ClassDef(self, node: ast.ClassDef) -> None:
+                """Visit class and check for a class-level docstring."""
+                if not _has_docstring(node):
+                    result.errors.append(f"{filename}: class {node.name} is missing a docstring")
+                self.context_stack.append(node)
+                self.generic_visit(node)
+                self.context_stack.pop()
+
+            def _check_func_node(self, node: "_FuncNode") -> None:
+                """Shared docstring check for FunctionDef and AsyncFunctionDef."""
+                if not _has_docstring(node):
+                    is_nested = any(
+                        isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        for p in self.context_stack
                     )
-                else:
-                    result.errors.append(f"{filename}: {node.name}() is missing a docstring")
-            self.context_stack.append(node)
-            self.generic_visit(node)
-            self.context_stack.pop()
+                    if is_nested:
+                        result.warnings.append(
+                            f"{filename}: nested function {node.name}() is missing a docstring"
+                        )
+                    else:
+                        result.errors.append(f"{filename}: {node.name}() is missing a docstring")
+                self.context_stack.append(node)
+                self.generic_visit(node)
+                self.context_stack.pop()
 
-        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # type: ignore[override]
-            """Delegate async function to the sync visitor."""
-            self.visit_FunctionDef(node)  # type: ignore[arg-type]
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+                """Delegate to shared function-node checker."""
+                self._check_func_node(node)
 
-    DocstringVisitor().visit(tree)
-    if _span:
-        _span.set_attribute("validation.passed", result.passed)
-        _span.set_attribute("validation.error_count", len(result.errors))
-        _span.end()
+            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+                """Delegate async function to shared function-node checker."""
+                self._check_func_node(node)
+
+        DocstringVisitor().visit(tree)
+        span.set_attribute("validation.passed", result.passed)
+        span.set_attribute("validation.error_count", len(result.errors))
     return result
 
 def check_imports(filepath: str, content: str) -> ValidationResult:
     """Validate imports against project dependencies.
 
-    Wrapped with OTel tracing for observability (INFRA-155).
+    Uses ``start_as_current_span`` so this span appears as a child of
+    ``validate_code_block`` in the trace hierarchy (INFRA-155).
     """
-    _span = _tracer.start_span("guards.check_imports") if _tracer else None
-    if _span:
-        _span.set_attribute("file", filepath)
-
     import ast
+    import re as _re
     import sys
     from agent.core.config import resolve_repo_path
-    
-    result = ValidationResult()
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return result
 
-    # 1. Gather allowed packages
-    allowed = {"agent", "tests", "backend", "web"} # Local project roots
-    
-    # Add standard library
-    if sys.version_info >= (3, 10):
-        allowed.update(sys.stdlib_module_names)
-    
-    # Add dependencies from pyproject.toml using robust TOML parsing (no fragile regex)
-    pyproject_path = resolve_repo_path("pyproject.toml")
-    if pyproject_path.exists():
+    with _tracer.start_as_current_span("guards.check_imports") as span:
+        span.set_attribute("file", filepath)
+
+        result = ValidationResult()
         try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return result
+
+        # 1. Gather allowed packages
+        allowed: Set[str] = {"agent", "tests", "backend", "web"}  # local project roots
+
+        # Add standard library
+        if sys.version_info >= (3, 10):
+            allowed.update(sys.stdlib_module_names)
+
+        # Add dependencies from pyproject.toml using robust TOML parsing (no fragile regex)
+        pyproject_path = resolve_repo_path("pyproject.toml")
+        if pyproject_path.exists():
             try:
-                import tomllib  # Python 3.11+
-            except ImportError:
-                import tomli as tomllib  # type: ignore[no-redef]  # backport
-            with pyproject_path.open("rb") as fh:
-                toml_data = tomllib.load(fh)
-            # Collect from [project.dependencies] and [project.optional-dependencies]
-            raw_deps: list = toml_data.get("project", {}).get("dependencies", [])
-            for section in toml_data.get("project", {}).get("optional-dependencies", {}).values():
-                raw_deps.extend(section)
-            # Also collect from [tool.uv.dev-dependencies] (uv workspace)
-            raw_deps.extend(
-                toml_data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
-            )
-            for dep in raw_deps:
-                # Extract bare package name: strip version specifiers and extras
-                # e.g. 'requests[security]>=2.0' -> 'requests'
-                import re as _re
-                m = _re.match(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)', str(dep).strip())
-                if m:
-                    # Normalise hyphens/dots to underscores (PEP 503)
-                    allowed.add(m.group(1).replace("-", "_").replace(".", "_").lower())
-        except Exception as exc:
-            logger.warning("Failed to parse pyproject.toml for dependency check: %s", exc)
+                try:
+                    import tomllib  # Python 3.11+
+                except ImportError:
+                    import tomli as tomllib  # type: ignore[no-redef]  # backport
+                with pyproject_path.open("rb") as fh:
+                    toml_data = tomllib.load(fh)
+                raw_deps: List[str] = toml_data.get("project", {}).get("dependencies", [])
+                for section in toml_data.get("project", {}).get("optional-dependencies", {}).values():
+                    raw_deps.extend(section)
+                raw_deps.extend(
+                    toml_data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
+                )
+                for dep in raw_deps:
+                    m = _re.match(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)', str(dep).strip())
+                    if m:
+                        # Normalise hyphens/dots to underscores (PEP 503)
+                        allowed.add(m.group(1).replace("-", "_").replace(".", "_").lower())
+            except Exception as exc:
+                logger.warning("Failed to parse pyproject.toml for dependency check: %s", exc)
 
-    # 2. Check imports in the tree
-    for node in ast.walk(tree):
-        module_name = ""
-        is_relative = False
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                module_name = alias.name.split('.')[0]
-        elif isinstance(node, ast.ImportFrom):
-            is_relative = (node.level or 0) > 0
-            if node.module:
-                module_name = node.module.split('.')[0]
-        
-        if module_name and not is_relative and module_name not in allowed:
-            result.errors.append(f"{filepath}: undeclared dependency '{module_name}' imported")
+        # 2. Check imports in the tree
+        for node in ast.walk(tree):
+            module_name = ""
+            is_relative = False
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    module_name = alias.name.split(".")[0]
+            elif isinstance(node, ast.ImportFrom):
+                is_relative = (node.level or 0) > 0
+                if node.module:
+                    module_name = node.module.split(".")[0]
 
-    if _span:
-        _span.set_attribute("validation.passed", result.passed)
-        _span.set_attribute("validation.error_count", len(result.errors))
-        _span.end()
+            if module_name and not is_relative and module_name not in allowed:
+                result.errors.append(f"{filepath}: undeclared dependency '{module_name}' imported")
+
+        span.set_attribute("validation.passed", result.passed)
+        span.set_attribute("validation.error_count", len(result.errors))
     return result
 
 
 # ---------------------------------------------------------------------------
 # File backup
 # ---------------------------------------------------------------------------
+
 
 def backup_file(file_path: Path) -> Optional[Path]:
     """Create a timestamped backup of a file before modification.

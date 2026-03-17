@@ -46,19 +46,19 @@ def test_check_imports_undeclared():
     assert not any("undeclared dependency 'os'" in e for e in res.errors)
     assert not any("undeclared dependency 'agent'" in e for e in res.errors)
 
-def test_validate_code_block_normalisies_trailing_newline() -> None:
-    """Verify validate_code_block normalises missing trailing newline (parser artefact).
+def test_validate_code_block_requires_trailing_newline() -> None:
+    """AC-1: validate_code_block raises an error when content has no trailing newline.
 
-    parse_code_blocks always strips trailing whitespace, so validate_code_block
-    must not treat the missing newline as a gate error or it would false-positive
-    on every extracted code block during runbook self-healing.
+    parse_code_blocks now preserves trailing newlines (rstrip + add), so callers
+    that supply content without a trailing newline represent a genuine violation.
     """
-    # Content without trailing newline (as parse_code_blocks produces)
     content_no_newline = '"""Module."""\n\n\ndef foo() -> None:\n    """Foo."""\n    pass'
     res = validate_code_block("test.py", content_no_newline)
-    assert not res.errors, f"Unexpected errors: {res.errors}"
+    assert any("missing trailing newline" in e for e in res.errors), (
+        f"Expected trailing-newline error, got: {res.errors}"
+    )
 
-    # Content with trailing newline (as direct file write produces) also passes
+    # Content with trailing newline passes the AC-1 check
     content_with_newline = content_no_newline + "\n"
     res_ok = validate_code_block("test.py", content_with_newline)
-    assert not res_ok.errors
+    assert not any("missing trailing newline" in e for e in res_ok.errors)
