@@ -388,8 +388,8 @@ Generate the runbook now.
 
         # 2. Code Gate Self-Healing (INFRA-155 AC-1)
 
-        code_errors: List = []
-        code_warnings: List = []
+        code_errors: List[str] = []
+        code_warnings: List[str] = []
         
         with tracer.start_as_current_span("validate_code_gates") as span:
             # Extract all code blocks

@@ -227,36 +227,40 @@ def enforce_docstrings(filepath: str, content: str) -> ValidationResult:  # noqa
 
     class DocstringVisitor(ast.NodeVisitor):
         """AST visitor to find missing docstrings at different nesting levels."""
-        def __init__(self):
-            self.context_stack = [] # Stack of nodes (ClassDef, FunctionDef)
 
-        def visit_ClassDef(self, node):
-            """Visit class and check docstring."""
+        context_stack: list  # Stack of AST scope nodes (ClassDef, FunctionDef)
+
+        def __init__(self) -> None:
+            self.context_stack = []
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            """Visit class and check for a class-level docstring."""
             if not _has_docstring(node):
                 result.errors.append(f"{filename}: class {node.name} is missing a docstring")
             self.context_stack.append(node)
             self.generic_visit(node)
             self.context_stack.pop()
 
-        def visit_FunctionDef(self, node):
-            """Visit function and check docstring based on nesting level."""
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # type: ignore[override]
+            """Visit function and check docstring; nested functions are warnings only."""
             if not _has_docstring(node):
-                # Is it a nested function? (Function inside a Function)
-                is_nested = any(isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef)) 
-                               for p in self.context_stack)
-                
+                is_nested = any(
+                    isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    for p in self.context_stack
+                )
                 if is_nested:
-                    result.warnings.append(f"{filename}: nested function {node.name}() is missing a docstring")
+                    result.warnings.append(
+                        f"{filename}: nested function {node.name}() is missing a docstring"
+                    )
                 else:
                     result.errors.append(f"{filename}: {node.name}() is missing a docstring")
-            
             self.context_stack.append(node)
             self.generic_visit(node)
             self.context_stack.pop()
 
-        def visit_AsyncFunctionDef(self, node):
-            """Visit async function and check docstring."""
-            self.visit_FunctionDef(node)
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # type: ignore[override]
+            """Delegate async function to the sync visitor."""
+            self.visit_FunctionDef(node)  # type: ignore[arg-type]
 
     DocstringVisitor().visit(tree)
     if _span:
@@ -291,16 +295,32 @@ def check_imports(filepath: str, content: str) -> ValidationResult:
     if sys.version_info >= (3, 10):
         allowed.update(sys.stdlib_module_names)
     
-    # Add dependencies from pyproject.toml
+    # Add dependencies from pyproject.toml using robust TOML parsing (no fragile regex)
     pyproject_path = resolve_repo_path("pyproject.toml")
     if pyproject_path.exists():
         try:
-            import re
-            ptxt = pyproject_path.read_text()
-            # Basic regex to extract dependency names from [project.dependencies]
-            # This handles common formats like 'package >= 1.0' or '"package"'
-            deps = re.findall(r'^\s*["\']?([a-zA-Z0-9_-]+)', ptxt, re.MULTILINE)
-            allowed.update(deps)
+            try:
+                import tomllib  # Python 3.11+
+            except ImportError:
+                import tomli as tomllib  # type: ignore[no-redef]  # backport
+            with pyproject_path.open("rb") as fh:
+                toml_data = tomllib.load(fh)
+            # Collect from [project.dependencies] and [project.optional-dependencies]
+            raw_deps: list = toml_data.get("project", {}).get("dependencies", [])
+            for section in toml_data.get("project", {}).get("optional-dependencies", {}).values():
+                raw_deps.extend(section)
+            # Also collect from [tool.uv.dev-dependencies] (uv workspace)
+            raw_deps.extend(
+                toml_data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
+            )
+            for dep in raw_deps:
+                # Extract bare package name: strip version specifiers and extras
+                # e.g. 'requests[security]>=2.0' -> 'requests'
+                import re as _re
+                m = _re.match(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)', str(dep).strip())
+                if m:
+                    # Normalise hyphens/dots to underscores (PEP 503)
+                    allowed.add(m.group(1).replace("-", "_").replace(".", "_").lower())
         except Exception as exc:
             logger.warning("Failed to parse pyproject.toml for dependency check: %s", exc)
 
