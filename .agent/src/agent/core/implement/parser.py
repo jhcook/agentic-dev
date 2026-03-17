@@ -79,6 +79,19 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
         code
         ```
 
+    Content is returned **as captured** (raw bytes between the fences) without
+    any trailing-newline normalisation.  This preserves the AI's output so that
+    the ``validate_code_block`` gate can correctly detect a missing trailing
+    newline and trigger the self-healing loop (AC-1).
+
+    A trailing newline is present in the captured content only when the AI
+    includes a blank line before the closing fence::
+
+        ```python
+        def foo():\n            pass        ← last line of code
+                                 ← blank line (\\n) → captured content ends with \\n
+        ```
+
     Args:
         content: Raw AI response string.
 
@@ -90,7 +103,7 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     # Uses (?P=fence) to ensure balanced detection (e.g. 4 backticks wrap 3)
     p1 = r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]+:([\w/\.\-_]+)\n(.*?)\n\1(?P=fence)[ \t]*$'
     for match in re.finditer(p1, content, re.DOTALL):
-        blocks.append({"file": _unescape_path(match.group(3)), "content": match.group(4).strip()})
+        blocks.append({"file": _unescape_path(match.group(3)), "content": match.group(4)})
 
     # [NEW] only — [MODIFY] blocks are handled exclusively by parse_search_replace_blocks.
     # Pattern 2: Header followed by ``` code block
@@ -100,7 +113,7 @@ def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     )
     for match in re.finditer(p2, content, re.DOTALL | re.IGNORECASE):
         fp = _unescape_path(match.group(1))
-        block_content = match.group(4).strip()
+        block_content = match.group(4)
         # Skip no-op placeholder blocks (e.g. runbook uses S/R inside a [NEW] header
         # for idempotency — the real work is done by parse_search_replace_blocks).
         if block_content.startswith("<<<SEARCH"):

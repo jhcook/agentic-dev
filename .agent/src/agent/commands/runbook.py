@@ -32,7 +32,9 @@ from agent.core.utils import (
     get_copyright_header,
 )
 from agent.core.context import context_loader
+from agent.core.implement.guards import validate_code_block
 from agent.core.implement.orchestrator import validate_runbook_schema
+from agent.core.implement.parser import parse_code_blocks
 from agent.utils.validation_formatter import format_runbook_errors
 from agent.db.client import upsert_artifact
 
@@ -366,41 +368,59 @@ Generate the runbook now.
         if "SPLIT_REQUEST" in content:
             break  # Let the split logic below handle it
 
-        # Schema validation (AC-3)
+        # 1. Schema validation
         with tracer.start_as_current_span("validate_runbook_schema") as span:
             schema_violations = validate_runbook_schema(content)
             span.set_attribute("validation.passed", not bool(schema_violations))
             span.set_attribute("validation.error_count", len(schema_violations) if schema_violations else 0)
-        if not schema_violations:
-            break
+        
+        if schema_violations:
+            logger.warning("runbook_schema_fail", extra={"attempt": attempt, "story_id": story_id})
+            formatted_errors = format_runbook_errors(schema_violations)
+            if attempt < max_attempts:
+                console.print(f"[yellow]⚠️  Attempt {attempt} failed schema validation. Retrying...[/yellow]")
+                current_user_prompt = f"{user_prompt}\n\n{formatted_errors}\nPlease fix these and re-generate."
+                continue
+            else:
+                error_console.print(f"[bold red]❌ Schema validation failed after {max_attempts} attempts.[/bold red]")
+                error_console.print(formatted_errors)
+                raise typer.Exit(code=1)
+
+        # 2. Code Gate Self-Healing (INFRA-155 AC-1)
+
+        code_errors: List[str] = []
+        code_warnings: List[str] = []
+        
+        with tracer.start_as_current_span("validate_code_gates") as span:
+            # Extract all code blocks
+            blocks = parse_code_blocks(content)
+            for b in blocks:
+                res = validate_code_block(b["file"], b["content"])
+                code_errors.extend(res.errors)
+                code_warnings.extend(res.warnings)
             
-        logger.warning(
-            "runbook_validation_fail",
-            extra={
-                "attempt": attempt,
-                "story_id": story_id,
-                "error_count": len(schema_violations),
-                "validation_error": schema_violations,
-            },
-        )
+            span.set_attribute("validation.passed", not bool(code_errors))
+            span.set_attribute("validation.error_count", len(code_errors))
+
+        if code_errors:
+            logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
+            error_msg = "CODE GATE VIOLATIONS DETECTED:\n" + "\n".join(f"- {e}" for e in code_errors)
+            if attempt < max_attempts:
+                console.print(f"[yellow]⚠️  Attempt {attempt} failed code gates. Asking AI for self-healing...[/yellow]")
+                current_user_prompt = f"{user_prompt}\n\n{error_msg}\nPlease fix these code violations and re-generate the full runbook."
+                continue
+            else:
+                error_console.print(f"[bold red]❌ Code gates failed after {max_attempts} attempts.[/bold red]")
+                error_console.print(error_msg)
+                raise typer.Exit(code=1)
         
-        formatted_errors = format_runbook_errors(schema_violations)
-        
-        if attempt < max_attempts:
-            console.print(f"[yellow]⚠️  Attempt {attempt} failed validation. Asking for correction...[/yellow]")
-            current_user_prompt = (
-                f"{user_prompt}\n\n"
-                f"{formatted_errors}\n\n"
-                f"Please correct these errors and generate the full runbook again."
-            )
-        else:
-            logger.error(
-                "runbook_generation_failed",
-                extra={"story_id": story_id, "attempts": max_attempts},
-            )
-            error_console.print(f"[bold red]❌ Failed to generate a valid runbook after {max_attempts} attempts.[/bold red]")
-            error_console.print(formatted_errors)
-            raise typer.Exit(code=1)
+        # If we got here, schema and code errors are clear
+        if code_warnings:
+            console.print(f"[yellow]ℹ️  Code warnings detected (non-blocking):[/yellow]")
+            for w in code_warnings:
+                console.print(f"  [dim]• {w}[/dim]")
+
+        break
 
     # -- SPLIT_REQUEST Fallback (INFRA-094) --
     if "SPLIT_REQUEST" in content:
