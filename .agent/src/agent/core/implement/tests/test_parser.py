@@ -89,7 +89,7 @@ class TestModifyParsingError:
 # ---------------------------------------------------------------------------
 
 class TestNewParsingError:
-    """Verify ParsingError for [NEW] headers with no balanced code fence."""
+    """Verify ParsingError for [NEW] headers with no code block."""
 
     def test_new_without_code_fence_raises_parsing_error(self):
         """A [NEW] header with no code fence must raise ParsingError."""
@@ -97,7 +97,7 @@ class TestNewParsingError:
             "#### [NEW] src/new_file.py\n\n"
             "This is just text, no code fence.\n"
         )
-        with pytest.raises(ParsingError, match="no balanced code fence"):
+        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
             _extract_runbook_data(content)
 
     def test_new_without_fence_surfaces_in_validate(self):
@@ -108,7 +108,7 @@ class TestNewParsingError:
         )
         violations = validate_runbook_schema(content)
         assert len(violations) >= 1
-        assert "code fence" in violations[0]
+        assert "code fence" in violations[0] or "code block" in violations[0]
 
     def test_new_with_valid_fence_passes(self):
         """A well-formed [NEW] block should extract without errors."""

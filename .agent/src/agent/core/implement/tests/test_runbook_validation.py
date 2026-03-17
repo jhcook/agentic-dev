@@ -91,7 +91,7 @@ class TestExtractFencedContent:
 
 
 class TestNewBlockMissingCodeFence:
-    """[NEW] headers with no balanced code fence must raise ParsingError."""
+    """[NEW] headers with no code block must raise ParsingError."""
 
     def test_no_code_fence(self):
         """A [NEW] header with prose only must fail."""
@@ -100,7 +100,7 @@ class TestNewBlockMissingCodeFence:
             "#### [NEW] .agent/src/agent/mod.py\n\n"
             "This is just prose.\n"
         )
-        with pytest.raises(ParsingError, match="no balanced code fence"):
+        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
             _extract_runbook_data(content)
 
     def test_empty_code_fence(self):
@@ -110,7 +110,7 @@ class TestNewBlockMissingCodeFence:
             "#### [NEW] .agent/src/agent/empty.py\n\n"
             "```python\n```\n"
         )
-        with pytest.raises(ParsingError, match="no balanced code fence"):
+        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
             _extract_runbook_data(content)
 
 

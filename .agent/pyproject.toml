@@ -48,6 +48,7 @@ dependencies = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=0.2.0",
     "langchain-openai>=0.2.0",
+    "mistune>=3.0.0",
 ]
 
 [project.optional-dependencies]
