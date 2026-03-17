@@ -16,10 +16,13 @@
 
 import ast
 import contextlib
+import os
 import re
 import logging
 import sys
-from typing import Dict, List, Set, Tuple, Union, Optional
+from typing import Dict, Any, List, Set, Tuple, Union, Optional
+
+import mistune
 
 from pydantic import ValidationError
 
@@ -153,15 +156,27 @@ def extract_modify_files(runbook_content: str) -> List[str]:
     Returns:
         Deduplicated list of file path strings in order of first appearance.
     """
-    seen: set = set()
-    result: List[str] = []
-    masked = _mask_fenced_blocks(runbook_content)
-    for path in re.findall(r'####\s*\[MODIFY\]\s*`?([^\n`]+)`?', masked, re.IGNORECASE):
-        path = _unescape_path(path)
-        if path not in seen:
-            seen.add(path)
-            result.append(path)
-    return result
+    if os.environ.get("USE_LEGACY_PARSER", "false").lower() == "true":
+        seen: set = set()
+        result: List[str] = []
+        masked = _mask_fenced_blocks(runbook_content)
+        for path in re.findall(r'####\s*\[MODIFY\]\s*`?([^\n`]+)`?', masked, re.IGNORECASE):
+            path = _unescape_path(path)
+            if path not in seen:
+                seen.add(path)
+                result.append(path)
+        return result
+
+    # AST implementation
+    steps = _extract_runbook_data_ast(runbook_content)
+    paths = []
+    seen = set()
+    for step in steps:
+        for op in step["operations"]:
+            if "blocks" in op and op["path"] not in seen:
+                paths.append(op["path"])
+                seen.add(op["path"])
+    return paths
 
 
 def extract_approved_files(runbook_content: str) -> Set[str]:
@@ -175,14 +190,23 @@ def extract_approved_files(runbook_content: str) -> Set[str]:
     Returns:
         Set of file path strings declared in the runbook.
     """
-    paths: Set[str] = set()
-    masked = _mask_fenced_blocks(runbook_content)
-    for match in re.findall(
-        r'####\s*\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
-        masked, re.IGNORECASE,
-    ):
-        paths.add(_unescape_path(match))
-    return paths
+    if os.environ.get("USE_LEGACY_PARSER", "false").lower() == "true":
+        paths: Set[str] = set()
+        masked = _mask_fenced_blocks(runbook_content)
+        for match in re.findall(
+            r'####\s*\[(?:MODIFY|NEW|DELETE)\]\s*`?([^\n`]+)`?',
+            masked, re.IGNORECASE,
+        ):
+            paths.add(_unescape_path(match))
+        return paths
+
+    # AST implementation
+    steps = _extract_runbook_data_ast(runbook_content)
+    approved_paths = set()
+    for step in steps:
+        for op in step["operations"]:
+            approved_paths.add(op["path"])
+    return approved_paths
 
 
 def extract_cross_cutting_files(runbook_content: str) -> Set[str]:
@@ -315,91 +339,224 @@ def _extract_fenced_content(block_body: str) -> str:
     return ""
 
 
-def _extract_runbook_data(content: str) -> List[dict]:
-    """Extract implementation steps from runbook markdown into Pydantic-ready dicts.
+def _extract_runbook_data_ast(content: str) -> List[dict]:
+    """Extract implementation steps using an AST parser.
 
-    Parses ``## Implementation Steps`` to find ``### Step N`` headers,
-    then within each step finds ``#### [MODIFY|NEW|DELETE]`` blocks and
-    extracts their content into structured dictionaries.
+    Uses mistune to parse markdown into tokens and walks the tree to identify
+    structural headers (H2 Implementation Steps -> H3 Steps -> H4 Operations).
+
+    Args:
+        content: Raw runbook markdown text.
+
+    Returns:
+        List of structured step dictionaries.
+
+    Raises:
+        ValueError: If Implementation Steps section is missing.
+        ParsingError: If operation blocks are malformed.
+    """
+    markdown = mistune.create_markdown(renderer=None)
+    tokens = markdown(content)
+
+    def _children_text(token: dict) -> str:
+        """Extract concatenated text from token children (mistune v3 uses 'raw')."""
+        return "".join(
+            t.get('raw', t.get('children', ''))
+            for t in token.get('children', [])
+            if t.get('type') in ('text', 'codespan')
+        ).strip()
+
+    steps: List[dict] = []
+    current_step: Optional[dict] = None
+    current_op: Optional[dict] = None
+    in_impl_steps = False
+
+    for token in tokens:
+        # 1. Identify "Implementation Steps" (H2)
+        if token['type'] == 'heading' and token['attrs']['level'] == 2:
+            header_text = _children_text(token)
+            if header_text.lower() == "implementation steps":
+                in_impl_steps = True
+                continue
+            elif in_impl_steps:
+                # Exit if we hit another H2 after Implementation Steps
+                break
+
+        if not in_impl_steps:
+            continue
+
+        # 2. Identify Step (H3)
+        if token['type'] == 'heading' and token['attrs']['level'] == 3:
+            title = _children_text(token)
+            # Strip "Step N: " prefix if present
+            title = re.sub(r'^Step\s+\d+:\s*', '', title, flags=re.IGNORECASE)
+            current_step = {"title": title, "operations": []}
+            steps.append(current_step)
+            current_op = None
+            continue
+
+        # 3. Identify Operation (H4)
+        if token['type'] == 'heading' and token['attrs']['level'] == 4:
+            op_text = _children_text(token)
+            match = re.match(r'\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?\s*$', op_text, re.IGNORECASE)
+            if match and current_step is not None:
+                action = match.group(1).upper()
+                filepath = _unescape_path(match.group(2))
+                current_op = {"action": action, "path": filepath}
+                if action == "MODIFY":
+                    current_op["blocks"] = []
+                elif action == "NEW":
+                    current_op["content"] = ""
+                elif action == "DELETE":
+                    current_op["rationale"] = ""
+                current_step["operations"].append(current_op)
+            continue
+
+        # 4. Extract content for the current operation
+        if current_op and token['type'] in ('paragraph', 'block_code', 'text'):
+            # Text content extraction from various token structures
+            text_parts = []
+            if 'raw' in token:
+                text_parts.append(token['raw'])
+            elif 'children' in token:
+                text_parts.append(_children_text(token))
+            
+            body_text = "\n".join(text_parts).strip()
+            if not body_text:
+                continue
+
+            if current_op["action"] == "MODIFY":
+                # Look for SEARCH/REPLACE blocks
+                sr_pattern = r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$'
+                for sr in re.finditer(sr_pattern, body_text, re.DOTALL):
+                    current_op["blocks"].append({"search": sr.group(1), "replace": sr.group(2)})
+            
+            elif current_op["action"] == "NEW" and token['type'] == 'block_code':
+                # For NEW, we only take the first code block encountered under the H4
+                if not current_op["content"]:
+                    current_op["content"] = body_text.rstrip()
+            
+            elif current_op["action"] == "DELETE":
+                # Strip HTML comments and accumulate rationale
+                rationale = re.sub(r'<!--\s*|\s*-->', '', body_text).strip()
+                if rationale:
+                    current_op["rationale"] = (current_op["rationale"] + " " + rationale).strip()
+
+    if not steps and in_impl_steps:
+         # Check if there were any operations at all
+         pass
+    elif not in_impl_steps:
+        raise ValueError("Missing '## Implementation Steps' section — runbook has no executable steps.")
+
+    # Validation: Ensure MODIFY blocks have at least one S/R pair
+    for step in steps:
+        for op in step["operations"]:
+            if op.get("action") == "MODIFY" and not op.get("blocks"):
+                raise ParsingError(
+                    f"MODIFY header for '{op['path']}' found but no valid SEARCH/REPLACE blocks detected."
+                )
+            if op.get("action") == "NEW" and not op.get("content"):
+                raise ParsingError(
+                    f"NEW header for '{op['path']}' found but no code block detected."
+                )
+            # Remove the internal 'action' key used for parsing state
+            op.pop("action", None)
+
+    return steps
+
+
+def _extract_runbook_data_legacy(content: str) -> List[dict]:
+    """Extract implementation steps using legacy regex logic (Rollback path).
+
+    Args:
+        content: Raw runbook markdown text.
+
+    Returns:
+        List of step dicts.
+    """
+    if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
+        raise ValueError(
+            "Missing '## Implementation Steps' section — runbook has no executable steps."
+        )
+
+    impl_match = re.search(
+        r'^## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
+        re.DOTALL | re.MULTILINE,
+    )
+    body = impl_match.group(1) if impl_match else ""
+
+    step_splits = re.split(r'(?:^|\n)### ', body)
+    steps: List[dict] = []
+
+    for raw_step in step_splits[1:]:
+        title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
+        title = title_match.group(1).strip() if title_match else "Untitled Step"
+
+        masked_step = _mask_fenced_blocks(raw_step)
+        block_pattern = re.compile(
+            r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?[ \t]*\n',
+            re.IGNORECASE,
+        )
+        block_matches = list(block_pattern.finditer(masked_step))
+        operations: List[dict] = []
+
+        for idx, match in enumerate(block_matches):
+            action = match.group(1).upper()
+            filepath = _unescape_path(match.group(2))
+            start = match.end()
+            end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
+            block_body = raw_step[start:end]
+
+            if action == "MODIFY":
+                sr_blocks = []
+                sr_pattern = r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$'
+                for sr in re.finditer(sr_pattern, block_body, re.DOTALL):
+                    sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
+                if not sr_blocks:
+                    raise ParsingError(
+                        f"MODIFY header for '{filepath}' found but no valid SEARCH/REPLACE blocks."
+                    )
+                operations.append({"path": filepath, "blocks": sr_blocks})
+
+            elif action == "NEW":
+                file_content = _extract_fenced_content(block_body)
+                if not file_content:
+                    raise ParsingError(f"NEW header for '{filepath}' found but no code fence matched.")
+                operations.append({"path": filepath, "content": file_content})
+
+            elif action == "DELETE":
+                rationale = block_body.strip()
+                rationale = re.sub(r'<!--\s*|\s*-->', '', rationale).strip()
+                operations.append({"path": filepath, "rationale": rationale or ""})
+
+        if operations:
+            steps.append({"title": title, "operations": operations})
+
+    return steps
+
+
+def _extract_runbook_data(content: str) -> List[dict]:
+    """Extract implementation steps from runbook markdown into structured dicts.
+
+    Dispatches to either AST or Legacy parser based on USE_LEGACY_PARSER env var.
 
     Args:
         content: Full runbook markdown text.
 
     Returns:
-        List of step dicts suitable for ``RunbookSchema(steps=...)``.
-
-    Raises:
-        ValueError: If the ``## Implementation Steps`` section is missing.
+        List of step dicts suitable for RunbookSchema.
     """
+    use_legacy = os.environ.get("USE_LEGACY_PARSER", "false").lower() == "true"
     span_ctx = _tracer.start_as_current_span("runbook.extract_data") if _tracer else contextlib.nullcontext()
+    
     with span_ctx as span:
-        if not re.search(r'^##\s+Implementation Steps', content, re.MULTILINE):
-            raise ValueError(
-                "Missing '## Implementation Steps' section — runbook has no executable steps."
-            )
-
-        impl_match = re.search(
-            r'^## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
-            re.DOTALL | re.MULTILINE,
-        )
-        body = impl_match.group(1) if impl_match else ""
-
-        # Split into steps by ### headers (handle body with or without leading newline)
-        step_splits = re.split(r'(?:^|\n)### ', body)
-        steps: List[dict] = []
-
-        for raw_step in step_splits[1:]:  # skip preamble before first ###
-            title_match = re.match(r'(?:Step\s+\d+:\s*)?(.+)', raw_step.splitlines()[0])
-            title = title_match.group(1).strip() if title_match else "Untitled Step"
-
-            # Mask fenced code blocks so embedded #### [MODIFY] etc. in
-            # file content (e.g. test data) are not matched as operations.
-            masked_step = _mask_fenced_blocks(raw_step)
-            block_pattern = re.compile(
-                r'####\s*\[(MODIFY|NEW|DELETE)\]\s*`?([^\n`]+?)`?[ \t]*\n',
-                re.IGNORECASE,
-            )
-            block_matches = list(block_pattern.finditer(masked_step))
-            operations: List[dict] = []
-
-            for idx, match in enumerate(block_matches):
-                action = match.group(1).upper()
-                filepath = _unescape_path(match.group(2))
-                start = match.end()
-                end = block_matches[idx + 1].start() if idx + 1 < len(block_matches) else len(raw_step)
-                block_body = raw_step[start:end]
-
-                if action == "MODIFY":
-                    sr_blocks = []
-                    # Also require >>> to be at start of line for robustness
-                    sr_pattern = r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$'
-                    for sr in re.finditer(sr_pattern, block_body, re.DOTALL):
-                        sr_blocks.append({"search": sr.group(1), "replace": sr.group(2)})
-                    if not sr_blocks:
-                        raise ParsingError(
-                            f"MODIFY header for '{filepath}' found but no valid "
-                            "SEARCH/REPLACE blocks detected in body."
-                        )
-                    operations.append({"path": filepath, "blocks": sr_blocks})
-
-                elif action == "NEW":
-                    # INFRA-151: Line-by-line parser for nested fence support
-                    file_content = _extract_fenced_content(block_body)
-                    if not file_content:
-                        raise ParsingError(
-                            f"NEW header for '{filepath}' found but no balanced "
-                            "code fence matched in body."
-                        )
-                    operations.append({"path": filepath, "content": file_content})
-
-                elif action == "DELETE":
-                    rationale = block_body.strip()
-                    # Strip HTML comments
-                    rationale = re.sub(r'<!--\s*|\s*-->', '', rationale).strip()
-                    operations.append({"path": filepath, "rationale": rationale or ""})
-
-            if operations:
-                steps.append({"title": title, "operations": operations})
+        if span:
+            span.set_attribute("parser.mode", "legacy" if use_legacy else "ast")
+            
+        if use_legacy:
+            steps = _extract_runbook_data_legacy(content)
+        else:
+            steps = _extract_runbook_data_ast(content)
 
         if span:
             span.set_attribute("runbook.step_count", len(steps))
