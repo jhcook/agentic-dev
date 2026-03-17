@@ -50,7 +50,13 @@ def panel(
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'.")
 ):
     """
-    Convening the Governance Panel to review changes or discuss design.
+    Convene the Governance Panel to review changes or discuss design.
+
+    When ``--apply`` is used on a runbook, the AI is explicitly instructed to
+    preserve the ``## Implementation Steps`` section character-for-character.
+    The updated content is then validated against the RunbookSchema before
+    writing to prevent file corruption from reformatted markers or truncated
+    code blocks.
     """
     from agent.core.ai import ai_service
 
@@ -222,9 +228,18 @@ def panel(
         
 TASK:
 Update the following document based on the advice from the Governance Panel.
-Appy the advice intelligently. Do not just append it. Integrate it into the relevant sections.
+Apply the advice intelligently. Do not just append it. Integrate it into the relevant sections.
 If the advice suggests changes to code, do NOT change code, but update the plan/spec to reflect the need for changes.
 Maintain the original document structure/headers.
+
+CRITICAL — PRESERVE IMPLEMENTATION STEPS EXACTLY:
+The "## Implementation Steps" section and everything below it (including all
+"### Step N" headings, "#### [NEW]", "#### [MODIFY]", "#### [DELETE]" markers,
+and all fenced code blocks / <<<SEARCH/===/>>> blocks) are machine-executable
+instructions. You MUST copy them **character-for-character** into your output.
+Do NOT reformat, summarise, truncate, or alter them in any way.
+Panel advice should be integrated into the Panel Review Findings, Goal Description,
+Codebase Introspection, or Definition of Done sections — never into Implementation Steps.
 
 DOCUMENT ({target_file.name}):
 {story_content}

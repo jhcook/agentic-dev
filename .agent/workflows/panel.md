@@ -10,11 +10,13 @@ This is a **Consultative** session — unlike `preflight`, the panel is NOT a ga
 
 ## PROCESS
 
-1. **Run** `agent panel <STORY-ID>` for consultative governance review.
-2. **Compare branches** with `agent panel <STORY-ID> --base main`.
-3. **Auto-apply** with `agent panel <STORY-ID> --apply` to inject advice into story/runbook.
-4. **Ask questions** with `agent panel "How should we approach X for INFRA-069?"`.
-5. **Override engine** with `agent panel <STORY-ID> --panel-engine adk|native`.
+// turbo-all
+
+1. **Run** `env -u VIRTUAL_ENV uv run agent panel <STORY-ID>` for consultative governance review.
+2. **Compare branches** with `env -u VIRTUAL_ENV uv run agent panel <STORY-ID> --base main`.
+3. **Auto-apply** with `env -u VIRTUAL_ENV uv run agent panel <STORY-ID> --apply` to inject advice into story/runbook.
+4. **Ask questions** with `env -u VIRTUAL_ENV uv run agent panel "How should we approach X for INFRA-069?"`.
+5. **Override engine** with `env -u VIRTUAL_ENV uv run agent panel <STORY-ID> --panel-engine adk|native`.
 
 ## FLAGS
 
@@ -39,4 +41,5 @@ The command produces a **Governance Panel Consultation** report with:
 - Use **Advice** and **Recommendations** framing, not BLOCK/PASS
 - Panel reads story/runbook context automatically
 - If no changes are staged, the panel operates in **Design Review mode** (document context only)
-- See `agent panel --help` for all options
+- When `--apply` is used on a runbook, the **Implementation Steps** section is preserved character-for-character and validated against the RunbookSchema before writing
+- See `env -u VIRTUAL_ENV uv run agent panel --help` for all options

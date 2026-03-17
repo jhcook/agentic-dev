@@ -19,6 +19,7 @@ As a developer using `/panel`, I want the workflow to call `env -u VIRTUAL_ENV u
 - [ ] **AC3: Advisory Mode**: `env -u VIRTUAL_ENV uv run agent panel` output uses "Advice" and "Recommendations" framing (not BLOCK/PASS), matching the workflow's consultative intent.
 - [ ] **AC4: Workflow Simplification**: `/panel` workflow is reduced to calling `env -u VIRTUAL_ENV uv run agent panel --story <ID>`, with a "See Also: `env -u VIRTUAL_ENV uv run agent panel --help`" reference.
 - [ ] **Negative Test**: `env -u VIRTUAL_ENV uv run agent panel` with no staged changes reports cleanly.
+- [ ] **AC6: Implementation Steps Preservation**: When `panel --apply` is used on a runbook, the `## Implementation Steps` section must be preserved character-for-character and validated against the RunbookSchema before writing.
 
 ## Non-Functional Requirements
 
@@ -34,8 +35,9 @@ As a developer using `/panel`, I want the workflow to call `env -u VIRTUAL_ENV u
 
 ## Impact Analysis Summary
 
-Components touched: `check.py` (panel command), `panel.md` workflow
+Components touched: `panel.py` (panel command), `panel.md` workflow
 Workflows affected: `/panel`
+New capability: `panel --apply` now explicitly instructs the AI to preserve `## Implementation Steps` verbatim and validates the output against RunbookSchema before writing, preventing AI-driven corruption of machine-executable runbook sections.
 Risks identified: The existing `env -u VIRTUAL_ENV uv run agent panel` command may already have full parity — needs verification before any code changes.
 
 ## Test Strategy
