@@ -149,33 +149,68 @@ _console = Console()
 
 
 # ---------------------------------------------------------------------------
-# Docstring enforcement (AC-10)
+# Code Validation Gates (INFRA-155)
 # ---------------------------------------------------------------------------
 
-def enforce_docstrings(filepath: str, content: str) -> List[str]:
+@dataclass
+class ValidationResult:
+    """Container for code validation findings."""
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        """Return True if no errors are present."""
+        return not bool(self.errors)
+
+def validate_code_block(filepath: str, content: str) -> ValidationResult:
+    """Run all code-level gates against a proposed code block.
+
+    Wrapped with OTel tracing for observability (INFRA-155).
+    """
+    _span = _tracer.start_span("guards.validate_code_block") if _tracer else None
+    if _span:
+        _span.set_attribute("file", filepath)
+
+    result = ValidationResult()
+
+    # `parse_code_blocks` strips trailing whitespace from extracted code as a
+    # markdown-parsing artefact.  Always normalise to a trailing newline before
+    # running AST-based checks — writing the file will restore the newline.
+    normalised = content if content.endswith("\n") else content + "\n"
+
+    # Python-specific checks
+    if filepath.endswith(".py"):
+        doc_res = enforce_docstrings(filepath, normalised)
+        result.errors.extend(doc_res.errors)
+        result.warnings.extend(doc_res.warnings)
+
+        import_res = check_imports(filepath, normalised)
+        result.errors.extend(import_res.errors)
+
+    if _span:
+        _span.set_attribute("validation.passed", result.passed)
+        _span.set_attribute("validation.error_count", len(result.errors))
+        _span.end()
+    return result
+
+def enforce_docstrings(filepath: str, content: str) -> ValidationResult:  # noqa: C901
     """Check generated Python source for missing PEP-257 docstrings.
 
-    Inspects every module, class, and function/method definition (including
-    inner functions such as decorator closures) using ast.parse(). Non-Python
-    files automatically pass.
-
-    Args:
-        filepath: Repo-relative path of the file being validated.
-        content: Python source code string to validate.
-
-    Returns:
-        List of human-readable violation strings. Empty list means pass.
+    Wrapped with OTel tracing for observability (INFRA-155).
     """
-    import ast
+    _span = _tracer.start_span("guards.enforce_docstrings") if _tracer else None
+    if _span:
+        _span.set_attribute("file", filepath)
 
-    if not filepath.endswith(".py"):
-        return []
+    import ast
+    result = ValidationResult()
+    
     try:
         tree = ast.parse(content)
     except SyntaxError:
-        return []
+        return result
 
-    violations: List[str] = []
     filename = Path(filepath).name
 
     def _has_docstring(node: ast.AST) -> bool:
@@ -188,17 +223,107 @@ def enforce_docstrings(filepath: str, content: str) -> List[str]:
         )
 
     if not _has_docstring(tree):
-        violations.append(f"{filename}: module is missing a docstring")
+        result.errors.append(f"{filename}: module is missing a docstring")
 
+    class DocstringVisitor(ast.NodeVisitor):
+        """AST visitor to find missing docstrings at different nesting levels."""
+        def __init__(self):
+            self.context_stack = [] # Stack of nodes (ClassDef, FunctionDef)
+
+        def visit_ClassDef(self, node):
+            """Visit class and check docstring."""
+            if not _has_docstring(node):
+                result.errors.append(f"{filename}: class {node.name} is missing a docstring")
+            self.context_stack.append(node)
+            self.generic_visit(node)
+            self.context_stack.pop()
+
+        def visit_FunctionDef(self, node):
+            """Visit function and check docstring based on nesting level."""
+            if not _has_docstring(node):
+                # Is it a nested function? (Function inside a Function)
+                is_nested = any(isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef)) 
+                               for p in self.context_stack)
+                
+                if is_nested:
+                    result.warnings.append(f"{filename}: nested function {node.name}() is missing a docstring")
+                else:
+                    result.errors.append(f"{filename}: {node.name}() is missing a docstring")
+            
+            self.context_stack.append(node)
+            self.generic_visit(node)
+            self.context_stack.pop()
+
+        def visit_AsyncFunctionDef(self, node):
+            """Visit async function and check docstring."""
+            self.visit_FunctionDef(node)
+
+    DocstringVisitor().visit(tree)
+    if _span:
+        _span.set_attribute("validation.passed", result.passed)
+        _span.set_attribute("validation.error_count", len(result.errors))
+        _span.end()
+    return result
+
+def check_imports(filepath: str, content: str) -> ValidationResult:
+    """Validate imports against project dependencies.
+
+    Wrapped with OTel tracing for observability (INFRA-155).
+    """
+    _span = _tracer.start_span("guards.check_imports") if _tracer else None
+    if _span:
+        _span.set_attribute("file", filepath)
+
+    import ast
+    import sys
+    from agent.core.config import resolve_repo_path
+    
+    result = ValidationResult()
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return result
+
+    # 1. Gather allowed packages
+    allowed = {"agent", "tests", "backend", "web"} # Local project roots
+    
+    # Add standard library
+    if sys.version_info >= (3, 10):
+        allowed.update(sys.stdlib_module_names)
+    
+    # Add dependencies from pyproject.toml
+    pyproject_path = resolve_repo_path("pyproject.toml")
+    if pyproject_path.exists():
+        try:
+            import re
+            ptxt = pyproject_path.read_text()
+            # Basic regex to extract dependency names from [project.dependencies]
+            # This handles common formats like 'package >= 1.0' or '"package"'
+            deps = re.findall(r'^\s*["\']?([a-zA-Z0-9_-]+)', ptxt, re.MULTILINE)
+            allowed.update(deps)
+        except Exception as exc:
+            logger.warning("Failed to parse pyproject.toml for dependency check: %s", exc)
+
+    # 2. Check imports in the tree
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if not _has_docstring(node):
-                violations.append(f"{filename}: {node.name}() is missing a docstring")
-        elif isinstance(node, ast.ClassDef):
-            if not _has_docstring(node):
-                violations.append(f"{filename}: class {node.name} is missing a docstring")
+        module_name = ""
+        is_relative = False
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module_name = alias.name.split('.')[0]
+        elif isinstance(node, ast.ImportFrom):
+            is_relative = (node.level or 0) > 0
+            if node.module:
+                module_name = node.module.split('.')[0]
+        
+        if module_name and not is_relative and module_name not in allowed:
+            result.errors.append(f"{filepath}: undeclared dependency '{module_name}' imported")
 
-    return violations
+    if _span:
+        _span.set_attribute("validation.passed", result.passed)
+        _span.set_attribute("validation.error_count", len(result.errors))
+        _span.end()
+    return result
 
 
 # ---------------------------------------------------------------------------

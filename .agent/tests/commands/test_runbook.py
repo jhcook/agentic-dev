@@ -22,8 +22,8 @@ from agent.commands.runbook import new_runbook
 
 runner = CliRunner()
 
-# Valid runbook content that passes Pydantic schema validation
-VALID_RUNBOOK_CONTENT = """# Runbook for INFRA-001
+# Valid runbook content that passes Pydantic schema validation AND code gates
+VALID_RUNBOOK_CONTENT = '''# Runbook for INFRA-001
 
 ## Implementation Steps
 
@@ -32,11 +32,14 @@ VALID_RUNBOOK_CONTENT = """# Runbook for INFRA-001
 #### [NEW] `new_module.py`
 
 ```python
-# New module content
-def hello():
+"""New module with a proper docstring."""
+
+
+def hello() -> str:
+    """Return a greeting string."""
     return "world"
 ```
-"""
+'''
 
 # Invalid runbook content missing Implementation Steps section
 INVALID_RUNBOOK_CONTENT = "Status: PROPOSED\n# Runbook without implementation steps"
@@ -123,7 +126,7 @@ def test_new_runbook_retry_on_invalid_schema(mock_fs, app):
         result = runner.invoke(app, [story_id])
         
         assert result.exit_code == 1
-        assert "Failed to generate a valid runbook after 3 attempts" in result.output
+        assert "Schema validation failed after" in result.output
 
 def test_new_runbook_self_corrects(mock_fs, app):
     """AI self-corrects on second attempt after initial schema failure."""
@@ -138,7 +141,7 @@ def test_new_runbook_self_corrects(mock_fs, app):
         result = runner.invoke(app, [story_id])
         
         assert result.exit_code == 0
-        assert "Attempt 1 failed validation" in result.stdout
+        assert "Attempt 1 failed schema validation" in result.stdout
         assert "Runbook generated" in result.stdout
 
 

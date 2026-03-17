@@ -86,8 +86,12 @@ implementation:
   routes: []
   files:
   - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/core/implement/guards.py
   - .agent/src/agent/core/implement/models.py
   - .agent/src/agent/core/implement/parser.py
+  - .agent/tests/core/implement/test_infra_155_gates.py
   - .agent/workflows/impact.md
   tests:
   - .agent/tests/commands/test_impact.py

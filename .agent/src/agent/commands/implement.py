@@ -60,6 +60,7 @@ from agent.core.implement.guards import (  # noqa: F401
     apply_search_replace_to_file,
     backup_file,
     enforce_docstrings,
+    validate_code_block,
 )
 from agent.core.implement.orchestrator import (  # noqa: F401
     Orchestrator,
@@ -544,16 +545,19 @@ def implement(
             for _b in _all_code:
                 if _b["file"] in _sr_done:
                     continue
-                _viols = enforce_docstrings(_b["file"], _b["content"])
-                if _viols:
+                _vres = enforce_docstrings(_b["file"], _b["content"])
+                if not _vres.passed:
                     rejected_files.append(_b["file"])
                     console.print(
                         f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
-                        f"({len(_viols)} violation(s))[/bold red]"
+                        f"({len(_vres.errors)} violation(s))[/bold red]"
                     )
-                    for _v in _viols:
+                    for _v in _vres.errors:
                         console.print(f"   [red]• {_v}[/red]")
                     continue
+                if _vres.warnings:
+                    for _w in _vres.warnings:
+                        console.print(f"   [yellow]⚠ {_w}[/yellow]")
                 _orig = Path(_b["file"]).read_text() if Path(_b["file"]).exists() else ""
                 _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
                 if _ok:
