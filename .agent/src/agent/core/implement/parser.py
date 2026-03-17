@@ -14,9 +14,11 @@
 
 """Parser utilities for AI markdown and runbooks."""
 
+import ast
 import contextlib
 import re
 import logging
+import sys
 from typing import Dict, List, Set, Tuple, Union, Optional
 
 from pydantic import ValidationError
@@ -271,6 +273,48 @@ def _mask_fenced_blocks(text: str) -> str:
     return re.sub(pattern, _replacer, text, flags=re.DOTALL)
 
 
+def _extract_fenced_content(block_body: str) -> str:
+    """Extract content from a fenced code block, handling nested fences.
+
+    Scans line-by-line for the first opening fence and the **last**
+    closing fence with the same characters and indentation. Inner
+    closing fences (same backtick length) are skipped because the
+    last match wins.
+
+    Args:
+        block_body: Markdown body after a ``[NEW]`` header.
+
+    Returns:
+        Extracted content, or empty string if no valid fence pair.
+    """
+    lines = block_body.split('\n')
+    fence_re = re.compile(r'^( {0,3})(`{3,}|~{3,})')
+    opening_fence = None
+    opening_indent = None
+    content_start = None
+    last_close = None
+
+    for i, line in enumerate(lines):
+        m = fence_re.match(line)
+        if m is None:
+            continue
+        indent = m.group(1)
+        fence_chars = m.group(2)
+        rest = line[m.end():]
+
+        if opening_fence is None:
+            opening_fence = fence_chars
+            opening_indent = indent
+            content_start = i + 1
+        elif fence_chars == opening_fence and indent == opening_indent:
+            if rest.strip() == "":
+                last_close = i
+
+    if content_start is not None and last_close is not None and last_close > content_start:
+        return '\n'.join(lines[content_start:last_close]).rstrip()
+    return ""
+
+
 def _extract_runbook_data(content: str) -> List[dict]:
     """Extract implementation steps from runbook markdown into Pydantic-ready dicts.
 
@@ -295,7 +339,7 @@ def _extract_runbook_data(content: str) -> List[dict]:
             )
 
         impl_match = re.search(
-            r'## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
+            r'^## Implementation Steps\s*(.*?)(?=^## |\Z)', content,
             re.DOTALL | re.MULTILINE,
         )
         body = impl_match.group(1) if impl_match else ""
@@ -339,12 +383,8 @@ def _extract_runbook_data(content: str) -> List[dict]:
                     operations.append({"path": filepath, "blocks": sr_blocks})
 
                 elif action == "NEW":
-                    # Use balanced detection for NEW content as it often contains ADRs with code fences
-                    new_pattern = (
-                        r'(?m)^( {0,3})(?P<fence>`{3,}|~{3,})[\w]*\n(.*?)\n\1(?P=fence)[ \t]*$'
-                    )
-                    fence_match = re.search(new_pattern, block_body, re.DOTALL)
-                    file_content = fence_match.group(3).rstrip() if fence_match else ""
+                    # INFRA-151: Line-by-line parser for nested fence support
+                    file_content = _extract_fenced_content(block_body)
                     if not file_content:
                         raise ParsingError(
                             f"NEW header for '{filepath}' found but no balanced "
@@ -365,6 +405,42 @@ def _extract_runbook_data(content: str) -> List[dict]:
             span.set_attribute("runbook.step_count", len(steps))
 
         return steps
+
+
+def _check_python_syntax(step_data: List[dict]) -> List[str]:
+    """Validate Python syntax in [NEW] blocks using ast.parse().
+
+    Iterates over extracted step data and runs ``ast.parse()`` on any
+    ``[NEW]`` block whose path ends with ``.py``. Errors are returned
+    as non-blocking warning strings and emitted to ``stderr``.
+
+    Args:
+        step_data: List of step dicts from ``_extract_runbook_data``.
+
+    Returns:
+        List of syntax warning strings. Empty if all valid.
+    """
+    warnings: List[str] = []
+    for step in step_data:
+        for op in step.get("operations", []):
+            path = op.get("path", "")
+            content = op.get("content", "")
+            if not content or not path.endswith(".py"):
+                continue
+            try:
+                ast.parse(content, filename=path)
+            except SyntaxError as exc:
+                msg = (
+                    f"Python syntax error in [NEW] {path}: "
+                    f"{exc.msg} (line {exc.lineno})"
+                )
+                warnings.append(msg)
+                _logger.warning(
+                    "python_syntax_warning",
+                    extra={"path": path, "error": exc.msg, "line_number": exc.lineno},
+                )
+                print(f"⚠️  {msg}", file=sys.stderr)
+    return warnings
 
 
 def validate_runbook_schema(content: str) -> List[str]:
@@ -395,6 +471,23 @@ def validate_runbook_schema(content: str) -> List[str]:
             violations.append(str(exc))
         except Exception as exc:
             violations.append(f"Structural error: {exc}")
+
+        # INFRA-151: Python syntax validation (non-blocking warnings)
+        if not violations:
+            try:
+                syntax_warnings = _check_python_syntax(step_data)
+                if syntax_warnings:
+                    _logger.info(
+                        "python_syntax_check",
+                        extra={
+                            "warning_count": len(syntax_warnings),
+                            "warnings": syntax_warnings,
+                        },
+                    )
+                if span and syntax_warnings:
+                    span.set_attribute("runbook.syntax_warning_count", len(syntax_warnings))
+            except Exception as exc:
+                _logger.warning("python_syntax_check_error: %s", exc)
 
         if span:
             span.set_attribute("runbook.violation_count", len(violations))

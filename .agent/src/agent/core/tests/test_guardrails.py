@@ -74,7 +74,7 @@ def test_mock_loop_integration():
             break
     assert aborted is True
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from agent.core.engine.executor import AgentExecutor
 from agent.core.engine.typedefs import AgentAction
 
@@ -96,7 +96,7 @@ def test_executor_loop_guardrail_integration():
 
     async def _run():
         """Run the executor loop guardrail integration test."""
-        executor = AgentExecutor(llm=AsyncMock(), mcp_client=AsyncMock(), max_steps=10)
+        executor = AgentExecutor(llm=MagicMock(), mcp_client=AsyncMock(), max_steps=10)
         
         # Enable the guardrail manually for the test
         executor.guardrail = ExecutionGuardrail(max_iterations=5)
