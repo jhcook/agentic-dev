@@ -79,6 +79,9 @@ def cli(
     from agent.core.logger import configure_logging
     configure_logging(verbose)
 
+    from agent.core.telemetry import initialize_telemetry
+    initialize_telemetry()
+
     if version:
         try:
             import sys

@@ -2,7 +2,7 @@
 
 ## State
 
-COMMITTED
+IN_PROGRESS
 
 ## Problem Statement
 
@@ -17,6 +17,8 @@ As an **SRE**, I want **OpenTelemetry (OTel) traces covering prompt templates, t
 - [ ] **Scenario 1**: Given an LLM request execution, When the workflow is triggered, Then an OpenTelemetry span is generated containing the prompt template name, model version, and tool input/output data.
 - [ ] **Scenario 2**: All LLM spans must include a `latency_ms` attribute and be successfully exported to the Langfuse collector endpoint, rendering correctly as a linked trace.
 - [ ] **Scenario 3**: Ensure that validation failures automatically attach a `score=0` (Validation Failed) metric to the corresponding Langfuse trace.
+- [ ] **Scenario 4**: Given OpenTelemetry tracing is disabled, When a log message is emitted, Then the output omits `trace_id` and `span_id` fields entirely (no blank placeholders).
+- [ ] **Scenario 5**: Given a span with PII-sensitive attributes is exported, When the span passes through the telemetry pipeline, Then all `prompt`, `completion`, `input`, and `output` attributes are automatically scrubbed by the `PiiScrubbingSpanProcessor`.
 - [ ] **Negative Test**: System handles LLMOps backend unavailability gracefully by dropping spans without blocking the primary LLM inference execution or increasing user-facing latency.
 
 ## Non-Functional Requirements
@@ -45,7 +47,11 @@ As an **SRE**, I want **OpenTelemetry (OTel) traces covering prompt templates, t
 - LLM Gateway Service
 - Tool Orchestration Layer
 - OpenTelemetry Collector Configuration
-- `agent.core.logger` (Application-wide log format updated to include `trace_id` and `span_id`)
+- `agent.core.logger` (Conditional trace-aware log formatting via `TraceAwareFormatter`)
+- `agent.core.telemetry` (`PiiScrubbingSpanProcessor` for automatic PII scrubbing in exported spans)
+- `agent.main` (`initialize_telemetry()` called at CLI startup)
+- `agent.core.tests.test_logger` (6 tests for OTelFilter and TraceAwareFormatter)
+- `agent.core.tests.test_telemetry` (9 tests for PiiScrubbingSpanProcessor)
 
 **Workflows affected:**
 - Inference request pipeline

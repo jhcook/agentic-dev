@@ -18,7 +18,17 @@ import logging
 # We do NOT call basicConfig here to avoid side effects on import.
 # Instead, we provide a setup function.
 
+_BASE_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+_TRACE_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - [trace_id=%(trace_id)s span_id=%(span_id)s] - %(message)s'
+
+
 class OTelFilter(logging.Filter):
+    """Inject OpenTelemetry trace context into log records.
+
+    Sets ``has_trace``, ``trace_id``, and ``span_id`` on every record so
+    the :class:`TraceAwareFormatter` can decide whether to render them.
+    """
+
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             from opentelemetry import trace
@@ -27,22 +37,45 @@ class OTelFilter(logging.Filter):
                 ctx = span.get_span_context()
                 record.trace_id = trace.format_trace_id(ctx.trace_id)
                 record.span_id = trace.format_span_id(ctx.span_id)
+                record.has_trace = True
             else:
                 record.trace_id = ""
                 record.span_id = ""
+                record.has_trace = False
         except ImportError:
             record.trace_id = ""
             record.span_id = ""
+            record.has_trace = False
         return True
+
+
+class TraceAwareFormatter(logging.Formatter):
+    """Conditionally include trace context in log output.
+
+    When an active OpenTelemetry span is recording, the formatter appends
+    ``[trace_id=... span_id=...]`` to the log line. Otherwise, the trace
+    fields are omitted entirely to keep logs clean.
+    """
+
+    def __init__(self, datefmt: str | None = None) -> None:
+        # Initialise with the base format; we swap dynamically in format()
+        super().__init__(fmt=_BASE_FORMAT, datefmt=datefmt)
+        self._trace_formatter = logging.Formatter(fmt=_TRACE_FORMAT, datefmt=datefmt)
+
+    def format(self, record: logging.LogRecord) -> str:
+        if getattr(record, 'has_trace', False):
+            return self._trace_formatter.format(record)
+        return super().format(record)
 
 
 # Guard flag to prevent adding duplicate file handlers.
 _file_handler_added = False
 
 
-def configure_logging(verbosity: int = 0):
+def configure_logging(verbosity: int = 0) -> None:
     """
     Configure logging based on verbosity level.
+
     0 = WARNING (default)
     1 = INFO (-v)
     2 = DEBUG (Agent DEBUG, Libraries WARNING) (-vv)
@@ -72,10 +105,10 @@ def configure_logging(verbosity: int = 0):
 
     stream_handler = logging.StreamHandler()
     stream_handler.addFilter(OTelFilter())
+    stream_handler.setFormatter(TraceAwareFormatter())
 
     logging.basicConfig(
         level=root_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - [trace_id=%(trace_id)s span_id=%(span_id)s] - %(message)s',
         handlers=[stream_handler]
     )
     
@@ -91,9 +124,7 @@ def configure_logging(verbosity: int = 0):
             log_dir = config.logs_dir
             log_dir.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(log_dir / "agent.log")
-            file_handler.setFormatter(
-                logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - [trace_id=%(trace_id)s span_id=%(span_id)s] - %(message)s')
-            )
+            file_handler.setFormatter(TraceAwareFormatter())
             file_handler.addFilter(OTelFilter())
             logging.getLogger("agent").addHandler(file_handler)
             _file_handler_added = True
