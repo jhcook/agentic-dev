@@ -22,7 +22,9 @@ from agent.commands.runbook import new_runbook
 
 runner = CliRunner()
 
-# Valid runbook content that passes Pydantic schema validation AND code gates
+# Valid runbook content that passes Pydantic schema validation AND code gates.
+# The blank line before the closing ``` is required: parse_code_blocks captures
+# content as-is, and validate_code_block (AC-1) requires a trailing newline.
 VALID_RUNBOOK_CONTENT = '''# Runbook for INFRA-001
 
 ## Implementation Steps
@@ -38,6 +40,7 @@ VALID_RUNBOOK_CONTENT = '''# Runbook for INFRA-001
 def hello() -> str:
     """Return a greeting string."""
     return "world"
+
 ```
 '''
 
