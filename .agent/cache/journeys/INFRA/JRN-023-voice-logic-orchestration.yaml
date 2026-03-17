@@ -71,6 +71,9 @@ linked_adrs: []
 depends_on: []
 implementation:
   routes: []
-  files: []
+  files:
+  - .agent/src/agent/tools/__init__.py
+  - .agent/src/agent/tools/tests/__init__.py
+  - .agent/src/agent/tools/tests/test_registry.py
   tests:
   - .agent/tests/journeys/test_jrn_023.py

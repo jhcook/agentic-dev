@@ -37,7 +37,7 @@ As a **Platform Developer**, I want **a `ToolRegistry` class with standard `Tool
 
 ## Impact Analysis Summary
 
-Components touched: `.agent/src/agent/tools/__init__.py` (NEW)
+Components touched: `.agent/src/agent/tools/__init__.py` (NEW), `.agent/src/agent/tools/tests/__init__.py` (NEW), `.agent/src/agent/tools/tests/test_registry.py` (NEW), `.agent/cache/journeys/INFRA/JRN-023-voice-logic-orchestration.yaml` (MODIFIED)
 Workflows affected: Tool registration and lookup.
 Risks identified: None — greenfield module.
 
