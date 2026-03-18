@@ -35,7 +35,12 @@ _VALID_STATES = frozenset({
 })
 
 
-def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
+def update_story_state(
+    story_id: str,
+    new_state: str,
+    context_prefix: str = "",
+    annotation: str = "",
+) -> None:
     """Update the ``## State`` section of a Story markdown file and trigger a Notion sync.
 
     **Internal Use Only** — this is a CLI-level file-system utility, not an API endpoint.
@@ -43,11 +48,15 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
     Called by:
         - ``agent commit`` (workflow.py) — sets state to ``COMMITTED``
         - ``agent implement`` (implement.py) — sets state to ``IN_PROGRESS``
+        - ``agent decompose-story`` — sets state to ``SUPERSEDED`` with an annotation
 
     Args:
         story_id: The story identifier (e.g. ``INFRA-023``).
         new_state: Target state string (e.g. ``IN_PROGRESS``, ``COMMITTED``).
         context_prefix: Optional label for log output (e.g. ``Phase 0``, ``Post-Commit``).
+        annotation: Optional suffix appended to the state token in the file,
+            e.g. ``'(see plan: INFRA-157-plan.md)'``.  The full persisted value
+            becomes ``'SUPERSEDED (see plan: INFRA-157-plan.md)'``.
 
     Raises:
         ValueError: If *story_id* is empty or *new_state* is not a recognised state.
@@ -75,7 +84,9 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
         console.print(f"[red]❌ Could not read {story_file}: {exc}[/red]")
         return
 
-    state_regex = r"(^## State\s*\n+)([A-Za-z_]+)"
+    # Match the state heading followed by the current state token (which may
+    # already include annotation text on the same line, e.g. "SUPERSEDED (…)").
+    state_regex = r"(^## State\s*\n+)([^\n]+)"
 
     match = re.search(state_regex, content, re.MULTILINE)
     if not match:
@@ -83,11 +94,13 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
         return
 
     current_state = match.group(2).strip()
-    if current_state.upper() == new_state_upper:
-        return  # Already set
+    written_value = f"{new_state_upper} {annotation}".strip() if annotation else new_state_upper
+
+    if current_state == written_value:
+        return  # Already set (idempotent)
 
     new_content = re.sub(
-        state_regex, f"\\1{new_state_upper}", content, count=1, flags=re.MULTILINE
+        state_regex, f"\\1{written_value}", content, count=1, flags=re.MULTILINE
     )
 
     try:
@@ -99,7 +112,7 @@ def update_story_state(story_id: str, new_state: str, context_prefix: str = ""):
 
     console.print(
         f"[bold blue]🔄 {context_prefix}: Updated Story {story_id} "
-        f"State: {current_state} -> {new_state_upper}[/bold blue]"
+        f"State: {current_state} -> {written_value}[/bold blue]"
     )
 
     # --- Sync (non-fatal) ----------------------------------------------------

@@ -907,7 +907,16 @@ ADRs:
                                 jf = f
                                 break
                     if jf and jf.exists():
-                        jdata = yaml.safe_load(jf.read_text())
+                        raw_text = jf.read_text(encoding="utf-8")
+                        # Preserve the leading comment block (e.g. Apache 2.0
+                        # license header) that yaml.safe_load silently discards.
+                        comment_lines: list[str] = []
+                        for _ln in raw_text.splitlines():
+                            if _ln.startswith("#") or _ln.strip() == "":
+                                comment_lines.append(_ln)
+                            else:
+                                break
+                        jdata = yaml.safe_load(raw_text)
                         if jdata and "implementation" in jdata:
                             # Add modified files
                             cur_files = set(jdata["implementation"].get("files", []))
@@ -915,15 +924,19 @@ ADRs:
                                 if not str(mf).startswith("tests"):
                                     cur_files.add(str(mf))
                             jdata["implementation"]["files"] = sorted(list(cur_files))
-                            
+
                             # Add modified tests
                             cur_tests = set(jdata["implementation"].get("tests", []))
                             for mf in run_modified_files:
                                 if str(mf).startswith("tests"):
                                     cur_tests.add(str(mf))
                             jdata["implementation"]["tests"] = sorted(list(cur_tests))
-                            
-                            jf.write_text(yaml.safe_dump(jdata, sort_keys=False))
+
+                            dumped = yaml.safe_dump(jdata, sort_keys=False)
+                            if comment_lines:
+                                header = "\n".join(comment_lines) + "\n\n"
+                                dumped = header + dumped
+                            jf.write_text(dumped, encoding="utf-8")
                             updated_journeys.append(jf.name)
                 if updated_journeys:
                     console.print(f"[dim]Updated linked journey(s): {', '.join(updated_journeys)}[/dim]")

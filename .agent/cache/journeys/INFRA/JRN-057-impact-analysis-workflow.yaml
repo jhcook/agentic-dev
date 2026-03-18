@@ -86,6 +86,7 @@ implementation:
   routes: []
   files:
   - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/decompose_story.py
   - .agent/src/agent/commands/implement.py
   - .agent/src/agent/commands/runbook.py
   - .agent/src/agent/core/implement/guards.py
