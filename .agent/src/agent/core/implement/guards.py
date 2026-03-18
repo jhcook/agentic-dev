@@ -191,9 +191,12 @@ def validate_code_block(filepath: str, content: str) -> ValidationResult:
 
         result = ValidationResult()
 
-        # AC-1: Trailing newline is required (callers must supply content with \n).
+        # AC-1: Trailing newline normalisation — auto-correct rather than block.
+        # The AI panel routinely omits the final \n; treating it as a hard error
+        # burns retry budget on a trivial mechanical issue. Auto-correct and warn.
         if content and not content.endswith("\n"):
-            result.errors.append(f"{filepath}: missing trailing newline")
+            content = content + "\n"
+            result.warnings.append(f"{filepath}: missing trailing newline (auto-corrected)")
 
         # Python-specific checks
         if filepath.endswith(".py"):
@@ -312,6 +315,20 @@ def check_imports(filepath: str, content: str) -> ValidationResult:
 
         # 1. Gather allowed packages
         allowed: Set[str] = {"agent", "tests", "backend", "web"}  # local project roots
+
+        # Test files legitimately import pytest, typer (for CLI invocation), and
+        # other test-only packages that may not appear in the production dep list.
+        _test_only: Set[str] = {
+            "pytest", "pytest_asyncio", "typer", "click", "unittest",
+            "mock", "fakeredis", "httpx", "respx", "freezegun",
+        }
+        _is_test_file = (
+            Path(filepath).name.startswith("test_")
+            or Path(filepath).name.endswith("_test.py")
+            or "/tests/" in filepath.replace("\\", "/")
+        )
+        if _is_test_file:
+            allowed.update(_test_only)
 
         # Add standard library
         if sys.version_info >= (3, 10):
