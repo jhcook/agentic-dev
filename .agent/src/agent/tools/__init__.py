@@ -16,6 +16,7 @@
 Core tool registry and foundational models for agentic tools.
 """
 
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 from agent.core.governance import log_governance_event
@@ -123,3 +124,214 @@ class ToolRegistry:
             "tool_unrestrict",
             f"Tool '{name}' has been unrestricted for general use."
         )
+
+
+def register_domain_tools(registry: "ToolRegistry", repo_root: Path) -> None:
+    """
+    Registers filesystem and shell tools into the ToolRegistry.
+
+    Each handler is wrapped in a lambda that captures ``handler`` by value at
+    definition time via a default argument (``h=handler``).  Without this
+    pattern all lambdas in the loop would share the *last* value of ``handler``
+    (the classic Python late-binding closure bug).
+
+    Args:
+        registry: The ToolRegistry instance to populate.
+        repo_root: The repository root used for path validation and sandboxing.
+    """
+    from agent.tools import filesystem, shell  # noqa: PLC0415 – lazy to avoid circular imports
+
+    # ------------------------------------------------------------------
+    # Filesystem tools
+    # ------------------------------------------------------------------
+    fs_specs = [
+        (
+            "read_file",
+            filesystem.read_file,
+            "Reads a file from the repository (capped at 2000 lines).",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to repo root."},
+                },
+                "required": ["path"],
+            },
+        ),
+        (
+            "edit_file",
+            filesystem.edit_file,
+            "Rewrites the entire content of a file.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to repo root."},
+                    "content": {"type": "string", "description": "New file content."},
+                },
+                "required": ["path", "content"],
+            },
+        ),
+        (
+            "patch_file",
+            filesystem.patch_file,
+            "Replaces a specific chunk of text in a file (must match exactly once).",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to repo root."},
+                    "search": {"type": "string", "description": "Text to find."},
+                    "replace": {"type": "string", "description": "Replacement text."},
+                },
+                "required": ["path", "search", "replace"],
+            },
+        ),
+        (
+            "create_file",
+            filesystem.create_file,
+            "Creates a new file with the given content.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to repo root."},
+                    "content": {"type": "string", "description": "Initial file content."},
+                },
+                "required": ["path", "content"],
+            },
+        ),
+        (
+            "delete_file",
+            filesystem.delete_file,
+            "Deletes a file from the repository.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to repo root."},
+                },
+                "required": ["path"],
+            },
+        ),
+        (
+            "find_files",
+            filesystem.find_files,
+            "Finds files matching a glob pattern (up to 100 results).",
+            {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Glob pattern."},
+                },
+                "required": ["pattern"],
+            },
+        ),
+        (
+            "move_file",
+            filesystem.move_file,
+            "Moves a file from one location to another within the sandbox.",
+            {
+                "type": "object",
+                "properties": {
+                    "src": {"type": "string", "description": "Source path relative to repo root."},
+                    "dst": {"type": "string", "description": "Destination path relative to repo root."},
+                },
+                "required": ["src", "dst"],
+            },
+        ),
+        (
+            "copy_file",
+            filesystem.copy_file,
+            "Copies a file to a new location within the sandbox.",
+            {
+                "type": "object",
+                "properties": {
+                    "src": {"type": "string", "description": "Source path relative to repo root."},
+                    "dst": {"type": "string", "description": "Destination path relative to repo root."},
+                },
+                "required": ["src", "dst"],
+            },
+        ),
+        (
+            "file_diff",
+            filesystem.file_diff,
+            "Computes a unified diff between two files.",
+            {
+                "type": "object",
+                "properties": {
+                    "path_a": {"type": "string", "description": "First file path."},
+                    "path_b": {"type": "string", "description": "Second file path."},
+                },
+                "required": ["path_a", "path_b"],
+            },
+        ),
+    ]
+
+    for name, handler, desc, params in fs_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            # Capture `handler` by value at loop-iteration time via default arg.
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="filesystem",
+        ))
+
+    # ------------------------------------------------------------------
+    # Shell tools
+    # ------------------------------------------------------------------
+    shell_specs = [
+        (
+            "run_command",
+            shell.run_command,
+            "Executes a shell command in the repository root.",
+            {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The shell command to execute."},
+                    "background": {"type": "boolean", "description": "Run in the background.", "default": False},
+                },
+                "required": ["command"],
+            },
+        ),
+        (
+            "send_command_input",
+            shell.send_command_input,
+            "Sends stdin input to a running background command.",
+            {
+                "type": "object",
+                "properties": {
+                    "command_id": {"type": "string", "description": "ID of the background command."},
+                    "input_text": {"type": "string", "description": "Text to send to stdin."},
+                },
+                "required": ["command_id", "input_text"],
+            },
+        ),
+        (
+            "check_command_status",
+            shell.check_command_status,
+            "Checks the status and recent output of a background command.",
+            {
+                "type": "object",
+                "properties": {
+                    "command_id": {"type": "string", "description": "ID of the background command."},
+                },
+                "required": ["command_id"],
+            },
+        ),
+        (
+            "interactive_shell",
+            shell.interactive_shell,
+            "Starts an interactive shell session (stub; not supported in non-TTY mode).",
+            {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+    ]
+
+    for name, handler, desc, params in shell_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            # Capture `handler` by value at loop-iteration time via default arg.
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="shell",
+        ))

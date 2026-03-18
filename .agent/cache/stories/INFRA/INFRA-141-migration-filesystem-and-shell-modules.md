@@ -2,11 +2,11 @@
 
 ## State
 
-COMMITTED
+REVIEW_NEEDED
 
 ## Problem Statement
 
-The filesystem and shell tools currently live in `agent/core/adk/tools.py` as part of `make_interactive_tools()`. This story migrates them into dedicated domain modules (`filesystem.py`, `shell.py`) in the new `agent/tools/` package, and adds new file operations (`move_file`, `copy_file`, `file_diff`).
+Filesystem and shell tools currently live in `agent/core/adk/tools.py` inside `make_interactive_tools()`. None of the target modules (`agent/tools/filesystem.py`, `agent/tools/shell.py`) exist on disk yet — these are purely NEW file creations. This story migrates those tools into dedicated domain modules and adds new file operations (`move_file`, `copy_file`, `file_diff`). Note: runbook generation must use `[NEW]` blocks, not `[MODIFY]`, for these files.
 
 Parent: INFRA-098
 
@@ -28,7 +28,8 @@ As a **Platform Developer**, I want **filesystem and shell tools in dedicated do
 
 ## Linked ADRs
 
-- ADR-043: Tool Registry Foundation
+- ADR-040: Agentic Tool-Calling Loop Architecture
+- ADR-042: Core Module Decomposition
 
 ## Linked Journeys
 
@@ -36,7 +37,12 @@ As a **Platform Developer**, I want **filesystem and shell tools in dedicated do
 
 ## Impact Analysis Summary
 
-Components touched: `.agent/src/agent/tools/filesystem.py` (NEW), `.agent/src/agent/tools/shell.py` (NEW)
+**Components touched:**
+- `.agent/src/agent/tools/utils.py` — **[NEW]** Shared `validate_path` security helper (consolidates sandbox enforcement used by both domain modules).
+- `.agent/src/agent/tools/filesystem.py` — **[NEW]** Implementation of filesystem domain tools.
+- `.agent/src/agent/tools/shell.py` — **[NEW]** Implementation of shell domain tools.
+- `.agent/src/agent/tools/__init__.py` — **[MODIFIED]** Added domain tool registration logic.
+
 Workflows affected: File manipulation and command execution.
 Risks identified: Must preserve existing sandbox enforcement behavior from `make_interactive_tools()`.
 
