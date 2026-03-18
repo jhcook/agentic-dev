@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
 id: JRN-035
 title: Restore Silero VAD with WebRTC Fallback
 state: COMMITTED
@@ -76,6 +78,9 @@ implementation:
   - .agent/pyproject.toml
   - .agent/src/agent/commands/admin.py
   - .agent/src/agent/commands/importer.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/src/agent/commands/utils.py
   - .agent/src/agent/main.py
   - .agent/src/agent/tui/app.py
   - .agent/src/agent/tui/chat.py

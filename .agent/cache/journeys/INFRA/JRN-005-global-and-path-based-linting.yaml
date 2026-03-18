@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
 id: JRN-005
 title: Global and Path-Based Linting
 state: COMMITTED
@@ -78,6 +80,8 @@ implementation:
   - .agent/src/agent/commands/plan.py
   - .agent/src/agent/commands/runbook.py
   - .agent/src/agent/commands/story.py
+  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/src/agent/commands/utils.py
   - .agent/src/agent/commands/workflow.py
   - .agent/src/agent/core/ai/prompts.py
   - .agent/src/agent/core/config.py
@@ -96,7 +100,6 @@ implementation:
   - .agent/src/backend/voice/__init__.py
   - package.json
   tests:
-  - .agent/tests/core/test_utils_json.py
   - .agent/tests/__init__.py
   - .agent/tests/commands/test_ai_commands.py
   - .agent/tests/commands/test_basic_commands.py
@@ -113,6 +116,7 @@ implementation:
   - .agent/tests/core/test_router.py
   - .agent/tests/core/test_scrubber.py
   - .agent/tests/core/test_utils.py
+  - .agent/tests/core/test_utils_json.py
   - .agent/tests/integration/test_preflight_report.py
   - .agent/tests/journeys/test_jrn_005.py
   - .agent/tests/test_lint.py

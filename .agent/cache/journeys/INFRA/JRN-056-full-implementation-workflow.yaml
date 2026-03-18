@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
+
 id: JRN-056
 title: Full Implementation Workflow
 state: DRAFT
@@ -22,11 +25,11 @@ tags:
 - cli
 - governance
 actor: developer using agent CLI
-description: 'End-to-end implementation workflow from runbook to verified code. Covers
+description: End-to-end implementation workflow from runbook to verified code. Covers
   pre-validation, journey gate, AI code generation, post-apply security scan, QA validation,
   documentation check, and structured verdict output. Post-apply phases use composable
   functions from gates.py with externalized security patterns and configurable test
-  commands.'
+  commands.
 preconditions:
 - Agent CLI is installed and configured
 - Developer is in a project directory with .agent/ initialized
@@ -159,6 +162,9 @@ implementation:
   - .agent/etc/security_patterns.yaml
   - .agent/src/agent/commands/gates.py
   - .agent/src/agent/commands/implement.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/src/agent/commands/utils.py
   - .agent/workflows/implement.md
   tests:
   - .agent/tests/commands/test_gates.py
