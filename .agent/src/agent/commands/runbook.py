@@ -32,11 +32,17 @@ from agent.core.utils import (
     get_copyright_header,
 )
 from agent.commands.utils import (
+    build_dod_correction_prompt,
+    check_changelog_entry,
+    check_license_headers,
+    check_otel_spans,
+    check_test_coverage,
+    extract_acs,
     extract_adr_refs,
     extract_journey_refs,
+    generate_sr_correction_prompt,
     merge_story_links,
     validate_sr_blocks,
-    generate_sr_correction_prompt,
 )
 from agent.core.context import context_loader
 from agent.core.implement.guards import validate_code_block
@@ -473,6 +479,60 @@ Generate the runbook now.
                 else:
                     sr_span.set_attribute("outcome", "pass")
                 logger.info("sr_validation_pass", extra={"story_id": story_id})
+
+        # 4. DoD Compliance Gate (INFRA-161)
+        with tracer.start_as_current_span("dod_compliance_gate") as dod_span:
+            dod_span.set_attribute("story_id", story_id)
+            dod_span.set_attribute("attempt", attempt)
+            acs = extract_acs(story_content)
+            dod_gaps: List[str] = []
+            dod_gaps.extend(check_test_coverage(content))
+            dod_gaps.extend(check_changelog_entry(content))
+            dod_gaps.extend(check_license_headers(content))
+            dod_gaps.extend(check_otel_spans(content, story_content))
+            dod_span.set_attribute("gap_count", len(dod_gaps))
+            # Per AC-9: gaps attribute is a comma-joined list of short IDs
+            _gap_ids = ",".join(
+                f"4{c}" for c, g in zip("bcde", dod_gaps[:4]) if g
+            ) if dod_gaps else ""
+            dod_span.set_attribute("gaps", _gap_ids)
+
+        if dod_gaps:
+            logger.warning(
+                "dod_compliance_fail",
+                extra={"attempt": attempt, "story_id": story_id, "gaps": dod_gaps},
+            )
+            if attempt < max_attempts:
+                dod_span.set_attribute("outcome", "retry")
+                console.print(
+                    f"[yellow]⚠️  Attempt {attempt}: DoD gaps detected "
+                    f"({len(dod_gaps)}) — asking AI for self-healing...[/yellow]"
+                )
+                logger.info(
+                    "dod_compliance_correction_attempt",
+                    extra={"attempt": attempt, "story_id": story_id},
+                )
+                current_user_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"{build_dod_correction_prompt(dod_gaps, story_content, acs)}"
+                )
+                continue
+            else:
+                dod_span.set_attribute("outcome", "exhausted")
+                logger.error(
+                    "dod_compliance_exhausted",
+                    extra={"story_id": story_id, "gaps": dod_gaps},
+                )
+                error_console.print(
+                    f"[bold red]❌ DoD compliance gate failed after {max_attempts} attempts.[/bold red]"
+                )
+                for gap in dod_gaps:
+                    error_console.print(f"  [red]• {gap}[/red]")
+                raise typer.Exit(code=1)
+        else:
+            dod_span.set_attribute("outcome", "pass")
+            logger.info("dod_compliance_pass", extra={"story_id": story_id})
+
 
         # All validations passed — proceed
         if code_warnings:

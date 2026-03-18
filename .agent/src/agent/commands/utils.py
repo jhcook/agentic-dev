@@ -414,3 +414,189 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
         "Use the provided actual content verbatim. Return the FULL updated runbook."
     )
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# INFRA-161: DoD Compliance Gate helpers
+# ---------------------------------------------------------------------------
+
+
+def extract_acs(story_content: str) -> List[str]:
+    """Extract Acceptance Criteria bullets from a story markdown file.
+
+    Scans for the ``## Acceptance Criteria`` section and returns each
+    non-empty bullet line (stripping leading ``- [ ]`` / ``- [x]`` markers).
+
+    Args:
+        story_content: Raw markdown text of the user story.
+
+    Returns:
+        List of AC strings.  Empty list if the section is absent.
+    """
+    import re as _re
+
+    ac_section = _re.search(
+        r"##\s+Acceptance Criteria\s*\n(.*?)(?=\n##|\Z)",
+        story_content,
+        _re.DOTALL | _re.IGNORECASE,
+    )
+    if not ac_section:
+        return []
+    raw = ac_section.group(1)
+    acs: List[str] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        cleaned = _re.sub(r"^-\s*\[.\]\s*", "", stripped)
+        cleaned = _re.sub(r"^[-*]\s+", "", cleaned)
+        if cleaned:
+            acs.append(cleaned)
+    return acs
+
+
+def check_test_coverage(runbook_content: str) -> List[str]:
+    """Check that the runbook includes at least one test-file step.
+
+    Looks for ``[NEW]`` or ``[MODIFY]`` blocks targeting paths that contain
+    ``test_`` or ``_test.`` in the filename.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        List of gap strings (empty if requirement met).
+    """
+    import re as _re
+
+    pattern = _re.compile(
+        r"####\s+\[(NEW|MODIFY)\]\s+([^\n]+)",
+        _re.IGNORECASE,
+    )
+    for m in pattern.finditer(runbook_content):
+        path = m.group(2).strip()
+        filename = path.split("/")[-1]
+        if "test_" in filename or "_test." in filename:
+            return []
+    return [
+        "No test file step found — at least one [NEW] or [MODIFY] targeting "
+        "a test_*.py file is required."
+    ]
+
+
+def check_changelog_entry(runbook_content: str) -> List[str]:
+    """Check that the runbook includes a CHANGELOG.md modification step.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        List of gap strings (empty if requirement met).
+    """
+    if "CHANGELOG.md" in runbook_content or "CHANGELOG" in runbook_content:
+        return []
+    return [
+        "No CHANGELOG.md step found — every story must document its change "
+        "in CHANGELOG.md."
+    ]
+
+
+def check_license_headers(runbook_content: str) -> List[str]:
+    """Check that every ``[NEW]`` Python file step includes the Apache-2.0 header.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        List of gap strings (empty if requirement met).
+    """
+    import re as _re
+
+    gaps: List[str] = []
+    new_py_pattern = _re.compile(
+        r"####\s+\[NEW\]\s+([^\n]+\.py)\s*\n+```[^\n]*\n(.*?)```",
+        _re.DOTALL | _re.IGNORECASE,
+    )
+    for m in new_py_pattern.finditer(runbook_content):
+        path = m.group(1).strip()
+        body = m.group(2)
+        if "Copyright" not in body and "Apache" not in body and "LICENSE" not in body:
+            gaps.append(
+                f"[NEW] {path} is missing the Apache-2.0 license header. "
+                "Add the standard copyright block at the top of the file."
+            )
+    return gaps
+
+
+def check_otel_spans(runbook_content: str, story_content: str) -> List[str]:
+    """Check that runbook steps touching commands/ or core/ include OTel spans.
+
+    Only applies when the story explicitly mentions observability, tracing,
+    or a new flow in commands/ or core/.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+        story_content: Raw story markdown (used to detect observability AC).
+
+    Returns:
+        List of gap strings (empty if requirement met or not applicable).
+    """
+    import re as _re
+
+    otel_keywords = ("opentelemetry", "otel", "tracing", "span", "observability")
+    if not any(kw in story_content.lower() for kw in otel_keywords):
+        return []
+
+    if "start_as_current_span" in runbook_content or "tracer.start" in runbook_content:
+        return []
+
+    touches_infra = _re.search(
+        r"####\s+\[(NEW|MODIFY)\]\s+\.agent/src/agent/(commands|core)/",
+        runbook_content,
+        _re.IGNORECASE,
+    )
+    if touches_infra:
+        return [
+            "Story requires OTel observability but no 'start_as_current_span' / "
+            "'tracer.start' found in runbook steps touching commands/ or core/. "
+            "Add an OTel span for the new flow."
+        ]
+    return []
+
+
+def build_dod_correction_prompt(
+    gaps: List[str],
+    story_content: str,
+    acs: List[str],
+) -> str:
+    """Build a targeted correction prompt that bundles all DoD gaps.
+
+    Args:
+        gaps: List of gap description strings from the deterministic checkers.
+        story_content: Scrubbed story text (for AC context).
+        acs: Extracted acceptance criteria list.
+
+    Returns:
+        Formatted instruction string ready to append to the AI user prompt.
+    """
+    lines = [
+        "DOD COMPLIANCE GATE FAILED. The following requirements are missing "
+        "from the generated runbook:\n"
+    ]
+    for i, gap in enumerate(gaps, 1):
+        lines.append(f"  {i}. {gap}")
+
+    if acs:
+        lines.append(
+            "\nACCEPTANCE CRITERIA FROM STORY (ensure ALL are addressed by at "
+            "least one Implementation Step):"
+        )
+        for ac in acs:
+            lines.append(f"  - {ac}")
+
+    lines.append(
+        "\nInstruction: Regenerate the FULL runbook ensuring every gap above is "
+        "resolved. Do not omit any existing correct steps — only add/fix the "
+        "missing items. Return the complete updated runbook."
+    )
+    return "\n".join(lines)

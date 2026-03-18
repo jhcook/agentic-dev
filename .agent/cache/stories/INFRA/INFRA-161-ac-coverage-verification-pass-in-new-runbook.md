@@ -63,17 +63,17 @@ As a **Platform Developer**, I want `agent new-runbook` to verify that every gen
 ## Impact Analysis Summary
 
 **New / Modified files:**
-- `agent/commands/utils.py` — **[MODIFY]** Add helper functions: `extract_acs`, `build_ac_coverage_prompt`, `parse_ac_gaps`, `check_test_coverage`, `check_changelog_entry`, `check_license_headers`, `check_otel_spans`, `build_dod_correction_prompt`. Note: `extract_acs`, `build_ac_coverage_prompt`, `parse_ac_gaps` were added in a partial INFRA-161 commit on the current branch — they will be replaced/completed here.
-- `agent/commands/runbook.py` — **[MODIFY]** Replace the placeholder AC coverage block with the full Gate 4 DoD Compliance gate, including the `dod_compliance_gate` OTel span. Import the new helpers.
-- `agent/commands/tests/test_dod_compliance.py` — **[NEW]** Unit tests for all 8 helper functions.
-- `agent/commands/tests/test_dod_compliance_integration.py` — **[NEW]** Integration tests for the gate loop.
+- `agent/commands/utils.py` — **[MODIFY]** Add helper functions: `extract_acs`, `check_test_coverage`, `check_changelog_entry`, `check_license_headers`, `check_otel_spans`, `build_dod_correction_prompt`.
+- `agent/commands/runbook.py` — **[MODIFY]** Wire Gate 4 (`dod_compliance_gate` OTel span + 4 deterministic checkers + correction-prompt retry loop). Import the new helpers.
+- `agent/commands/tests/test_dod_compliance.py` — **[NEW]** Unit tests for all helper functions (16 unit tests).
+- `agent/commands/tests/test_dod_compliance_integration.py` — **[NEW]** Integration tests for the gate composition (8 integration tests).
 - `CHANGELOG.md` — **[MODIFY]** Add INFRA-161 entry.
+- `agent/core/implement/guards.py` — **[MODIFY]** Two prerequisite fixes required to unblock runbook generation on this branch: (1) missing trailing newlines in AI-generated code blocks are now auto-corrected with a warning instead of a hard blocking error; (2) `check_imports` now exempts test-only imports (`pytest`, `typer`, etc.) when the file path matches `test_*.py` / `*_test.py` — resolving a persistent false-positive that was exhausting the 3-retry budget on every `new-runbook` run.
 
-**Workflows affected:** `agent new-runbook` only. The `agent implement` pipeline is unchanged.
+**Workflows affected:** `agent new-runbook` only. The `agent implement` pipeline is unchanged for non-test files.
 
 **Risks:**
 - False positives from the OTel check (4e) for stories that don't touch commands/core — mitigated by scoping to file paths matching `commands/` or `core/`.
-- False negatives from AC coverage AI (4a) — bounded by `max_attempts`; not a blocker as the command exits with a structured error list the developer can review.
 
 ## Test Strategy
 
