@@ -422,46 +422,57 @@ Generate the runbook now.
                 raise typer.Exit(code=1)
 
         # 3. S/R Validation Gate (INFRA-159)
-        try:
-            sr_mismatches = validate_sr_blocks(content)
-        except FileNotFoundError as exc:
-            # AC-6: [MODIFY] targeting a missing file is an immediate hard failure.
-            logger.error("sr_validation_error", extra={"story_id": story_id, "error": str(exc)})
-            error_console.print(f"[bold red]❌ S/R Validation Error: {exc}[/bold red]")
-            raise typer.Exit(code=1)
-
-        if sr_mismatches:
-            logger.warning(
-                "sr_validation_fail",
-                extra={
-                    "attempt": attempt,
-                    "story_id": story_id,
-                    "count": len(sr_mismatches),
-                    "files": [m["file"] for m in sr_mismatches],
-                },
-            )
-            if attempt < max_attempts:
-                console.print(
-                    f"[yellow]⚠️  Attempt {attempt}: S/R mismatch in "
-                    f"{len(sr_mismatches)} block(s) — asking AI for self-healing...[/yellow]"
-                )
-                logger.info("sr_correction_attempt", extra={"attempt": attempt, "story_id": story_id})
-                current_user_prompt = (
-                    f"{user_prompt}\n\n{generate_sr_correction_prompt(sr_mismatches)}"
-                )
-                continue
-            else:
-                logger.error("sr_correction_exhausted", extra={"story_id": story_id})
-                error_console.print(
-                    f"[bold red]❌ S/R validation failed after {max_attempts} attempts.[/bold red]"
-                )
-                for m in sr_mismatches:
-                    error_console.print(f"  [red]• {m['file']} (Block #{m['index']})[/red]")
+        with tracer.start_as_current_span("sr_validation_gate") as sr_span:
+            sr_span.set_attribute("story_id", story_id)
+            sr_span.set_attribute("attempt", attempt)
+            try:
+                sr_mismatches = validate_sr_blocks(content)
+            except FileNotFoundError as exc:
+                # AC-6: [MODIFY] targeting a missing file is an immediate hard failure.
+                logger.error("sr_validation_error", extra={"story_id": story_id, "error": str(exc)})
+                error_console.print(f"[bold red]❌ S/R Validation Error: {exc}[/bold red]")
+                sr_span.set_attribute("outcome", "error")
                 raise typer.Exit(code=1)
-        else:
-            if attempt > 1:
-                logger.info("sr_correction_success", extra={"story_id": story_id, "attempt": attempt})
-            logger.info("sr_validation_pass", extra={"story_id": story_id})
+
+            sr_span.set_attribute("mismatch_count", len(sr_mismatches))
+
+            if sr_mismatches:
+                logger.warning(
+                    "sr_validation_fail",
+                    extra={
+                        "attempt": attempt,
+                        "story_id": story_id,
+                        "count": len(sr_mismatches),
+                        "files": [m["file"] for m in sr_mismatches],
+                    },
+                )
+                if attempt < max_attempts:
+                    sr_span.set_attribute("outcome", "retry")
+                    console.print(
+                        f"[yellow]⚠️  Attempt {attempt}: S/R mismatch in "
+                        f"{len(sr_mismatches)} block(s) — asking AI for self-healing...[/yellow]"
+                    )
+                    logger.info("sr_correction_attempt", extra={"attempt": attempt, "story_id": story_id})
+                    current_user_prompt = (
+                        f"{user_prompt}\n\n{generate_sr_correction_prompt(sr_mismatches)}"
+                    )
+                    continue
+                else:
+                    sr_span.set_attribute("outcome", "exhausted")
+                    logger.error("sr_correction_exhausted", extra={"story_id": story_id})
+                    error_console.print(
+                        f"[bold red]❌ S/R validation failed after {max_attempts} attempts.[/bold red]"
+                    )
+                    for m in sr_mismatches:
+                        error_console.print(f"  [red]• {m['file']} (Block #{m['index']})[/red]")
+                    raise typer.Exit(code=1)
+            else:
+                if attempt > 1:
+                    sr_span.set_attribute("outcome", "corrected")
+                    logger.info("sr_correction_success", extra={"story_id": story_id, "attempt": attempt})
+                else:
+                    sr_span.set_attribute("outcome", "pass")
+                logger.info("sr_validation_pass", extra={"story_id": story_id})
 
         # All validations passed — proceed
         if code_warnings:
