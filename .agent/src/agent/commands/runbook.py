@@ -31,6 +31,11 @@ from agent.core.utils import (
     scrub_sensitive_data,
     get_copyright_header,
 )
+from agent.commands.utils import (
+    extract_adr_refs,
+    extract_journey_refs,
+    merge_story_links,
+)
 from agent.core.context import context_loader
 from agent.core.implement.guards import validate_code_block
 from agent.core.implement.orchestrator import validate_runbook_schema
@@ -470,6 +475,12 @@ Generate the runbook now.
     # 5. Write
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
+
+    # 5.0 Back-populate story with identified ADRs and Journeys (INFRA-158)
+    adrs = extract_adr_refs(content)
+    journeys = extract_journey_refs(content)
+    if adrs or journeys:
+        merge_story_links(story_file, adrs, journeys)
 
     # 5.1 Schema validation status
     console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
