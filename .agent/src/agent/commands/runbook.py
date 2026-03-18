@@ -418,8 +418,10 @@ Generate the runbook now.
                 error_console.print(f"[bold red]❌ Code gates failed after {max_attempts} attempts.[/bold red]")
                 error_console.print(error_msg)
                 raise typer.Exit(code=1)
-        
-        # If we got here, schema and code errors are clear
+
+        # 3. S/R Validation (INFRA-159) — TODO: implement after INFRA-159 lands
+
+        # All validations passed — proceed
         if code_warnings:
             console.print(f"[yellow]ℹ️  Code warnings detected (non-blocking):[/yellow]")
             for w in code_warnings:
