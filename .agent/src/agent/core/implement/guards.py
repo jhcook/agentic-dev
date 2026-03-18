@@ -191,9 +191,12 @@ def validate_code_block(filepath: str, content: str) -> ValidationResult:
 
         result = ValidationResult()
 
-        # AC-1: Trailing newline is required (callers must supply content with \n).
+        # AC-1: Trailing newline normalisation — auto-correct rather than block.
+        # The AI panel routinely omits the final \n; treating it as a hard error
+        # burns retry budget on a trivial mechanical issue. Auto-correct and warn.
         if content and not content.endswith("\n"):
-            result.errors.append(f"{filepath}: missing trailing newline")
+            content = content + "\n"
+            result.warnings.append(f"{filepath}: missing trailing newline (auto-corrected)")
 
         # Python-specific checks
         if filepath.endswith(".py"):
