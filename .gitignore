@@ -67,3 +67,6 @@ agentic-executive-premium/
 
 .agent/cache/chat_sessions.db
 .agent/cache/.preflight_result
+
+# Split-request artifacts are ephemeral AI output; not source-controlled
+.agent/cache/split_requests/

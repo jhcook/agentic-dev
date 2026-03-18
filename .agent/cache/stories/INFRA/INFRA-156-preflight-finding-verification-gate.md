@@ -10,9 +10,11 @@ The `agent preflight` governance panel produces AI-generated findings with high 
 
 This story introduces a hybrid verification gate that runs **after** the AI panel generates findings, applying deterministic checks where possible and LLM self-review as a fallback, to confirm or dismiss each finding before presenting it to the developer.
 
+A related failure mode has also been observed in `agent implement --apply`: when an AI-generated `<<<SEARCH` block does not match the actual file content, the pipeline currently logs a WARNING and **silently continues**, reporting overall success even though a block was never applied. This leaves the codebase in a broken intermediate state (e.g. code importing functions that were never added). This same root cause — AI hallucinating file content — must also be addressed with deterministic verification.
+
 ## User Story
 
-As a **Platform Developer**, I want **preflight findings to be verified before they are reported** so that **I only see actionable, evidence-backed issues and can trust the governance output.**
+As a **Platform Developer**, I want **preflight findings to be verified before they are reported, and `agent implement` to fail hard when a search block cannot be matched** so that **I only see actionable, evidence-backed issues and can trust that the implement pipeline either fully succeeds or clearly fails.**
 
 ## Acceptance Criteria
 
@@ -26,7 +28,11 @@ As a **Platform Developer**, I want **preflight findings to be verified before t
 - [ ] **AC-3**: For findings that cannot be deterministically verified, an LLM self-review pass is invoked: the finding + referenced file content are sent to the LLM with a prompt asking for evidence. Findings without evidence are demoted to warnings or dropped.
 - [ ] **AC-4**: The preflight summary table includes a new `Verified` column showing how many findings passed verification vs. were dismissed.
 - [ ] **AC-5**: Dismissed findings are logged at DEBUG level with the reason for dismissal (e.g., "file ends with newline", "CHANGELOG is staged").
+- [ ] **AC-6 — Implement hard-fail on S/R mismatch**: When `agent implement --apply` is used and a `<<<SEARCH` block cannot be matched to the target file, the command **exits with code 1** immediately. It must not continue applying remaining blocks, must not report "apply complete", and must not stage any partial changes. The exit message must identify the file and block number that failed.
+- [ ] **AC-7 — Implement dry-run mismatch detection**: `agent implement --dry-run` must report all S/R blocks that would fail to match (without modifying any files), so the developer can identify hallucinated search content before attempting `--apply`.
 - [ ] **Negative Test**: A finding referencing a non-existent file is automatically dismissed with an appropriate log message.
+- [ ] **Negative Test — S/R mismatch on --apply**: Given a runbook with a `<<<SEARCH` block whose content does not appear in the target file, `agent implement --apply` exits `1`, no files are staged, and the error output names the failing file and block index.
+
 
 ## Non-Functional Requirements
 
@@ -44,9 +50,9 @@ As a **Platform Developer**, I want **preflight findings to be verified before t
 
 ## Impact Analysis Summary
 
-Components touched: `agent.core.check` (MODIFIED — new verifier module), preflight reporting (MODIFIED — add Verified column).
-Workflows affected: `agent preflight` output and finding accuracy.
-Risks identified: LLM self-review fallback could itself hallucinate — bounded by requiring quoted evidence from the file.
+Components touched: `agent.core.check` (MODIFIED — new verifier module), preflight reporting (MODIFIED — add Verified column), `agent.commands.implement` and `agent.core.implement.orchestrator` (MODIFIED — hard-fail on S/R mismatch, AC-6/AC-7).
+Workflows affected: `agent preflight` output and finding accuracy; `agent implement --apply` and `--dry-run` failure modes.
+Risks identified: LLM self-review fallback could itself hallucinate — bounded by requiring quoted evidence from the file. Hard-fail on S/R mismatch is a breaking behaviour change for any runbook that relies on partial application (none currently do, by design).
 
 ## Test Strategy
 

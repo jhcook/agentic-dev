@@ -1,8 +1,0 @@
-{
-  "SPLIT_REQUEST": true,
-  "reason": "The implementation exceeds thresholds for both file count (5 files) and estimated lines of code (400+), requiring changes across the core implementation engine, CLI workflows, and telemetry systems.",
-  "suggestions": [
-    "INFRA-122-A: Core Runbook Verification Logic: Implement dry-run block verification in the orchestrator and add correction prompts.",
-    "INFRA-122-B: Implementation Workflow & Metrics: Integrate the retry loop into the CLI and add observability metrics for verification success."
-  ]
-}
