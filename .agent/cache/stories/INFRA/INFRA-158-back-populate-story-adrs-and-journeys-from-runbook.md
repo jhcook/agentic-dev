@@ -52,12 +52,12 @@ As a **Platform Developer**, I want **`agent new-runbook` to extract ADR and Jou
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py` — **[MODIFY]** add post-generation ADR/Journey extraction and story back-population step (after line ~471 where the runbook file is written)
-- `agent/commands/utils.py` — **[MODIFY]** add `extract_adr_refs(text)`, `extract_journey_refs(text)`, and `merge_story_links(story_file, adrs, journeys)` helpers
-- `agent/core/config.py` — no change; `config.adrs_dir` and `config.journeys_dir` are already defined and used. Only entries with a confirmed local file are written; unresolvable references are silently skipped to prevent `agent implement` validation errors.
+- `agent/commands/runbook.py` — **[MODIFY]** add post-generation ADR/Journey extraction and story back-population step
+- `agent/commands/utils.py` — **[MODIFY]** add `extract_adr_refs(text)`, `extract_journey_refs(text)`, and `merge_story_links(story_file, adrs, journeys)` helpers with ID-based idempotency
+- `agent/commands/tests/__init__.py` — **[NEW]** package init with Apache 2.0 header
+- `agent/commands/tests/test_story_link_helpers.py` — **[NEW]** 17 unit tests covering all ACs and negative cases
 - `CHANGELOG.md` — **[MODIFY]** add INFRA-158 entry under Unreleased
-- `INFRA-156-preflight-finding-verification-gate.md` — **[MODIFY]** AC-6 and AC-7 added documenting the `agent implement` silent S/R mismatch failure mode discovered during INFRA-158 investigation; directly related as a root-cause finding
-- `JRN-057-impact-analysis-workflow.yaml` — **[MODIFY]** Apache 2.0 license header restored (stripped by `agent implement` during story linking)
+- `INFRA-156-preflight-finding-verification-gate.md` — **[MODIFY]** AC-6 and AC-7 added documenting the `agent implement` silent S/R mismatch failure mode discovered during INFRA-158 investigation
 
 **Workflows affected:** `agent new-runbook` — purely additive post-processing step after successful generation.
 

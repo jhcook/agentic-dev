@@ -164,9 +164,15 @@ def merge_story_links(
 
     # --- Resolve ADR titles --------------------------------------------------
     resolved_adrs: list[str] = []
+    # Extract IDs already present in the section — check by ID, not full string,
+    # so a title change never creates a duplicate (AC-5 idempotency).
+    adr_section = content.split("## Linked ADRs")[1].split("##")[0] if "## Linked ADRs" in content else ""
+    existing_adr_ids = set(re.findall(r"\bADR-\d+\b", adr_section))
     adrs_dir = getattr(config, "adrs_dir", None)
     if adrs_dir and Path(adrs_dir).exists():
         for adr_id in sorted(adrs):
+            if adr_id in existing_adr_ids:
+                continue  # already present — skip regardless of title
             matches = list(Path(adrs_dir).glob(f"{adr_id}*.md"))
             if matches:
                 # Extract H1 title from ADR file; fall back to stem on parse failure
@@ -175,16 +181,19 @@ def merge_story_links(
                     title = h1_match.group(1).strip() if h1_match else matches[0].stem
                 except OSError:
                     title = matches[0].stem
-                entry = f"- {adr_id}: {title}"
-                if entry not in content:
-                    resolved_adrs.append(entry)
-                    adrs_added.append(adr_id)
+                resolved_adrs.append(f"- {adr_id}: {title}")
+                adrs_added.append(adr_id)
 
     # --- Resolve Journey titles ----------------------------------------------
     resolved_journeys: list[str] = []
+    # Same ID-based idempotency for journeys.
+    jrn_section = content.split("## Linked Journeys")[1].split("##")[0] if "## Linked Journeys" in content else ""
+    existing_jrn_ids = set(re.findall(r"\bJRN-\d+\b", jrn_section))
     journeys_dir = getattr(config, "journeys_dir", None)
     if journeys_dir and Path(journeys_dir).exists():
         for jrn_id in sorted(journeys):
+            if jrn_id in existing_jrn_ids:
+                continue  # already present
             num = jrn_id.split("-")[1]
             matches = list(Path(journeys_dir).rglob(f"JRN-{num}*.yaml"))
             if matches:
@@ -194,10 +203,8 @@ def merge_story_links(
                     name = data.get("name", matches[0].stem) if isinstance(data, dict) else matches[0].stem
                 except (yaml.YAMLError, OSError):
                     name = matches[0].stem
-                entry = f"- {jrn_id}: {name}"
-                if entry not in content:
-                    resolved_journeys.append(entry)
-                    journeys_added.append(jrn_id)
+                resolved_journeys.append(f"- {jrn_id}: {name}")
+                journeys_added.append(jrn_id)
 
     if not resolved_adrs and not resolved_journeys:
         return  # Nothing resolvable — leave story unchanged

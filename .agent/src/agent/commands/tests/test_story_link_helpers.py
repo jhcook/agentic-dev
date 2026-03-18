@@ -183,7 +183,7 @@ class TestMergeStoryLinks:
         assert "- JRN-057: Impact Analysis Workflow" in result
 
     def test_idempotent_adr(self, tmp_path):
-        """Re-running does not add a duplicate ADR entry."""
+        """Re-running does not add a duplicate ADR entry even if title changes."""
         story_file = tmp_path / "INFRA-001-story.md"
         story_file.write_text(STORY_WITH_EXISTING_ADR)
         adrs_dir = self._make_adr_dir(tmp_path, "ADR-041", "Module Decomposition Standards")
@@ -193,6 +193,25 @@ class TestMergeStoryLinks:
             mock_config.journeys_dir = None
             merge_story_links(story_file, {"ADR-041"}, set())
 
+        result = story_file.read_text()
+        assert result.count("ADR-041") == 1
+
+    def test_idempotent_adr_title_changed(self, tmp_path):
+        """ID-based check prevents duplicate even when the ADR title has changed."""
+        story_file = tmp_path / "INFRA-001-story.md"
+        # Story already has ADR-041 with an old title
+        story_file.write_text(STORY_WITH_EXISTING_ADR.replace(
+            "ADR-041: Module Decomposition Standards",
+            "ADR-041: Old Title That Has Changed"
+        ))
+        adrs_dir = self._make_adr_dir(tmp_path, "ADR-041", "New Updated Title")
+
+        with patch("agent.commands.utils.config") as mock_config:
+            mock_config.adrs_dir = str(adrs_dir)
+            mock_config.journeys_dir = None
+            merge_story_links(story_file, {"ADR-041"}, set())
+
+        # Should still only be one ADR-041 — ID match prevents a second entry
         result = story_file.read_text()
         assert result.count("ADR-041") == 1
 
