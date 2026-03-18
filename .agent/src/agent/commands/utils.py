@@ -17,7 +17,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import List
+from typing import List, TypedDict
 
 import yaml
 from rich.console import Console
@@ -270,6 +270,19 @@ def merge_story_links(
 # INFRA-159 — S/R block validation helpers
 # ---------------------------------------------------------------------------
 
+
+class SRMismatch(TypedDict):
+    """A single S/R block that failed to match the target file on disk."""
+
+    file: str
+    """Relative path to the target file (as declared in the runbook header)."""
+    search: str
+    """The verbatim <<<SEARCH content that could not be found in the file."""
+    actual: str
+    """Full content of the target file at validation time."""
+    index: int
+    """1-based block counter within this file (for user-facing error messages)."""
+
 def _lines_match(search_text: str, file_text: str) -> bool:
     """Return True if *search_text* exists as a contiguous block in *file_text*.
 
@@ -296,7 +309,7 @@ def _lines_match(search_text: str, file_text: str) -> bool:
     return False
 
 
-def validate_sr_blocks(content: str) -> List[dict]:
+def validate_sr_blocks(content: str) -> List[SRMismatch]:
     """Validate every SEARCH block in a runbook against the target file on disk.
 
     Uses :func:`agent.core.implement.parser.parse_search_replace_blocks` to
@@ -308,8 +321,8 @@ def validate_sr_blocks(content: str) -> List[dict]:
         content: Full runbook markdown content.
 
     Returns:
-        List of mismatch dicts — each has keys ``file``, ``search``, ``actual``,
-        and ``index`` (1-based block counter per file).
+        List of :class:`SRMismatch` typed dicts — each has keys ``file``,
+        ``search``, ``actual``, and ``index`` (1-based block counter per file).
 
     Raises:
         FileNotFoundError: If a ``[MODIFY]`` block targets a file that does not
@@ -329,7 +342,7 @@ def validate_sr_blocks(content: str) -> List[dict]:
     # All S/R blocks (MODIFY + NEW that contain <<<SEARCH blocks).
     sr_blocks = parse_search_replace_blocks(content)
 
-    mismatches: List[dict] = []
+    mismatches: List[SRMismatch] = []
     # Track per-file block index (1-based).
     block_counters: dict[str, int] = {}
 
@@ -371,7 +384,7 @@ def validate_sr_blocks(content: str) -> List[dict]:
     return mismatches
 
 
-def generate_sr_correction_prompt(mismatches: List[dict]) -> str:
+def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     """Build an AI correction prompt for failing S/R blocks.
 
     File content is scrubbed with :func:`scrub_sensitive_data` before being
