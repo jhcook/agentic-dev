@@ -276,8 +276,8 @@ class AIService:
         if openai_key:
             try:
                 from openai import OpenAI
-                # Set 120s timeout
-                self.clients['openai'] = OpenAI(api_key=openai_key, timeout=120.0)
+                _openai_timeout = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
+                self.clients['openai'] = OpenAI(api_key=openai_key, timeout=_openai_timeout)
                 logging.debug("OpenAI provider initialized from secrets.")
             except ImportError:
                 console.print(
@@ -301,10 +301,10 @@ class AIService:
         if anthropic_key:
             try:
                 from anthropic import Anthropic
-                # Set 120s timeout for large contexts
+                _anthropic_timeout = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
                 self.clients['anthropic'] = Anthropic(
                     api_key=anthropic_key,
-                    timeout=120.0
+                    timeout=_anthropic_timeout
                 )
                 logging.debug("Anthropic provider initialized from secrets.")
             except ImportError:
@@ -338,7 +338,7 @@ class AIService:
                     self.clients['ollama'] = OpenAI(
                         base_url=f"{ollama_host}/v1",
                         api_key="ollama",  # Dummy — Ollama ignores this but SDK requires it
-                        timeout=120.0,
+                        timeout=int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000,
                     )
                     logging.info("Ollama provider initialized at %s", ollama_host)
                 else:

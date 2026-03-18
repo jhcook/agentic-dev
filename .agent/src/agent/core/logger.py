@@ -14,6 +14,35 @@
 
 import logging
 
+# Suppress noisy third-party loggers at module level — before any model can load.
+# configure_logging() reinforces this, but the model may load before the CLI
+# parses verbosity flags, so we must act at import time too.
+for _noisy in (
+    "huggingface_hub",
+    "sentence_transformers",
+    "transformers",
+    "transformers.modeling_utils",
+    "transformers.trainer",
+    "transformers.utils",
+):
+    logging.getLogger(_noisy).setLevel(logging.ERROR)
+
+# transformers ships its own logging wrapper (transformers.utils.logging) which is
+# independent of Python's logging hierarchy — setLevel above does not reach it.
+# Must use the library's own API to suppress the "layers were not sharded" noise.
+try:
+    import transformers as _transformers
+    _transformers.logging.set_verbosity_error()
+except Exception:
+    pass
+try:
+    import sentence_transformers as _st  # noqa: F401
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+except Exception:
+    pass
+
+
+
 # Configure default logging (Default to WARNING to be quiet)
 # We do NOT call basicConfig here to avoid side effects on import.
 # Instead, we provide a setup function.

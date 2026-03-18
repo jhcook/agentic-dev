@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
+
+
 id: JRN-051
 title: Import Custom Voice Tool
 state: COMMITTED
@@ -22,9 +26,9 @@ tags:
 - cli
 - voice
 actor: developer using agent CLI
-description: 'Import a custom Python tool into the Voice Agent''s tool registry using
+description: Import a custom Python tool into the Voice Agent's tool registry using
   the `agent import tool` command. The command copies the tool file into the voice
-  tools directory and the Voice Agent hot-reloads it automatically.'
+  tools directory and the Voice Agent hot-reloads it automatically.
 preconditions:
 - Agent CLI is installed and configured
 - Developer has a custom Python tool file ready to import
@@ -101,6 +105,13 @@ implementation:
   routes: []
   files:
   - .agent/src/agent/commands/importer.py
+  - .agent/src/agent/core/logger.py
   - .agent/src/agent/main.py
+  - .agent/src/agent/tools/custom/**init**.py
+  - .agent/src/agent/tools/custom/__init__.py
+  - .agent/src/agent/tools/dynamic.py
+  - .agent/src/agent/tools/tests/test_dynamic.py
+  - .agent/src/backend/voice/tools/create_tool.py
+  - CHANGELOG.md
   tests:
   - .agent/tests/journeys/test_jrn_051.py

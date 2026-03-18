@@ -223,13 +223,17 @@ class TestValidateSrBlocks:
 
         assert result == []
 
-    def test_missing_modify_target_raises(self, tmp_path):
-        """[MODIFY] block targeting a missing file raises FileNotFoundError immediately."""
+    def test_missing_modify_target_returns_mismatch(self, tmp_path):
+        """[MODIFY] block targeting a missing file returns a mismatch with missing_modify=True."""
         nonexistent = tmp_path / "agent/src/nonexistent_module.py"
 
         with patch("agent.core.implement.resolver.resolve_path", return_value=nonexistent):
-            with pytest.raises(FileNotFoundError, match="nonexistent_module"):
-                validate_sr_blocks(RUNBOOK_MISSING_MODIFY_TARGET)
+            result = validate_sr_blocks(RUNBOOK_MISSING_MODIFY_TARGET)
+
+        assert len(result) == 1
+        assert result[0]["missing_modify"] is True
+        assert "nonexistent_module" in result[0]["file"]
+        assert result[0]["actual"] == ""
 
     def test_two_blocks_same_file_indexed(self, tmp_path):
         """Multiple blocks against the same file get sequential 1-based indices."""
@@ -292,6 +296,8 @@ SAMPLE_MISMATCH = [
         "search": "def foo():\n    return 99",
         "actual": "def foo():\n    return 1\n",
         "index": 1,
+        "missing_modify": False,
+        "replace": "def foo():\n    return 42",
     }
 ]
 

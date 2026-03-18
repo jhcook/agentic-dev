@@ -175,6 +175,9 @@ def new_runbook(
     skip_forecast: bool = typer.Option(
         False, "--skip-forecast", help="Bypass the complexity forecast gate."
     ),
+    timeout: int = typer.Option(
+        180, "--timeout", help="AI request timeout in seconds (default: 180)."
+    ),
 ):
     """
     Generate an implementation runbook using AI Governance Panel.
@@ -183,6 +186,9 @@ def new_runbook(
     from agent.core.ai import ai_service  # ADR-025: lazy init
     if provider:
         ai_service.set_provider(provider)
+    # Set AI timeout from CLI option (tunable, default 180s)
+    import os as _os
+    _os.environ["AGENT_AI_TIMEOUT_MS"] = str(timeout * 1000)
     
     # 1. Find Story
     story_file = find_story_file(story_id)
@@ -334,6 +340,7 @@ INSTRUCTIONS:
     - All NEW Python files MUST have PEP-257 docstrings on the module, every class, every function,
       and every inner/closure function. The docstring gate will hard-reject files missing any of these.
 12. You MUST use full, repository-root-relative file paths for ALL files (e.g., STARTING with `.agent/src/` or similar, NOT just `src/`).
+13. NEVER include steps that modify files in `.agent/cache/` (stories, plans, runbooks). Story state transitions are managed automatically by `agent` commands — do NOT add `[MODIFY]` or `[NEW]` steps for any file under `.agent/cache/`.
 
 INPUTS:
 1. User Story (Requirements)
@@ -389,15 +396,21 @@ TEST IMPACT MATRIX (tests with patch targets for these modules — MUST be addre
 BEHAVIORAL CONTRACTS (defaults and invariants — MUST be preserved):
 {behavioral_contracts if behavioral_contracts else "(No behavioral contracts found)"}
 
+STORY FILE PATH (exact — use this verbatim for any runbook steps that reference this story):
+{story_file.relative_to(story_file.parents[3])}
+
 Generate the runbook now.
 """
 
     console.print("[bold green]🤖 Panel is discussing...[/bold green]")
-    
+
     max_attempts = 3
     attempt = 0
     content = ""
     current_user_prompt = user_prompt
+    # Track files the AI keeps trying to [MODIFY] that don't exist yet.
+    # Injected back into the prompt so the AI learns from the first attempt.
+    known_new_files: set = set()
 
     while attempt < max_attempts:
         attempt += 1
@@ -412,104 +425,125 @@ Generate the runbook now.
         if "SPLIT_REQUEST" in content:
             break  # Let the split logic below handle it
 
+        # ------------------------------------------------------------------ #
+        # DRY-RUN GATE PASS: run ALL gates in collect mode, then fix once.   #
+        # We never short-circuit mid-pass — every gate sees the same content  #
+        # so the AI gets a single combined correction prompt per retry.        #
+        # ------------------------------------------------------------------ #
+        correction_parts: List[str] = []
+
         # 1. Schema validation
         with tracer.start_as_current_span("validate_runbook_schema") as span:
             schema_violations = validate_runbook_schema(content)
             span.set_attribute("validation.passed", not bool(schema_violations))
             span.set_attribute("validation.error_count", len(schema_violations) if schema_violations else 0)
-        
+
         if schema_violations:
             logger.warning("runbook_schema_fail", extra={"attempt": attempt, "story_id": story_id})
-            formatted_errors = format_runbook_errors(schema_violations)
-            if attempt < max_attempts:
-                console.print(f"[yellow]⚠️  Attempt {attempt} failed schema validation. Retrying...[/yellow]")
-                current_user_prompt = f"{user_prompt}\n\n{formatted_errors}\nPlease fix these and re-generate."
-                continue
-            else:
-                error_console.print(f"[bold red]❌ Schema validation failed after {max_attempts} attempts.[/bold red]")
-                error_console.print(formatted_errors)
-                raise typer.Exit(code=1)
+            correction_parts.append(
+                format_runbook_errors(schema_violations) + "\nPlease fix these schema errors."
+            )
 
         # 2. Code Gate Self-Healing (INFRA-155 AC-1)
-
         code_errors: List[str] = []
         code_warnings: List[str] = []
-        
+
         with tracer.start_as_current_span("validate_code_gates") as span:
-            # Extract all code blocks
             blocks = parse_code_blocks(content)
             for b in blocks:
                 res = validate_code_block(b["file"], b["content"])
                 code_errors.extend(res.errors)
                 code_warnings.extend(res.warnings)
-            
+
             span.set_attribute("validation.passed", not bool(code_errors))
             span.set_attribute("validation.error_count", len(code_errors))
 
         if code_errors:
             logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
-            error_msg = "CODE GATE VIOLATIONS DETECTED:\n" + "\n".join(f"- {e}" for e in code_errors)
-            if attempt < max_attempts:
-                console.print(f"[yellow]⚠️  Attempt {attempt} failed code gates. Asking AI for self-healing...[/yellow]")
-                current_user_prompt = f"{user_prompt}\n\n{error_msg}\nPlease fix these code violations and re-generate the full runbook."
-                continue
-            else:
-                error_console.print(f"[bold red]❌ Code gates failed after {max_attempts} attempts.[/bold red]")
-                error_console.print(error_msg)
-                raise typer.Exit(code=1)
+            correction_parts.append(
+                "CODE GATE VIOLATIONS:\n" + "\n".join(f"- {e}" for e in code_errors)
+            )
 
-        # 3. S/R Validation Gate (INFRA-159)
+        # 3. S/R Validation Gate (INFRA-159 + autohealing pre-pass)
         with tracer.start_as_current_span("sr_validation_gate") as sr_span:
             sr_span.set_attribute("story_id", story_id)
             sr_span.set_attribute("attempt", attempt)
-            try:
-                sr_mismatches = validate_sr_blocks(content)
-            except FileNotFoundError as exc:
-                # AC-6: [MODIFY] targeting a missing file is an immediate hard failure.
-                logger.error("sr_validation_error", extra={"story_id": story_id, "error": str(exc)})
-                error_console.print(f"[bold red]❌ S/R Validation Error: {exc}[/bold red]")
-                sr_span.set_attribute("outcome", "error")
-                raise typer.Exit(code=1)
+            sr_mismatches = validate_sr_blocks(content)
 
-            sr_span.set_attribute("mismatch_count", len(sr_mismatches))
+            # Pre-pass: deterministically handle [MODIFY] on missing files.
+            # Independent of retry loop — does not consume an attempt slot.
+            missing_blocks = [m for m in sr_mismatches if m.get("missing_modify")]
+            real_mismatches = [m for m in sr_mismatches if not m.get("missing_modify")]
 
-            if sr_mismatches:
+            if missing_blocks:
+                logger.warning("sr_modify_missing", extra={"story_id": story_id, "count": len(missing_blocks)})
+                missing_paths = [m["file"] for m in missing_blocks]
+                # Accumulate so future attempts include this in base prompt.
+                known_new_files.update(missing_paths)
+                sr_span.set_attribute("outcome", "modify_missing_prepass")
+                console.print(f"[yellow]⚠️  [MODIFY] on non-existent file(s): {missing_paths} — autohealing (free pass)...[/yellow]")
+                missing_detail = "\n".join(
+                    f"  - {m['file']}: file does not exist, must use [NEW] with a full code block"
+                    for m in missing_blocks
+                )
+                correction_parts.append(
+                    "AUTOHEALING REQUIRED — [MODIFY] used for files that do not yet exist:\n"
+                    f"{missing_detail}\n"
+                    "For each listed file: replace `#### [MODIFY] <path>` + "
+                    "`<<<SEARCH/===/>>>` with `#### [NEW] <path>` followed by "
+                    "a complete fenced code block of the full intended file contents."
+                )
+                # Autohealing pre-pass does not count as a retry attempt.
+                attempt -= 1
+                # Re-inject known-new-files into the base user prompt so ALL
+                # future retries have this knowledge baked in from the start.
+                if known_new_files:
+                    new_files_notice = (
+                        "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
+                        + "\n".join(f"  - {f}" for f in sorted(known_new_files))
+                    )
+                    current_user_prompt = user_prompt + new_files_notice
+
+            sr_span.set_attribute("mismatch_count", len(real_mismatches))
+
+            if real_mismatches:
                 logger.warning(
                     "sr_validation_fail",
-                    extra={
-                        "attempt": attempt,
-                        "story_id": story_id,
-                        "count": len(sr_mismatches),
-                        "files": [m["file"] for m in sr_mismatches],
-                    },
+                    extra={"attempt": attempt, "story_id": story_id, "count": len(real_mismatches),
+                           "files": [m["file"] for m in real_mismatches]},
                 )
-                if attempt < max_attempts:
-                    sr_span.set_attribute("outcome", "retry")
-                    console.print(
-                        f"[yellow]⚠️  Attempt {attempt}: S/R mismatch in "
-                        f"{len(sr_mismatches)} block(s) — asking AI for self-healing...[/yellow]"
-                    )
-                    logger.info("sr_correction_attempt", extra={"attempt": attempt, "story_id": story_id})
-                    current_user_prompt = (
-                        f"{user_prompt}\n\n{generate_sr_correction_prompt(sr_mismatches)}"
-                    )
-                    continue
-                else:
-                    sr_span.set_attribute("outcome", "exhausted")
-                    logger.error("sr_correction_exhausted", extra={"story_id": story_id})
-                    error_console.print(
-                        f"[bold red]❌ S/R validation failed after {max_attempts} attempts.[/bold red]"
-                    )
-                    for m in sr_mismatches:
-                        error_console.print(f"  [red]• {m['file']} (Block #{m['index']})[/red]")
-                    raise typer.Exit(code=1)
-            else:
+                sr_span.set_attribute("outcome", "mismatch")
+                correction_parts.append(generate_sr_correction_prompt(real_mismatches))
+            elif not missing_blocks:
                 if attempt > 1:
                     sr_span.set_attribute("outcome", "corrected")
                     logger.info("sr_correction_success", extra={"story_id": story_id, "attempt": attempt})
                 else:
                     sr_span.set_attribute("outcome", "pass")
                 logger.info("sr_validation_pass", extra={"story_id": story_id})
+
+        # ------------------------------------------------------------------ #
+        # Combined correction: if ANY gate failed, send one unified prompt.   #
+        # ------------------------------------------------------------------ #
+        if correction_parts:
+            if attempt < max_attempts:
+                issues = len(correction_parts)
+                console.print(f"[yellow]⚠️  Attempt {attempt}: {issues} gate issue(s) — sending combined correction...[/yellow]")
+                logger.info("combined_correction_attempt", extra={"attempt": attempt, "story_id": story_id, "issues": issues})
+                current_user_prompt = (
+                    f"{user_prompt}\n\n"
+                    "=== CORRECTION REQUIRED ===\n"
+                    "The runbook has the following issues that must ALL be fixed before re-generating:\n\n"
+                    + "\n\n---\n\n".join(correction_parts)
+                    + "\n\nReturn the FULL corrected runbook addressing every issue above."
+                )
+                continue
+            else:
+                logger.error("gate_exhausted", extra={"story_id": story_id, "attempt": attempt})
+                error_console.print(f"[bold red]❌ Gates failed after {max_attempts} attempts.[/bold red]")
+                for part in correction_parts:
+                    error_console.print(f"[red]{part[:400]}[/red]")
+                raise typer.Exit(code=1)
 
         # 4. DoD Compliance Gate (INFRA-161)
         with tracer.start_as_current_span("dod_compliance_gate") as dod_span:
@@ -562,42 +596,15 @@ Generate the runbook now.
                 "dod_compliance_fail",
                 extra={"attempt": attempt, "story_id": story_id, "gaps": dod_gaps},
             )
-            if attempt < max_attempts:
-                dod_span.set_attribute("outcome", "retry")
-                console.print(
-                    f"[yellow]⚠️  Attempt {attempt}: DoD gaps detected "
-                    f"({len(dod_gaps)}) — asking AI for self-healing...[/yellow]"
-                )
-                logger.info(
-                    "dod_compliance_correction_attempt",
-                    extra={"attempt": attempt, "story_id": story_id},
-                )
-                current_user_prompt = (
-                    f"{user_prompt}\n\n"
-                    f"{build_dod_correction_prompt(dod_gaps, story_content, acs)}"
-                )
-                continue
-            else:
-                dod_span.set_attribute("outcome", "exhausted")
-                logger.error(
-                    "dod_compliance_exhausted",
-                    extra={"story_id": story_id, "gaps": dod_gaps},
-                )
-                error_console.print(
-                    f"[bold red]❌ DoD compliance gate failed after {max_attempts} attempts.[/bold red]"
-                )
-                for gap in dod_gaps:
-                    error_console.print(f"  [red]• {gap}[/red]")
-                raise typer.Exit(code=1)
+            dod_span.set_attribute("outcome", "fail")
+            correction_parts.append(
+                build_dod_correction_prompt(dod_gaps, story_content, acs)
+            )
         else:
-            # outcome = 'corrected' if gate passed after one or more retries (AC-9)
             _outcome = "corrected" if attempt > 1 else "pass"
             dod_span.set_attribute("outcome", _outcome)
             if _outcome == "corrected":
-                logger.info(
-                    "dod_compliance_corrected",
-                    extra={"story_id": story_id, "attempt": attempt},
-                )
+                logger.info("dod_compliance_corrected", extra={"story_id": story_id, "attempt": attempt})
             else:
                 logger.info("dod_compliance_pass", extra={"story_id": story_id})
 
@@ -739,6 +746,7 @@ def _retrieve_dynamic_rules(story_content: str, targeted_context: str) -> str:
     try:
         # Try local Vector DB first as it's the primary fallback for Rule Diet
         from agent.db.journey_index import JourneyIndex
+        console.print("[dim]ℹ️  Populating shards in vector index...[/dim]")
         idx = JourneyIndex()
         # Search for contextual rules specifically
         retrieved_content = idx.search(f"Governance rules for: {query}", k=4)
