@@ -477,10 +477,14 @@ Generate the runbook now.
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
 
     # 5.0 Back-populate story with identified ADRs and Journeys (INFRA-158)
-    adrs = extract_adr_refs(content)
-    journeys = extract_journey_refs(content)
-    if adrs or journeys:
-        merge_story_links(story_file, adrs, journeys)
+    # Best-effort: failures are logged as warnings and do not abort runbook generation.
+    try:
+        adrs = extract_adr_refs(content)
+        journeys = extract_journey_refs(content)
+        if adrs or journeys:
+            merge_story_links(story_file, adrs, journeys)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
 
     # 5.1 Schema validation status
     console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")

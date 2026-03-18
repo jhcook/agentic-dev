@@ -169,9 +169,13 @@ def merge_story_links(
         for adr_id in sorted(adrs):
             matches = list(Path(adrs_dir).glob(f"{adr_id}*.md"))
             if matches:
-                # Use filename stem (without extension) as the title
-                title = matches[0].stem
-                entry = f"- {title}"
+                # Extract H1 title from ADR file; fall back to stem on parse failure
+                try:
+                    h1_match = re.search(r"^#\s+(.+)", matches[0].read_text(), re.MULTILINE)
+                    title = h1_match.group(1).strip() if h1_match else matches[0].stem
+                except OSError:
+                    title = matches[0].stem
+                entry = f"- {adr_id}: {title}"
                 if entry not in content:
                     resolved_adrs.append(entry)
                     adrs_added.append(adr_id)

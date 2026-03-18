@@ -69,3 +69,6 @@ Integrate the extraction and merging utilities into the `agent new-runbook` comm
 **Technical Notes:**
 - Ensure the `story_id` is extracted from the filepath or the file content for the log event.
 - Follow existing patterns in `runbook.py` for accessing `agent_config` to locate ADR/Journey directories.
+## Copyright
+
+Copyright 2026 Justin Cook
