@@ -297,6 +297,10 @@ class SRMismatch(TypedDict):
     """Full content of the target file at validation time."""
     index: int
     """1-based block counter within this file (for user-facing error messages)."""
+    missing_modify: bool
+    """True when a [MODIFY] block targets a file that does not yet exist on disk."""
+    replace: str
+    """The REPLACE content from the S/R block (useful for autohealing to [NEW])."""
 
 def _lines_match(search_text: str, file_text: str) -> bool:
     """Return True if *search_text* exists as a contiguous block in *file_text*.
@@ -368,10 +372,24 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
         abs_path = resolve_path(file_path_str)
         is_modify = file_path_str in modify_files
 
+        # Meta-files in .agent/cache/ (stories, plans, runbooks) are managed
+        # by agent commands — not source code. Skip validation silently.
+        if ".agent/cache/" in file_path_str or "/.agent/cache/" in file_path_str:
+            continue
+
         if is_modify and (abs_path is None or not abs_path.exists()):
-            raise FileNotFoundError(
-                f"[MODIFY] target does not exist on disk: {file_path_str}"
+            # Return a structured mismatch instead of raising — caller decides healing.
+            mismatches.append(
+                {
+                    "file": file_path_str,
+                    "search": block.get("search", ""),
+                    "actual": "",
+                    "index": block_counters.get(file_path_str, 0) + 1,
+                    "missing_modify": True,
+                    "replace": block.get("replace", ""),
+                }
             )
+            continue
 
         # [NEW] targeting a file that doesn't exist yet — nothing to match.
         if not is_modify and (abs_path is None or not abs_path.exists()):
@@ -393,6 +411,8 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                         "search": search_text,
                         "actual": file_text,
                         "index": idx,
+                        "missing_modify": False,
+                        "replace": block.get("replace", ""),
                     }
                 )
 
