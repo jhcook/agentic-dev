@@ -67,6 +67,7 @@ As a **Platform Developer**, I want `agent new-runbook` to verify that every gen
 - `agent/commands/runbook.py` — **[MODIFY]** Wire Gate 4 (`dod_compliance_gate` OTel span + 4 deterministic checkers + correction-prompt retry loop). Import the new helpers.
 - `agent/commands/tests/test_dod_compliance.py` — **[NEW]** Unit tests for all helper functions (16 unit tests).
 - `agent/commands/tests/test_dod_compliance_integration.py` — **[NEW]** Integration tests for the gate composition (8 integration tests).
+- `agent/commands/tests/test_dod_gate_orchestration.py` — **[NEW]** Orchestration-level integration tests for Gate 4 control flow (retry, corrected, exhausted, no-story skip — 11 tests).
 - `CHANGELOG.md` — **[MODIFY]** Add INFRA-161 entry.
 - `agent/core/implement/guards.py` — **[MODIFY]** Two prerequisite fixes required to unblock runbook generation on this branch: (1) missing trailing newlines in AI-generated code blocks are now auto-corrected with a warning instead of a hard blocking error; (2) `check_imports` now exempts test-only imports (`pytest`, `typer`, etc.) when the file path matches `test_*.py` / `*_test.py` — resolving a persistent false-positive that was exhausting the 3-retry budget on every `new-runbook` run.
 
