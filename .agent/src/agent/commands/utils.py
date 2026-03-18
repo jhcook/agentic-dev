@@ -299,62 +299,74 @@ def _lines_match(search_text: str, file_text: str) -> bool:
 def validate_sr_blocks(content: str) -> List[dict]:
     """Validate every SEARCH block in a runbook against the target file on disk.
 
+    Uses :func:`agent.core.implement.parser.parse_search_replace_blocks` to
+    extract S/R blocks (reusing the canonical parser — no duplicated regex) and
+    :func:`agent.core.implement.parser.extract_modify_files` to identify which
+    operations require an existing file.
+
     Args:
         content: Full runbook markdown content.
 
     Returns:
         List of mismatch dicts — each has keys ``file``, ``search``, ``actual``,
-        and ``index`` (1-based block counter within the operation header).
+        and ``index`` (1-based block counter per file).
 
     Raises:
         FileNotFoundError: If a ``[MODIFY]`` block targets a file that does not
             exist on disk. ``[NEW]`` blocks targeting non-existent files are
             silently skipped (they will be created by ``agent implement``).
     """
-    # Deferred import to avoid circular dependency at module load time.
+    # Deferred imports to avoid circular dependency at module load time.
+    from agent.core.implement.parser import (  # noqa: PLC0415
+        parse_search_replace_blocks,
+        extract_modify_files,
+    )
     from agent.core.implement.resolver import resolve_path  # noqa: PLC0415
 
+    # Files declared in [MODIFY] headers — missing files are an immediate error.
+    modify_files: set[str] = set(extract_modify_files(content))
+
+    # All S/R blocks (MODIFY + NEW that contain <<<SEARCH blocks).
+    sr_blocks = parse_search_replace_blocks(content)
+
     mismatches: List[dict] = []
-    op_pattern = re.compile(
-        r"####\s*\[(MODIFY|NEW)\]\s*`?([^\n`]+?)`?\s*\n(.*?)(?=\n####\s*\[|\Z)",
-        re.DOTALL | re.IGNORECASE,
-    )
-    sr_pattern = re.compile(r"<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>", re.DOTALL)
+    # Track per-file block index (1-based).
+    block_counters: dict[str, int] = {}
 
-    for op_match in op_pattern.finditer(content):
-        op_type = op_match.group(1).upper()
-        file_path_str = op_match.group(2).strip()
-        body = op_match.group(3)
+    for block in sr_blocks:
+        file_path_str = block["file"]
+        search_text = block["search"]
 
-        abs_path: Path | None = resolve_path(file_path_str)
+        abs_path = resolve_path(file_path_str)
+        is_modify = file_path_str in modify_files
 
-        if op_type == "MODIFY":
-            if abs_path is None or not abs_path.exists():
-                raise FileNotFoundError(
-                    f"[MODIFY] target does not exist on disk: {file_path_str}"
-                )
+        if is_modify and (abs_path is None or not abs_path.exists()):
+            raise FileNotFoundError(
+                f"[MODIFY] target does not exist on disk: {file_path_str}"
+            )
 
-        # [NEW] targeting a file that doesn't exist yet — nothing to validate.
-        if op_type == "NEW" and (abs_path is None or not abs_path.exists()):
+        # [NEW] targeting a file that doesn't exist yet — nothing to match.
+        if not is_modify and (abs_path is None or not abs_path.exists()):
             continue
 
         if abs_path is not None and abs_path.exists():
+            block_counters[file_path_str] = block_counters.get(file_path_str, 0) + 1
+            idx = block_counters[file_path_str]
+
             try:
                 file_text = abs_path.read_text(encoding="utf-8")
             except OSError:
                 continue  # unreadable — skip silently
 
-            for idx, sr_match in enumerate(sr_pattern.finditer(body), start=1):
-                search_text = sr_match.group(1)
-                if not _lines_match(search_text, file_text):
-                    mismatches.append(
-                        {
-                            "file": file_path_str,
-                            "search": search_text,
-                            "actual": file_text,
-                            "index": idx,
-                        }
-                    )
+            if not _lines_match(search_text, file_text):
+                mismatches.append(
+                    {
+                        "file": file_path_str,
+                        "search": search_text,
+                        "actual": file_text,
+                        "index": idx,
+                    }
+                )
 
     return mismatches
 
