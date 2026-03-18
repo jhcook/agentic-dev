@@ -107,7 +107,9 @@ If the CLI command fails (e.g., due to AI context length limits or complex refac
 2. Architect the solution in your context.
 3. Write the code using file editing tools.
 4. Manually run `make test`.
-5. Run `agent preflight --story <STORY-ID>` to validate your manual changes against the Governance Council.
+5. **Update `CHANGELOG.md`** — add an entry under `## [Unreleased] > ### Added|Changed|Fixed` describing the user-facing change. Missing entries will be caught by `@docs` at preflight.
+6. **Update the story's `## Impact Analysis Summary`** — ensure every file actually modified (including any incidental cache files, journey YAMLs, etc.) appears under "Components touched". This is required by `@product` at preflight.
+7. Run `agent preflight --story <STORY-ID>` to validate your manual changes against the Governance Council.
 
 ## Copyright
 
