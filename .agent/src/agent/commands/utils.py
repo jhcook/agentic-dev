@@ -487,13 +487,23 @@ def check_test_coverage(runbook_content: str) -> List[str]:
 def check_changelog_entry(runbook_content: str) -> List[str]:
     """Check that the runbook includes a CHANGELOG.md modification step.
 
+    Uses a regex that looks specifically for a ``[MODIFY]`` or ``[NEW]``
+    block header targeting ``CHANGELOG.md``, avoiding false positives from
+    prose mentions of the word "CHANGELOG".
+
     Args:
         runbook_content: Raw runbook markdown.
 
     Returns:
         List of gap strings (empty if requirement met).
     """
-    if "CHANGELOG.md" in runbook_content or "CHANGELOG" in runbook_content:
+    import re as _re
+
+    if _re.search(
+        r"####\s+\[(NEW|MODIFY)\]\s+CHANGELOG\.md",
+        runbook_content,
+        _re.IGNORECASE,
+    ):
         return []
     return [
         "No CHANGELOG.md step found — every story must document its change "

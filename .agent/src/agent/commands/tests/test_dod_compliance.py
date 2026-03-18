@@ -146,6 +146,17 @@ class TestCheckChangelogEntry:
         assert len(gaps) == 1
         assert "CHANGELOG" in gaps[0]
 
+    def test_prose_mention_does_not_pass(self) -> None:
+        """A prose mention of CHANGELOG should NOT satisfy the check.
+
+        This is a regression test for the false-positive bug caught by the
+        governance panel — 'CHANGELOG' in a comment or description was
+        previously treated as a passing step.
+        """
+        prose = "### Overview\nThis runbook updates the CHANGELOG section.\n"
+        gaps = check_changelog_entry(prose)
+        assert len(gaps) == 1, "prose mention should not satisfy the check"
+
 
 # ---------------------------------------------------------------------------
 # check_license_headers

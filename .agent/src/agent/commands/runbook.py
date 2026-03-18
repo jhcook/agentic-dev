@@ -485,17 +485,25 @@ Generate the runbook now.
             dod_span.set_attribute("story_id", story_id)
             dod_span.set_attribute("attempt", attempt)
             acs = extract_acs(story_content)
-            dod_gaps: List[str] = []
-            dod_gaps.extend(check_test_coverage(content))
-            dod_gaps.extend(check_changelog_entry(content))
-            dod_gaps.extend(check_license_headers(content))
-            dod_gaps.extend(check_otel_spans(content, story_content))
+            # Evaluate each check independently so we can assign correct gap IDs
+            _gap_4b = check_test_coverage(content)
+            _gap_4c = check_changelog_entry(content)
+            _gap_4d = check_license_headers(content)
+            _gap_4e = check_otel_spans(content, story_content)
+            dod_gaps: List[str] = [*_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e]
             dod_span.set_attribute("gap_count", len(dod_gaps))
-            # Per AC-9: gaps attribute is a comma-joined list of short IDs
-            _gap_ids = ",".join(
-                f"4{c}" for c, g in zip("bcde", dod_gaps[:4]) if g
-            ) if dod_gaps else ""
-            dod_span.set_attribute("gaps", _gap_ids)
+            # Per AC-9: gaps attribute is comma-joined IDs (4b–4e)
+            _gap_ids_list: List[str] = []
+            if _gap_4b:
+                _gap_ids_list.append("4b")
+            if _gap_4c:
+                _gap_ids_list.append("4c")
+            if _gap_4d:
+                _gap_ids_list.append("4d")
+            if _gap_4e:
+                _gap_ids_list.append("4e")
+            dod_span.set_attribute("gaps", ",".join(_gap_ids_list))
+
 
         if dod_gaps:
             logger.warning(
