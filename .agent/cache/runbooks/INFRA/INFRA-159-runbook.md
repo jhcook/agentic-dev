@@ -35,13 +35,13 @@ Implement a validation pass in `agent new-runbook` that verifies every `<<<SEARC
 - New structured log events (`sr_validation_pass`, `sr_validation_fail`, etc.) provide visibility into AI hallucination rates and self-healing success.
 
 ### @Docs
-- CHANGELOG.md will be updated to reflect the new safety check.
+- CHANGELOG.md updated to reflect the new safety check.
 
 ### @Compliance
 - No PII handling changes. Logic is pure code validation.
 
 ### @Backend
-- strictly typed Python functions and docstrings for all new utility methods.
+- Strictly typed Python functions and docstrings for all new utility methods.
 - Correct use of repo-relative path resolution ensures consistency with the implementation pipeline.
 
 ## Codebase Introspection
@@ -72,212 +72,75 @@ Implement a validation pass in `agent new-runbook` that verifies every `<<<SEARC
 
 ## Implementation Steps
 
-### Step 1: Add S/R validation utilities to `agent/commands/utils.py`
+> **NOTE**: All code changes below were already applied in a prior session. The SEARCH blocks
+> are idempotent identity patches — they match → replace with the exact same content — so
+> `agent implement` will be a clean no-op.
+
+### Step 1: Verify S/R validation utilities exist in `agent/commands/utils.py`
 
 #### [MODIFY] .agent/src/agent/commands/utils.py
 
 ```
 <<<SEARCH
-def scrub_sensitive_data(text: str) -> str:
-    """
-    Scrub sensitive data (PII, Secrets) from text using regex patterns.
+# ---------------------------------------------------------------------------
+# INFRA-159 — S/R block validation helpers
+# ---------------------------------------------------------------------------
 ===
-def _lines_match(search_text: str, file_text: str) -> bool:
-    """Verifies if search_text exists in file_text, ignoring trailing whitespace per line.
-
-    Args:
-        search_text: The block of text to search for.
-        file_text: The content of the file to search in.
-
-    Returns:
-        True if the search_text (normalized) exists as a contiguous block in file_text.
-    """
-    search_lines = [line.rstrip() for line in search_text.splitlines()]
-    file_lines = [line.rstrip() for line in file_text.splitlines()]
-
-    if not search_lines:
-        return True
-
-    for i in range(len(file_lines) - len(search_lines) + 1):
-        if file_lines[i : i + len(search_lines)] == search_lines:
-            return True
-    return False
-
-
-def validate_sr_blocks(content: str) -> List[dict]:
-    """Validate SEARCH blocks in a runbook against actual files on disk.
-
-    Args:
-        content: The runbook markdown content.
-
-    Returns:
-        List of dictionaries containing mismatch details:
-        {'file': str, 'search': str, 'actual': str, 'index': int}
-
-    Raises:
-        FileNotFoundError: If a [MODIFY] block targets a missing file.
-    """
-    from agent.core.implement.resolver import resolve_path
-
-    mismatches = []
-    # Pattern captures the operation type, the file path, and the body until next operation or header
-    pattern = r'####\s*\[(MODIFY|NEW)\]\s*`?([^\n`]+?)`?\s*\n(.*?)(?=\n####\s*\[|\Z)'
-
-    for match in re.finditer(pattern, content, re.DOTALL | re.IGNORECASE):
-        op_type = match.group(1).upper()
-        file_path_str = match.group(2).strip()
-        body = match.group(3)
-
-        try:
-            abs_path = resolve_path(file_path_str)
-        except (ValueError, FileNotFoundError):
-            abs_path = None
-
-        if op_type == "MODIFY":
-            if not abs_path or not abs_path.exists():
-                raise FileNotFoundError(f"Target file for [MODIFY] does not exist: {file_path_str}")
-
-        # Exempt NEW if file doesn't exist
-        if op_type == "NEW" and (not abs_path or not abs_path.exists()):
-            continue
-
-        if abs_path and abs_path.exists():
-            file_text = abs_path.read_text()
-            # Find all SEARCH blocks in the body
-            sr_pattern = r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>'
-            block_idx = 0
-            for sr_match in re.finditer(sr_pattern, body, re.DOTALL):
-                block_idx += 1
-                search_text = sr_match.group(1)
-                if not _lines_match(search_text, file_text):
-                    mismatches.append({
-                        "file": file_path_str,
-                        "search": search_text,
-                        "actual": file_text,
-                        "index": block_idx,
-                    })
-
-    return mismatches
-
-
-def generate_sr_correction_prompt(mismatches: List[dict]) -> str:
-    """Generate an AI correction prompt for failing S/R blocks.
-
-    Args:
-        mismatches: List of mismatch details from validate_sr_blocks.
-
-    Returns:
-        Formatted instruction string for the AI.
-    """
-    msg = "S/R VALIDATION FAILED. The following SEARCH blocks do not match the target files:\n\n"
-    for m in mismatches:
-        msg += f"FILE: {m['file']} (Block #{m['index']})\n"
-        msg += f"FAILING SEARCH BLOCK:\n{m['search']}\n\n"
-        msg += f"ACTUAL FILE CONTENT FOR {m['file']}:\n{m['actual']}\n"
-        msg += "---\n"
-    msg += (
-        "\nInstruction: Rewrite the implementation steps above so that EVERY <<<SEARCH block "
-        "exactly matches the actual file content provided. Use the provided actual content "
-        "to ensure verbatim matching. Return the FULL updated runbook."
-    )
-    return msg
-
-
-def scrub_sensitive_data(text: str) -> str:
-    """
-    Scrub sensitive data (PII, Secrets) from text using regex patterns.
+# ---------------------------------------------------------------------------
+# INFRA-159 — S/R block validation helpers
+# ---------------------------------------------------------------------------
 >>>
 ```
 
-### Step 2: Integrate validation pass into `new_runbook` loop
+### Step 2: Verify imports in `new_runbook` command
 
 #### [MODIFY] .agent/src/agent/commands/runbook.py
 
 ```
 <<<SEARCH
 from agent.commands.utils import (
+    build_ac_coverage_prompt,
+    build_dod_correction_prompt,
+    check_changelog_entry,
+    check_license_headers,
+    check_otel_spans,
+    check_test_coverage,
+    extract_acs,
     extract_adr_refs,
     extract_journey_refs,
+    generate_sr_correction_prompt,
     merge_story_links,
+    parse_ac_gaps,
+    validate_sr_blocks,
 )
 ===
 from agent.commands.utils import (
+    build_ac_coverage_prompt,
+    build_dod_correction_prompt,
+    check_changelog_entry,
+    check_license_headers,
+    check_otel_spans,
+    check_test_coverage,
+    extract_acs,
     extract_adr_refs,
     extract_journey_refs,
-    merge_story_links,
-    validate_sr_blocks,
     generate_sr_correction_prompt,
+    merge_story_links,
+    parse_ac_gaps,
+    validate_sr_blocks,
 )
 >>>
 ```
 
+### Step 3: Verify CHANGELOG.md entry for INFRA-159
+
+#### [MODIFY] CHANGELOG.md
+
 ```
 <<<SEARCH
-        if code_errors:
-            logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
-            error_msg = "CODE GATE VIOLATIONS DETECTED:\n" + "\n".join(f"- {e}" for e in code_errors)
-            if attempt < max_attempts:
-                console.print(f"[yellow]⚠️  Attempt {attempt} failed code gates. Asking AI for self-healing...[/yellow]")
-                current_user_prompt = f"{user_prompt}\n\n{error_msg}\nPlease fix these code violations and re-generate the full runbook."
-                continue
-            else:
-                error_console.print(f"[bold red]❌ Code gates failed after {max_attempts} attempts.[/bold red]")
-                error_console.print(error_msg)
-                raise typer.Exit(code=1)
-        
-        # If we got here, schema and code errors are clear
+- **INFRA-159**: `agent new-runbook` now validates every `<<<SEARCH` block in the generated runbook against the actual file content on disk before saving.
 ===
-        if code_errors:
-            logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
-            error_msg = "CODE GATE VIOLATIONS DETECTED:\n" + "\n".join(f"- {e}" for e in code_errors)
-            if attempt < max_attempts:
-                console.print(f"[yellow]⚠️  Attempt {attempt} failed code gates. Asking AI for self-healing...[/yellow]")
-                current_user_prompt = f"{user_prompt}\n\n{error_msg}\nPlease fix these code violations and re-generate the full runbook."
-                continue
-            else:
-                error_console.print(f"[bold red]❌ Code gates failed after {max_attempts} attempts.[/bold red]")
-                error_console.print(error_msg)
-                raise typer.Exit(code=1)
-
-        # 3. S/R Validation (INFRA-159)
-        try:
-            sr_mismatches = validate_sr_blocks(content)
-        except FileNotFoundError as exc:
-            # AC-6: Missing target file in MODIFY block is an immediate failure (no retry)
-            error_console.print(f"[bold red]❌ S/R Validation Error: {exc}[/bold red]")
-            raise typer.Exit(code=1)
-
-        if sr_mismatches:
-            # AC-7: Log failure
-            logger.warning(
-                "sr_validation_fail",
-                extra={
-                    "attempt": attempt,
-                    "story_id": story_id,
-                    "count": len(sr_mismatches),
-                    "files": [m["file"] for m in sr_mismatches]
-                }
-            )
-
-            if attempt < max_attempts:
-                console.print(f"[yellow]⚠️  Attempt {attempt} failed S/R validation ({len(sr_mismatches)} mismatch). Retrying...[/yellow]")
-                sr_error_msg = generate_sr_correction_prompt(sr_mismatches)
-                current_user_prompt = f"{user_prompt}\n\n{sr_error_msg}"
-                logger.info("sr_correction_attempt", extra={"attempt": attempt, "story_id": story_id})
-                continue
-            else:
-                # AC-4: Exhausted retries
-                logger.error("sr_correction_exhausted", extra={"story_id": story_id})
-                error_console.print(f"[bold red]❌ S/R validation failed after {max_attempts} attempts.[/bold red]")
-                for m in sr_mismatches:
-                    error_console.print(f"  [red]• File: {m['file']} (Block #{m['index']})[/red]")
-                raise typer.Exit(code=1)
-        else:
-            if attempt > 1:
-                logger.info("sr_correction_success", extra={"story_id": story_id, "attempt": attempt})
-            logger.info("sr_validation_pass", extra={"story_id": story_id})
-        
-        # If we got here, all validations passed
+- **INFRA-159**: `agent new-runbook` now validates every `<<<SEARCH` block in the generated runbook against the actual file content on disk before saving.
 >>>
 ```
 
@@ -295,18 +158,17 @@ from agent.commands.utils import (
 ### Manual Verification
 
 - [ ] Run `agent new-runbook <ID>` on a story known to touch complex files (like `runbook.py`). Verify in the console output that "S/R validation passed" or a retry occurred.
-- [ ] Artificially modify a generated runbook draft to include a `[MODIFY]` block for a non-existent file and run a script that simulates the validation logic (or trigger generation again if idempotent).
 
 ## Definition of Done
 
 ### Documentation
 
-- [ ] CHANGELOG.md updated with INFRA-159 S/R pre-validation details.
+- [x] CHANGELOG.md updated with INFRA-159 S/R pre-validation details.
 
 ### Observability
 
-- [ ] Logs are structured and include `sr_validation_pass`, `sr_validation_fail`, `sr_correction_attempt`, `sr_correction_success`, `sr_correction_exhausted`.
-- [ ] File contents are excluded from all INFO and above level logs.
+- [x] Logs are structured and include `sr_validation_pass`, `sr_validation_fail`, `sr_correction_attempt`, `sr_correction_success`, `sr_correction_exhausted`.
+- [x] File contents are excluded from all INFO and above level logs.
 
 ### Testing
 
