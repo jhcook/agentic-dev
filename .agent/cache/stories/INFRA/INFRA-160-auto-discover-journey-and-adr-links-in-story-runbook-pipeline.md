@@ -96,17 +96,7 @@ the relevant ones by ID, which are then automatically back-populated into the st
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py` — **[MODIFY]** build and inject JRN/ADR catalogue into `user_prompt`
-  before the generation loop
-- `agent/commands/utils.py` — **[MODIFY]** add `build_journey_catalogue(journeys_dir)` and
-  `build_adr_catalogue(adrs_dir)` helpers returning formatted strings
-- `agent/commands/tests/test_story_link_helpers.py` — **[MODIFY]** add unit tests for
-  catalogue builder helpers
-- `.agent/cache/journeys/INFRA/JRN-005-global-and-path-based-linting.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
-- `.agent/cache/journeys/INFRA/JRN-006-runbook-file-based-versioning-system-infra-006.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
-- `.agent/cache/journeys/INFRA/JRN-035-restore-silero-vad-with-webrtc-fallback.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
-- `.agent/cache/journeys/INFRA/JRN-056-full-implementation-workflow.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
-- `.agent/cache/journeys/INFRA/JRN-089-generate-runbook-with-targeted-codebase-introspection.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
+- `agent/commands/utils.py` — **[MODIFY]** add OTel tracing spans (`build_journey_catalogue`, `build_adr_catalogue`) with `journey_count` / `adr_count` span attributes, and `opentelemetry.trace` import + module-level `tracer`
 
 **Workflows affected:** `agent new-runbook` — prompt augmentation only, no change to output
 format or saving logic.

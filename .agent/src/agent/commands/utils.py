@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List, TypedDict
 
 import yaml
+from opentelemetry import trace
 from rich.console import Console
 
 from agent.core.config import config
@@ -27,6 +28,7 @@ from agent.core.utils import find_story_file, scrub_sensitive_data
 
 console = Console()
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 # Valid story states recognised by the agent workflow.
 _VALID_STATES = frozenset({
@@ -442,39 +444,43 @@ def build_journey_catalogue(journeys_dir: Path) -> tuple[str, int]:
     Returns:
         A tuple of (formatted_catalogue_string, total_count_found).
     """
-    if not journeys_dir.exists():
-        logger.debug("Journeys directory missing: %s", journeys_dir)
-        return "", 0
+    with tracer.start_as_current_span("build_journey_catalogue") as span:
+        if not journeys_dir.exists():
+            logger.debug("Journeys directory missing: %s", journeys_dir)
+            span.set_attribute("journey_count", 0)
+            return "", 0
 
-    entries: list[tuple[str, str]] = []
-    for jf in journeys_dir.rglob("*.yaml"):
-        try:
-            data = yaml.safe_load(jf.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                jid = data.get("id", jf.stem)
-                # Prefer 'title' per AC, fall back to 'name' or stem
-                title = data.get("title") or data.get("name") or jf.stem
-                entries.append((str(jid), str(title)))
-        except Exception:  # noqa: BLE001
-            continue
+        entries: list[tuple[str, str]] = []
+        for jf in journeys_dir.rglob("*.yaml"):
+            try:
+                data = yaml.safe_load(jf.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    jid = data.get("id", jf.stem)
+                    # Prefer 'title' per AC, fall back to 'name' or stem
+                    title = data.get("title") or data.get("name") or jf.stem
+                    entries.append((str(jid), str(title)))
+            except Exception:  # noqa: BLE001
+                continue
 
-    if not entries:
-        return "", 0
+        if not entries:
+            span.set_attribute("journey_count", 0)
+            return "", 0
 
-    total_count = len(entries)
+        total_count = len(entries)
+        span.set_attribute("journey_count", total_count)
 
-    # Sort by numeric ID descending: JRN-089 -> 89
-    def sort_key(e: tuple[str, str]) -> int:
-        match = re.search(r"(\d+)", e[0])
-        return int(match.group(1)) if match else 0
+        # Sort by numeric ID descending: JRN-089 -> 89
+        def sort_key(e: tuple[str, str]) -> int:
+            match = re.search(r"(\d+)", e[0])
+            return int(match.group(1)) if match else 0
 
-    entries.sort(key=sort_key, reverse=True)
-    top_30 = entries[:30]
+        entries.sort(key=sort_key, reverse=True)
+        top_30 = entries[:30]
 
-    lines = ["Available Journeys:"]
-    for jid, title in top_30:
-        lines.append(f"- {jid}: {title}")
-    return "\n".join(lines), total_count
+        lines = ["Available Journeys:"]
+        for jid, title in top_30:
+            lines.append(f"- {jid}: {title}")
+        return "\n".join(lines), total_count
 
 
 def build_adr_catalogue(adrs_dir: Path) -> tuple[str, int]:
@@ -490,40 +496,44 @@ def build_adr_catalogue(adrs_dir: Path) -> tuple[str, int]:
     Returns:
         A tuple of (formatted_catalogue_string, total_count_found).
     """
-    if not adrs_dir.exists():
-        logger.debug("ADRs directory missing: %s", adrs_dir)
-        return "", 0
+    with tracer.start_as_current_span("build_adr_catalogue") as span:
+        if not adrs_dir.exists():
+            logger.debug("ADRs directory missing: %s", adrs_dir)
+            span.set_attribute("adr_count", 0)
+            return "", 0
 
-    entries: list[tuple[str, str]] = []
-    for af in adrs_dir.glob("ADR-*.md"):
-        try:
-            content = af.read_text(encoding="utf-8")
-            h1_match = re.search(r"^#\s+(.+)", content, re.MULTILINE)
-            title = h1_match.group(1).strip() if h1_match else af.stem
-            # Extract ID from filename (e.g. ADR-041)
-            id_match = re.match(r"(ADR-\d+)", af.name)
-            aid = id_match.group(1) if id_match else af.stem
-            entries.append((str(aid), str(title)))
-        except Exception:  # noqa: BLE001
-            continue
+        entries: list[tuple[str, str]] = []
+        for af in adrs_dir.glob("ADR-*.md"):
+            try:
+                content = af.read_text(encoding="utf-8")
+                h1_match = re.search(r"^#\s+(.+)", content, re.MULTILINE)
+                title = h1_match.group(1).strip() if h1_match else af.stem
+                # Extract ID from filename (e.g. ADR-041)
+                id_match = re.match(r"(ADR-\d+)", af.name)
+                aid = id_match.group(1) if id_match else af.stem
+                entries.append((str(aid), str(title)))
+            except Exception:  # noqa: BLE001
+                continue
 
-    if not entries:
-        return "", 0
+        if not entries:
+            span.set_attribute("adr_count", 0)
+            return "", 0
 
-    total_count = len(entries)
+        total_count = len(entries)
+        span.set_attribute("adr_count", total_count)
 
-    # Sort by numeric ID descending
-    def sort_key(e: tuple[str, str]) -> int:
-        match = re.search(r"(\d+)", e[0])
-        return int(match.group(1)) if match else 0
+        # Sort by numeric ID descending
+        def sort_key(e: tuple[str, str]) -> int:
+            match = re.search(r"(\d+)", e[0])
+            return int(match.group(1)) if match else 0
 
-    entries.sort(key=sort_key, reverse=True)
-    top_30 = entries[:30]
+        entries.sort(key=sort_key, reverse=True)
+        top_30 = entries[:30]
 
-    lines = ["Available ADRs:"]
-    for aid, title in top_30:
-        lines.append(f"- {aid}: {title}")
-    return "\n".join(lines), total_count
+        lines = ["Available ADRs:"]
+        for aid, title in top_30:
+            lines.append(f"- {aid}: {title}")
+        return "\n".join(lines), total_count
 
 
 # ---------------------------------------------------------------------------
