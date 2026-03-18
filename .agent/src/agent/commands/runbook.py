@@ -33,7 +33,9 @@ from agent.core.utils import (
 )
 from agent.commands.utils import (
     build_ac_coverage_prompt,
+    build_adr_catalogue,
     build_dod_correction_prompt,
+    build_journey_catalogue,
     check_changelog_entry,
     check_license_headers,
     check_otel_spans,
@@ -272,6 +274,28 @@ def new_runbook(
     if len(rules_content) < len(rules_full) * 0.5:
         console.print(f"[dim]ℹ️  Rule Diet active: Prompt reduced by {100 - (len(rules_content)/len(rules_full)*100):.1f}%[/dim]")
 
+    # INFRA-160: Catalogue Injection
+    j_catalogue, j_count = build_journey_catalogue(config.journeys_dir)
+    a_catalogue, a_count = build_adr_catalogue(config.adrs_dir)
+    
+    # AC-7: Observability
+    logger.info("catalogue_injected", extra={
+        "story_id": story_id,
+        "journey_count": j_count,
+        "adr_count": a_count
+    })
+
+    # AC-3: Story links pre-seeded (Extract from markdown headers)
+    preseeded_adrs = extract_adr_refs(story_content)
+    preseeded_journeys = extract_journey_refs(story_content)
+    preseeded_block = ""
+    if preseeded_adrs or preseeded_journeys:
+        preseeded_block = "PRE-SEEDED STORY LINKS (Preserve these unless explicitly redundant):\n"
+        if preseeded_adrs:
+            preseeded_block += f"- ADRs: {', '.join(sorted(preseeded_adrs))}\n"
+        if preseeded_journeys:
+            preseeded_block += f"- Journeys: {', '.join(sorted(preseeded_journeys))}\n"
+
     # 4. Prompt
     # Load Template
     template_path = config.templates_dir / "runbook-template.md"
@@ -316,8 +340,10 @@ INPUTS:
 2. Governance Rules (Compliance constraints)
 3. Role Instructions (Per-role detailed guidance)
 4. ADRs (Codified architectural decisions)
-5. Source File Tree (Repository structure)
-6. Source Code Outlines (Imports, class/function signatures)
+5. Available Journeys Catalogue (Catalogue of all defined user workflows)
+6. Available ADRs Catalogue (Catalogue of all architectural decisions)
+7. Source File Tree (Repository structure)
+8. Source Code Outlines (Imports, class/function signatures)
 
 TEMPLATE STRUCTURE (Found in {template_path.name}):
 {template_content}
@@ -333,6 +359,8 @@ Update '## Targeted Refactors & Cleanups (INFRA-043)' with any relevant cleanups
     user_prompt = f"""STORY CONTENT:
 {story_content}
 
+{preseeded_block}
+
 GOVERNANCE RULES:
 {rules_content}
 
@@ -342,8 +370,9 @@ DETAILED ROLE INSTRUCTIONS:
 ARCHITECTURAL DECISIONS (ADRs):
 {adrs_content}
 
-EXISTING USER JOURNEYS:
-{_load_journey_context()}
+{j_catalogue if j_catalogue else "No journeys defined."}
+
+{a_catalogue if a_catalogue else "No ADRs defined."}
 
 SOURCE FILE TREE:
 {source_tree if source_tree else "(No source directory found)"}

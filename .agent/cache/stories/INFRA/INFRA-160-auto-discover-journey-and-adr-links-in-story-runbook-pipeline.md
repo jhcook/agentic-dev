@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -17,6 +17,7 @@ journey gate. The developer must manually intervene — contradicting the promis
 is fully self-sufficient.
 
 The correct data flow is:
+
 ```
 agent new-runbook
   → AI prompt includes JRN/ADR catalogue
@@ -79,11 +80,18 @@ the relevant ones by ID, which are then automatically back-populated into the st
 
 - ADR-005: AI-Driven Governance Preflight
 - ADR-040: Agentic Tool-Calling Loop Architecture
+- ADR-006: ADR-006: Encrypted Secret Management for Agent CLI
+- ADR-041: ADR-041: Module Decomposition Standards
 
 ## Linked Journeys
 
 - JRN-056: Full Implementation Workflow
 - JRN-089: Generate Runbook with Targeted Codebase Introspection
+- JRN-005: JRN-005-global-and-path-based-linting
+- JRN-006: JRN-006-runbook-file-based-versioning-system-infra-006
+- JRN-035: JRN-035-restore-silero-vad-with-webrtc-fallback
+- JRN-056: JRN-056-full-implementation-workflow
+- JRN-089: JRN-089-generate-runbook-with-targeted-codebase-introspection
 
 ## Impact Analysis Summary
 
@@ -94,6 +102,11 @@ the relevant ones by ID, which are then automatically back-populated into the st
   `build_adr_catalogue(adrs_dir)` helpers returning formatted strings
 - `agent/commands/tests/test_story_link_helpers.py` — **[MODIFY]** add unit tests for
   catalogue builder helpers
+- `.agent/cache/journeys/INFRA/JRN-005-global-and-path-based-linting.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
+- `.agent/cache/journeys/INFRA/JRN-006-runbook-file-based-versioning-system-infra-006.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
+- `.agent/cache/journeys/INFRA/JRN-035-restore-silero-vad-with-webrtc-fallback.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
+- `.agent/cache/journeys/INFRA/JRN-056-full-implementation-workflow.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
+- `.agent/cache/journeys/INFRA/JRN-089-generate-runbook-with-targeted-codebase-introspection.yaml` — **[MODIFIED]** back-populated with linked journeys/ADRs by the new catalogue injection feature
 
 **Workflows affected:** `agent new-runbook` — prompt augmentation only, no change to output
 format or saving logic.
