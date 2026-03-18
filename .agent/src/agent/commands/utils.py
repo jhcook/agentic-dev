@@ -17,12 +17,13 @@
 import logging
 import re
 from pathlib import Path
+from typing import List
 
 import yaml
 from rich.console import Console
 
 from agent.core.config import config
-from agent.core.utils import find_story_file
+from agent.core.utils import find_story_file, scrub_sensitive_data
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -263,3 +264,128 @@ def merge_story_links(
         logger.warning("merge_story_links: cannot write %s: %s", story_file, exc)
         if tmp.exists():
             tmp.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# INFRA-159 — S/R block validation helpers
+# ---------------------------------------------------------------------------
+
+def _lines_match(search_text: str, file_text: str) -> bool:
+    """Return True if *search_text* exists as a contiguous block in *file_text*.
+
+    Comparison is done line-by-line with trailing whitespace stripped per line
+    to absorb minor AI formatting variance.
+
+    Args:
+        search_text: The block of text to look for (SEARCH block content).
+        file_text: The full content of the target file on disk.
+
+    Returns:
+        True if every line of *search_text* appears contiguously in *file_text*.
+    """
+    search_lines = [line.rstrip() for line in search_text.splitlines()]
+    file_lines = [line.rstrip() for line in file_text.splitlines()]
+
+    if not search_lines:
+        return True
+
+    n = len(search_lines)
+    for i in range(len(file_lines) - n + 1):
+        if file_lines[i : i + n] == search_lines:
+            return True
+    return False
+
+
+def validate_sr_blocks(content: str) -> List[dict]:
+    """Validate every SEARCH block in a runbook against the target file on disk.
+
+    Args:
+        content: Full runbook markdown content.
+
+    Returns:
+        List of mismatch dicts — each has keys ``file``, ``search``, ``actual``,
+        and ``index`` (1-based block counter within the operation header).
+
+    Raises:
+        FileNotFoundError: If a ``[MODIFY]`` block targets a file that does not
+            exist on disk. ``[NEW]`` blocks targeting non-existent files are
+            silently skipped (they will be created by ``agent implement``).
+    """
+    # Deferred import to avoid circular dependency at module load time.
+    from agent.core.implement.resolver import resolve_path  # noqa: PLC0415
+
+    mismatches: List[dict] = []
+    op_pattern = re.compile(
+        r"####\s*\[(MODIFY|NEW)\]\s*`?([^\n`]+?)`?\s*\n(.*?)(?=\n####\s*\[|\Z)",
+        re.DOTALL | re.IGNORECASE,
+    )
+    sr_pattern = re.compile(r"<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>", re.DOTALL)
+
+    for op_match in op_pattern.finditer(content):
+        op_type = op_match.group(1).upper()
+        file_path_str = op_match.group(2).strip()
+        body = op_match.group(3)
+
+        abs_path: Path | None = resolve_path(file_path_str)
+
+        if op_type == "MODIFY":
+            if abs_path is None or not abs_path.exists():
+                raise FileNotFoundError(
+                    f"[MODIFY] target does not exist on disk: {file_path_str}"
+                )
+
+        # [NEW] targeting a file that doesn't exist yet — nothing to validate.
+        if op_type == "NEW" and (abs_path is None or not abs_path.exists()):
+            continue
+
+        if abs_path is not None and abs_path.exists():
+            try:
+                file_text = abs_path.read_text(encoding="utf-8")
+            except OSError:
+                continue  # unreadable — skip silently
+
+            for idx, sr_match in enumerate(sr_pattern.finditer(body), start=1):
+                search_text = sr_match.group(1)
+                if not _lines_match(search_text, file_text):
+                    mismatches.append(
+                        {
+                            "file": file_path_str,
+                            "search": search_text,
+                            "actual": file_text,
+                            "index": idx,
+                        }
+                    )
+
+    return mismatches
+
+
+def generate_sr_correction_prompt(mismatches: List[dict]) -> str:
+    """Build an AI correction prompt for failing S/R blocks.
+
+    File content is scrubbed with :func:`scrub_sensitive_data` before being
+    embedded in the prompt (security requirement — no PII/secrets in AI calls).
+
+    Args:
+        mismatches: List of mismatch dicts returned by :func:`validate_sr_blocks`.
+
+    Returns:
+        Formatted instruction string ready to append to the AI user prompt.
+    """
+    lines = [
+        "S/R VALIDATION FAILED. The following SEARCH blocks do not match the "
+        "target files:\n"
+    ]
+    for m in mismatches:
+        lines.append(f"FILE: {m['file']} (Block #{m['index']})")
+        lines.append(f"FAILING SEARCH BLOCK:\n{m['search']}\n")
+        lines.append(
+            f"ACTUAL FILE CONTENT FOR {m['file']}:\n"
+            f"{scrub_sensitive_data(m['actual'])}"
+        )
+        lines.append("---")
+    lines.append(
+        "\nInstruction: Rewrite the implementation steps so that EVERY "
+        "<<<SEARCH block exactly matches the actual file content provided. "
+        "Use the provided actual content verbatim. Return the FULL updated runbook."
+    )
+    return "\n".join(lines)

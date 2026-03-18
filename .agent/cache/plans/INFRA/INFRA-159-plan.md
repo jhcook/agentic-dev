@@ -63,3 +63,6 @@ Finalize the feature with structured logging, atomicity guarantees, and a bypass
     - [ ] Exhausted retries result in exit `1` and no file on disk.
     - [ ] Missing target file results in immediate exit `1`.
 - [ ] Verify performance: ensure local matching completes in < 100ms per block.
+## Copyright
+
+Copyright 2026 Justin Cook

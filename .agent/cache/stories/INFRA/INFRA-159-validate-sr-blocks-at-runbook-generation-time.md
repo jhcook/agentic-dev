@@ -2,7 +2,7 @@
 
 ## State
 
-DONE
+COMMITTED
 
 ## Problem Statement
 
@@ -59,11 +59,11 @@ As a **Platform Developer**, I want **`agent new-runbook` to verify that every `
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py` — **[MODIFY]** add S/R validation pass between AI generation and file write
-- `agent/core/implement/parser.py` — **[MODIFY]** expose `parse_code_blocks` or a new `parse_sr_blocks()` function for use in the validation pass (currently only used in `implement.py`)
-- `agent/commands/utils.py` — **[MODIFY]** add `validate_sr_blocks(runbook_content, base_dir)` helper
+- `agent/commands/runbook.py` — **[MODIFY]** import `validate_sr_blocks` and `generate_sr_correction_prompt`; replace TODO stub with full self-healing S/R validation loop (AC-1, AC-2, AC-4, AC-6, AC-7)
+- `agent/commands/utils.py` — **[MODIFY]** add `_lines_match`, `validate_sr_blocks`, and `generate_sr_correction_prompt` helpers; add `List` import and `scrub_sensitive_data` import from `agent.core.utils`
+- `CHANGELOG.md` — **[MODIFY]** add INFRA-159 S/R pre-validation entry under Unreleased
 
-**Workflows affected:** `agent new-runbook` — validation pass added between AI generation and file save. No change to `agent implement` pipeline.
+**Workflows affected:** `agent new-runbook` — S/R validation gate inserted between AI generation and file save. When mismatches are found, a self-healing re-prompt is issued up to `max_attempts - 1` times before hard failure.
 
 **Risks identified:**
 - Correction re-prompting adds latency (one extra AI call per retry) — bounded by the 2-retry limit.
