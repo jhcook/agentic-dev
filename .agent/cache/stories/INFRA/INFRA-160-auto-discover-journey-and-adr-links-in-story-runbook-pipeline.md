@@ -77,7 +77,8 @@ the relevant ones by ID, which are then automatically back-populated into the st
 
 ## Linked ADRs
 
-- None
+- ADR-005: AI-Driven Governance Preflight
+- ADR-040: Agentic Tool-Calling Loop Architecture
 
 ## Linked Journeys
 

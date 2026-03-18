@@ -47,7 +47,9 @@ As a **Platform Developer**, I want **`agent new-runbook` to verify that every `
 
 ## Linked ADRs
 
-- None
+- ADR-005: AI-Driven Governance Preflight
+- ADR-022: Interactive Fixer Pattern
+- ADR-040: Agentic Tool-Calling Loop Architecture
 
 ## Linked Journeys
 
