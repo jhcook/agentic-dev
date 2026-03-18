@@ -22,6 +22,7 @@ dependencies = [
     "modelcontextprotocol>=0.1.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
     "anyio>=4.0.0",
     "supabase>=2.0.0",
     "typer>=0.12.0",
