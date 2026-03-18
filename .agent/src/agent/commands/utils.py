@@ -455,6 +455,64 @@ def extract_acs(story_content: str) -> List[str]:
     return acs
 
 
+def build_ac_coverage_prompt(acs: List[str], runbook_content: str) -> str:
+    """Build the secondary AI prompt for AC-1 coverage check.
+
+    Asks the AI to identify which Acceptance Criteria from the story are NOT
+    addressed by any step in the runbook.  The response format is strictly
+    ``ALL_PASS`` (all covered) or one ``AC-N: <reason>`` line per gap.
+
+    Args:
+        acs: List of AC strings extracted from the parent story.
+        runbook_content: Raw runbook markdown (implementation steps only).
+
+    Returns:
+        Prompt string to send to the AI for AC coverage analysis.
+    """
+    numbered = "\n".join(f"AC-{i + 1}: {ac}" for i, ac in enumerate(acs))
+    # Trim runbook to the Implementation Steps section to keep prompt compact
+    import re as _re
+    impl_match = _re.search(
+        r"#+\s*Implementation Steps?\s*\n(.*?)(?=\n#+|\Z)",
+        runbook_content,
+        _re.DOTALL | _re.IGNORECASE,
+    )
+    steps_text = impl_match.group(1).strip() if impl_match else runbook_content[:4000]
+
+    return (
+        "You are a strict QA reviewer. Given the Acceptance Criteria (ACs) for a "
+        "user story and the Implementation Steps in a runbook, identify which ACs "
+        "are NOT addressed by any step in the runbook.\n\n"
+        f"## Acceptance Criteria\n{numbered}\n\n"
+        f"## Runbook Implementation Steps\n{steps_text}\n\n"
+        "## Instructions\n"
+        "Return ONLY one of:\n"
+        "  • The literal string `ALL_PASS` if every AC is addressed.\n"
+        "  • One line per unaddressed AC in the format `AC-N: <brief reason>`.\n"
+        "Do NOT include any prose, preamble, or explanation outside this format."
+    )
+
+
+def parse_ac_gaps(ai_response: str) -> List[str]:
+    """Parse the AI response from an AC coverage check.
+
+    Args:
+        ai_response: Raw string returned by the AI for AC coverage analysis.
+
+    Returns:
+        List of gap IDs (e.g. ``['AC-1', 'AC-3']``).  Empty list if all pass.
+    """
+    import re as _re
+
+    text = ai_response.strip()
+    if not text or "ALL_PASS" in text:
+        return []
+    gaps: List[str] = []
+    for match in _re.finditer(r"^(AC-\d+):", text, _re.MULTILINE):
+        gaps.append(match.group(1))
+    return gaps
+
+
 def check_test_coverage(runbook_content: str) -> List[str]:
     """Check that the runbook includes at least one test-file step.
 

@@ -32,6 +32,7 @@ from agent.core.utils import (
     get_copyright_header,
 )
 from agent.commands.utils import (
+    build_ac_coverage_prompt,
     build_dod_correction_prompt,
     check_changelog_entry,
     check_license_headers,
@@ -42,6 +43,7 @@ from agent.commands.utils import (
     extract_journey_refs,
     generate_sr_correction_prompt,
     merge_story_links,
+    parse_ac_gaps,
     validate_sr_blocks,
 )
 from agent.core.context import context_loader
@@ -485,15 +487,36 @@ Generate the runbook now.
             dod_span.set_attribute("story_id", story_id)
             dod_span.set_attribute("attempt", attempt)
             acs = extract_acs(story_content)
-            # Evaluate each check independently so we can assign correct gap IDs
+
+            # AC-1: Secondary AI call — AC coverage check (only when story exists)
+            _gap_4a: List[str] = []
+            if acs:  # story file found and has ACs (AC-8: skip gracefully otherwise)
+                _ac_prompt = build_ac_coverage_prompt(acs, content)
+                _ac_response = ai_service.complete(
+                    system_prompt=(
+                        "You are a QA reviewer. Respond ONLY with ALL_PASS or "
+                        "AC-N: <reason> lines. No prose."
+                    ),
+                    user_prompt=scrub_sensitive_data(_ac_prompt),
+                )
+                _ac_gap_ids = parse_ac_gaps(_ac_response or "")
+                if _ac_gap_ids:
+                    _gap_4a = [
+                        f"AC coverage gap: {gid} is not addressed by any runbook step"
+                        for gid in _ac_gap_ids
+                    ]
+
+            # AC-2 through AC-5: Deterministic checks
             _gap_4b = check_test_coverage(content)
             _gap_4c = check_changelog_entry(content)
             _gap_4d = check_license_headers(content)
             _gap_4e = check_otel_spans(content, story_content)
-            dod_gaps: List[str] = [*_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e]
-            dod_span.set_attribute("gap_count", len(dod_gaps))
-            # Per AC-9: gaps attribute is comma-joined IDs (4b–4e)
+            dod_gaps: List[str] = [*_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e]
+
+            # Per AC-9: gaps attribute is comma-joined IDs (4a–4e)
             _gap_ids_list: List[str] = []
+            if _gap_4a:
+                _gap_ids_list.append("4a")
             if _gap_4b:
                 _gap_ids_list.append("4b")
             if _gap_4c:
@@ -502,8 +525,8 @@ Generate the runbook now.
                 _gap_ids_list.append("4d")
             if _gap_4e:
                 _gap_ids_list.append("4e")
+            dod_span.set_attribute("gap_count", len(dod_gaps))
             dod_span.set_attribute("gaps", ",".join(_gap_ids_list))
-
 
         if dod_gaps:
             logger.warning(
@@ -538,8 +561,16 @@ Generate the runbook now.
                     error_console.print(f"  [red]• {gap}[/red]")
                 raise typer.Exit(code=1)
         else:
-            dod_span.set_attribute("outcome", "pass")
-            logger.info("dod_compliance_pass", extra={"story_id": story_id})
+            # outcome = 'corrected' if gate passed after one or more retries (AC-9)
+            _outcome = "corrected" if attempt > 1 else "pass"
+            dod_span.set_attribute("outcome", _outcome)
+            if _outcome == "corrected":
+                logger.info(
+                    "dod_compliance_corrected",
+                    extra={"story_id": story_id, "attempt": attempt},
+                )
+            else:
+                logger.info("dod_compliance_pass", extra={"story_id": story_id})
 
 
         # All validations passed — proceed

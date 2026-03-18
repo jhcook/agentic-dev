@@ -19,12 +19,14 @@ check_license_headers, check_otel_spans, build_dod_correction_prompt.
 import pytest
 
 from agent.commands.utils import (
+    build_ac_coverage_prompt,
     build_dod_correction_prompt,
     check_changelog_entry,
     check_license_headers,
     check_otel_spans,
     check_test_coverage,
     extract_acs,
+    parse_ac_gaps,
 )
 
 # ---------------------------------------------------------------------------
@@ -230,3 +232,69 @@ class TestBuildDodCorrectionPrompt:
         """Should include the regeneration instruction."""
         prompt = build_dod_correction_prompt(["gap"], "", [])
         assert "Regenerate" in prompt or "regenerate" in prompt
+
+
+# ---------------------------------------------------------------------------
+# build_ac_coverage_prompt
+# ---------------------------------------------------------------------------
+
+class TestBuildAcCoveragePrompt:
+    """Tests for build_ac_coverage_prompt()."""
+
+    def test_contains_numbered_acs(self) -> None:
+        """Should include numbered AC lines in the prompt."""
+        acs = ["Implement the gate", "Add OTel spans"]
+        prompt = build_ac_coverage_prompt(acs, "### Implementation Steps\nStep 1.\n")
+        assert "AC-1: Implement the gate" in prompt
+        assert "AC-2: Add OTel spans" in prompt
+
+    def test_contains_all_pass_instruction(self) -> None:
+        """Prompt should instruct AI to return ALL_PASS when all ACs covered."""
+        acs = ["Implement the gate"]
+        prompt = build_ac_coverage_prompt(acs, "")
+        assert "ALL_PASS" in prompt
+
+    def test_contains_format_instruction(self) -> None:
+        """Prompt should specify the AC-N: <reason> response format."""
+        acs = ["Implement the gate"]
+        prompt = build_ac_coverage_prompt(acs, "")
+        assert "AC-N:" in prompt or "AC-1:" in prompt
+
+    def test_empty_acs_produces_prompt(self) -> None:
+        """Should not raise when called with an empty ACs list."""
+        prompt = build_ac_coverage_prompt([], "No steps.")
+        assert isinstance(prompt, str)
+
+
+# ---------------------------------------------------------------------------
+# parse_ac_gaps
+# ---------------------------------------------------------------------------
+
+class TestParseAcGaps:
+    """Tests for parse_ac_gaps()."""
+
+    def test_all_pass_returns_empty(self) -> None:
+        """ALL_PASS response should return an empty list."""
+        assert parse_ac_gaps("ALL_PASS") == []
+
+    def test_empty_response_returns_empty(self) -> None:
+        """Empty / whitespace response should return an empty list."""
+        assert parse_ac_gaps("") == []
+        assert parse_ac_gaps("   ") == []
+
+    def test_single_gap_parsed(self) -> None:
+        """Single AC-N: line should be parsed correctly."""
+        gaps = parse_ac_gaps("AC-3: No test step found in runbook")
+        assert gaps == ["AC-3"]
+
+    def test_multiple_gaps_parsed(self) -> None:
+        """Multiple AC-N: lines should all be returned."""
+        response = "AC-1: Missing OTel span\nAC-4: No CHANGELOG step"
+        gaps = parse_ac_gaps(response)
+        assert "AC-1" in gaps
+        assert "AC-4" in gaps
+        assert len(gaps) == 2
+
+    def test_prose_with_all_pass_returns_empty(self) -> None:
+        """ALL_PASS anywhere in the response should short-circuit to empty."""
+        assert parse_ac_gaps("Looks good. ALL_PASS") == []
