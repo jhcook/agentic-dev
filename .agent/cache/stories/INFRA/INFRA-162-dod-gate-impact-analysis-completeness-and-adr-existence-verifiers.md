@@ -40,10 +40,11 @@ As an **Infrastructure Engineer**, I want **deterministic verifiers for Impact A
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py` — **[MODIFY]** Wire `_gap_4f` and `_gap_4g` into Gate 4 `dod_gaps` list.
-- `agent/core/implement/guards.py` — **[MODIFY]** Implement `check_impact_analysis_completeness` and `check_adr_refs` verifier functions.
-- `agent/commands/tests/test_dod_verifiers.py` — **[NEW]** Unit tests for both verifiers covering happy path, missing paths, hallucinated ADRs, and empty/missing inputs.
+- `.agent/src/agent/commands/runbook.py` — **[MODIFY]** Wire `_gap_4f` and `_gap_4g` into Gate 4 `dod_gaps` list.
+- `.agent/src/agent/core/implement/guards.py` — **[MODIFY]** Implement `check_impact_analysis_completeness`, `check_adr_refs`, and `check_op_type_vs_filesystem` verifier functions; fix `check_imports` pyproject.toml resolution and namespace package handling.
+- `.agent/src/agent/core/implement/tests/test_guards.py` — **[NEW]** Unit tests for all verifiers covering happy path, missing paths, hallucinated ADRs, op-type mismatches, and empty/missing inputs.
 - `CHANGELOG.md` — **[MODIFY]** Document new verifiers.
+
 
 **Workflows affected:**
 - DoD Compliance Gate (Gate 4)
