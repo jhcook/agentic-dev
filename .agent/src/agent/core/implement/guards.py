@@ -389,7 +389,113 @@ def check_adr_refs(runbook_content: str, adr_dir: Path) -> List[str]:
         ]
 
 
+def check_op_type_vs_filesystem(runbook_content: str, repo_root: Path) -> List[str]:
+    """Verify that [MODIFY] and [DELETE] operations target files that exist on disk.
+
+    Catches AI-generated runbooks that use [MODIFY] on files that do not yet
+    exist (which should be [NEW]) before they reach the apply-time
+    ``sr_modify_missing`` autohealer. This prevents free-pass conversions from
+    consuming retry budget and surfaces the mismatch as an actionable gate error.
+
+    Args:
+        runbook_content: The full content of the generated runbook.
+        repo_root: Absolute path to the repository root used to resolve
+            repo-relative file paths from the runbook headers.
+
+    Returns:
+        List of error messages for each mismatched operation.
+    """
+    import re as _re
+
+    with _tracer.start_as_current_span("guards.check_op_type_vs_filesystem") as span:
+        _EXEMPT_SUFFIXES = ("CHANGELOG.md",)
+        _EXEMPT_PREFIXES = (".agent/cache/",)
+
+        ops = _re.findall(
+            r"####\s*\[(MODIFY|DELETE)\]\s*([^ \n`]+)",
+            runbook_content,
+        )
+
+        errors: List[str] = []
+        checked = 0
+        for op, raw_path in ops:
+            path = raw_path.strip()
+            if any(path.endswith(s) for s in _EXEMPT_SUFFIXES):
+                continue
+            if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
+                continue
+            resolved = repo_root / path
+            if not resolved.exists():
+                errors.append(
+                    f"Op-type mismatch: `{path}` uses [{op}] but the file does not "
+                    f"exist on disk — change to [NEW] and provide a full code block."
+                )
+            checked += 1
+
+        span.set_attribute("paths_checked", checked)
+        span.set_attribute("mismatch_count", len(errors))
+        return errors
+
+
+
+def check_stub_implementations(runbook_content: str) -> List[str]:
+    """Detect placeholder / stub implementations in AI-generated code blocks.
+
+    Catches patterns that indicate the AI left an incomplete implementation:
+    - ``pass`` as the sole statement in a function or method body
+    - ``raise NotImplementedError``
+    - ``# TODO``, ``# FIXME``, ``# HACK`` comments
+    - Common stub phrases: "implementation here", "logic here",
+      "orchestrate … here", "…goes here", "left as an exercise", etc.
+
+    Only inspects the *content* of fenced code blocks inside the runbook
+    (i.e. what will actually be written to disk) — not prose sections.
+
+    Returns:
+        List of descriptive error strings, one per stub pattern found.
+    """
+    import re as _re
+
+    with _tracer.start_as_current_span("guards.check_stub_implementations") as span:
+        # Extract fenced code blocks (``` … ```)
+        code_blocks = _re.findall(r"```(?:[a-z]*)?\n(.*?)```", runbook_content, _re.DOTALL)
+
+        # Patterns that indicate an incomplete implementation
+        _STUB_PATTERNS: List[tuple] = [
+            (_re.compile(r"^\s*pass\s*$", _re.MULTILINE), "bare `pass` statement"),
+            (_re.compile(r"raise\s+NotImplementedError", _re.IGNORECASE), "`raise NotImplementedError`"),
+            (_re.compile(r"#\s*(TODO|FIXME|HACK)\b", _re.IGNORECASE), "TODO/FIXME/HACK comment"),
+            (
+                _re.compile(
+                    r"#.*(?:implementation|logic|orchestrat|goes here|left as an exercise|add here|insert here)",
+                    _re.IGNORECASE,
+                ),
+                "stub comment placeholder",
+            ),
+            (_re.compile(r"\.{3}\s*#", _re.IGNORECASE), "ellipsis stub (``...  #``)"),
+        ]
+
+        errors: List[str] = []
+        for block in code_blocks:
+            for pattern, label in _STUB_PATTERNS:
+                if pattern.search(block):
+                    # Surface a one-sentence error per unique label to keep the
+                    # correction prompt concise.
+                    msg = (
+                        f"Stub detected ({label}) — the code block contains an incomplete "
+                        f"implementation. Replace every placeholder with a real, working "
+                        f"implementation before submitting the runbook."
+                    )
+                    if msg not in errors:
+                        errors.append(msg)
+
+        span.set_attribute("blocks_checked", len(code_blocks))
+        span.set_attribute("stub_count", len(errors))
+        return errors
+
+
 def check_imports(filepath: str, content: str) -> ValidationResult:
+
     """Validate imports against project dependencies.
 
     Uses ``start_as_current_span`` so this span appears as a child of
@@ -431,8 +537,13 @@ def check_imports(filepath: str, content: str) -> ValidationResult:
             allowed.update(sys.stdlib_module_names)
 
         # Add dependencies from pyproject.toml using robust TOML parsing (no fragile regex)
-        pyproject_path = resolve_repo_path("pyproject.toml")
-        if pyproject_path.exists():
+        # Try multiple candidate locations: repo root first, then .agent/ subdirectory.
+        _pyproject_candidates = [
+            resolve_repo_path("pyproject.toml"),
+            resolve_repo_path(".agent/pyproject.toml"),
+        ]
+        pyproject_path = next((p for p in _pyproject_candidates if p.exists()), None)
+        if pyproject_path:
             try:
                 try:
                     import tomllib  # Python 3.11+
@@ -447,10 +558,20 @@ def check_imports(filepath: str, content: str) -> ValidationResult:
                     toml_data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
                 )
                 for dep in raw_deps:
-                    m = _re.match(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)', str(dep).strip())
+                    # Strip extras (e.g. pkg[extra] -> pkg)
+                    base_dep = _re.split(r'[;\[>=<]', str(dep))[0].strip()
+                    m = _re.match(r'^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)', base_dep)
                     if m:
+                        pkg_name = m.group(1)
                         # Normalise hyphens/dots to underscores (PEP 503)
-                        allowed.add(m.group(1).replace("-", "_").replace(".", "_").lower())
+                        normalised = pkg_name.replace("-", "_").replace(".", "_").lower()
+                        allowed.add(normalised)
+                        
+                        # Handle known hyphenated namespace mappings
+                        # e.g. opentelemetry-api -> opentelemetry
+                        if "-" in pkg_name:
+                            top_level = pkg_name.split("-")[0].lower()
+                            allowed.add(top_level)
             except Exception as exc:
                 logger.warning("Failed to parse pyproject.toml for dependency check: %s", exc)
 

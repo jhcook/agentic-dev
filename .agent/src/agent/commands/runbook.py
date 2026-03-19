@@ -53,6 +53,7 @@ from agent.core.implement.guards import (
     validate_code_block,
     check_impact_analysis_completeness,
     check_adr_refs,
+    check_stub_implementations,
 )
 from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import parse_code_blocks
@@ -411,10 +412,23 @@ Generate the runbook now.
     max_attempts = 3
     attempt = 0
     content = ""
-    current_user_prompt = user_prompt
     # Track files the AI keeps trying to [MODIFY] that don't exist yet.
     # Injected back into the prompt so the AI learns from the first attempt.
     known_new_files: set = set()
+
+    # Pre-populate from the story Impact Analysis [NEW] markers so the AI
+    # starts with this constraint on attempt 1 rather than after failing.
+    _ia_new = re.findall(
+        r"-\s*`([^`]+)`\s*[—-]\s*\*\*\[NEW\]\*\*",
+        story_content,
+    )
+    known_new_files.update(_ia_new)
+
+    new_files_notice = (
+        "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
+        + "\n".join(f"  - {f}" for f in sorted(known_new_files))
+    ) if known_new_files else ""
+    current_user_prompt = user_prompt + new_files_notice
 
     while attempt < max_attempts:
         attempt += 1
@@ -469,6 +483,7 @@ Generate the runbook now.
             )
 
         # 3. S/R Validation Gate (INFRA-159 + autohealing pre-pass)
+
         with tracer.start_as_current_span("sr_validation_gate") as sr_span:
             sr_span.set_attribute("story_id", story_id)
             sr_span.set_attribute("attempt", attempt)
@@ -482,7 +497,6 @@ Generate the runbook now.
             if missing_blocks:
                 logger.warning("sr_modify_missing", extra={"story_id": story_id, "count": len(missing_blocks)})
                 missing_paths = [m["file"] for m in missing_blocks]
-                # Accumulate so future attempts include this in base prompt.
                 known_new_files.update(missing_paths)
                 sr_span.set_attribute("outcome", "modify_missing_prepass")
                 console.print(f"[yellow]⚠️  [MODIFY] on non-existent file(s): {missing_paths} — autohealing (free pass)...[/yellow]")
@@ -497,16 +511,13 @@ Generate the runbook now.
                     "`<<<SEARCH/===/>>>` with `#### [NEW] <path>` followed by "
                     "a complete fenced code block of the full intended file contents."
                 )
-                # Autohealing pre-pass does not count as a retry attempt.
                 attempt -= 1
-                # Re-inject known-new-files into the base user prompt so ALL
-                # future retries have this knowledge baked in from the start.
-                if known_new_files:
-                    new_files_notice = (
-                        "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
-                        + "\n".join(f"  - {f}" for f in sorted(known_new_files))
-                    )
-                    current_user_prompt = user_prompt + new_files_notice
+                new_files_notice = (
+                    "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
+                    + "\n".join(f"  - {f}" for f in sorted(known_new_files))
+                )
+                current_user_prompt = user_prompt + new_files_notice
+
 
             sr_span.set_attribute("mismatch_count", len(real_mismatches))
 
@@ -580,8 +591,9 @@ Generate the runbook now.
             _gap_4e = check_otel_spans(content, story_content)
             _gap_4f = check_impact_analysis_completeness(content)
             _gap_4g = check_adr_refs(content, config.adrs_dir)
+            _gap_4i = check_stub_implementations(content)
             dod_gaps: List[str] = [
-                *_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e, *_gap_4f, *_gap_4g
+                *_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e, *_gap_4f, *_gap_4g, *_gap_4i
             ]
 
             # Per AC-9: gaps attribute is comma-joined IDs (4a–4g)
@@ -600,6 +612,8 @@ Generate the runbook now.
                 _gap_ids_list.append("4f")
             if _gap_4g:
                 _gap_ids_list.append("4g")
+            if _gap_4i:
+                _gap_ids_list.append("4i")
             dod_span.set_attribute("gap_count", len(dod_gaps))
             dod_span.set_attribute("gaps", ",".join(_gap_ids_list))
 
