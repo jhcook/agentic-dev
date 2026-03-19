@@ -432,8 +432,17 @@ Generate the runbook now.
 
     while attempt < max_attempts:
         attempt += 1
-        with console.status(f"[bold green]🤖 Panel is discussing (Attempt {attempt}/{max_attempts})...[/bold green]") as status:
-            content = ai_service.complete(system_prompt, current_user_prompt, rich_status=status)
+        try:
+            with console.status(f"[bold green]🤖 Panel is discussing (Attempt {attempt}/{max_attempts})...[/bold green]") as status:
+                content = ai_service.complete(system_prompt, current_user_prompt, rich_status=status)
+        except TimeoutError as te:
+            logger.error(
+                "AI service timeout",
+                extra={"story_id": story_id, "attempt": attempt},
+                exc_info=te,
+            )
+            error_console.print(f"[bold red]❌ {te}[/bold red]")
+            raise typer.Exit(code=1)
             
         if not content:
             console.print("[bold red]❌ AI returned empty response.[/bold red]")
@@ -545,8 +554,15 @@ Generate the runbook now.
                 issues = len(correction_parts)
                 console.print(f"[yellow]⚠️  Attempt {attempt}: {issues} gate issue(s) — sending combined correction...[/yellow]")
                 logger.info("combined_correction_attempt", extra={"attempt": attempt, "story_id": story_id, "issues": issues})
+                # Rebuild new_files_notice from the current known_new_files set so it is
+                # always included — the autohealer may have added new entries since the
+                # initial prompt was built and we must not lose that grounding.
+                new_files_notice = (
+                    "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
+                    + "\n".join(f"  - {f}" for f in sorted(known_new_files))
+                ) if known_new_files else ""
                 current_user_prompt = (
-                    f"{user_prompt}\n\n"
+                    f"{user_prompt}{new_files_notice}\n\n"
                     "=== CORRECTION REQUIRED ===\n"
                     "The runbook has the following issues that must ALL be fixed before re-generating:\n\n"
                     + "\n\n---\n\n".join(correction_parts)

@@ -182,5 +182,37 @@ app.command("new-plan")(plan.new_plan)
 app.command("apply-license")(license_cmd.apply_license)
 
 
+def main() -> None:
+    """CLI entry point with top-level exception handling.
+
+    Wraps ``app()`` so that any unhandled exception from any subcommand is
+    displayed as a clean one-liner on stderr instead of a raw Python traceback.
+    Pass ``-v`` or set ``AGENT_VERBOSE=1`` to see the full traceback.
+    """
+    import sys as _sys
+    try:
+        app()
+    except SystemExit:
+        # typer.Exit / typer.Abort use SystemExit — pass through normally.
+        raise
+    except KeyboardInterrupt:
+        typer.echo("\n[Interrupted]", err=True)
+        _sys.exit(130)
+    except Exception as _exc:  # noqa: BLE001
+        from agent.core.logger import get_logger as _get_logger
+        _get_logger("main").exception(
+            "Unhandled exception at CLI entry point",
+            extra={"exc_type": type(_exc).__name__},
+        )
+        _verbose = os.environ.get("AGENT_VERBOSE", "0") not in ("0", "")
+        if _verbose:
+            import traceback as _tb
+            _tb.print_exc()
+        else:
+            typer.echo(f"❌ {type(_exc).__name__}: {_exc}", err=True)
+            typer.echo("   Run with -v for full traceback.", err=True)
+        _sys.exit(1)
+
+
 if __name__ == "__main__":
-    app()
+    main()

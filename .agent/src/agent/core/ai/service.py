@@ -990,8 +990,10 @@ class AIService:
 
                 elif provider == "openai":
                     client = self.clients['openai']
+                    _timeout_s = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
                     create_kwargs = {
                         "model": model_used,
+                        "timeout": _timeout_s,
                         "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
@@ -1070,12 +1072,14 @@ class AIService:
 
                 elif provider == "anthropic":
                     client = self.clients['anthropic']
+                    _timeout_s = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
                     full_text = ""
                     # Use streaming to prevent timeouts with large contexts
                     # (similar to Gemini)
                     stream_kwargs = {
                         "model": model_used,
                         "max_tokens": 4096,
+                        "timeout": _timeout_s,
                         "system": system_prompt,
                         "messages": [
                             {"role": "user", "content": user_prompt}
@@ -1111,7 +1115,21 @@ class AIService:
                     return ""
                 
             except Exception as e:
-                # Catch-all is necessary because different provider SDKs (Google, OpenAI, Anthropic) 
+                # ── Timeout: surface a clean one-liner, no stack trace ────────
+                # httpx.ReadTimeout fires when the provider doesn't respond within
+                # the configured window.  Convert it to a TimeoutError so the
+                # outer caller can catch it separately and display a user-friendly
+                # message instead of a 30-line httpx traceback.
+                _timeout_ms = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000))
+                if type(e).__name__ in ("ReadTimeout", "TimeoutException", "DeadlineExceeded") or (
+                    "timeout" in type(e).__name__.lower()
+                ):
+                    raise TimeoutError(
+                        f"AI request to {provider} timed out after {_timeout_ms // 1000}s. "
+                        f"Retry with: agent new-runbook <ID> --timeout {_timeout_ms // 1000 + 120}"
+                    ) from None
+
+                # Catch-all is necessary because different provider SDKs (Google, OpenAI, Anthropic)
                 # raise different base exceptions. We inspect specific errors below.
                 
                 # Check for SSL errors first - Fail Fast if Proxy/Cert issue

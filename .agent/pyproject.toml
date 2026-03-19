@@ -98,7 +98,7 @@ dev = [
 ]
 
 [project.scripts]
-agent = "agent.main:app"
+agent = "agent.main:main"
 
 
 [build-system]
