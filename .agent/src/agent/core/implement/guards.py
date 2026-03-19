@@ -293,6 +293,102 @@ def enforce_docstrings(filepath: str, content: str) -> ValidationResult:  # noqa
         span.set_attribute("validation.error_count", len(result.errors))
     return result
 
+def check_impact_analysis_completeness(runbook_content: str) -> List[str]:
+    """Verify that every modified file is listed in the Step N summary.
+
+    Checks files mentioned in [MODIFY], [NEW], and [DELETE] blocks against
+    the 'Components touched:' section in the Impact Analysis update step.
+
+    Args:
+        runbook_content: The full content of the generated runbook.
+
+    Returns:
+        List of error messages for missing documentation.
+    """
+    import re
+    from pathlib import Path
+
+    with _tracer.start_as_current_span("guards.check_impact_analysis") as span:
+        # 1. Extract files from runbook headers
+        # Exclude CHANGELOG.md and story files as they are standard housekeeping
+        ops = re.findall(r"####\s*\[(?:MODIFY|NEW|DELETE)\]\s*([^ \n`]+)", runbook_content)
+        touched_files = {
+            Path(f).as_posix() for f in ops
+            if not f.endswith("CHANGELOG.md") and ".agent/cache/stories/" not in f
+        }
+
+        # 2. Extract files from the "Components touched:" list in Step N
+        # We look for the block intended to be written to the story file
+        summary_match = re.search(
+            r"\*\*Components touched:\*\*\s*\n((?:\s*-\s*`[^`]+`[^\n]*\n?)+)",
+            runbook_content,
+            re.MULTILINE
+        )
+
+        documented_files: Set[str] = set()
+        if summary_match:
+            lines = summary_match.group(1).splitlines()
+            for line in lines:
+                file_match = re.search(r"-\s*`([^`]+)`", line)
+                if file_match:
+                    documented_files.add(Path(file_match.group(1)).as_posix())
+
+        missing = touched_files - documented_files
+        span.set_attribute("files_touched", len(touched_files))
+        span.set_attribute("files_documented", len(documented_files))
+        span.set_attribute("missing_count", len(missing))
+
+        if not missing:
+            return []
+
+        return [
+            f"Impact Analysis Gap: `{f}` is modified/created in implementation steps but missing from the Step N Impact Analysis summary"
+            for f in sorted(missing)
+        ]
+
+
+def check_adr_refs(runbook_content: str, adr_dir: Path) -> List[str]:
+    """Validate that all ADR-NNN citations exist in the catalogue.
+
+    Args:
+        runbook_content: The full content of the generated runbook.
+        adr_dir: Path to the directory containing ADR markdown files.
+
+    Returns:
+        List of error messages for hallucinated ADR references.
+    """
+    import re
+
+    with _tracer.start_as_current_span("guards.check_adr_refs") as span:
+        # Extract all ADR-NNN patterns
+        refs = set(re.findall(r"ADR-\d+", runbook_content))
+        if not refs:
+            return []
+
+        if not adr_dir.exists():
+            span.set_attribute("error", "adr_dir_missing")
+            return [f"ADR directory not found at {adr_dir}"]
+
+        # Map existing ADR IDs to filenames
+        existing_ids: Set[str] = set()
+        for adr_file in adr_dir.glob("ADR-*.md"):
+            match = re.match(r"(ADR-\d+)", adr_file.name)
+            if match:
+                existing_ids.add(match.group(1))
+
+        invalid = refs - existing_ids
+        span.set_attribute("refs_found", len(refs))
+        span.set_attribute("invalid_count", len(invalid))
+
+        if not invalid:
+            return []
+
+        return [
+            f"Hallucinated ADR: `{adr}` is cited but does not exist in the on-disk catalogue"
+            for adr in sorted(invalid)
+        ]
+
+
 def check_imports(filepath: str, content: str) -> ValidationResult:
     """Validate imports against project dependencies.
 

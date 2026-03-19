@@ -49,7 +49,11 @@ from agent.commands.utils import (
     validate_sr_blocks,
 )
 from agent.core.context import context_loader
-from agent.core.implement.guards import validate_code_block
+from agent.core.implement.guards import (
+    validate_code_block,
+    check_impact_analysis_completeness,
+    check_adr_refs,
+)
 from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import parse_code_blocks
 from agent.utils.validation_formatter import format_runbook_errors
@@ -574,9 +578,13 @@ Generate the runbook now.
             _gap_4c = check_changelog_entry(content)
             _gap_4d = check_license_headers(content)
             _gap_4e = check_otel_spans(content, story_content)
-            dod_gaps: List[str] = [*_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e]
+            _gap_4f = check_impact_analysis_completeness(content)
+            _gap_4g = check_adr_refs(content, config.adrs_dir)
+            dod_gaps: List[str] = [
+                *_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e, *_gap_4f, *_gap_4g
+            ]
 
-            # Per AC-9: gaps attribute is comma-joined IDs (4a–4e)
+            # Per AC-9: gaps attribute is comma-joined IDs (4a–4g)
             _gap_ids_list: List[str] = []
             if _gap_4a:
                 _gap_ids_list.append("4a")
@@ -588,6 +596,10 @@ Generate the runbook now.
                 _gap_ids_list.append("4d")
             if _gap_4e:
                 _gap_ids_list.append("4e")
+            if _gap_4f:
+                _gap_ids_list.append("4f")
+            if _gap_4g:
+                _gap_ids_list.append("4g")
             dod_span.set_attribute("gap_count", len(dod_gaps))
             dod_span.set_attribute("gaps", ",".join(_gap_ids_list))
 

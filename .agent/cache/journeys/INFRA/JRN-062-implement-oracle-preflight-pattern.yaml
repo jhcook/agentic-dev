@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 actor: Agentic Developer / Framework Maintainer
 description: Preflight checks use dynamic tool-driven retrieval (Oracle Pattern) across
   all providers to prevent hallucinations. Includes NotebookLM MCP routing and local
@@ -73,16 +74,21 @@ implementation:
   routes:
   - agent preflight
   files:
+  - .agent/cache/stories/INFRA/INFRA-162-dod-gate-impact-analysis-completeness-and-adr-existence-verifiers.md
   - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/tests/test_dod_verifiers.py
   - .agent/src/agent/core/adk/agents.py
   - .agent/src/agent/core/context.py
   - .agent/src/agent/core/governance.py
+  - .agent/src/agent/core/implement/guards.py
   - .agent/src/agent/core/implement/models.py
   - .agent/src/agent/core/implement/parser.py
   - .agent/src/agent/core/mcp/client.py
   - .agent/src/agent/db/journey_index.py
   - .agent/src/agent/sync/notebooklm.py
   - .agent/src/agent/sync/notion.py
+  - CHANGELOG.md
   tests:
   - .agent/tests/commands/test_check_commands.py
   - .agent/tests/db/test_journey_index.py
