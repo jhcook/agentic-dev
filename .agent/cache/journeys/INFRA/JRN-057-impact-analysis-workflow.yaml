@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 id: JRN-057
 title: Impact Analysis Workflow
 state: DRAFT
@@ -85,14 +86,17 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/cache/stories/INFRA/INFRA-162-dod-gate-impact-analysis-completeness-and-adr-existence-verifiers.md
   - .agent/src/agent/commands/check.py
   - .agent/src/agent/commands/decompose_story.py
   - .agent/src/agent/commands/implement.py
   - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/tests/test_dod_verifiers.py
   - .agent/src/agent/core/implement/guards.py
   - .agent/src/agent/core/implement/models.py
   - .agent/src/agent/core/implement/parser.py
   - .agent/tests/core/implement/test_infra_155_gates.py
   - .agent/workflows/impact.md
+  - CHANGELOG.md
   tests:
   - .agent/tests/commands/test_impact.py
