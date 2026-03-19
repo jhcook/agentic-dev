@@ -95,6 +95,8 @@ def preflight(
     skip_tests: bool = typer.Option(False, "--skip-tests", help="Skip running tests."),
     ignore_tests: bool = typer.Option(False, "--ignore-tests", help="Run tests but ignore failure (informational only)."),
     interactive: bool = typer.Option(False, "--interactive", help="Enable interactive repair mode."),
+    autoheal: bool = typer.Option(False, "--autoheal", help="Autonomously fix BLOCK verdicts: extract REQUIRED_CHANGES, apply AI edits, re-run per role."),
+    budget: int = typer.Option(3, "--budget", help="Max autoheal attempts per blocked role (default: 3)."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'."),
     thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens)."),
     legacy_context: bool = typer.Option(False, "--legacy-context", help="Use full legacy context instead of Oracle Pattern."),
@@ -260,24 +262,42 @@ def preflight(
         tests_ok = False
     elif test_result.get("test_commands"):
         console.print("\n[bold blue]🧪 Running Automated Tests...[/bold blue]")
+        _test_healer = None
+        if autoheal:
+            from agent.core.preflight.test_healer import TestHealer
+            _test_healer = TestHealer(budget=budget)
+
         for cmd_info in test_result["test_commands"]:
             cmd_name = cmd_info.get("name", "Tests")
             cmd = cmd_info.get("cmd", [])
             cwd = cmd_info.get("cwd")
-            
+
             console.print(f"  [bold]Run ({cmd_name}):[/bold] [cyan]{' '.join(str(c) for c in cmd)}[/cyan]")
-            
+
             try:
-                # Actually run the tests
+                # Stream output live so the terminal doesn't appear frozen.
                 res = subprocess.run(cmd, cwd=cwd)
                 if res.returncode != 0:
                     console.print(f"  [bold red]❌ {cmd_name} failed.[/bold red]")
-                    tests_ok = False
+                    if _test_healer:
+                        # Re-run with capture to collect the traceback for healing.
+                        cap = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+                        traceback = (cap.stdout or "") + (cap.stderr or "")
+                        console.print(f"  [cyan]🩹 Autoheal: attempting test fix (attempt {_test_healer._attempts + 1}/{budget})...[/cyan]")
+                        healed = _test_healer.heal_failure(traceback, cmd, cwd)
+                        if healed:
+                            console.print(f"  [green]✅ Autoheal fixed {cmd_name}.[/green]")
+                        else:
+                            console.print(f"  [yellow]⚠️  Autoheal could not fix {cmd_name}.[/yellow]")
+                            tests_ok = False
+                    else:
+                        tests_ok = False
                 else:
                     console.print(f"  [green]✅ {cmd_name} passed.[/green]")
+
             except Exception as e:
-                 console.print(f"  [bold red]❌ Failed to execute {cmd_name}: {e}[/bold red]")
-                 tests_ok = False
+                console.print(f"  [bold red]❌ Failed to execute {cmd_name}: {e}[/bold red]")
+                tests_ok = False
     else:
         console.print("\n[dim]No tests selected for current changes.[/dim]")
 
@@ -446,7 +466,14 @@ def preflight(
         # Interactive repair loop — re-run governance after each fix
         MAX_GOVERNANCE_RETRIES = 3
         governance_passed = False
-        
+
+        # Healer is created ONCE so the budget is shared across all roles
+        # and all governance retry cycles — prevents unbounded token spend.
+        _healer = None
+        if autoheal:
+            from agent.core.preflight.healer import PreflightHealer
+            _healer = PreflightHealer(budget=budget)
+
         for governance_attempt in range(MAX_GOVERNANCE_RETRIES):
             if governance_attempt > 0:
                 console.print(f"\n[bold cyan]🔄 Re-running Governance Council (attempt {governance_attempt + 1}/{MAX_GOVERNANCE_RETRIES})...[/bold cyan]")
@@ -534,6 +561,32 @@ def preflight(
             fix_applied = handle_blocked_findings(console, result, interactive, story_id, config)
             if fix_applied:
                 continue
+
+            # Autoheal: extract REQUIRED_CHANGES per blocked role and apply AI fixes
+            if _healer:
+                if _healer._attempts >= _healer.budget:
+                    # Budget fully consumed — no point re-running the panel
+                    console.print(f"[yellow]⚠️  Autoheal budget exhausted ({_healer.budget} attempts used). Stopping.[/yellow]")
+                    break
+                _blocked_roles = [
+                    r for r in result.get("json_report", {}).get("roles", [])
+                    if r.get("verdict") == "BLOCK"
+                ]
+                _any_healed = False
+                for _role in _blocked_roles:
+                    if _healer._attempts >= _healer.budget:
+                        break  # Stop iterating roles once budget gone
+                    _healed = _healer.heal(
+                        role=_role["name"],
+                        findings=_role.get("summary", ""),
+                        required_changes=_role.get("required_changes") or [],
+                        diff=full_diff,
+                    )
+                    if _healed:
+                        _any_healed = True
+                        console.print(f"[cyan]🩹 Autoheal applied fix for @{_role['name']} — re-running governance...[/cyan]")
+                if _any_healed:
+                    continue  # Re-enter governance loop with healed changes
 
             # If we reach here without a fix applied, break out — no point retrying
             break
