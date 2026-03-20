@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List, TypedDict
 
 import yaml
+from opentelemetry import trace
 from rich.console import Console
 
 from agent.core.config import config
@@ -27,6 +28,7 @@ from agent.core.utils import find_story_file, scrub_sensitive_data
 
 console = Console()
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 # Valid story states recognised by the agent workflow.
 _VALID_STATES = frozenset({
@@ -295,6 +297,10 @@ class SRMismatch(TypedDict):
     """Full content of the target file at validation time."""
     index: int
     """1-based block counter within this file (for user-facing error messages)."""
+    missing_modify: bool
+    """True when a [MODIFY] block targets a file that does not yet exist on disk."""
+    replace: str
+    """The REPLACE content from the S/R block (useful for autohealing to [NEW])."""
 
 def _lines_match(search_text: str, file_text: str) -> bool:
     """Return True if *search_text* exists as a contiguous block in *file_text*.
@@ -366,10 +372,24 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
         abs_path = resolve_path(file_path_str)
         is_modify = file_path_str in modify_files
 
+        # Meta-files in .agent/cache/ (stories, plans, runbooks) are managed
+        # by agent commands — not source code. Skip validation silently.
+        if ".agent/cache/" in file_path_str or "/.agent/cache/" in file_path_str:
+            continue
+
         if is_modify and (abs_path is None or not abs_path.exists()):
-            raise FileNotFoundError(
-                f"[MODIFY] target does not exist on disk: {file_path_str}"
+            # Return a structured mismatch instead of raising — caller decides healing.
+            mismatches.append(
+                {
+                    "file": file_path_str,
+                    "search": block.get("search", ""),
+                    "actual": "",
+                    "index": block_counters.get(file_path_str, 0) + 1,
+                    "missing_modify": True,
+                    "replace": block.get("replace", ""),
+                }
             )
+            continue
 
         # [NEW] targeting a file that doesn't exist yet — nothing to match.
         if not is_modify and (abs_path is None or not abs_path.exists()):
@@ -391,6 +411,8 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                         "search": search_text,
                         "actual": file_text,
                         "index": idx,
+                        "missing_modify": False,
+                        "replace": block.get("replace", ""),
                     }
                 )
 
@@ -427,6 +449,111 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
         "Use the provided actual content verbatim. Return the FULL updated runbook."
     )
     return "\n".join(lines)
+
+
+def build_journey_catalogue(journeys_dir: Path) -> tuple[str, int]:
+    """Build a sorted, capped catalogue of available Journeys for AI context.
+
+    Scans the journeys directory recursively for YAML files, extracts the ID and
+    title/name, and returns a formatted markdown list. Capped at 30 entries
+    sorted by numeric ID descending.
+
+    Args:
+        journeys_dir: Path to the directory containing JRN-*.yaml files.
+
+    Returns:
+        A tuple of (formatted_catalogue_string, total_count_found).
+    """
+    with tracer.start_as_current_span("build_journey_catalogue") as span:
+        if not journeys_dir.exists():
+            logger.debug("Journeys directory missing: %s", journeys_dir)
+            span.set_attribute("journey_count", 0)
+            return "", 0
+
+        entries: list[tuple[str, str]] = []
+        for jf in journeys_dir.rglob("*.yaml"):
+            try:
+                data = yaml.safe_load(jf.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    jid = data.get("id", jf.stem)
+                    # Prefer 'title' per AC, fall back to 'name' or stem
+                    title = data.get("title") or data.get("name") or jf.stem
+                    entries.append((str(jid), str(title)))
+            except Exception:  # noqa: BLE001
+                continue
+
+        if not entries:
+            span.set_attribute("journey_count", 0)
+            return "", 0
+
+        total_count = len(entries)
+        span.set_attribute("journey_count", total_count)
+
+        # Sort by numeric ID descending: JRN-089 -> 89
+        def sort_key(e: tuple[str, str]) -> int:
+            match = re.search(r"(\d+)", e[0])
+            return int(match.group(1)) if match else 0
+
+        entries.sort(key=sort_key, reverse=True)
+        top_30 = entries[:30]
+
+        lines = ["Available Journeys:"]
+        for jid, title in top_30:
+            lines.append(f"- {jid}: {title}")
+        return "\n".join(lines), total_count
+
+
+def build_adr_catalogue(adrs_dir: Path) -> tuple[str, int]:
+    """Build a sorted, capped catalogue of available ADRs for AI context.
+
+    Scans the ADRs directory for markdown files, extracts the H1 title,
+    and returns a formatted markdown list. Capped at 30 entries sorted by
+    numeric ID descending.
+
+    Args:
+        adrs_dir: Path to the directory containing ADR-*.md files.
+
+    Returns:
+        A tuple of (formatted_catalogue_string, total_count_found).
+    """
+    with tracer.start_as_current_span("build_adr_catalogue") as span:
+        if not adrs_dir.exists():
+            logger.debug("ADRs directory missing: %s", adrs_dir)
+            span.set_attribute("adr_count", 0)
+            return "", 0
+
+        entries: list[tuple[str, str]] = []
+        for af in adrs_dir.glob("ADR-*.md"):
+            try:
+                content = af.read_text(encoding="utf-8")
+                h1_match = re.search(r"^#\s+(.+)", content, re.MULTILINE)
+                title = h1_match.group(1).strip() if h1_match else af.stem
+                # Extract ID from filename (e.g. ADR-041)
+                id_match = re.match(r"(ADR-\d+)", af.name)
+                aid = id_match.group(1) if id_match else af.stem
+                entries.append((str(aid), str(title)))
+            except Exception:  # noqa: BLE001
+                continue
+
+        if not entries:
+            span.set_attribute("adr_count", 0)
+            return "", 0
+
+        total_count = len(entries)
+        span.set_attribute("adr_count", total_count)
+
+        # Sort by numeric ID descending
+        def sort_key(e: tuple[str, str]) -> int:
+            match = re.search(r"(\d+)", e[0])
+            return int(match.group(1)) if match else 0
+
+        entries.sort(key=sort_key, reverse=True)
+        top_30 = entries[:30]
+
+        lines = ["Available ADRs:"]
+        for aid, title in top_30:
+            lines.append(f"- {aid}: {title}")
+        return "\n".join(lines), total_count
 
 
 # ---------------------------------------------------------------------------

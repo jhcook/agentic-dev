@@ -158,31 +158,64 @@ class ContextLoader:
 
 
     def _load_targeted_context(self, story_content: str) -> str:
-        """Extracts file names referenced in the story and returns their contents."""
-        context = "TARGETED FILE CONTENTS:\n"
-        paths = set(_re.findall(r"[\w\.\-/]+\.(?:py|md|yaml|yml|json|txt|sh)", story_content))
-        for p in paths:
-            file_path = config.repo_root / p
-            if not file_path.exists():
-                # try to find it via rglob
-                name = Path(p).name
-                for cand in config.repo_root.rglob(name):
-                    if p in str(cand) or cand.name == name:
-                        file_path = cand
-                        break
+        """Extracts file paths referenced in the story and returns their contents.
 
-            if file_path.exists() and file_path.is_file():
+        Resolution priority:
+        1. Precise paths from the Impact Analysis section (backtick-quoted, fully-prefixed).
+           These are the most reliable — they were written by the engineer and contain the
+           leading ``.agent/src/`` segment, so there is no ambiguity.
+        2. Broad regex fallback for any ``path/with/slash.py`` pattern found elsewhere in
+           the story text.  Bare filenames (no directory separator, e.g. ``__init__.py``)
+           are *intentionally excluded* from the fallback to prevent ``rglob`` from
+           resolving the wrong file (the classic ``__init__.py`` collision).
+        """
+        context = "TARGETED FILE CONTENTS:\n"
+        seen: set = set()
+
+        def _read_and_append(p: str, resolved: Path) -> None:
+            """Read resolved path and append to context, with truncation guard."""
+            if p in seen:
+                return
+            seen.add(p)
+            if resolved.exists() and resolved.is_file():
                 try:
-                    content = file_path.read_text(errors="ignore")
-                    if len(content) > 30000:
+                    raw = resolved.read_text(errors="ignore")
+                    if len(raw) > 30000:
                         half = 14000
-                        lines_omitted = (len(content) - 2 * half) // 50
-                        content = content[:half] + f"\n... ({lines_omitted} lines omitted) ...\n" + content[-half:]
-                    context += f"\n--- TARGETED CONTEXT: {p} ---\n{content}\n"
+                        lines_omitted = (len(raw) - 2 * half) // 50
+                        raw = raw[:half] + f"\n... ({lines_omitted} lines omitted) ...\n" + raw[-half:]
+                    nonlocal context
+                    context += f"\n--- TARGETED CONTEXT: {p} ---\n{raw}\n"
                 except Exception:
                     pass
             else:
                 context += f"\n--- TARGETED CONTEXT: {p} ---\n(FILE NOT FOUND)\n"
+
+        # ── Pass 1: Precise Impact Analysis paths ────────────────────────────
+        # Match any backtick-quoted path that contains at least one slash and
+        # ends with a known extension. No prefix whitelist — the agent manages
+        # the entire repo, and Impact Analysis sections can reference any file.
+        # The slash requirement is the only invariant: it excludes bare names
+        # like ``__init__.py`` while covering arbitrary repo layouts.
+        ia_pattern = _re.compile(
+            r"`([^`]+/[^`]+\.(?:py|md|yaml|yml|json|txt|sh))`"
+        )
+        for m in ia_pattern.finditer(story_content):
+            p = m.group(1).strip()
+            _read_and_append(p, config.repo_root / p)
+
+        # ── Pass 2: Broad regex fallback — paths with at least one '/' ───────
+        # Bare names (like ``__init__.py``) are excluded; they are too ambiguous
+        # for rglob and are captured only when they appear as part of a full path
+        # in Pass 1.
+        broad_pattern = _re.compile(r"[\w\.\-]+(?:/[\w\.\-]+)+\.(?:py|md|yaml|yml|json|txt|sh)")
+        for m in broad_pattern.finditer(story_content):
+            p = m.group(0)
+            if p in seen:
+                continue
+            file_path = config.repo_root / p
+            _read_and_append(p, file_path)
+
         return context
 
     def _load_test_impact(self, story_content: str) -> str:

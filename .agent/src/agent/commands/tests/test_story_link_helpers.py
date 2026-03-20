@@ -27,6 +27,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from agent.commands.utils import (
+    build_adr_catalogue,
+    build_journey_catalogue,
     extract_adr_refs,
     extract_journey_refs,
     merge_story_links,
@@ -284,4 +286,67 @@ class TestMergeStoryLinks:
                 # Must not raise — back-population is best-effort
 
         assert any("cannot write" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Catalogue Builders (INFRA-160)
+# ---------------------------------------------------------------------------
+
+class TestCatalogueBuilders:
+    """Unit tests for build_journey_catalogue and build_adr_catalogue."""
+
+    def test_build_journey_catalogue_sorting_and_cap(self, tmp_path):
+        """Builds journey catalogue sorted by ID descending and capped at 30."""
+        journeys_dir = tmp_path / "journeys"
+        journeys_dir.mkdir()
+        
+        # Create 35 journeys
+        for i in range(1, 36):
+            jf = journeys_dir / f"JRN-{i:03d}-test.yaml"
+            jf.write_text(f"id: JRN-{i:03d}\ntitle: Journey {i:03d}\n")
+            
+        catalogue, total = build_journey_catalogue(journeys_dir)
+        
+        assert total == 35
+        # Capped at 30
+        lines = catalogue.splitlines()
+        # "Available Journeys:" + 30 entries
+        assert len(lines) == 31
+        # Sorted descending: 35 is top
+        assert "- JRN-035: Journey 035" in lines[1]
+        assert "- JRN-006: Journey 006" in lines[30]
+        assert "JRN-005" not in catalogue
+
+    def test_build_adr_catalogue_sorting_and_cap(self, tmp_path):
+        """Builds ADR catalogue sorted by ID descending and capped at 30."""
+        adrs_dir = tmp_path / "adrs"
+        adrs_dir.mkdir()
+        
+        # Create 35 ADRs
+        for i in range(1, 36):
+            af = adrs_dir / f"ADR-{i:03d}-test.md"
+            af.write_text(f"# ADR {i:03d} Title\n\nContent")
+            
+        catalogue, total = build_adr_catalogue(adrs_dir)
+        
+        assert total == 35
+        lines = catalogue.splitlines()
+        assert len(lines) == 31
+        # Sorted descending: 35 is top
+        assert "- ADR-035: ADR 035 Title" in lines[1]
+        assert "- ADR-006: ADR 006 Title" in lines[30]
+
+    def test_build_catalogue_empty_or_missing(self, tmp_path):
+        """Returns empty string and count 0 for missing or empty directories."""
+        # Missing
+        catalogue, count = build_journey_catalogue(tmp_path / "missing")
+        assert catalogue == ""
+        assert count == 0
+        
+        # Empty
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        catalogue, count = build_adr_catalogue(empty_dir)
+        assert catalogue == ""
+        assert count == 0
 

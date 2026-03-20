@@ -91,6 +91,36 @@ PROPOSED
 
 <!-- < one-line rationale > -->
 
+### Step N-1: Update CHANGELOG.md
+
+> ⚠️  **MANDATORY — do not skip.** Missing entries will be caught by `@docs` at preflight.
+
+#### [MODIFY] CHANGELOG.md
+
+```
+<<<SEARCH
+### Added
+===
+### Added
+- **STORY-ID**: < one-sentence user-facing description of what changed and why it matters >
+>>>
+```
+
+### Step N: Update Impact Analysis in story file
+
+> ⚠️  **MANDATORY — do not skip.** Missing files will be caught by `@product` at preflight.
+
+#### [MODIFY] .agent/cache/stories/< PREFIX >/< STORY-ID >-< slug >.md
+
+```
+<<<SEARCH
+**Components touched:**
+===
+**Components touched:**
+- `< every file created or modified >` — **[NEW|MODIFIED]** < one-line description >
+>>>
+```
+
 ## Verification Plan
 
 ### Automated Tests
@@ -105,7 +135,8 @@ PROPOSED
 
 ### Documentation
 
-- [ ] CHANGELOG.md updated
+- [ ] CHANGELOG.md updated (see Step N-1 above — this is a runbook step, not a suggestion)
+- [ ] Story `## Impact Analysis Summary` updated to list every touched file (see Step N above)
 - [ ] README.md updated (if applicable)
 
 ### Observability

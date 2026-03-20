@@ -59,8 +59,11 @@ def _unescape_path(path: str) -> str:
     """
     if not path:
         return ""
-    # Remove bold/italic and backticks
-    path = path.strip().strip('`*')
+    # Remove bold/italic and backticks from the edges only
+    path = path.strip().strip('`')
+    # Safety net: if mistune rendered __ as ** anywhere in the path, restore it
+    path = re.sub(r'\*\*(.*?)\*\*', r'__\1__', path)
+    path = re.sub(r'\*(.*?)\*', r'_\1_', path)
     # Remove backslash escapes for markdown characters: _ * [ ] ( ) # + - . !
     return re.sub(r'\\([_*[\]()#+\-.!])', r'\1', path)
 
@@ -372,12 +375,28 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
     tokens = markdown(content)
 
     def _children_text(token: dict) -> str:
-        """Extract concatenated text from token children (mistune v3 uses 'raw')."""
-        return "".join(
-            t.get('raw', t.get('children', ''))
-            for t in token.get('children', [])
-            if t.get('type') in ('text', 'codespan')
-        ).strip()
+        """Extract concatenated text from token children, preserving bold/em delimiters.
+
+        mistune v3 parses ``__init__`` as a ``strong`` token wrapping a ``text``
+        child.  Silently dropping the ``strong`` wrapper loses the underscores and
+        produces ``init`` instead of ``__init__``.  We restore the original
+        delimiters so file paths like ``__init__.py`` survive the round-trip.
+        """
+        parts = []
+        for t in token.get('children', []):
+            ttype = t.get('type')
+            if ttype == 'text':
+                parts.append(t.get('raw', ''))
+            elif ttype == 'codespan':
+                parts.append(t.get('raw', ''))
+            elif ttype == 'strong':
+                # Re-wrap with __ so _unescape_path can convert ** back to __
+                inner = _children_text(t)
+                parts.append(f'__{inner}__')
+            elif ttype == 'emphasis':
+                inner = _children_text(t)
+                parts.append(f'_{inner}_')
+        return ''.join(parts).strip()
 
     steps: List[dict] = []
     current_step: Optional[dict] = None

@@ -87,36 +87,72 @@ class TestLoadTargetedContext:
     """Tests for ContextLoader._load_targeted_context."""
 
     def test_existing_file_included(self, tmp_path):
-        """Referenced files that exist are loaded into context."""
+        """Backtick-prefixed paths that exist are loaded into context (Pass 1)."""
         loader = ContextLoader()
-        test_file = tmp_path / "mod.py"
-        test_file.write_text("print('hello')")
+        # Replicate the real directory structure the Impact Analysis uses.
+        mod_path = tmp_path / ".agent" / "src" / "agent" / "foo" / "mod.py"
+        mod_path.parent.mkdir(parents=True)
+        mod_path.write_text("print('hello')")
 
+        story = (
+            "## Impact Analysis\n"
+            "- `.agent/src/agent/foo/mod.py` — **[MODIFY]** — update logic\n"
+        )
         with patch("agent.core.context.config") as mock_config:
             mock_config.repo_root = tmp_path
-            result = loader._load_targeted_context("Check mod.py for details.")
+            result = loader._load_targeted_context(story)
 
-        assert "TARGETED CONTEXT: mod.py" in result
+        assert "TARGETED CONTEXT: .agent/src/agent/foo/mod.py" in result
         assert "print('hello')" in result
 
     def test_missing_file_marked_not_found(self, tmp_path):
-        """Referenced files that don't exist are marked as not found."""
+        """Backtick-prefixed paths that don't exist are marked as not found."""
         loader = ContextLoader()
 
+        story = (
+            "## Impact Analysis\n"
+            "- `.agent/src/agent/foo/nonexistent.py` — **[NEW]** — create module\n"
+        )
         with patch("agent.core.context.config") as mock_config:
             mock_config.repo_root = tmp_path
-            result = loader._load_targeted_context("See nonexistent.py for details.")
+            result = loader._load_targeted_context(story)
 
         assert "FILE NOT FOUND" in result
 
     def test_large_file_truncated(self, tmp_path):
         """Files exceeding 30k chars are truncated with omission notice."""
         loader = ContextLoader()
-        large_file = tmp_path / "big.py"
+        large_dir = tmp_path / ".agent" / "src" / "agent" / "foo"
+        large_dir.mkdir(parents=True)
+        large_file = large_dir / "big.py"
         large_file.write_text("x" * 40000)
 
+        story = (
+            "## Impact Analysis\n"
+            "- `.agent/src/agent/foo/big.py` — **[MODIFY]**\n"
+        )
         with patch("agent.core.context.config") as mock_config:
             mock_config.repo_root = tmp_path
-            result = loader._load_targeted_context("Load big.py please.")
+            result = loader._load_targeted_context(story)
 
         assert "lines omitted" in result
+
+    def test_bare_filenames_are_excluded(self, tmp_path):
+        """Bare filenames (no directory separator) must NOT be resolved.
+
+        This prevents the rglob-based wrong-file resolution that caused
+        ``__init__.py`` to be loaded from a completely different package
+        and the AI to generate SEARCH blocks that never matched.
+        """
+        loader = ContextLoader()
+        # Even if these files exist at tmp_path root, they should not appear.
+        (tmp_path / "util.py").write_text("# should not appear")
+        (tmp_path / "__init__.py").write_text("# should not appear")
+
+        story = "Make changes to util.py and __init__.py."
+        with patch("agent.core.context.config") as mock_config:
+            mock_config.repo_root = tmp_path
+            result = loader._load_targeted_context(story)
+
+        assert "util.py" not in result
+        assert "__init__.py" not in result
