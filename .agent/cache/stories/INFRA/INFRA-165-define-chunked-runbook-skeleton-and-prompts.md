@@ -38,9 +38,10 @@ As a **DevOps Engineer**, I want a **multi-phase generation pipeline (Skeleton a
 
 - **Components touched**:
   - `.agent/src/agent/core/implement/chunk_models.py` [NEW]
-  - `.agent/src/agent/core/ai/prompts.py`
-  - `.agent/src/agent/commands/runbook.py`
-  - `.agent/src/agent/core/context.py`
+  - `.agent/src/agent/core/implement/tests/test_chunk_models.py` [NEW]
+  - `.agent/src/agent/core/ai/prompts.py` — Added `generate_skeleton_prompt` and `generate_block_prompt`.
+  - `.agent/src/agent/commands/runbook.py` — Added `--chunked` flag and `_generate_runbook_chunked` pipeline with OTel spans.
+  - `.agent/src/agent/core/context.py` — (AC-4, committed in prior commit `82feb53`, fuzzy path resolution via `resolve_path`.)
 - **Workflows affected**: `agent new-runbook` command execution.
 - **Risks identified**: Potential for context drift between independent block generation calls.
 
