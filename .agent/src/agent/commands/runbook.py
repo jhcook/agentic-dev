@@ -163,7 +163,11 @@ def generate_decomposition_plan(story_id: str, story_content: str) -> str:
     system_prompt = (
         "You are a story decomposer. Given a story that exceeds complexity "
         "limits, produce a Plan with child stories. Each child must be "
-        "scoped to ≤400 LOC. Output markdown with child story references."
+        "scoped to ≤400 LOC. Output markdown with child story references. "
+        "IMPORTANT: In every Impact Analysis section, ALL file paths MUST be "
+        "exact repository-relative paths (e.g. .agent/src/agent/commands/runbook.py). "
+        "Do NOT use generic component names like 'Orchestrator' or bare filenames "
+        "like 'parser.py'."
     )
     user_prompt = f"Decompose this story:\n\n{story_content}"
 

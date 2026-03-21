@@ -17,6 +17,7 @@ As a **DevOps Engineer**, I want a **multi-phase generation pipeline (Skeleton a
 - [ ] **AC-1**: Given a runbook objective and metadata, When the Phase 1 prompt is executed, Then the system generates a valid JSON Skeleton containing the table of contents and structural headers.
 - [ ] **AC-2**: Phase 2 prompts must successfully ingest a specific Skeleton section as context and output a JSON Block containing detailed technical instructions and troubleshooting steps.
 - [ ] **AC-3**: System handles malformed LLM output gracefully by validating against the JSON schema and triggering a retry or a specific validation error message.
+- [ ] **AC-4**: The context loader must use fuzzy path resolution (via `resolve_path`) so that partial or bare file paths in Impact Analysis are auto-corrected to their real repository location.
 
 ## Non-Functional Requirements
 
@@ -35,10 +36,13 @@ As a **DevOps Engineer**, I want a **multi-phase generation pipeline (Skeleton a
 
 ## Impact Analysis Summary
 
-- **Files modified**: `.agent/src/agent/core/implement/chunk_models.py`, `.agent/src/agent/core/ai/prompts.py`, `.agent/src/agent/commands/runbook.py`
-- **Components touched**: Prompt Engineering Module, Backend Orchestration Service, Schema Registry.
-- **Workflows affected**: Runbook Creation, Content Editing.
-- **Risks identified**: Potential for "context drift" between independent block generation calls; mitigation requires passing summary context from previous blocks.
+- **Components touched**:
+  - `.agent/src/agent/core/implement/chunk_models.py` [NEW]
+  - `.agent/src/agent/core/ai/prompts.py`
+  - `.agent/src/agent/commands/runbook.py`
+  - `.agent/src/agent/core/context.py`
+- **Workflows affected**: `agent new-runbook` command execution.
+- **Risks identified**: Potential for context drift between independent block generation calls.
 
 ## Test Strategy
 

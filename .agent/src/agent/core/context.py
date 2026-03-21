@@ -175,10 +175,21 @@ class ContextLoader:
         seen: set = set()
 
         def _read_and_append(p: str, resolved: Path) -> None:
-            """Read resolved path and append to context, with truncation guard."""
+            """Read resolved path and append to context, with truncation guard.
+
+            If *resolved* does not exist on disk, falls back to the fuzzy
+            :func:`resolve_path` resolver so that partial paths (e.g.
+            ``parser.py``) are auto-corrected to their real location.
+            """
             if p in seen:
                 return
             seen.add(p)
+            # Fuzzy fallback — resolve_path handles bare names, partial dirs, etc.
+            if not (resolved.exists() and resolved.is_file()):
+                from agent.core.implement.resolver import resolve_path
+                fuzzy = resolve_path(p)
+                if fuzzy is not None:
+                    resolved = fuzzy
             if resolved.exists() and resolved.is_file():
                 try:
                     raw = resolved.read_text(errors="ignore")
