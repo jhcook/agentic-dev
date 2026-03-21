@@ -17,7 +17,6 @@ alwaysApply: true
 -   `docs/`: High-level architecture, user guides, and API specs.
 -   `backend/docs/`: Backend-specific implementation details.
 -   `web/docs-site/`: Public-facing documentation site content.
--   `.agent/adrs/`: Architecture Decision Records (ADRs).
 
 ## 2. Code Comments & Docstrings
 
@@ -43,14 +42,15 @@ alwaysApply: true
 -   **Updates**: Must be regenerated via `scripts/generate_openapi.py` on any API change.
 
 ## 4. Architecture Decisions (ADRs)
--   **Requirement**: Any significant architectural decision (e.g., adding a database, changing a framework) MUST be recorded in `.agent/adrs/`.
+-   **Requirement**: Any significant architectural decision (e.g., adding a database, changing a framework) MUST be recorded in the project's ADR directory. ADRs are first-class objects — they do NOT live under `docs/`. Typical locations: `adrs/` at the repo root, or domain-scoped paths like `backend/adrs/`.
 -   **Format**: Use the standard ADR template (Title, Status, Context, Decision, Consequences).
 
 ## 5. Change Management
 -   **CHANGELOG.md**: Must be updated for all user-facing changes or breaking API changes.
 
 ## 6. Operational Documentation
--   **New Features**: Any new CLI command or feature MUST have a corresponding entry in `docs/commands.md` (or equivalent).
+
+-   **New Features**: Any new CLI command, API, or user-facing feature MUST have a corresponding entry in `docs/` (e.g., `docs/getting_started.md`, `docs/developer-experience.md`).
 -   **Error Handling**: Documentation must clearly state visible error conditions and troubleshooting steps for the user.
 
 ## 7. Observability Requirements

@@ -480,17 +480,22 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
     elif not in_impl_steps:
         raise ValueError("Missing '## Implementation Steps' section — runbook has no executable steps.")
 
-    # Validation: Ensure MODIFY blocks have at least one S/R pair
+    # Validation: Flag (but don't crash on) malformed blocks so downstream
+    # consumers can handle them as correctable gate findings.
     for step in steps:
         for op in step["operations"]:
             if op.get("action") == "MODIFY" and not op.get("blocks"):
-                raise ParsingError(
-                    f"MODIFY header for '{op['path']}' found but no valid SEARCH/REPLACE blocks detected."
+                _logger.warning(
+                    "malformed_modify_block",
+                    extra={"path": op["path"], "reason": "no SEARCH/REPLACE blocks"},
                 )
+                op["malformed"] = True
             if op.get("action") == "NEW" and not op.get("content"):
-                raise ParsingError(
-                    f"NEW header for '{op['path']}' found but no code block detected."
+                _logger.warning(
+                    "malformed_new_block",
+                    extra={"path": op["path"], "reason": "no code block"},
                 )
+                op["malformed"] = True
             # Remove the internal 'action' key used for parsing state
             op.pop("action", None)
 

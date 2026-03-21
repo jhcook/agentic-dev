@@ -63,7 +63,7 @@ class ContextLoader:
 
         # NotebookLM MCP / Local Vector DB integration
         context_str = ""
-        if not legacy_context and story_id:
+        if not legacy_context and story_id and not os.environ.get("AGENT_DISABLE_MCP"):
             try:
                 from agent.core.mcp.client import MCPClient
                 mcp_client = MCPClient()
@@ -71,6 +71,8 @@ class ContextLoader:
             except Exception as e:
                 logger.debug(f"MCP Server not detected. Falling back to local Vector DB: {e}")
                 context_str = self._query_local_vector_db(story_id)
+        elif not legacy_context and story_id:
+            context_str = self._query_local_vector_db(story_id)
 
         return {
             "rules": rules,
@@ -173,10 +175,21 @@ class ContextLoader:
         seen: set = set()
 
         def _read_and_append(p: str, resolved: Path) -> None:
-            """Read resolved path and append to context, with truncation guard."""
+            """Read resolved path and append to context, with truncation guard.
+
+            If *resolved* does not exist on disk, falls back to the fuzzy
+            :func:`resolve_path` resolver so that partial paths (e.g.
+            ``parser.py``) are auto-corrected to their real location.
+            """
             if p in seen:
                 return
             seen.add(p)
+            # Fuzzy fallback — resolve_path handles bare names, partial dirs, etc.
+            if not (resolved.exists() and resolved.is_file()):
+                from agent.core.implement.resolver import resolve_path
+                fuzzy = resolve_path(p)
+                if fuzzy is not None:
+                    resolved = fuzzy
             if resolved.exists() and resolved.is_file():
                 try:
                     raw = resolved.read_text(errors="ignore")

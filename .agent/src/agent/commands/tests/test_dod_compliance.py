@@ -55,20 +55,18 @@ RUNBOOK_NO_CHANGELOG = "### Step 2\n#### [MODIFY] README.md\n"
 
 _FENCE = "```"
 RUNBOOK_NEW_PY_WITH_HEADER = (
-    "#### [NEW] .agent/src/agent/commands/bar.py\n\n"
-    + _FENCE + "python\n"
-    "# Copyright 2024 Google LLC\n"
-    "# Licensed under the Apache License, Version 2.0 (the \"License\")\n"
-    "def foo():\n"
-    "    pass\n"
+    "#### [NEW] src/commands/bar.ts\n\n"
+    + _FENCE + "typescript\n"
+    "// Copyright 2026 Justin Cook\n"
+    "// Licensed under the Apache License, Version 2.0\n"
+    "export function foo() {}\n"
     + _FENCE + "\n"
 )
 
 RUNBOOK_NEW_PY_NO_HEADER = (
-    "#### [NEW] .agent/src/agent/commands/bar.py\n\n"
-    + _FENCE + "python\n"
-    "def foo():\n"
-    "    pass\n"
+    "#### [NEW] src/commands/bar.ts\n\n"
+    + _FENCE + "typescript\n"
+    "export function foo() {}\n"
     + _FENCE + "\n"
 )
 
@@ -168,14 +166,14 @@ class TestCheckLicenseHeaders:
     """Tests for check_license_headers()."""
 
     def test_passes_when_header_present(self) -> None:
-        """Should return no gaps when Apache header is present."""
+        """Should return no gaps when license header is present."""
         assert check_license_headers(RUNBOOK_NEW_PY_WITH_HEADER) == []
 
     def test_fails_when_header_missing(self) -> None:
         """Should return a gap when a [NEW] .py file lacks a license header."""
         gaps = check_license_headers(RUNBOOK_NEW_PY_NO_HEADER)
         assert len(gaps) == 1
-        assert "Apache" in gaps[0] or "license" in gaps[0].lower()
+        assert "license" in gaps[0].lower()
 
     def test_ignores_non_py_files(self) -> None:
         """Should not flag [NEW] non-Python files."""

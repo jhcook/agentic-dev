@@ -53,12 +53,16 @@ steps:
   action: Developer runs `agent new-runbook INFRA-107` (or any story with file references)
   system_response: 'CLI loads story content, then calls _load_targeted_context() which
     extracts file paths from story annotations and reads their import/signature lines.
+    When a path does not resolve exactly, the system falls back to fuzzy resolution
+    via resolve_path() which auto-corrects partial paths (e.g. parser.py to
+    .agent/src/agent/core/implement/parser.py).
 
     '
   assertions:
   - Story content is read and file paths are parsed via regex
   - For each referenced file, function signatures are extracted (not invented)
-  - Missing files emit FILE NOT FOUND (verify path!) warning
+  - Partial or bare file paths are auto-resolved via fuzzy matching before emitting FILE NOT FOUND
+  - Missing files (after fuzzy resolution fails) emit FILE NOT FOUND (verify path!) warning
 - id: 2
   action: CLI loads test impact matrix via _load_test_impact()
   system_response: 'System walks .agent/tests/, reads each .py file, finds all patch()
@@ -106,11 +110,14 @@ steps:
   - Runbook generation completes in < 1 second extra vs baseline
 error_paths:
 - trigger_step: 1
-  condition: Story references a file that does not exist on disk
-  system_response: Context includes "FILE NOT FOUND (verify path!)" for that path;
-    generation continues
+  condition: Story references a file that does not exist on disk (exact path)
+  system_response: System attempts fuzzy resolution via resolve_path(). If a unique
+    match is found, uses that file. Otherwise context includes "FILE NOT FOUND (verify
+    path!)" for that path; generation continues
   assertions:
-  - Warning is present in generated runbook Codebase Introspection section
+  - Fuzzy resolver is invoked for non-existent exact paths
+  - Unique fuzzy matches are auto-corrected and logged
+  - Ambiguous matches (multiple candidates) fall through to FILE NOT FOUND
   - Generation does not abort
   severity: expected
 - trigger_step: 2

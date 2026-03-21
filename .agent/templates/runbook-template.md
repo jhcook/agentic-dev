@@ -82,7 +82,18 @@ PROPOSED
 #### [NEW] < path/to/new/file >
 
 ```
-< complete file content >
+< complete file content — with any required license/copyright header, module-level doc, and all public interfaces >
+```
+
+### Step 2b: < Tests for Step 2 — MANDATORY >
+
+> ⚠️  **MANDATORY — every `[NEW]` implementation file requires a paired test step.**
+> Missing test files are machine-verified and will block acceptance. Do NOT skip.
+
+#### [NEW] < path/to/tests/test_new_file >
+
+```
+< complete test file — covering every public function/class/method in Step 2, using the project's test framework >
 ```
 
 ### Step 3: < Remove an obsolete file >

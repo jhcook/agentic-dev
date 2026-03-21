@@ -20,13 +20,13 @@ As a **Platform Developer**, I want `agent new-runbook` to verify that every gen
 
 - [ ] **AC-1 — AC Coverage (4a)**: After schema + S/R gates pass, extract all `- [ ]` and `- [x]` Acceptance Criteria from the parent story. Make a secondary AI call with a structured prompt asking which ACs are not addressed by the runbook. If gaps are found, assemble a correction prompt and retry (consuming one slot from `max_attempts`). Helper functions: `extract_acs`, `build_ac_coverage_prompt`, `parse_ac_gaps` in `agent/commands/utils.py`.
 
-- [ ] **AC-2 — Test Coverage (4b)**: Verify the runbook contains at least one `[NEW]` or `[MODIFY]` step targeting a file whose path contains `test` (case‑insensitive). If absent, include `"No test file is created or modified — add a test step"` in the correction prompt. This is a deterministic regex check — no AI call required.
+- [ ] **AC-2 — Test Coverage (4b)**: For every `[NEW]` source file (non-boilerplate `.py`, `.ts`, `.go`, etc.) in the runbook, verify a corresponding paired test file step (`test_<module>.py` or `<module>_test.py`) exists as a `[NEW]` or `[MODIFY]` block. Files such as `__init__.py`, `conftest.py`, and non-source extensions are excluded. If any implementation file lacks a paired test step, include the specific file path in the correction prompt. Deterministic regex check — no AI call required.
 
 - [ ] **AC-3 — CHANGELOG Entry (4c)**: Verify `CHANGELOG.md` appears as a modified or new file in the runbook. If absent, include `"CHANGELOG.md is not updated — add a [MODIFY] CHANGELOG.md step"` in the correction prompt. Deterministic check.
 
 - [ ] **AC-4 — License Headers (4d)**: For every `[NEW] *.py` block in the runbook, verify the code content contains the Apache 2.0 preamble (`# Copyright` + `# Licensed under the Apache License`). For any `[NEW]` Python file missing the header, include the specific file path in the correction prompt. Deterministic check.
 
-- [ ] **AC-5 — OTel Spans (4e)**: For any `[NEW]` or `[MODIFY]` targeting a file in `commands/` or `core/`, verify the runbook's implementation steps include at least one `tracer.start_as_current_span(` call. If absent, include a correction note. Deterministic check.
+- [ ] **AC-5 — OTel Spans (4e)**: When the parent story content contains observability-related keywords (`opentelemetry`, `otel`, `tracing`, `span`, `observability`), verify that any `[NEW]` or `[MODIFY]` step targeting a file in `commands/` or `core/` includes at least one `tracer.start_as_current_span(` or `tracer.start` call. If the story does not mention observability, this check is skipped. Deterministic check.
 
 - [ ] **AC-6 — Unified Correction Prompt**: All gaps from AC-1 through AC-5 are collected in a single pass and bundled into one combined correction prompt per retry iteration. The prompt explicitly lists each gap and instructs the AI to return the full corrected runbook. Only one retry slot is consumed per correction cycle regardless of how many gaps are found.
 
@@ -63,13 +63,15 @@ As a **Platform Developer**, I want `agent new-runbook` to verify that every gen
 ## Impact Analysis Summary
 
 **New / Modified files:**
-- `agent/commands/utils.py` — **[MODIFY]** Add helper functions: `extract_acs`, `check_test_coverage`, `check_changelog_entry`, `check_license_headers`, `check_otel_spans`, `build_dod_correction_prompt`.
-- `agent/commands/runbook.py` — **[MODIFY]** Wire Gate 4 (`dod_compliance_gate` OTel span + 4 deterministic checkers + correction-prompt retry loop). Import the new helpers.
+- `agent/commands/dod_checks.py` — **[NEW]** DoD Compliance Gate helpers extracted from `utils.py` (INFRA-165 LOC quality refactor): `extract_acs`, `build_ac_coverage_prompt`, `parse_ac_gaps`, `check_test_coverage`, `check_changelog_entry`, `check_license_headers`, `check_otel_spans`, `build_dod_correction_prompt`, `auto_fix_license_headers`, `auto_fix_changelog_step`.
+- `agent/commands/runbook_helpers.py` — **[NEW]** Runbook helpers extracted from `runbook.py` (INFRA-165 LOC quality refactor): `ComplexityMetrics`, `score_story_complexity`, `generate_decomposition_plan`, `load_journey_context`, `retrieve_dynamic_rules`, `parse_split_request`.
+- `agent/commands/utils.py` — **[MODIFY]** DoD helpers moved to `dod_checks.py`; re-exported for backward compatibility.
+- `agent/commands/runbook.py` — **[MODIFY]** Wire Gate 4 (`dod_compliance_gate` OTel span + deterministic checkers + correction-prompt retry loop). Complexity/helper functions moved to `runbook_helpers.py`; imported for backward compatibility.
 - `agent/commands/tests/test_dod_compliance.py` — **[NEW]** Unit tests for all helper functions (16 unit tests).
 - `agent/commands/tests/test_dod_compliance_integration.py` — **[NEW]** Integration tests for the gate composition (8 integration tests).
 - `agent/commands/tests/test_dod_gate_orchestration.py` — **[NEW]** Orchestration-level integration tests for Gate 4 control flow (retry, corrected, exhausted, no-story skip — 11 tests).
 - `CHANGELOG.md` — **[MODIFY]** Add INFRA-161 entry.
-- `agent/core/implement/guards.py` — **[MODIFY]** Two prerequisite fixes required to unblock runbook generation on this branch: (1) missing trailing newlines in AI-generated code blocks are now auto-corrected with a warning instead of a hard blocking error; (2) `check_imports` now exempts test-only imports (`pytest`, `typer`, etc.) when the file path matches `test_*.py` / `*_test.py` — resolving a persistent false-positive that was exhausting the 3-retry budget on every `new-runbook` run.
+- `agent/core/implement/guards.py` — **[MODIFY]** Two prerequisite fixes: (1) missing trailing newlines auto-corrected with warning; (2) `check_imports` exempts test-only imports (`pytest`, `typer`, etc.) for `test_*.py` / `*_test.py`.
 
 **Workflows affected:** `agent new-runbook` only. The `agent implement` pipeline is unchanged for non-test files.
 
@@ -104,7 +106,7 @@ As a **Platform Developer**, I want `agent new-runbook` to verify that every gen
 
 ## Rollback Plan
 
-Remove the `dod_compliance_gate` block from `runbook.py` and the Gate 4 helpers from `utils.py`. The pipeline reverts to the three-gate behaviour. No data migration required.
+Remove the `dod_compliance_gate` block from `runbook.py` and the Gate 4 helpers from `dod_checks.py` (previously in `utils.py`). The pipeline reverts to the three-gate behaviour. No data migration required.
 
 ## Copyright
 

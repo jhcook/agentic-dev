@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 from typing import List, Optional
 
 import json
@@ -32,6 +31,8 @@ from agent.core.utils import (
     get_copyright_header,
 )
 from agent.commands.utils import (
+    auto_fix_changelog_step,
+    auto_fix_license_headers,
     build_ac_coverage_prompt,
     build_adr_catalogue,
     build_dod_correction_prompt,
@@ -59,6 +60,14 @@ from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import parse_code_blocks
 from agent.utils.validation_formatter import format_runbook_errors
 from agent.db.client import upsert_artifact
+from agent.commands.runbook_helpers import (
+    ComplexityMetrics,
+    generate_decomposition_plan,
+    load_journey_context,
+    parse_split_request,
+    retrieve_dynamic_rules,
+    score_story_complexity,
+)
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -76,101 +85,13 @@ SPLIT_REQUEST_DIRECTIVE = (
     "- More than 4 files modified\n\n"
     "Then you MUST NOT generate a runbook. Instead, emit ONLY a JSON block with this exact structure:\n\n"
     '{"SPLIT_REQUEST": true, "reason": "<one-sentence explanation>", '
+    '"estimated_loc": <number>, "estimated_files": <number>, '
     '"suggestions": ["<child story 1 title and scope>", "<child story 2 title and scope>"]}\n\n'
     "Do NOT wrap this in any other text or markdown if you determine the story must be split.\n"
     "If the story fits within the thresholds, proceed with normal runbook generation."
 )
 
 
-@dataclass
-class ComplexityMetrics:
-    """Heuristic complexity metrics for a story."""
-
-    step_count: int
-    context_width: int
-    verb_intensity: float
-    estimated_loc: float
-    file_count: int
-
-
-def score_story_complexity(content: str) -> ComplexityMetrics:
-    """Calculate heuristic complexity score from story content.
-
-    Scoring is regex-based and runs in <100ms (no AI call).
-
-    Args:
-        content: Raw story markdown content.
-
-    Returns:
-        ComplexityMetrics with step_count, context_width, verb_intensity,
-        estimated_loc, and file_count.
-    """
-    with tracer.start_as_current_span("forecast.score_complexity") as span:
-        step_count = len(re.findall(r"^\s*-\s*\[ \]", content, re.MULTILINE))
-        context_width = len(re.findall(r"ADR-\d+|JRN-\d+", content))
-
-        verb_intensity = 1.0
-        if re.search(r"\bmigrate\b", content, re.IGNORECASE):
-            verb_intensity = 2.0
-        elif re.search(r"\brefactor\b", content, re.IGNORECASE):
-            verb_intensity = 1.5
-
-        file_count = len(re.findall(r"####\s*\[(?:MODIFY|NEW|DELETE|ADD)\]", content))
-        estimated_loc = (step_count * 40) * verb_intensity
-
-        span.set_attribute("forecast.step_count", step_count)
-        span.set_attribute("forecast.context_width", context_width)
-        span.set_attribute("forecast.verb_intensity", verb_intensity)
-        span.set_attribute("forecast.estimated_loc", estimated_loc)
-        span.set_attribute("forecast.file_count", file_count)
-
-        logger.info(
-            "forecast step_count=%d context_width=%d verb_intensity=%.1f "
-            "estimated_loc=%.0f file_count=%d",
-            step_count, context_width, verb_intensity, estimated_loc, file_count,
-        )
-
-        return ComplexityMetrics(
-            step_count=step_count,
-            context_width=context_width,
-            verb_intensity=verb_intensity,
-            estimated_loc=estimated_loc,
-            file_count=file_count,
-        )
-
-
-def generate_decomposition_plan(story_id: str, story_content: str) -> str:
-    """Generate a decomposition plan for an over-budget story using AI.
-
-    Args:
-        story_id: The story identifier (e.g. INFRA-093).
-        story_content: Raw story markdown content.
-
-    Returns:
-        Path to the generated plan file.
-    """
-    from agent.core.ai import ai_service  # ADR-025: lazy init
-
-    scope_match = re.match(r"([A-Z]+)-\d+", story_id)
-    scope = scope_match.group(1) if scope_match else "MISC"
-    plan_dir = config.plans_dir / scope
-    plan_dir.mkdir(parents=True, exist_ok=True)
-    plan_path = plan_dir / f"{story_id}-plan.md"
-
-    system_prompt = (
-        "You are a story decomposer. Given a story that exceeds complexity "
-        "limits, produce a Plan with child stories. Each child must be "
-        "scoped to ≤400 LOC. Output markdown with child story references."
-    )
-    user_prompt = f"Decompose this story:\n\n{story_content}"
-
-    plan_content = ai_service.complete(system_prompt, user_prompt)
-    if plan_content:
-        plan_path.write_text(plan_content)
-    else:
-        plan_path.write_text(f"# Plan: {story_id}\n\nAI returned empty plan.")
-
-    return str(plan_path)
 
 def new_runbook(
     story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
@@ -280,7 +201,7 @@ def new_runbook(
     
     # INFRA-135: Dynamic Rule Retrieval (Rule Diet)
     # Replaces static truncation with semantic filtering
-    rules_content = _retrieve_dynamic_rules(story_content, targeted_context)
+    rules_content = retrieve_dynamic_rules(story_content, targeted_context)
     
     if len(rules_content) < len(rules_full) * 0.5:
         console.print(f"[dim]ℹ️  Rule Diet active: Prompt reduced by {100 - (len(rules_content)/len(rules_full)*100):.1f}%[/dim]")
@@ -346,6 +267,13 @@ INSTRUCTIONS:
       and every inner/closure function. The docstring gate will hard-reject files missing any of these.
 12. You MUST use full, repository-root-relative file paths for ALL files (e.g., STARTING with `.agent/src/` or similar, NOT just `src/`).
 13. NEVER include steps that modify files in `.agent/cache/` (stories, plans, runbooks). Story state transitions are managed automatically by `agent` commands — do NOT add `[MODIFY]` or `[NEW]` steps for any file under `.agent/cache/`.
+14. MANDATORY TEST COVERAGE — For every `[NEW] <path/to/impl>` step you write (where the file
+    is NOT itself a test file), you MUST include a paired `[NEW] <path/to/tests/test_impl>` step
+    in the SAME runbook. Rules:
+    - The test file MUST use the project's test framework and cover every public interface in the implementation.
+    - The test file MUST be placed in the `tests/` subdirectory adjacent to the implementation file.
+    - This is machine-verified — a runbook missing any paired test file will be rejected and sent back
+      for correction. Do NOT skip test files, do NOT mention them only in the Verification Plan.
 
 INPUTS:
 1. User Story (Requirements)
@@ -430,6 +358,9 @@ Generate the runbook now.
     ) if known_new_files else ""
     current_user_prompt = user_prompt + new_files_notice
 
+    max_gate_corrections = 3   # separate budget for gate fixes
+    gate_corrections = 0
+
     while attempt < max_attempts:
         attempt += 1
         try:
@@ -445,12 +376,45 @@ Generate the runbook now.
             raise typer.Exit(code=1)
             
         if not content:
-            console.print("[bold red]❌ AI returned empty response.[/bold red]")
-            raise typer.Exit(code=1)
+            logger.warning("ai_empty_response", extra={"story_id": story_id, "attempt": attempt})
+            if attempt < max_attempts:
+                console.print(f"[yellow]⚠️  Attempt {attempt}: AI returned empty/malformed response — retrying...[/yellow]")
+                continue
+            else:
+                console.print("[bold red]❌ AI returned empty response on final attempt.[/bold red]")
+                raise typer.Exit(code=1)
 
         # -- SPLIT_REQUEST Fallback (INFRA-094) --
+        # Only honoured on attempt 1. On later attempts the AI is in a correction
+        # loop — a SPLIT_REQUEST there is an escape attempt, not a real complexity signal.
         if "SPLIT_REQUEST" in content:
-            break  # Let the split logic below handle it
+            if attempt == 1:
+                break  # Let the split logic below handle it
+            else:
+                logger.warning(
+                    "split_request_rejected_in_correction",
+                    extra={"story_id": story_id, "attempt": attempt},
+                )
+                console.print(
+                    f"[yellow]⚠️  Attempt {attempt}: AI tried to SPLIT_REQUEST inside a "
+                    "correction loop — rejecting and retrying.[/yellow]"
+                )
+                if attempt < max_attempts:
+                    current_user_prompt = (
+                        f"{user_prompt}{new_files_notice}\n\n"
+                        "=== CORRECTION REQUIRED ===\n"
+                        "You responded with SPLIT_REQUEST, but you are in a correction loop. "
+                        "You MUST generate the complete runbook. Do NOT emit SPLIT_REQUEST.\n\n"
+                        "Previous correction instructions still apply:\n"
+                        + "\n\n---\n\n".join(correction_parts)
+                        + "\n\nReturn the FULL corrected runbook."
+                    )
+                    continue
+                else:
+                    logger.error("gate_exhausted", extra={"story_id": story_id, "attempt": attempt})
+                    error_console.print(f"[bold red]❌ Gates failed after {max_attempts} attempts.[/bold red]")
+                    raise typer.Exit(code=1)
+
 
         # ------------------------------------------------------------------ #
         # DRY-RUN GATE PASS: run ALL gates in collect mode, then fix once.   #
@@ -537,7 +501,52 @@ Generate the runbook now.
                            "files": [m["file"] for m in real_mismatches]},
                 )
                 sr_span.set_attribute("outcome", "mismatch")
-                correction_parts.append(generate_sr_correction_prompt(real_mismatches))
+
+                # ── Targeted S/R fix: patch blocks in-place ──────────── #
+                # Instead of regenerating the full runbook, ask the AI to
+                # produce ONLY corrected MODIFY blocks and replace them.
+                # NOTE: gate_corrections is only incremented if the targeted
+                # fix succeeds.  If it falls back to correction_parts, that
+                # path handles its own budget accounting.
+                sr_prompt = generate_sr_correction_prompt(real_mismatches)
+                console.print(f"[yellow]⚠️  S/R mismatch in {len(real_mismatches)} file(s) — targeted fix...[/yellow]")
+                sr_fix = ai_service.complete(
+                    system_prompt=(
+                        "You are a code correction assistant. Output ONLY the corrected "
+                        "#### [MODIFY] sections with <<<SEARCH / === / >>>REPLACE blocks. "
+                        "No prose, no explanation, no other content."
+                    ),
+                    user_prompt=sr_prompt,
+                )
+                if sr_fix:
+                    # Replace each failing MODIFY block in the runbook content
+                    import re as _sr_re
+                    patched_any = False
+                    for m in real_mismatches:
+                        # Find the MODIFY block for this file and replace its S/R content
+                        old_search = m["search"].strip()
+                        if old_search and old_search in content:
+                            # Look for the corrected SEARCH block for this file in the AI response
+                            file_pattern = _sr_re.compile(
+                                r"####\s+\[MODIFY\]\s+" + _sr_re.escape(m["file"]) + r".*?(?=####\s+\[|$)",
+                                _sr_re.DOTALL,
+                            )
+                            fix_match = file_pattern.search(sr_fix)
+                            if fix_match:
+                                # Find and replace the old MODIFY block for this file in content
+                                old_block = file_pattern.search(content)
+                                if old_block:
+                                    content = content[:old_block.start()] + fix_match.group() + content[old_block.end():]
+                                    patched_any = True
+                    if patched_any:
+                        logger.info("sr_targeted_fix_applied", extra={"story_id": story_id, "files": [m["file"] for m in real_mismatches]})
+                        gate_corrections += 1
+                        attempt -= 1  # Don't consume a panel attempt
+                        continue
+                    else:
+                        # Targeted fix didn't match — fall back to correction_parts
+                        logger.warning("sr_targeted_fix_failed_fallback", extra={"story_id": story_id})
+                        correction_parts.append(sr_prompt)
             elif not missing_blocks:
                 if attempt > 1:
                     sr_span.set_attribute("outcome", "corrected")
@@ -554,6 +563,15 @@ Generate the runbook now.
                 issues = len(correction_parts)
                 console.print(f"[yellow]⚠️  Attempt {attempt}: {issues} gate issue(s) — sending combined correction...[/yellow]")
                 logger.info("combined_correction_attempt", extra={"attempt": attempt, "story_id": story_id, "issues": issues})
+                gate_corrections += 1
+                if gate_corrections > max_gate_corrections:
+                    logger.error("gate_corrections_exhausted", extra={"story_id": story_id, "gate_corrections": gate_corrections})
+                    error_console.print(f"[bold red]❌ Gate corrections exhausted ({max_gate_corrections} corrections).[/bold red]")
+                    for part in correction_parts:
+                        error_console.print(f"[red]{part[:400]}[/red]")
+                    raise typer.Exit(code=1)
+                # Gate correction — do NOT consume a panel attempt
+                attempt -= 1
                 # Rebuild new_files_notice from the current known_new_files set so it is
                 # always included — the autohealer may have added new entries since the
                 # initial prompt was built and we must not lose that grounding.
@@ -564,9 +582,11 @@ Generate the runbook now.
                 current_user_prompt = (
                     f"{user_prompt}{new_files_notice}\n\n"
                     "=== CORRECTION REQUIRED ===\n"
-                    "The runbook has the following issues that must ALL be fixed before re-generating:\n\n"
+                    "The runbook has the following issues that must be fixed:\n\n"
                     + "\n\n---\n\n".join(correction_parts)
-                    + "\n\nReturn the FULL corrected runbook addressing every issue above."
+                    + "\n\nIMPORTANT: Return the FULL corrected runbook with these issues fixed. "
+                    "Preserve ALL existing valid content exactly as-is. Only modify the "
+                    "specific sections listed above."
                 )
                 continue
             else:
@@ -575,6 +595,11 @@ Generate the runbook now.
                 for part in correction_parts:
                     error_console.print(f"[red]{part[:400]}[/red]")
                 raise typer.Exit(code=1)
+
+        # 3b. Deterministic auto-fixes — patch content BEFORE DoD gate runs.
+        #     These are free (no AI call) and don't consume retry budget.
+        content = auto_fix_license_headers(content)
+        content = auto_fix_changelog_step(content)
 
         # 4. DoD Compliance Gate (INFRA-161)
         with tracer.start_as_current_span("dod_compliance_gate") as dod_span:
@@ -639,9 +664,87 @@ Generate the runbook now.
                 extra={"attempt": attempt, "story_id": story_id, "gaps": dod_gaps},
             )
             dod_span.set_attribute("outcome", "fail")
-            correction_parts.append(
-                build_dod_correction_prompt(dod_gaps, story_content, acs)
-            )
+
+            # ── Targeted DoD patching (no full regeneration) ────────────── #
+            # Separate test-coverage gaps (can be patched with targeted AI)
+            # from other gaps (AC coverage, OTel, etc.)
+            test_gaps = [g for g in dod_gaps if "has no paired test file" in g]
+            other_gaps = [g for g in dod_gaps if "has no paired test file" not in g]
+
+            issues = len(dod_gaps)
+            console.print(f"[yellow]⚠️  Attempt {attempt}: DoD gate {issues} gap(s) — patching...[/yellow]")
+            logger.info("dod_targeted_patch", extra={"attempt": attempt, "story_id": story_id, "test_gaps": len(test_gaps), "other_gaps": len(other_gaps)})
+            gate_corrections += 1
+            if gate_corrections > max_gate_corrections:
+                logger.error("gate_corrections_exhausted", extra={"story_id": story_id, "gate_corrections": gate_corrections})
+                error_console.print(f"[bold red]❌ Gate corrections exhausted ({max_gate_corrections} corrections).[/bold red]")
+                for gap in dod_gaps[:5]:
+                    error_console.print(f"  [red]• {gap[:200]}[/red]")
+                raise typer.Exit(code=1)
+
+            patched = False
+
+            # Targeted fix for missing test files: ask AI only for the test blocks
+            if test_gaps:
+                # Extract impl paths from gap messages
+                import re as _gap_re
+                impl_paths = []
+                for g in test_gaps:
+                    m = _gap_re.match(r"\[NEW\]\s+(\S+)", g)
+                    if m:
+                        impl_paths.append(m.group(1))
+
+                if impl_paths:
+                    test_prompt = (
+                        "Generate ONLY the following test file implementation steps "
+                        "to append to an existing runbook. For each file below, produce "
+                        "a step with #### [NEW] <test_path> and a fenced code block. "
+                        "Include the project license header at the top of each file.\n\n"
+                        "Files needing paired test files:\n"
+                        + "\n".join(f"  - {p}" for p in impl_paths)
+                        + "\n\nReturn ONLY the markdown steps, nothing else."
+                    )
+                    test_blocks = ai_service.complete(
+                        system_prompt="You are a code generation assistant. Output only markdown. No prose.",
+                        user_prompt=test_prompt,
+                    )
+                    if test_blocks:
+                        content = content.rstrip() + "\n\n" + test_blocks.strip() + "\n"
+                        # Re-apply license auto-fix to the new blocks
+                        content = auto_fix_license_headers(content)
+                        patched = True
+                        logger.info("test_blocks_appended", extra={"story_id": story_id, "count": len(impl_paths)})
+
+            # For non-test gaps, build a targeted correction and append
+            if other_gaps:
+                dod_correction = build_dod_correction_prompt(other_gaps, story_content, acs)
+                other_prompt = (
+                    "The following DoD gaps must be fixed. Generate ONLY the additional "
+                    "runbook steps needed to address them. Do NOT reproduce any existing "
+                    "content — output only NEW steps to append.\n\n"
+                    + dod_correction
+                )
+                other_blocks = ai_service.complete(
+                    system_prompt="You are a code generation assistant. Output only markdown. No prose.",
+                    user_prompt=other_prompt,
+                )
+                if other_blocks:
+                    content = content.rstrip() + "\n\n" + other_blocks.strip() + "\n"
+                    patched = True
+
+            if patched:
+                # Re-run DoD checks on the patched content — don't consume panel attempt
+                attempt -= 1
+                continue
+            else:
+                # Nothing could be patched — fall through to exhaustion
+                logger.error("dod_patch_failed", extra={"story_id": story_id, "attempt": attempt})
+
+            logger.error("dod_gate_exhausted", extra={"story_id": story_id, "gate_corrections": gate_corrections})
+            error_console.print(f"[bold red]❌ DoD gate failed after {gate_corrections} corrections.[/bold red]")
+            for gap in dod_gaps[:5]:
+                error_console.print(f"  [red]• {gap[:200]}[/red]")
+            raise typer.Exit(code=1)
         else:
             _outcome = "corrected" if attempt > 1 else "pass"
             dod_span.set_attribute("outcome", _outcome)
@@ -661,7 +764,7 @@ Generate the runbook now.
 
     # -- SPLIT_REQUEST Fallback (INFRA-094) --
     if "SPLIT_REQUEST" in content:
-        split_data = _parse_split_request(content)
+        split_data = parse_split_request(content)
         if split_data:
             # AC-3: Save decomposition suggestions
             config.split_requests_dir.mkdir(parents=True, exist_ok=True)
@@ -697,6 +800,10 @@ Generate the runbook now.
                 # AC-4: Exit with code 2 and guidance
                 console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
                 console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
+                est_loc = split_data.get('estimated_loc')
+                est_files = split_data.get('estimated_files')
+                if est_loc or est_files:
+                    console.print(f"  • Estimated scope: ~{est_loc or '?'} LOC across {est_files or '?'} files")
                 console.print(f"  • Suggestions: {len(split_data.get('suggestions', []))}")
                 for i, s in enumerate(split_data.get("suggestions", []), 1):
                     console.print(f"    {i}. {s}")
@@ -731,127 +838,3 @@ Generate the runbook now.
     console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
 
 
-def _load_journey_context() -> str:
-    """Load existing journey YAML files for context injection.
-    
-    Returns a size-bounded, scrubbed string of journey content.
-    """
-    from agent.core.utils import scrub_sensitive_data
-
-    journeys_content = ""
-    if config.journeys_dir.exists():
-        for jf in config.journeys_dir.rglob("*.yaml"):
-            journeys_content += f"\n---\n{jf.read_text()}"
-
-    if journeys_content:
-        return scrub_sensitive_data(journeys_content[:5000])
-    return "None defined yet."
-
-
-def _retrieve_dynamic_rules(story_content: str, targeted_context: str) -> str:
-    """
-    Perform semantic retrieval of contextual rules based on story impact (INFRA-135).
-    
-    Classifies .agent/rules/ into core (always included) and contextual 
-    (retrieved via RAG). Reduces token count by ≥50%.
-    
-    Args:
-        story_content: The user story markdown.
-        targeted_context: Introspection of touched files.
-        
-    Returns:
-        Assembled string of relevant governance rules.
-    """
-    start_time = time.monotonic()
-    rules_dir = config.rules_dir
-    
-    # AC-1: Audit and Classify
-    # Core: Identity, Governance, Security, QA, Architect (Foundation)
-    CORE_PREFIXES = ("000", "001", "002", "003", "004")
-    
-    core_content = []
-    contextual_candidates = []
-    
-    if rules_dir.exists():
-        for rule_file in sorted(rules_dir.glob("*.mdc")):
-            if rule_file.name.startswith(CORE_PREFIXES):
-                core_content.append(f"--- CORE RULE: {rule_file.name} ---\n{rule_file.read_text()}")
-            else:
-                contextual_candidates.append(rule_file.name)
-                
-    # AC-3: Retrieval Step
-    query = f"{story_content}\n\nTOUCHED FILES:\n{targeted_context}"
-    retrieved_content = ""
-    source = "NONE"
-    fallback_used = False
-    
-    try:
-        # Try local Vector DB first as it's the primary fallback for Rule Diet
-        from agent.db.journey_index import JourneyIndex
-        console.print("[dim]ℹ️  Populating shards in vector index...[/dim]")
-        idx = JourneyIndex()
-        # Search for contextual rules specifically
-        retrieved_content = idx.search(f"Governance rules for: {query}", k=4)
-        source = "ChromaDB"
-        fallback_used = True
-    except Exception as e:
-        logger.warning(f"Rule retrieval failed: {e}")
-        source = "FAILED"
-        
-    # AC-4: Fallback Mechanism
-    # If retrieval failed or returned empty, we still have core_content (Security + QA)
-    
-    latency = (time.monotonic() - start_time) * 1000
-    
-    # NFR: SOC2/Observability logging
-    logger.info("rule_retrieval", extra={
-        "source": source,
-        "count": 4 if retrieved_content else 0,
-        "latency_ms": latency,
-        "fallback_used": fallback_used
-    })
-    
-    combined = "\n\n".join(core_content)
-    if retrieved_content:
-        combined += "\n\n### CONTEXTUAL RULES (RETRIEVED) ###\n\n" + retrieved_content
-        
-    return combined
-
-
-def _parse_split_request(content: str) -> Optional[dict]:
-    """Extract and parse SPLIT_REQUEST JSON from AI response.
-
-    Handles:
-    - Pure JSON response
-    - JSON embedded in markdown code fences
-    - Malformed JSON (returns None -> treat as normal runbook)
-
-    Args:
-        content: Raw AI response string.
-
-    Returns:
-        Parsed dict if valid SPLIT_REQUEST, None otherwise.
-    """
-    # Try direct parse first
-    try:
-        data = json.loads(content.strip())
-        if isinstance(data, dict) and data.get("SPLIT_REQUEST"):
-            return data
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # Try extracting from markdown code fences (\n made optional for AI variance)
-    json_match = re.search(r"```(?:json)?\s*\n?(.+?)\n?\s*```", content, re.DOTALL)
-    if json_match:
-        try:
-            data = json.loads(json_match.group(1).strip())
-            if isinstance(data, dict) and data.get("SPLIT_REQUEST"):
-                return data
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Malformed or not a SPLIT_REQUEST -- graceful fallback
-    logger.debug(
-        "SPLIT_REQUEST marker found but JSON parse failed, treating as normal runbook"
-    )
-    return None

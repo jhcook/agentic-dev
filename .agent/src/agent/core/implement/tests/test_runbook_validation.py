@@ -91,44 +91,50 @@ class TestExtractFencedContent:
 
 
 class TestNewBlockMissingCodeFence:
-    """[NEW] headers with no code block must raise ParsingError."""
+    """[NEW] headers with no code block must be flagged malformed."""
 
     def test_no_code_fence(self):
-        """A [NEW] header with prose only must fail."""
+        """A [NEW] header with prose only must be flagged malformed."""
         content = _wrap_runbook(
             "### Step 1: Create file\n\n"
             "#### [NEW] .agent/src/agent/mod.py\n\n"
             "This is just prose.\n"
         )
-        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
-            _extract_runbook_data(content)
+        steps = _extract_runbook_data(content)
+        assert len(steps) == 1
+        op = steps[0]["operations"][0]
+        assert op.get("malformed") is True
 
     def test_empty_code_fence(self):
-        """A [NEW] header with empty fence must fail."""
+        """A [NEW] header with empty fence must be flagged malformed."""
         content = _wrap_runbook(
             "### Step 1: Create file\n\n"
             "#### [NEW] .agent/src/agent/empty.py\n\n"
             "```python\n```\n"
         )
-        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
-            _extract_runbook_data(content)
+        steps = _extract_runbook_data(content)
+        assert len(steps) == 1
+        op = steps[0]["operations"][0]
+        assert op.get("malformed") is True
 
 
 # ── Empty S/R content in [MODIFY] tags (AC-3b) ───────────────
 
 
 class TestModifyBlockEmptySearchReplace:
-    """[MODIFY] with empty or missing S/R blocks must fail."""
+    """[MODIFY] with empty or missing S/R blocks must be flagged malformed."""
 
     def test_no_search_replace(self):
-        """A [MODIFY] with no SEARCH block must fail."""
+        """A [MODIFY] with no SEARCH block must be flagged malformed."""
         content = _wrap_runbook(
             "### Step 1: Update file\n\n"
             "#### [MODIFY] .agent/src/agent/commands/runbook.py\n\n"
             "Just prose.\n"
         )
-        with pytest.raises(ParsingError, match="no valid SEARCH/REPLACE"):
-            _extract_runbook_data(content)
+        steps = _extract_runbook_data(content)
+        assert len(steps) == 1
+        op = steps[0]["operations"][0]
+        assert op.get("malformed") is True
 
 
 # ── Malformed file paths (AC-3c) ─────────────────────────────

@@ -352,11 +352,38 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
     from agent.core.implement.parser import (  # noqa: PLC0415
         parse_search_replace_blocks,
         extract_modify_files,
+        _extract_runbook_data_ast,
     )
+    from agent.core.implement.models import ParsingError  # noqa: PLC0415
     from agent.core.implement.resolver import resolve_path  # noqa: PLC0415
 
     # Files declared in [MODIFY] headers — missing files are an immediate error.
-    modify_files: set[str] = set(extract_modify_files(content))
+    # The parser now flags malformed blocks instead of crashing, but we still
+    # guard against unexpected parse failures.
+    try:
+        modify_files: set[str] = set(extract_modify_files(content))
+    except (ParsingError, ValueError) as pe:
+        return [{"file": "PARSE_ERROR", "index": 0, "search": "", "actual": "",
+                 "missing_modify": False, "parse_error": str(pe)}]
+
+    # Detect malformed [MODIFY] blocks (header present, no S/R pairs).
+    # The AST parser flags these with malformed=True instead of crashing.
+    try:
+        steps = _extract_runbook_data_ast(content)
+    except (ParsingError, ValueError):
+        steps = []
+    malformed_mismatches: List[SRMismatch] = []
+    for step in steps:
+        for op in step.get("operations", []):
+            if op.get("malformed") and "blocks" in op:
+                malformed_mismatches.append({
+                    "file": op["path"],
+                    "index": 0,
+                    "search": "",
+                    "actual": "",
+                    "missing_modify": False,
+                    "parse_error": f"MODIFY header for '{op['path']}' has no valid SEARCH/REPLACE blocks",
+                })
 
     # All S/R blocks (MODIFY + NEW that contain <<<SEARCH blocks).
     sr_blocks = parse_search_replace_blocks(content)
@@ -416,11 +443,15 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                     }
                 )
 
-    return mismatches
+    return malformed_mismatches + mismatches
 
 
 def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     """Build an AI correction prompt for failing S/R blocks.
+
+    Handles two kinds of findings:
+    - **Regular mismatches**: SEARCH text doesn't match the file.
+    - **Parse errors**: MODIFY header present but no valid S/R blocks at all.
 
     File content is scrubbed with :func:`scrub_sensitive_data` before being
     embedded in the prompt (security requirement — no PII/secrets in AI calls).
@@ -431,23 +462,49 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     Returns:
         Formatted instruction string ready to append to the AI user prompt.
     """
-    lines = [
-        "S/R VALIDATION FAILED. The following SEARCH blocks do not match the "
-        "target files:\n"
-    ]
-    for m in mismatches:
-        lines.append(f"FILE: {m['file']} (Block #{m['index']})")
-        lines.append(f"FAILING SEARCH BLOCK:\n{m['search']}\n")
+    # Separate structural errors from content mismatches
+    parse_errors = [m for m in mismatches if m.get("parse_error")]
+    content_mismatches = [m for m in mismatches if not m.get("parse_error")]
+
+    lines = []
+
+    if parse_errors:
         lines.append(
-            f"ACTUAL FILE CONTENT FOR {m['file']}:\n"
-            f"{scrub_sensitive_data(m['actual'])}"
+            "MALFORMED MODIFY BLOCKS. The following [MODIFY] headers have no valid "
+            "<<<SEARCH/===/>>>REPLACE blocks. Each [MODIFY] MUST contain at least one "
+            "<<<SEARCH block with exact content from the target file:\n"
         )
-        lines.append("---")
-    lines.append(
-        "\nInstruction: Rewrite the implementation steps so that EVERY "
-        "<<<SEARCH block exactly matches the actual file content provided. "
-        "Use the provided actual content verbatim. Return the FULL updated runbook."
-    )
+        for m in parse_errors:
+            lines.append(f"FILE: {m['file']}")
+            lines.append(f"ERROR: {m['parse_error']}")
+            lines.append("---")
+        lines.append(
+            "\nInstruction: Rewrite the MODIFY sections listed above to include "
+            "proper <<<SEARCH / === / >>>REPLACE blocks. The SEARCH text must be "
+            "an exact verbatim excerpt from the actual file."
+        )
+
+    if content_mismatches:
+        if lines:
+            lines.append("\n")
+        lines.append(
+            "S/R VALIDATION FAILED. The following SEARCH blocks do not match the "
+            "target files:\n"
+        )
+        for m in content_mismatches:
+            lines.append(f"FILE: {m['file']} (Block #{m['index']})")
+            lines.append(f"FAILING SEARCH BLOCK:\n{m['search']}\n")
+            lines.append(
+                f"ACTUAL FILE CONTENT FOR {m['file']}:\n"
+                f"{scrub_sensitive_data(m['actual'])}"
+            )
+            lines.append("---")
+        lines.append(
+            "\nInstruction: Rewrite ONLY the failing MODIFY blocks listed above "
+            "so that every <<<SEARCH block exactly matches the actual file content "
+            "provided. Use the provided actual content verbatim. Output ONLY the "
+            "corrected #### [MODIFY] sections — do NOT reproduce the rest of the runbook."
+        )
     return "\n".join(lines)
 
 
@@ -558,253 +615,20 @@ def build_adr_catalogue(adrs_dir: Path) -> tuple[str, int]:
 
 # ---------------------------------------------------------------------------
 # INFRA-161: DoD Compliance Gate helpers
+# Extracted to agent.commands.dod_checks (INFRA-165) — re-exported here for
+# backward compatibility.
 # ---------------------------------------------------------------------------
 
+from agent.commands.dod_checks import (  # noqa: F401
+    auto_fix_changelog_step,
+    auto_fix_license_headers,
+    build_ac_coverage_prompt,
+    build_dod_correction_prompt,
+    check_changelog_entry,
+    check_license_headers,
+    check_otel_spans,
+    check_test_coverage,
+    extract_acs,
+    parse_ac_gaps,
+)
 
-def extract_acs(story_content: str) -> List[str]:
-    """Extract Acceptance Criteria bullets from a story markdown file.
-
-    Scans for the ``## Acceptance Criteria`` section and returns each
-    non-empty bullet line (stripping leading ``- [ ]`` / ``- [x]`` markers).
-
-    Args:
-        story_content: Raw markdown text of the user story.
-
-    Returns:
-        List of AC strings.  Empty list if the section is absent.
-    """
-    import re as _re
-
-    ac_section = _re.search(
-        r"##\s+Acceptance Criteria\s*\n(.*?)(?=\n##|\Z)",
-        story_content,
-        _re.DOTALL | _re.IGNORECASE,
-    )
-    if not ac_section:
-        return []
-    raw = ac_section.group(1)
-    acs: List[str] = []
-    for line in raw.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        cleaned = _re.sub(r"^-\s*\[.\]\s*", "", stripped)
-        cleaned = _re.sub(r"^[-*]\s+", "", cleaned)
-        if cleaned:
-            acs.append(cleaned)
-    return acs
-
-
-def build_ac_coverage_prompt(acs: List[str], runbook_content: str) -> str:
-    """Build the secondary AI prompt for AC-1 coverage check.
-
-    Asks the AI to identify which Acceptance Criteria from the story are NOT
-    addressed by any step in the runbook.  The response format is strictly
-    ``ALL_PASS`` (all covered) or one ``AC-N: <reason>`` line per gap.
-
-    Args:
-        acs: List of AC strings extracted from the parent story.
-        runbook_content: Raw runbook markdown (implementation steps only).
-
-    Returns:
-        Prompt string to send to the AI for AC coverage analysis.
-    """
-    numbered = "\n".join(f"AC-{i + 1}: {ac}" for i, ac in enumerate(acs))
-    # Trim runbook to the Implementation Steps section to keep prompt compact
-    import re as _re
-    impl_match = _re.search(
-        r"#+\s*Implementation Steps?\s*\n(.*?)(?=\n#+|\Z)",
-        runbook_content,
-        _re.DOTALL | _re.IGNORECASE,
-    )
-    steps_text = impl_match.group(1).strip() if impl_match else runbook_content[:4000]
-
-    return (
-        "You are a strict QA reviewer. Given the Acceptance Criteria (ACs) for a "
-        "user story and the Implementation Steps in a runbook, identify which ACs "
-        "are NOT addressed by any step in the runbook.\n\n"
-        f"## Acceptance Criteria\n{numbered}\n\n"
-        f"## Runbook Implementation Steps\n{steps_text}\n\n"
-        "## Instructions\n"
-        "Return ONLY one of:\n"
-        "  • The literal string `ALL_PASS` if every AC is addressed.\n"
-        "  • One line per unaddressed AC in the format `AC-N: <brief reason>`.\n"
-        "Do NOT include any prose, preamble, or explanation outside this format."
-    )
-
-
-def parse_ac_gaps(ai_response: str) -> List[str]:
-    """Parse the AI response from an AC coverage check.
-
-    Args:
-        ai_response: Raw string returned by the AI for AC coverage analysis.
-
-    Returns:
-        List of gap IDs (e.g. ``['AC-1', 'AC-3']``).  Empty list if all pass.
-    """
-    import re as _re
-
-    text = ai_response.strip()
-    if not text or "ALL_PASS" in text:
-        return []
-    gaps: List[str] = []
-    for match in _re.finditer(r"^(AC-\d+):", text, _re.MULTILINE):
-        gaps.append(match.group(1))
-    return gaps
-
-
-def check_test_coverage(runbook_content: str) -> List[str]:
-    """Check that the runbook includes at least one test-file step.
-
-    Looks for ``[NEW]`` or ``[MODIFY]`` blocks targeting paths that contain
-    ``test_`` or ``_test.`` in the filename.
-
-    Args:
-        runbook_content: Raw runbook markdown.
-
-    Returns:
-        List of gap strings (empty if requirement met).
-    """
-    import re as _re
-
-    pattern = _re.compile(
-        r"####\s+\[(NEW|MODIFY)\]\s+([^\n]+)",
-        _re.IGNORECASE,
-    )
-    for m in pattern.finditer(runbook_content):
-        path = m.group(2).strip()
-        filename = path.split("/")[-1]
-        if "test_" in filename or "_test." in filename:
-            return []
-    return [
-        "No test file step found — at least one [NEW] or [MODIFY] targeting "
-        "a test_*.py file is required."
-    ]
-
-
-def check_changelog_entry(runbook_content: str) -> List[str]:
-    """Check that the runbook includes a CHANGELOG.md modification step.
-
-    Uses a regex that looks specifically for a ``[MODIFY]`` or ``[NEW]``
-    block header targeting ``CHANGELOG.md``, avoiding false positives from
-    prose mentions of the word "CHANGELOG".
-
-    Args:
-        runbook_content: Raw runbook markdown.
-
-    Returns:
-        List of gap strings (empty if requirement met).
-    """
-    import re as _re
-
-    if _re.search(
-        r"####\s+\[(NEW|MODIFY)\]\s+CHANGELOG\.md",
-        runbook_content,
-        _re.IGNORECASE,
-    ):
-        return []
-    return [
-        "No CHANGELOG.md step found — every story must document its change "
-        "in CHANGELOG.md."
-    ]
-
-
-def check_license_headers(runbook_content: str) -> List[str]:
-    """Check that every ``[NEW]`` Python file step includes the Apache-2.0 header.
-
-    Args:
-        runbook_content: Raw runbook markdown.
-
-    Returns:
-        List of gap strings (empty if requirement met).
-    """
-    import re as _re
-
-    gaps: List[str] = []
-    new_py_pattern = _re.compile(
-        r"####\s+\[NEW\]\s+([^\n]+\.py)\s*\n+```[^\n]*\n(.*?)```",
-        _re.DOTALL | _re.IGNORECASE,
-    )
-    for m in new_py_pattern.finditer(runbook_content):
-        path = m.group(1).strip()
-        body = m.group(2)
-        if "Copyright" not in body and "Apache" not in body and "LICENSE" not in body:
-            gaps.append(
-                f"[NEW] {path} is missing the Apache-2.0 license header. "
-                "Add the standard copyright block at the top of the file."
-            )
-    return gaps
-
-
-def check_otel_spans(runbook_content: str, story_content: str) -> List[str]:
-    """Check that runbook steps touching commands/ or core/ include OTel spans.
-
-    Only applies when the story explicitly mentions observability, tracing,
-    or a new flow in commands/ or core/.
-
-    Args:
-        runbook_content: Raw runbook markdown.
-        story_content: Raw story markdown (used to detect observability AC).
-
-    Returns:
-        List of gap strings (empty if requirement met or not applicable).
-    """
-    import re as _re
-
-    otel_keywords = ("opentelemetry", "otel", "tracing", "span", "observability")
-    if not any(kw in story_content.lower() for kw in otel_keywords):
-        return []
-
-    if "start_as_current_span" in runbook_content or "tracer.start" in runbook_content:
-        return []
-
-    touches_infra = _re.search(
-        r"####\s+\[(NEW|MODIFY)\]\s+\.agent/src/agent/(commands|core)/",
-        runbook_content,
-        _re.IGNORECASE,
-    )
-    if touches_infra:
-        return [
-            "Story requires OTel observability but no 'start_as_current_span' / "
-            "'tracer.start' found in runbook steps touching commands/ or core/. "
-            "Add an OTel span for the new flow."
-        ]
-    return []
-
-
-def build_dod_correction_prompt(
-    gaps: List[str],
-    story_content: str,
-    acs: List[str],
-) -> str:
-    """Build a targeted correction prompt that bundles all DoD gaps.
-
-    Args:
-        gaps: List of gap description strings from the deterministic checkers.
-        story_content: Scrubbed story text (for AC context).
-        acs: Extracted acceptance criteria list.
-
-    Returns:
-        Formatted instruction string ready to append to the AI user prompt.
-    """
-    lines = [
-        "DOD COMPLIANCE GATE FAILED. The following requirements are missing "
-        "from the generated runbook:\n"
-    ]
-    for i, gap in enumerate(gaps, 1):
-        lines.append(f"  {i}. {gap}")
-
-    if acs:
-        lines.append(
-            "\nACCEPTANCE CRITERIA FROM STORY (ensure ALL are addressed by at "
-            "least one Implementation Step):"
-        )
-        for ac in acs:
-            lines.append(f"  - {ac}")
-
-    lines.append(
-        "\nInstruction: Regenerate the FULL runbook ensuring every gap above is "
-        "resolved. Do not omit any existing correct steps — only add/fix the "
-        "missing items. Return the complete updated runbook."
-    )
-    return "\n".join(lines)
