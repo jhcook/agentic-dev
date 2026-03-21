@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-142**: Migrated search and git tools to dedicated modules with AST-aware symbol lookup and git history.
+- **INFRA-142**: Migrated and consolidated search and git tools into dedicated domain modules. Added AST-aware `find_symbol` for semantic Python navigation and expanded git tools with history and blame support.
 - **INFRA-163**: Added `--autoheal` flag to preflight command for autonomous governance and test failure remediation.
 - **INFRA-162**: Enhanced DoD Compliance Gate (Gate 4) with deterministic verifiers for Impact Analysis completeness (`_gap_4f`) and ADR reference validation (`_gap_4g`).
 - **INFRA-141**: Migrated filesystem and shell tools to dedicated domain modules and added `move_file`, `copy_file`, and `file_diff`.

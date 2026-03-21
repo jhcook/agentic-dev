@@ -99,7 +99,7 @@ def new_story(
                 
             console.print("[dim]🤖 AI is generating story content...[/dim]")
             try:
-                sys_prompt = "You are a product manager. Fill in the story template based on the user context. Keep it professional and concise."
+                sys_prompt = "You are a product manager. Fill in the story template based on the user context. Keep it professional and concise. IMPORTANT: In the Impact Analysis Summary, ALL file paths MUST be exact, repository-relative paths (e.g. .agent/src/main.py). Do NOT use generic component names like 'Runbook Orchestrator' or relative filenames without their full directory path like 'parser.py'."
                 user_prompt = f"TEMPLATE:\n{content}\n\nCONTEXT:\n{prompt}"
                 generated = ai_service.complete(sys_prompt, user_prompt)
                 if generated:

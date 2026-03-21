@@ -352,11 +352,38 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
     from agent.core.implement.parser import (  # noqa: PLC0415
         parse_search_replace_blocks,
         extract_modify_files,
+        _extract_runbook_data_ast,
     )
+    from agent.core.implement.models import ParsingError  # noqa: PLC0415
     from agent.core.implement.resolver import resolve_path  # noqa: PLC0415
 
     # Files declared in [MODIFY] headers — missing files are an immediate error.
-    modify_files: set[str] = set(extract_modify_files(content))
+    # The parser now flags malformed blocks instead of crashing, but we still
+    # guard against unexpected parse failures.
+    try:
+        modify_files: set[str] = set(extract_modify_files(content))
+    except (ParsingError, ValueError) as pe:
+        return [{"file": "PARSE_ERROR", "index": 0, "search": "", "actual": "",
+                 "missing_modify": False, "parse_error": str(pe)}]
+
+    # Detect malformed [MODIFY] blocks (header present, no S/R pairs).
+    # The AST parser flags these with malformed=True instead of crashing.
+    try:
+        steps = _extract_runbook_data_ast(content)
+    except (ParsingError, ValueError):
+        steps = []
+    malformed_mismatches: List[SRMismatch] = []
+    for step in steps:
+        for op in step.get("operations", []):
+            if op.get("malformed") and "blocks" in op:
+                malformed_mismatches.append({
+                    "file": op["path"],
+                    "index": 0,
+                    "search": "",
+                    "actual": "",
+                    "missing_modify": False,
+                    "parse_error": f"MODIFY header for '{op['path']}' has no valid SEARCH/REPLACE blocks",
+                })
 
     # All S/R blocks (MODIFY + NEW that contain <<<SEARCH blocks).
     sr_blocks = parse_search_replace_blocks(content)
@@ -416,11 +443,15 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                     }
                 )
 
-    return mismatches
+    return malformed_mismatches + mismatches
 
 
 def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     """Build an AI correction prompt for failing S/R blocks.
+
+    Handles two kinds of findings:
+    - **Regular mismatches**: SEARCH text doesn't match the file.
+    - **Parse errors**: MODIFY header present but no valid S/R blocks at all.
 
     File content is scrubbed with :func:`scrub_sensitive_data` before being
     embedded in the prompt (security requirement — no PII/secrets in AI calls).
@@ -431,23 +462,49 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     Returns:
         Formatted instruction string ready to append to the AI user prompt.
     """
-    lines = [
-        "S/R VALIDATION FAILED. The following SEARCH blocks do not match the "
-        "target files:\n"
-    ]
-    for m in mismatches:
-        lines.append(f"FILE: {m['file']} (Block #{m['index']})")
-        lines.append(f"FAILING SEARCH BLOCK:\n{m['search']}\n")
+    # Separate structural errors from content mismatches
+    parse_errors = [m for m in mismatches if m.get("parse_error")]
+    content_mismatches = [m for m in mismatches if not m.get("parse_error")]
+
+    lines = []
+
+    if parse_errors:
         lines.append(
-            f"ACTUAL FILE CONTENT FOR {m['file']}:\n"
-            f"{scrub_sensitive_data(m['actual'])}"
+            "MALFORMED MODIFY BLOCKS. The following [MODIFY] headers have no valid "
+            "<<<SEARCH/===/>>>REPLACE blocks. Each [MODIFY] MUST contain at least one "
+            "<<<SEARCH block with exact content from the target file:\n"
         )
-        lines.append("---")
-    lines.append(
-        "\nInstruction: Rewrite the implementation steps so that EVERY "
-        "<<<SEARCH block exactly matches the actual file content provided. "
-        "Use the provided actual content verbatim. Return the FULL updated runbook."
-    )
+        for m in parse_errors:
+            lines.append(f"FILE: {m['file']}")
+            lines.append(f"ERROR: {m['parse_error']}")
+            lines.append("---")
+        lines.append(
+            "\nInstruction: Rewrite the MODIFY sections listed above to include "
+            "proper <<<SEARCH / === / >>>REPLACE blocks. The SEARCH text must be "
+            "an exact verbatim excerpt from the actual file."
+        )
+
+    if content_mismatches:
+        if lines:
+            lines.append("\n")
+        lines.append(
+            "S/R VALIDATION FAILED. The following SEARCH blocks do not match the "
+            "target files:\n"
+        )
+        for m in content_mismatches:
+            lines.append(f"FILE: {m['file']} (Block #{m['index']})")
+            lines.append(f"FAILING SEARCH BLOCK:\n{m['search']}\n")
+            lines.append(
+                f"ACTUAL FILE CONTENT FOR {m['file']}:\n"
+                f"{scrub_sensitive_data(m['actual'])}"
+            )
+            lines.append("---")
+        lines.append(
+            "\nInstruction: Rewrite ONLY the failing MODIFY blocks listed above "
+            "so that every <<<SEARCH block exactly matches the actual file content "
+            "provided. Use the provided actual content verbatim. Output ONLY the "
+            "corrected #### [MODIFY] sections — do NOT reproduce the rest of the runbook."
+        )
     return "\n".join(lines)
 
 
@@ -654,32 +711,83 @@ def parse_ac_gaps(ai_response: str) -> List[str]:
 
 
 def check_test_coverage(runbook_content: str) -> List[str]:
-    """Check that the runbook includes at least one test-file step.
+    """Check that every ``[NEW]`` implementation file has a paired test file step.
 
-    Looks for ``[NEW]`` or ``[MODIFY]`` blocks targeting paths that contain
-    ``test_`` or ``_test.`` in the filename.
+    For each ``[NEW]`` non-test ``.py`` file found in the runbook, verifies that a
+    corresponding ``[NEW]`` or ``[MODIFY]`` step targeting a ``test_<module>.py``
+    (or ``<module>_test.py``) file also exists.
 
     Args:
         runbook_content: Raw runbook markdown.
 
     Returns:
-        List of gap strings (empty if requirement met).
+        List of gap strings — one per unpaired implementation file (empty if all pass).
     """
     import re as _re
+    from pathlib import PurePosixPath
 
     pattern = _re.compile(
         r"####\s+\[(NEW|MODIFY)\]\s+([^\n]+)",
         _re.IGNORECASE,
     )
+
+    # Source code extensions that DO need paired tests.
+    # Everything else (config, docs, data, rules, templates, etc.) is excluded.
+    _SOURCE_EXTS = {
+        ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+        ".go", ".rs", ".java", ".kt", ".swift", ".rb", ".php",
+        ".c", ".cpp", ".h", ".hpp", ".cs",
+    }
+    # Boilerplate files that don't need paired tests
+    _BOILERPLATE_STEMS = {"__init__", "conftest", "__main__", "setup"}
+
+    impl_files: List[str] = []
+    test_stems: set[str] = set()
+
     for m in pattern.finditer(runbook_content):
+        action = m.group(1).upper()  # "NEW" or "MODIFY"
         path = m.group(2).strip()
-        filename = path.split("/")[-1]
-        if "test_" in filename or "_test." in filename:
-            return []
-    return [
-        "No test file step found — at least one [NEW] or [MODIFY] targeting "
-        "a test_*.py file is required."
-    ]
+        pp = PurePosixPath(path)
+        stem = pp.stem  # filename without extension
+        ext = pp.suffix.lower()
+
+        # Only source code files need paired tests
+        if ext not in _SOURCE_EXTS or stem in _BOILERPLATE_STEMS:
+            continue
+
+        # Detect test files by convention (language-agnostic: test_*, *_test, *.spec, *.test)
+        is_test = (
+            stem.startswith("test_")
+            or stem.endswith("_test")
+            or stem.endswith(".spec")
+            or stem.endswith(".test")
+        )
+
+        if is_test:
+            # Collect test stems from both NEW and MODIFY so existing test files count
+            base = stem
+            for prefix in ("test_",):
+                if base.startswith(prefix):
+                    base = base[len(prefix):]
+            for suffix in ("_test", ".spec", ".test"):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+            test_stems.add(base)
+        elif action == "NEW":
+            # Only NEW implementation files require a paired test step
+            impl_files.append(path)
+
+    gaps: List[str] = []
+    for impl_path in impl_files:
+        stem = PurePosixPath(impl_path).stem  # e.g. "search"
+        if stem not in test_stems:
+            gaps.append(
+                f"[NEW] {impl_path} has no paired test file — "
+                f"add a [NEW] or [MODIFY] step targeting a "
+                f"test_{stem} file covering all public interfaces."
+            )
+    return gaps
+
 
 
 def check_changelog_entry(runbook_content: str) -> List[str]:
@@ -710,7 +818,12 @@ def check_changelog_entry(runbook_content: str) -> List[str]:
 
 
 def check_license_headers(runbook_content: str) -> List[str]:
-    """Check that every ``[NEW]`` Python file step includes the Apache-2.0 header.
+    """Check that every ``[NEW]`` source file step includes the project license header.
+
+    Reads key phrases from ``.agent/templates/license_header.txt`` and verifies
+    that each ``[NEW]`` source file block contains at least one of them.
+    Falls back to checking for ``Copyright`` or ``LICENSE`` if the template
+    is not found.
 
     Args:
         runbook_content: Raw runbook markdown.
@@ -719,21 +832,153 @@ def check_license_headers(runbook_content: str) -> List[str]:
         List of gap strings (empty if requirement met).
     """
     import re as _re
+    from pathlib import Path, PurePosixPath
+
+    # Non-source extensions that don't require license headers
+    _NON_SOURCE_EXTS = {
+        ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
+        ".html", ".css", ".csv", ".xml", ".svg", ".lock", ".env",
+    }
+
+    # Read key phrases from the license header template
+    template_path = Path(".agent/templates/license_header.txt")
+    if template_path.exists():
+        template_text = template_path.read_text()
+        # Extract the first non-empty line as the key phrase to check for
+        key_phrases = [
+            line.strip()
+            for line in template_text.splitlines()
+            if line.strip()
+        ][:3]  # First 3 non-empty lines are enough to identify the header
+    else:
+        key_phrases = ["Copyright", "LICENSE"]
 
     gaps: List[str] = []
-    new_py_pattern = _re.compile(
-        r"####\s+\[NEW\]\s+([^\n]+\.py)\s*\n+```[^\n]*\n(.*?)```",
+    new_file_pattern = _re.compile(
+        r"####\s+\[NEW\]\s+([^\n]+)\s*\n+```[^\n]*\n(.*?)```",
         _re.DOTALL | _re.IGNORECASE,
     )
-    for m in new_py_pattern.finditer(runbook_content):
+    for m in new_file_pattern.finditer(runbook_content):
         path = m.group(1).strip()
+        ext = PurePosixPath(path).suffix.lower()
+        if ext in _NON_SOURCE_EXTS:
+            continue
         body = m.group(2)
-        if "Copyright" not in body and "Apache" not in body and "LICENSE" not in body:
+        if not any(phrase in body for phrase in key_phrases):
             gaps.append(
-                f"[NEW] {path} is missing the Apache-2.0 license header. "
-                "Add the standard copyright block at the top of the file."
+                f"[NEW] {path} is missing the project license header "
+                f"(from .agent/templates/license_header.txt). "
+                "Add the license block at the top of the file."
             )
     return gaps
+
+
+# ── Deterministic Auto-Fixes ─────────────────────────────────────────────── #
+# These functions patch runbook content directly — no AI call required.        #
+# ────────────────────────────────────────────────────────────────────────────── #
+
+# Map file extensions to their comment prefix for license header injection.
+_COMMENT_PREFIXES: dict[str, str] = {
+    ".py": "# ", ".rb": "# ", ".sh": "# ", ".bash": "# ", ".zsh": "# ",
+    ".yaml": "# ", ".yml": "# ", ".r": "# ", ".pl": "# ", ".pm": "# ",
+    ".ts": "// ", ".js": "// ", ".tsx": "// ", ".jsx": "// ",
+    ".go": "// ", ".rs": "// ", ".java": "// ", ".kt": "// ",
+    ".c": "// ", ".cpp": "// ", ".h": "// ", ".hpp": "// ",
+    ".cs": "// ", ".swift": "// ", ".scala": "// ", ".dart": "// ",
+}
+
+
+def auto_fix_license_headers(runbook_content: str) -> str:
+    """Inject the project license header into ``[NEW]`` source file blocks.
+
+    Reads the header from ``.agent/templates/license_header.txt``, wraps it
+    with the appropriate comment prefix for the file's language, and prepends
+    it to every ``[NEW]`` code block that is missing it.
+
+    This is fully deterministic — no AI call is made.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Patched runbook content with license headers injected.
+    """
+    import re as _re
+    from pathlib import Path, PurePosixPath
+
+    _NON_SOURCE_EXTS = {
+        ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
+        ".html", ".css", ".csv", ".xml", ".svg", ".lock", ".env",
+    }
+
+    template_path = Path(".agent/templates/license_header.txt")
+    if not template_path.exists():
+        return runbook_content  # nothing to inject
+
+    raw_header = template_path.read_text().rstrip("\n")
+
+    # Read key phrases for presence check (same as check_license_headers)
+    key_phrases = [
+        line.strip()
+        for line in raw_header.splitlines()
+        if line.strip()
+    ][:3]
+
+    new_file_pattern = _re.compile(
+        r"(####\s+\[NEW\]\s+([^\n]+)\s*\n+)(```[^\n]*\n)(.*?```)",
+        _re.DOTALL | _re.IGNORECASE,
+    )
+
+    def _inject(m: _re.Match) -> str:
+        header_line = m.group(1)  # #### [NEW] path\n\n
+        fence_open = m.group(3)    # ```lang\n
+        body_and_close = m.group(4)  # code...```
+        path = m.group(2).strip()
+
+        ext = PurePosixPath(path).suffix.lower()
+        if ext in _NON_SOURCE_EXTS:
+            return m.group(0)
+
+        # Already has the header?
+        if any(phrase in body_and_close for phrase in key_phrases):
+            return m.group(0)
+
+        prefix = _COMMENT_PREFIXES.get(ext, "# ")
+        formatted_header = "\n".join(
+            f"{prefix}{line}".rstrip() for line in raw_header.splitlines()
+        ) + "\n\n"
+
+        return header_line + fence_open + formatted_header + body_and_close
+
+    return new_file_pattern.sub(_inject, runbook_content)
+
+
+def auto_fix_changelog_step(runbook_content: str) -> str:
+    """Append a ``[MODIFY] CHANGELOG.md`` step if one is missing.
+
+    This is fully deterministic — no AI call is made.
+
+    Args:
+        runbook_content: Raw runbook markdown.
+
+    Returns:
+        Patched runbook content with changelog step appended if needed.
+    """
+    import re as _re
+
+    if _re.search(
+        r"####\s+\[(NEW|MODIFY)\]\s+CHANGELOG\.md",
+        runbook_content,
+        _re.IGNORECASE,
+    ):
+        return runbook_content  # already present
+
+    changelog_step = (
+        "\n\n### Step N: Update CHANGELOG\n"
+        "#### [MODIFY] CHANGELOG.md\n\n"
+        "Add an entry under the `[Unreleased]` section documenting this change.\n"
+    )
+    return runbook_content.rstrip() + changelog_step
 
 
 def check_otel_spans(runbook_content: str, story_content: str) -> List[str]:

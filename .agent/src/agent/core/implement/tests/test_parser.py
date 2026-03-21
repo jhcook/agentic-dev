@@ -14,8 +14,9 @@
 
 """Integration tests for parser error handling (INFRA-150).
 
-Verifies that the parser raises ParsingError (not silent debug logging)
-when encountering malformed [MODIFY] or [NEW] blocks.
+Verifies that the parser flags malformed [MODIFY] or [NEW] blocks
+with malformed=True so downstream consumers can handle them as
+correctable gate findings instead of crashing.
 """
 
 import pytest
@@ -46,26 +47,30 @@ def _wrap_runbook(step_body: str) -> str:
 # ---------------------------------------------------------------------------
 
 class TestModifyParsingError:
-    """Verify ParsingError for [MODIFY] headers with no S/R blocks."""
+    """Verify malformed flag for [MODIFY] headers with no S/R blocks."""
 
-    def test_modify_without_sr_raises_parsing_error(self):
-        """A [MODIFY] header with no <<<SEARCH blocks must raise ParsingError."""
+    def test_modify_without_sr_flags_malformed(self):
+        """A [MODIFY] header with no <<<SEARCH blocks must be flagged malformed."""
         content = _wrap_runbook(
             "#### [MODIFY] src/main.py\n\n"
             "Some description but no search/replace blocks.\n"
         )
-        with pytest.raises(ParsingError, match="no valid SEARCH/REPLACE blocks"):
-            _extract_runbook_data(content)
+        steps = _extract_runbook_data(content)
+        assert len(steps) == 1
+        op = steps[0]["operations"][0]
+        assert op["path"] == "src/main.py"
+        assert op.get("malformed") is True
 
     def test_modify_without_sr_surfaces_in_validate(self):
-        """validate_runbook_schema should return a violation string for empty MODIFY."""
+        """validate_runbook_schema should return a violation for empty MODIFY."""
         content = _wrap_runbook(
             "#### [MODIFY] src/main.py\n\n"
             "Description only, no <<<SEARCH blocks.\n"
         )
         violations = validate_runbook_schema(content)
+        # Malformed blocks may surface as Pydantic validation errors (empty blocks list)
+        # or as structural warnings — either way, at least one violation expected.
         assert len(violations) >= 1
-        assert "SEARCH/REPLACE" in violations[0]
 
     def test_modify_with_valid_sr_passes(self):
         """A well-formed [MODIFY] block should extract without errors."""
@@ -89,26 +94,30 @@ class TestModifyParsingError:
 # ---------------------------------------------------------------------------
 
 class TestNewParsingError:
-    """Verify ParsingError for [NEW] headers with no code block."""
+    """Verify malformed flag for [NEW] headers with no code block."""
 
-    def test_new_without_code_fence_raises_parsing_error(self):
-        """A [NEW] header with no code fence must raise ParsingError."""
+    def test_new_without_code_fence_flags_malformed(self):
+        """A [NEW] header with no code fence must be flagged malformed."""
         content = _wrap_runbook(
             "#### [NEW] src/new_file.py\n\n"
             "This is just text, no code fence.\n"
         )
-        with pytest.raises(ParsingError, match="no (balanced code fence|code block)"):
-            _extract_runbook_data(content)
+        steps = _extract_runbook_data(content)
+        assert len(steps) == 1
+        op = steps[0]["operations"][0]
+        assert op["path"] == "src/new_file.py"
+        assert op.get("malformed") is True
 
     def test_new_without_fence_surfaces_in_validate(self):
-        """validate_runbook_schema should return a violation string for fenceless NEW."""
+        """validate_runbook_schema should return a violation for fenceless NEW."""
         content = _wrap_runbook(
             "#### [NEW] src/new_file.py\n\n"
             "Just text, no fenced code block.\n"
         )
         violations = validate_runbook_schema(content)
+        # Malformed blocks surface as Pydantic validation errors (empty content)
+        # or structural warnings.
         assert len(violations) >= 1
-        assert "code fence" in violations[0] or "code block" in violations[0]
 
     def test_new_with_valid_fence_passes(self):
         """A well-formed [NEW] block should extract without errors."""

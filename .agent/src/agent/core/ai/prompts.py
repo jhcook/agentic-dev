@@ -49,7 +49,7 @@ INSTRUCTIONS:
    The structure MUST be:
    
    ## Impact Analysis Summary
-   Components touched: [List of files/components]
+   Components touched: [List of exact repository-relative file paths touched (e.g. .agent/src/agent/core/ai/prompts.py)]
    Workflows affected: [List of workflows]
    Risks identified: [List of risks]
    Breaking Changes: [Yes/No - Detail if Yes]

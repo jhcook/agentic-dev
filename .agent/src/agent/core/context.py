@@ -63,7 +63,7 @@ class ContextLoader:
 
         # NotebookLM MCP / Local Vector DB integration
         context_str = ""
-        if not legacy_context and story_id:
+        if not legacy_context and story_id and not os.environ.get("AGENT_DISABLE_MCP"):
             try:
                 from agent.core.mcp.client import MCPClient
                 mcp_client = MCPClient()
@@ -71,6 +71,8 @@ class ContextLoader:
             except Exception as e:
                 logger.debug(f"MCP Server not detected. Falling back to local Vector DB: {e}")
                 context_str = self._query_local_vector_db(story_id)
+        elif not legacy_context and story_id:
+            context_str = self._query_local_vector_db(story_id)
 
         return {
             "rules": rules,

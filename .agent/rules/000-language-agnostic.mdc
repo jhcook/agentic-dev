@@ -1,0 +1,40 @@
+---
+description: Language-agnostic codebase management — no technology assumptions
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Rule 000: Language-Agnostic Codebase Management
+
+> **This tool is written in Python. It manages codebases in any language.**
+> These are two separate concerns. The implementation language is irrelevant to what it manages.
+
+This tool manages codebases in **any language and any stack**. It is not a Python tool, a JavaScript tool, or any other language-specific tool. It exists to manage the lifecycle of code — regardless of what language that code is written in.
+
+> This agent manages the **lifecycle of code** — planning, implementation, testing, review, and delivery — regardless of what language that code is written in.
+
+## What This Means in Practice
+
+### Rules and Templates Must Never Assume a Language
+- Rules (`.mdc` files) must use language-neutral language
+- Templates (`.agent/templates/`) must use generic placeholders — never `.py`, `.ts`, `.go`, etc.
+- Code block fences in templates must use plain ` ``` ` — never ` ```python `, ` ```typescript `, etc.
+
+### Gates Must Be Language-Aware, Not Language-Specific
+- The DoD gate detects test files by naming convention (`test_*`, `*_test`, `*.spec.*`, `*.test.*`) — not by extension
+- The license header gate checks for copyright notices using heuristics applicable to any comment syntax
+- No gate may hard-code a language-specific check
+
+### The Panel Adapts to the Stack
+- The AI Governance Panel reads the source file tree and adapts its review to the actual stack present
+- It does NOT apply Python-specific or TypeScript-specific advice by default
+- Role instructions (e.g., `@QA`) describe outcomes (coverage, reliability) not language-level tooling
+
+## Enforcement
+
+Any PR that introduces a language-specific assumption into:
+- A `.mdc` rule file
+- A template file
+- A gate verifier in `utils.py`
+
+...must be rejected and corrected before merge.
