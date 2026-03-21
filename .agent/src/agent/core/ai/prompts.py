@@ -15,6 +15,107 @@
 from typing import Any, Dict
 
 
+def generate_skeleton_prompt(story_content: str, metadata: Dict[str, Any] = None) -> str:
+    """
+    Generate a Phase 1 prompt for creating a runbook skeleton.
+
+    Args:
+        story_content: The full content of the User Story.
+        metadata: Additional metadata about the environment or story.
+
+    Returns:
+        A system prompt for the AI.
+    """
+    prompt = f"""
+You are the Lead Architect in the AI Governance Panel.
+Your task is to generate a high-level Implementation Skeleton for the following User Story.
+
+STORY CONTENT:
+{story_content}
+
+METADATA:
+{metadata or "None"}
+
+TASK:
+Identify all necessary sections for a comprehensive implementation runbook (Architecture Review, Implementation Steps, Verification Plan, etc.).
+For each section, provide a title, a brief description of what it should cover, and an estimated token weight.
+
+OUTPUT FORMAT:
+Return ONLY a JSON object with this structure (no markdown fences, no prose):
+{{
+  "title": "Implementation Runbook for STORY-ID",
+  "sections": [
+    {{
+      "title": "Section Title",
+      "description": "Short description of what to implement/review here.",
+      "estimated_tokens": 500
+    }}
+  ]
+}}
+
+CRITICAL: Do NOT include credentials, PII, or secrets. Use placeholders if necessary.
+"""
+    return prompt.strip()
+
+
+def generate_block_prompt(
+    section_title: str,
+    section_desc: str,
+    skeleton_json: str,
+    story_content: str,
+    context_summary: str,
+) -> str:
+    """
+    Generate a Phase 2 prompt for creating a detailed implementation block.
+
+    Args:
+        section_title: The title of the section to generate.
+        section_desc: The description of the section.
+        skeleton_json: The full skeleton JSON for context.
+        story_content: The original story content.
+        context_summary: Relevant codebase context (targeted introspection).
+
+    Returns:
+        A system prompt for the AI.
+    """
+    prompt = f"""
+You are the Implementation Specialist in the AI Governance Panel.
+Your task is to generate a DETAILED implementation block for a specific section of a runbook.
+
+TARGET SECTION:
+Title: {section_title}
+Objective: {section_desc}
+
+FULL RUNBOOK SKELETON (FOR COHERENCE):
+{skeleton_json}
+
+STORY CONTEXT:
+{story_content}
+
+CODEBASE CONTEXT:
+{context_summary}
+
+TASK:
+Provide the full technical content for this section.
+- Use valid Markdown.
+- Use the repository-standard `#### [MODIFY|NEW|DELETE] <path>` format for code changes.
+- Use `<<<SEARCH / === / >>>` blocks for modifications.
+- Ensure all public interfaces have PEP-257 docstrings.
+- Include a troubleshooting subsection if applicable.
+
+OUTPUT FORMAT:
+Return ONLY a JSON object with this structure (no markdown fences, no prose):
+{{
+  "header": "{section_title}",
+  "content": "... full markdown content ..."
+}}
+
+CRITICAL: Ensure implementation blocks use repository-relative paths starting with `.agent/src/`.
+CRITICAL: Do NOT include credentials, PII, or secrets. Use placeholders if necessary.
+"""
+    return prompt.strip()
+
+
 def generate_impact_prompt(diff: str, story: str, metadata: Dict[str, Any] = None) -> str:
     """
     Generate a prompt for the AI to analyze the impact of changes.

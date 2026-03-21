@@ -60,6 +60,8 @@ from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import parse_code_blocks
 from agent.utils.validation_formatter import format_runbook_errors
 from agent.db.client import upsert_artifact
+from agent.core.implement.chunk_models import RunbookSkeleton, RunbookBlock
+from agent.core.ai.prompts import generate_skeleton_prompt, generate_block_prompt
 from agent.commands.runbook_helpers import (
     ComplexityMetrics,
     generate_decomposition_plan,
@@ -103,6 +105,9 @@ def new_runbook(
     ),
     timeout: int = typer.Option(
         180, "--timeout", help="AI request timeout in seconds (default: 180)."
+    ),
+    chunked: bool = typer.Option(
+        False, "--chunked", help="Use modular chunked generation pipeline for better depth."
     ),
 ):
     """
@@ -228,7 +233,35 @@ def new_runbook(
         if preseeded_journeys:
             preseeded_block += f"- Journeys: {', '.join(sorted(preseeded_journeys))}\n"
 
-    # 4. Prompt
+    # 4. Content Generation
+    if chunked:
+        content = _generate_runbook_chunked(
+            story_id=story_id,
+            story_content=story_content,
+            rules_content=rules_content,
+            targeted_context=targeted_context,
+            source_tree=source_tree,
+            source_code=source_code,
+            provider=provider,
+            timeout=timeout,
+        )
+        # Write + sync + return (skip monolithic path entirely)
+        runbook_file.write_text(content)
+        console.print(f"[bold green]✅ Chunked runbook generated at: {runbook_file}[/bold green]")
+        try:
+            adrs = extract_adr_refs(content)
+            journeys = extract_journey_refs(content)
+            if adrs or journeys:
+                merge_story_links(story_file, adrs, journeys)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
+        if upsert_artifact(story_id, "runbook", content, author="agent"):
+            console.print("[bold green]🔄 Synced to local cache[/bold green]")
+        else:
+            console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
+        console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
+        return
+
     # Load Template
     template_path = config.templates_dir / "runbook-template.md"
     if not template_path.exists():
@@ -835,6 +868,125 @@ Generate the runbook now.
     else:
          console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
 
-    console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
+    console.print("[yellow]\u26a0\ufe0f  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
+
+
+def _generate_runbook_chunked(
+    story_id: str,
+    story_content: str,
+    rules_content: str,
+    targeted_context: str,
+    source_tree: str,
+    source_code: str,
+    provider: Optional[str] = None,
+    timeout: int = 180,
+) -> str:
+    """Execute a modular, two-phase generation pipeline for detailed runbooks.
+
+    Phase 1 generates a JSON Skeleton (table of contents), Phase 2 populates
+    each section with detailed implementation blocks.
+
+    Args:
+        story_id: The story identifier.
+        story_content: Full content of the user story.
+        rules_content: Relevant governance rules.
+        targeted_context: Codebase introspection data.
+        source_tree: The project file structure.
+        source_code: Outlines of relevant source files.
+        provider: AI provider override.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        The fully assembled implementation runbook in Markdown.
+    """
+    from agent.core.ai import ai_service
+
+    if provider:
+        ai_service.set_provider(provider)
+
+    context_summary = (
+        f"{source_tree}\n\n{source_code}\n\n{targeted_context}\n\nRULES:\n{rules_content}"
+    )
+
+    # Phase 1: Skeleton Generation
+    with tracer.start_as_current_span("runbook.skeleton_generation") as span:
+        skeleton_prompt = generate_skeleton_prompt(story_content)
+        console.print("[bold green]\U0001f916 Phase 1: Generating Skeleton...[/bold green]")
+
+        skeleton_raw = ai_service.complete(
+            system_prompt="You are a senior technical architect. Output ONLY valid JSON.",
+            user_prompt=skeleton_prompt,
+        )
+
+        try:
+            skeleton_data = json.loads(skeleton_raw.strip())
+            skeleton = RunbookSkeleton.from_dict(skeleton_data)
+            span.set_attribute("section_count", len(skeleton.sections))
+            logger.info(
+                "skeleton_generated",
+                extra={"story_id": story_id, "size": len(skeleton_raw)},
+            )
+        except (json.JSONDecodeError, ValueError) as exc:
+            error_console.print(
+                f"[bold red]\u274c Failed to parse Skeleton JSON: {exc}[/bold red]"
+            )
+            logger.error(
+                "skeleton_parse_failed",
+                extra={"error": str(exc), "story_id": story_id},
+            )
+            raise typer.Exit(code=1)
+
+    # Phase 2: Block Generation
+    assembled_content = (
+        f"# Runbook: {skeleton.title}\n\n## State\n\nPROPOSED\n\n"
+    )
+
+    for i, section in enumerate(skeleton.sections, 1):
+        with tracer.start_as_current_span("runbook.block_generation") as bspan:
+            bspan.set_attribute("section_index", i)
+            bspan.set_attribute("section_title", section.title)
+
+            console.print(
+                f"[bold green]\U0001f916 Phase 2: Generating Block "
+                f"{i}/{len(skeleton.sections)}: {section.title}...[/bold green]"
+            )
+
+            block_prompt = generate_block_prompt(
+                section.title,
+                section.description,
+                skeleton_raw,
+                story_content,
+                context_summary,
+            )
+
+            block_raw = ai_service.complete(
+                system_prompt="You are an implementation specialist. Output ONLY valid JSON.",
+                user_prompt=block_prompt,
+            )
+
+            try:
+                block_data = json.loads(block_raw.strip())
+                block = RunbookBlock.from_dict(block_data)
+                assembled_content += f"## {block.header}\n\n{block.content}\n\n"
+                logger.info(
+                    "block_generated",
+                    extra={"section": section.title, "size": len(block_raw)},
+                )
+            except (json.JSONDecodeError, ValueError) as exc:
+                error_console.print(
+                    f"[bold red]\u274c Failed to parse Block JSON for "
+                    f"'{section.title}': {exc}[/bold red]"
+                )
+                logger.warning(
+                    "block_parse_failed",
+                    extra={"section": section.title, "error": str(exc)},
+                )
+                # Best effort: placeholder for failed section
+                assembled_content += (
+                    f"## {section.title}\n\n"
+                    "[Generation failed for this section]\n\n"
+                )
+
+    return assembled_content
 
 

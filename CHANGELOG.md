@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-165**: Introduced a modular, two-phase chunked generation pipeline for runbooks, including Phase 1 Skeleton and Phase 2 Block generation with JSON validation and OTel tracing.
 - **INFRA-142**: Migrated search and git tools to dedicated modules with AST-aware symbol lookup and git history.
 - **INFRA-142**: Migrated and consolidated search and git tools into dedicated domain modules. Added AST-aware `find_symbol` for semantic Python navigation and expanded git tools with history and blame support.
 - **INFRA-163**: Added `--autoheal` flag to preflight command for autonomous governance and test failure remediation.
