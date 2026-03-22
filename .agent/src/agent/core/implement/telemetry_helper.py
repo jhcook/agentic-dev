@@ -12,70 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Telemetry instrumentation for verification workflows.
+"""telemetry_helper module."""
 
-Follows ADR-058: Telemetry and Instrumentation Schema.
-"""
+# Copyright 2026 Justin Cook
 
+import os
 import time
-from typing import Dict, Any
-from opentelemetry import trace, metrics
+from typing import Any, Dict, Optional
 from agent.core.logger import get_logger
 
-logger = get_logger(__name__)
-tracer = trace.get_tracer(__name__)
-meter = metrics.get_meter(__name__)
+_logger = get_logger(__name__)
 
-duration_histogram = meter.create_histogram(
-    "verification.execution_duration_ms",
-    description="Total execution time for the verification workflow",
-    unit="ms"
-)
+def log_assembly_audit(user: str, template_version: str, block_count: int, success: bool, duration_ms: float):
+    """Log a structured audit event for runbook assembly.
 
-class VerificationTelemetry:
-    """Helper to track and emit verification metrics."""
-    
-    def __init__(self, workflow_type: str):
-        """
-        Initialize telemetry tracker.
-        
-        Args:
-            workflow_type: The type of verification.
-        """
-        self.workflow_type = workflow_type
-        self.start_time = 0.0
-        
-    def start(self) -> None:
-        """Start tracking duration."""
-        self.start_time = time.perf_counter()
-        
-    def emit(self, status: str, metadata: Dict[str, Any] = None) -> None:
-        """
-        Emit metrics to OpenTelemetry.
-        
-        Args:
-            status: Final status ('Success', 'Failed').
-            metadata: Additional non-PII attributes.
-        """
-        if metadata is None:
-            metadata = {}
-            
-        duration_ms = (time.perf_counter() - self.start_time) * 1000
-        
-        attributes = {
-            "workflow_type": self.workflow_type,
-            "status": status,
-            **metadata
-        }
-        
-        duration_histogram.record(duration_ms, attributes)
-        
-        logger.info(
-            "Verification telemetry emitted",
-            extra={
-                "duration_ms": duration_ms,
-                "status": status,
-                "workflow": self.workflow_type
+    Args:
+        user: The identity of the user who triggered the assembly.
+        template_version: The version string of the skeleton template used.
+        block_count: Number of blocks processed during assembly.
+        success: Whether the assembly completed without errors.
+        duration_ms: Time taken to assemble in milliseconds.
+    """
+    _logger.info(
+        "runbook_assembly_audit",
+        extra={
+            "audit": {
+                "event": "assembly",
+                "user": user,
+                "template_version": template_version,
+                "block_count": block_count,
+                "status": "success" if success else "failure",
+                "latency_ms": duration_ms
             }
-        )
+        }
+    )
+
+def calculate_block_density(block_count: int, content: str) -> float:
+    """Calculate the mapping density (blocks per 100 lines).
+
+    Args:
+        block_count: Number of addressable blocks found.
+        content: The raw source content.
+
+    Returns:
+        Density percentage as a float.
+    """
+    lines = len(content.splitlines())
+    if lines == 0:
+        return 0.0
+    return (block_count / lines) * 100

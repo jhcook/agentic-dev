@@ -32,7 +32,7 @@ Placing this function in `core/utils.py` violates **separation of concerns** by 
 
 Both callers are CLI commands:
 - `agent commit` (`commands/workflow.py`) — sets state to `COMMITTED`
-- `agent implement` (`commands/implement.py`) — sets state to `IN_PROGRESS`
+- `agent implement` (`commands/implement.py`) — validates state is `COMMITTED`
 
 `core/utils.py` should remain **importable without pulling in sync or Rich dependencies**, consistent with `lean-code.mdc`: *"Do not introduce dependencies unless absolutely required"* and *"Prefer explicitness over magic — avoid hidden side effects."*
 

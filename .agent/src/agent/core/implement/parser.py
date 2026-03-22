@@ -20,6 +20,7 @@ import os
 import re
 import logging
 import sys
+from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple, Union, Optional
 
 import mistune
@@ -37,6 +38,7 @@ from agent.core.implement.models import (
     RunbookStep,
     SearchReplaceBlock,
 )
+from agent.core.implement.chunk_models import RunbookBlock, RunbookSkeleton
 
 try:
     from opentelemetry import trace
@@ -44,6 +46,61 @@ try:
 except ImportError:
     _tracer = None
 _logger = get_logger(__name__)
+
+
+class InvalidTemplateError(Exception):
+    """Raised when a runbook skeleton is malformed or lacks addressable blocks."""
+    pass
+
+
+def validate_path_safety(path_str: str) -> str:
+    """Verify that a path does not attempt directory traversal.
+
+    Args:
+        path_str: The file path to validate.
+
+    Returns:
+        The validated path string.
+
+    Raises:
+        ParsingError: If the path is absolute or attempts to climb up (..).
+    """
+    if not path_str:
+        return ""
+    if ".." in path_str or path_str.startswith("/") or ":" in path_str:
+        raise ParsingError(f"Security Violation: Potential directory traversal in path: {path_str}")
+    return path_str
+
+
+def validate_block_id(block_id: str) -> str:
+    """Sanitize and validate a block identifier.
+
+    Args:
+        block_id: The raw identifier extracted from the template.
+
+    Returns:
+        The sanitized identifier.
+
+    Raises:
+        ParsingError: If the ID contains illegal characters or exceeds length limits.
+    """
+    if not re.match(r"^[a-zA-Z0-9_\-\.]+$", block_id):
+        raise ParsingError(f"Security Violation: Invalid characters in block ID: {block_id}")
+    if len(block_id) > 64:
+        raise ParsingError(f"Security Violation: Block ID too long: {block_id[:10]}...")
+    return block_id
+
+
+def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter block metadata to prevent injection and ensure storage safety."""
+    sanitized = {}
+    for k, v in metadata.items():
+        safe_key = re.sub(r"[^a-z0-9_]", "", str(k).lower())
+        if not safe_key:
+            continue
+        if isinstance(v, (str, int, float, bool)):
+            sanitized[safe_key] = v
+    return sanitized
 
 
 def _unescape_path(path: str) -> str:
@@ -65,8 +122,26 @@ def _unescape_path(path: str) -> str:
     path = re.sub(r'\*\*(.*?)\*\*', r'__\1__', path)
     path = re.sub(r'\*(.*?)\*', r'_\1_', path)
     # Remove backslash escapes for markdown characters: _ * [ ] ( ) # + - . !
-    return re.sub(r'\\([_*[\]()#+\-.!])', r'\1', path)
+    clean_path = re.sub(r'\\([_*[\]()#+\-.!])', r'\1', path)
+    return validate_path_safety(clean_path)
 
+def parse_skeleton(content: str) -> RunbookSkeleton:
+    """Parse a runbook skeleton containing @block tags into a RunbookSkeleton model.
+
+    This function identifies block boundaries, extracts IDs and metadata, and 
+    captures whitespace for exact reconstruction.
+
+    Args:
+        content: The raw string content of the skeleton file.
+
+    Returns:
+        A populated RunbookSkeleton instance.
+
+    Raises:
+        InvalidTemplateError: If tags are unbalanced or IDs are duplicated.
+    """
+    # Implementation logic for @block parsing goes here (defined in prior steps)
+    pass
 
 def parse_code_blocks(content: str) -> List[Dict[str, str]]:
     """Parse full-file code blocks from AI-generated markdown.
@@ -587,8 +662,10 @@ def _extract_runbook_data(content: str) -> List[dict]:
     span_ctx = _tracer.start_as_current_span("runbook.extract_data") if _tracer else contextlib.nullcontext()
     
     with span_ctx as span:
+        line_count = len(content.splitlines())
         if span:
             span.set_attribute("parser.mode", "legacy" if use_legacy else "ast")
+            span.set_attribute("runbook.line_count", line_count)
             
         if use_legacy:
             steps = _extract_runbook_data_legacy(content)
@@ -597,6 +674,17 @@ def _extract_runbook_data(content: str) -> List[dict]:
 
         if span:
             span.set_attribute("runbook.step_count", len(steps))
+            # Calculate and record block mapping density (INFRA-168)
+            density = (len(steps) / max(1, line_count)) * 100
+            span.set_attribute("runbook.block_density", density)
+            _logger.info(
+                "skeleton_parsed",
+                extra={
+                    "block_count": len(steps),
+                    "line_count": line_count,
+                    "density": f"{density:.2f}%"
+                }
+            )
 
         return steps
 
@@ -725,3 +813,73 @@ def split_runbook_into_chunks(content: str) -> Tuple[str, List[str]]:
     if verify:
         chunks.append(f"TEST REQUIREMENTS:\n{verify.group(1).strip()}")
     return global_context, chunks
+
+
+def parse_skeleton(content: str, source_path: Optional[str] = None) -> RunbookSkeleton:
+    """Decompose a template string into addressable blocks with metadata mapping.
+
+    Recognises blocks bounded by HTML-style comments:
+    <!-- block: id key=value -->
+    Content
+    <!-- /block -->
+
+    Args:
+        content: Raw template string.
+        source_path: Optional path to the source file for reference.
+
+    Returns:
+        A RunbookSkeleton containing the mapped blocks.
+
+    Raises:
+        InvalidTemplateError: If no blocks are found, IDs are duplicated,
+                             or block structure is malformed.
+    """
+    # Pattern captures block ID, metadata, and the raw inner content.
+    pattern = re.compile(
+        r'<!--\s*block:\s*(?P<id>[\w-]+)\s*(?P<meta>.*?)\s*-->(?P<content>.*?)<!--\s*/block\s*-->',
+        re.DOTALL
+    )
+
+    matches = list(pattern.finditer(content))
+    if not matches:
+        raise InvalidTemplateError(
+            "No addressable blocks found. Templates must contain markers in the format: "
+            "<!-- block: id --> content <!-- /block -->"
+        )
+
+    blocks: List[RunbookBlock] = []
+    seen_ids = set()
+    last_pos = 0
+
+    for i, match in enumerate(matches):
+        block_id = match.group('id')
+        if block_id in seen_ids:
+            raise InvalidTemplateError(f"Duplicate block ID '{block_id}' found in skeleton.")
+        seen_ids.add(block_id)
+
+        # Metadata extraction: key=value (supports underscores and dots in values)
+        meta_raw = match.group('meta')
+        metadata = {}
+        if meta_raw:
+            kv_pairs = re.findall(r'(\w+)=["\']?([\w.-]+)["\']?', meta_raw)
+            metadata = {k: v for k, v in kv_pairs}
+
+        # Assign prefix whitespace (text between previous block end and current tags)
+        prefix = content[last_pos:match.start()]
+        
+        # Suffix whitespace (remaining text after the last block tag)
+        suffix = ""
+        if i == len(matches) - 1:
+            suffix = content[match.end():]
+
+        blocks.append(RunbookBlock(
+            id=block_id,
+            content=match.group('content'),
+            metadata=metadata,
+            prefix_whitespace=prefix,
+            suffix_whitespace=suffix,
+            block_type="markdown"
+        ))
+        last_pos = match.end()
+
+    return RunbookSkeleton(blocks=blocks, source_path=source_path)

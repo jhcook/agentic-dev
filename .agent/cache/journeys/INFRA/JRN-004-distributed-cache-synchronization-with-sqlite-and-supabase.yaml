@@ -82,7 +82,9 @@ implementation:
   - .agent/src/agent/core/engine/parser.py
   - .agent/src/agent/core/engine/typedefs.py
   - .agent/src/agent/core/formatters.py
+  - .agent/src/agent/core/implement/chunk_models.py
   - .agent/src/agent/core/implement/parser.py
+  - .agent/src/agent/core/implement/telemetry_helper.py
   - .agent/src/agent/core/implement/tests/test_runbook_validation.py
   - .agent/src/agent/core/logger.py
   - .agent/src/agent/core/router.py

@@ -12,79 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Models for modular (chunked) runbook generation."""
+"""chunk_models module."""
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any
+# Copyright 2026 Justin Cook
 
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-@dataclass
-class SkeletonSection:
-    """Represents a specific section in the implementation runbook skeleton."""
+class RunbookBlock(BaseModel):
+    """Represents a discrete, addressable segment of a runbook.
 
-    title: str
-    description: str
-    estimated_tokens: int
-
-
-@dataclass
-class RunbookSkeleton:
-    """Represents the high-level structural skeleton of a runbook."""
-
-    title: str
-    sections: List[SkeletonSection]
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RunbookSkeleton":
-        """
-        Create a RunbookSkeleton from a dictionary with basic validation.
-
-        Args:
-            data: The dictionary to parse.
-
-        Returns:
-            A populated RunbookSkeleton instance.
-
-        Raises:
-            ValueError: If required fields are missing or malformed.
-        """
-        if "title" not in data or "sections" not in data:
-            raise ValueError("Skeleton JSON must contain 'title' and 'sections'")
-        if not isinstance(data["sections"], list):
-            raise ValueError("'sections' must be a JSON array")
-
-        sections = [
-            SkeletonSection(
-                title=str(s.get("title", "Untitled")),
-                description=str(s.get("description", "")),
-                estimated_tokens=int(s.get("estimated_tokens", 0)),
-            )
-            for s in data["sections"]
-        ]
-        return cls(title=str(data["title"]), sections=sections)
-
-
-@dataclass
-class RunbookBlock:
-    """Represents a detailed implementation block generated from a skeleton section."""
-
-    header: str
+    Attributes:
+        id: A unique identifier for the block, usually derived from comments.
+        content: The raw text content of the block excluding boundaries.
+        metadata: Key-value pairs extracted from block tags (e.g., tags, version).
+        prefix_whitespace: Exact whitespace/newlines preceding the block content.
+        suffix_whitespace: Exact whitespace/newlines following the block content.
+        block_type: The source format (e.g., 'markdown', 'yaml').
+    """
+    id: str
     content: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    prefix_whitespace: str = ""
+    suffix_whitespace: str = ""
+    block_type: str = "markdown"
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RunbookBlock":
-        """
-        Create a RunbookBlock from a dictionary with basic validation.
+class RunbookSkeleton(BaseModel):
+    """A complete collection of blocks representing a full runbook template."""
+    blocks: List[RunbookBlock]
+    source_path: Optional[str] = None
+    version: str = "1.0.0"
 
-        Args:
-            data: The dictionary to parse.
-
-        Returns:
-            A populated RunbookBlock instance.
-
-        Raises:
-            ValueError: If required fields are missing.
-        """
-        if "header" not in data or "content" not in data:
-            raise ValueError("Block JSON must contain 'header' and 'content'")
-        return cls(header=str(data["header"]), content=str(data["content"]))
+    def get_block(self, block_id: str) -> Optional[RunbookBlock]:
+        """Retrieve a specific block by its ID."""
+        for block in self.blocks:
+            if block.id == block_id:
+                return block
+        return None

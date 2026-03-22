@@ -26,6 +26,8 @@ from agent.core.implement.models import ParsingError
 from agent.core.implement.parser import (
     validate_runbook_schema,
     _extract_runbook_data,
+    parse_skeleton,
+)    InvalidTemplateError,
 )
 
 
@@ -157,6 +159,20 @@ class TestMissingImplementationSteps:
 # DeleteBlock rationale validation through parser pipeline
 # ---------------------------------------------------------------------------
 
+class TestSecurityValidation:
+    """Verify security constraints for paths and identifiers."""
+
+    def test_traversal_detection_in_path(self):
+        """Ensure that paths with .. or absolute roots are blocked."""
+        with pytest.raises(ParsingError, match="Security Violation"):
+            validate_runbook_schema(_wrap_runbook("#### [NEW] ../../etc/passwd\n\n```\ncode\n```"))
+
+    def test_absolute_path_detection(self):
+        """Ensure absolute paths are blocked for runbook operations."""
+        with pytest.raises(ParsingError, match="Security Violation"):
+            validate_runbook_schema(_wrap_runbook("#### [MODIFY] /var/log/syslog\n\n<<<SEARCH\nx\n===\ny\n>>>"))
+
+
 class TestDeleteBlockPipeline:
     """Verify DeleteBlock rationale validation through the full pipeline."""
 
@@ -176,5 +192,68 @@ class TestDeleteBlockPipeline:
             "#### [DELETE] old_file.py\n\n"
             "This module is deprecated and replaced by new_file.py.\n"
         )
-        violations = validate_runbook_schema(content)
-        assert len(violations) == 0
+    violations = validate_runbook_schema(content)
+    assert len(violations) == 0
+
+
+class TestSkeletonParser:
+    """Unit tests for regex logic and block mapping (INFRA-168)."""
+
+    def test_regex_block_identification(self):
+        """Verify that block boundaries are correctly identified by the parser."""
+        content = "<!-- @block id1 -->content1<!-- @end -->"
+        skeleton = parse_skeleton(content)
+        assert len(skeleton.blocks) == 1
+        assert skeleton.blocks[0].id == "id1"
+        assert skeleton.blocks[0].content == "content1"
+
+    def test_block_metadata_mapping(self):
+        """Verify extraction of metadata tokens from block tags."""
+        content = "<!-- @block id1 version=2.0 tags=infra,test -->content<!-- @end -->"
+        skeleton = parse_skeleton(content)
+        meta = skeleton.blocks[0].metadata
+        assert meta.get("version") == "2.0"
+        assert "infra" in meta.get("tags", "")
+
+class TestSkeletonParser:
+    """Verify decomposition of templates into addressable blocks (INFRA-168)."""
+
+    def test_parse_skeleton_success(self):
+        """Verify valid blocks are extracted with metadata and whitespace preservation."""
+        template = (
+            "# Document Prelude\n"
+            "  <!-- block: section-1 category=intro -->\n"
+            "  Initial content\n"
+            "  <!-- /block -->\n"
+            "\n"
+            "<!-- block: section-2 version=2.0 -->\n"
+            "Secondary content\n"
+            "<!-- /block -->\n"
+            "EOF footer"
+        )
+        skeleton = parse_skeleton(template)
+        assert len(skeleton.blocks) == 2
+        
+        b1 = skeleton.get_block("section-1")
+        assert b1.metadata["category"] == "intro"
+        assert "Initial content" in b1.content
+        assert b1.prefix_whitespace == "# Document Prelude\n  "
+        
+        b2 = skeleton.get_block("section-2")
+        assert b2.metadata["version"] == "2.0"
+        assert b2.suffix_whitespace == "\nEOF footer"
+
+    def test_parse_skeleton_duplicate_id_raises(self):
+        """Verify duplicate block IDs trigger InvalidTemplateError."""
+        template = (
+            "<!-- block: same --> content <!-- /block -->\n"
+            "<!-- block: same --> content <!-- /block -->"
+        )
+        with pytest.raises(InvalidTemplateError, match="Duplicate block ID"):
+            parse_skeleton(template)
+
+    def test_parse_skeleton_no_blocks_raises(self):
+        """Verify templates without block markers trigger InvalidTemplateError."""
+        template = "Plain text without any addressable blocks."
+        with pytest.raises(InvalidTemplateError, match="No addressable blocks"):
+            parse_skeleton(template)

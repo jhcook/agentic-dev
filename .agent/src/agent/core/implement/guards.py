@@ -624,6 +624,75 @@ def backup_file(file_path: Path) -> Optional[Path]:
 # Apply helpers
 # ---------------------------------------------------------------------------
 
+
+def _fuzzy_find_and_replace(
+    content: str,
+    search: str,
+    replace: str,
+    filepath: str,
+    block_num: int,
+    total_blocks: int,
+    threshold: float = 0.6,
+) -> Optional[str]:
+    """Find the best fuzzy match for search text in content and apply replacement.
+
+    Uses a sliding window of lines sized to the search block to find the
+    highest-similarity contiguous region.  If similarity >= threshold,
+    replaces that region with the replace text.
+
+    Args:
+        content: The full file content to search in.
+        search: The search text to match (may not match exactly).
+        replace: The replacement text.
+        filepath: File path for logging.
+        block_num: Block number for logging.
+        total_blocks: Total blocks for logging.
+        threshold: Minimum similarity ratio (0.0–1.0).
+
+    Returns:
+        The modified content if a fuzzy match was applied, None otherwise.
+    """
+    search_lines = search.splitlines(keepends=True)
+    content_lines = content.splitlines(keepends=True)
+    window_size = len(search_lines)
+
+    if window_size == 0 or len(content_lines) == 0:
+        return None
+
+    best_ratio = 0.0
+    best_start = -1
+
+    # Slide window across all possible positions
+    for start in range(max(1, len(content_lines) - window_size + 1)):
+        end = min(start + window_size, len(content_lines))
+        candidate = content_lines[start:end]
+        ratio = difflib.SequenceMatcher(
+            None, "".join(candidate), search
+        ).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_start = start
+
+    if best_ratio >= threshold and best_start >= 0:
+        best_end = min(best_start + window_size, len(content_lines))
+        matched_text = "".join(content_lines[best_start:best_end])
+        _console.print(
+            f"[yellow]🔍 Fuzzy matched block {block_num}/{total_blocks} in {filepath} "
+            f"(similarity: {best_ratio:.0%})[/yellow]"
+        )
+        logging.info(
+            "search_replace_fuzzy_match file=%s block=%d/%d similarity=%.2f",
+            filepath, block_num, total_blocks, best_ratio,
+        )
+        return content.replace(matched_text, replace, 1)
+
+    logging.warning(
+        "search_replace_fuzzy_no_match file=%s block=%d/%d best_ratio=%.2f threshold=%.2f",
+        filepath, block_num, total_blocks, best_ratio, threshold,
+    )
+    return None
+
+
 def apply_search_replace_to_file(
     filepath: str,
     blocks: List[Dict[str, str]],
@@ -665,24 +734,32 @@ def apply_search_replace_to_file(
     working_content = original_content
 
     for i, block in enumerate(blocks):
-        if block["search"] not in working_content:
-            _console.print(
-                f"[bold red]❌ Search block {i+1}/{len(blocks)} not found in {filepath}.[/bold red]"
+        if block["search"] in working_content:
+            match_count = working_content.count(block["search"])
+            if match_count > 1:
+                logging.warning(
+                    "search_replace_ambiguous file=%s block=%d match_count=%d",
+                    filepath, i + 1, match_count,
+                )
+            working_content = working_content.replace(block["search"], block["replace"], 1)
+        else:
+            # Fuzzy match fallback: find best matching region
+            _fuzzy_result = _fuzzy_find_and_replace(
+                working_content, block["search"], block["replace"], filepath, i + 1, len(blocks)
             )
-            logging.warning(
-                "search_replace_match_failure file=%s block=%d/%d",
-                filepath, i + 1, len(blocks),
-            )
-            if span_ctx:
-                span_ctx.end()
-            return False, original_content
-        match_count = working_content.count(block["search"])
-        if match_count > 1:
-            logging.warning(
-                "search_replace_ambiguous file=%s block=%d match_count=%d",
-                filepath, i + 1, match_count,
-            )
-        working_content = working_content.replace(block["search"], block["replace"], 1)
+            if _fuzzy_result is not None:
+                working_content = _fuzzy_result
+            else:
+                _console.print(
+                    f"[bold red]❌ Search block {i+1}/{len(blocks)} not found in {filepath}.[/bold red]"
+                )
+                logging.warning(
+                    "search_replace_match_failure file=%s block=%d/%d",
+                    filepath, i + 1, len(blocks),
+                )
+                if span_ctx:
+                    span_ctx.end()
+                return False, original_content
 
     _console.print(f"\n[bold cyan]📝 Search/Replace for: {filepath}[/bold cyan]")
     diff_lines = list(difflib.unified_diff(
