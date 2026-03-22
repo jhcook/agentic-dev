@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 
 def generate_skeleton_prompt(story_content: str, metadata: Dict[str, Any] = None) -> str:
@@ -37,8 +37,19 @@ METADATA:
 {metadata or "None"}
 
 TASK:
-Identify all necessary sections for a comprehensive implementation runbook (Architecture Review, Implementation Steps, Verification Plan, etc.).
+Identify all necessary sections for a comprehensive implementation runbook.
 For each section, provide a title, a brief description of what it should cover, and an estimated token weight.
+
+MANDATORY SECTIONS (always include these, plus any story-specific ones):
+- Architecture & Design Review
+- Implementation (one or more sections covering code changes)
+- Security & Input Sanitization (if applicable)
+- Observability & Audit Logging
+- Verification & Test Suite
+- Deployment & Rollback Strategy
+
+CONDITIONAL SECTIONS (include when the story's Acceptance Criteria warrant it):
+- Documentation Updates — if the story introduces new commands, CLI flags, or user-facing behavioral changes, include a section that creates or updates docs in `.agent/docs/`
 
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):
@@ -64,6 +75,7 @@ def generate_block_prompt(
     skeleton_json: str,
     story_content: str,
     context_summary: str,
+    prior_changes: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Generate a Phase 2 prompt for creating a detailed implementation block.
@@ -74,10 +86,32 @@ def generate_block_prompt(
         skeleton_json: The full skeleton JSON for context.
         story_content: The original story content.
         context_summary: Relevant codebase context (targeted introspection).
+        prior_changes: Dict mapping file paths to a summary of changes
+            already applied by earlier sections.
 
     Returns:
         A system prompt for the AI.
     """
+    # Build deduplication instruction if prior sections touched files
+    dedup_block = ""
+    if prior_changes:
+        entries = []
+        for path, summary in prior_changes.items():
+            entries.append(f"  - `{path}`: {summary}")
+        change_list = "\n".join(entries)
+        dedup_block = f"""
+ALREADY HANDLED BY EARLIER SECTIONS (DO NOT duplicate — this wastes tokens and breaks apply):
+{change_list}
+
+DEDUPLICATION RULES:
+1. Do NOT emit a [NEW] block for any file listed above.
+2. Do NOT re-add imports that were already added above.
+3. If you need to [MODIFY] a file listed above, your SEARCH block MUST use the EXACT
+   function names, class names, and signatures shown in the prior content above.
+   Do NOT guess or paraphrase — copy the exact lines from the content shown.
+4. If your section has no unique changes for a file already listed, skip it entirely.
+"""
+
     prompt = f"""
 You are the Implementation Specialist in the AI Governance Panel.
 Your task is to generate a DETAILED implementation block for a specific section of a runbook.
@@ -92,22 +126,53 @@ FULL RUNBOOK SKELETON (FOR COHERENCE):
 STORY CONTEXT:
 {story_content}
 
-CODEBASE CONTEXT:
+TARGETED FILE CONTENTS (this is the GROUND TRUTH — base all SEARCH blocks on these exact contents):
 {context_summary}
-
+{dedup_block}
 TASK:
 Provide the full technical content for this section.
-- Use valid Markdown.
-- Use the repository-standard `#### [MODIFY|NEW|DELETE] <path>` format for code changes.
-- Use `<<<SEARCH / === / >>>` blocks for modifications.
-- Ensure all public interfaces have PEP-257 docstrings.
-- Include a troubleshooting subsection if applicable.
+IMPORTANT: Do NOT start the content with a section header (## or ### title). The section header
+is provided separately via the "header" field. Start content directly with an objective, description,
+or the first `#### [NEW]` / `#### [MODIFY]` block. Using ## or ### headers at the top of the content
+will break the document structure.
+
+CODE CHANGE FORMAT RULES (follow these EXACTLY):
+1. Use `#### [NEW] <path>` for files that DO NOT EXIST yet, followed by a fenced code block with the full file content.
+2. Use `#### [MODIFY] <path>` for EXISTING files. A [MODIFY] header MUST be followed by one or more `<<<SEARCH / === / >>>` blocks ONLY.
+   NEVER follow a [MODIFY] header with a fenced code block — it will be silently skipped by the parser.
+3. `<<<SEARCH` blocks must contain the EXACT lines from the source file. Do NOT paraphrase, guess, or modify them.
+   Base your SEARCH blocks exactly on the content provided in TARGETED FILE CONTENTS above.
+4. Format for search/replace:
+   ```
+   <<<SEARCH
+   exact existing lines
+   ===
+   replacement lines
+   >>>
+   ```
+5. Use `#### [DELETE] <path>` to remove a file (requires a `rationale` line).
+6. Use repository-relative paths starting with `.agent/src/` (never absolute paths).
+7. Ensure all public interfaces have PEP-257 docstrings.
+8. Include a troubleshooting subsection if applicable.
+9. CRITICAL: Inside <<<SEARCH and >>> blocks, content is LITERAL CODE, not markdown.
+   Do NOT apply markdown formatting to code identifiers. Write `__name__` not `**name**`,
+   write `__init__` not `**init**`. Double underscores are Python dunder syntax, not bold.
+10. DEDUPLICATION: If a file appears in PRIOR SECTIONS below, do NOT create another
+    [NEW] or [MODIFY] block for that same file. Consolidate all changes to a file
+    into a SINGLE section. If you need to reference prior changes, describe them in prose.
+11. NEVER use [MODIFY] on a file created by [NEW] in the SAME runbook. If you are
+    creating a new file, include ALL final code in a single [NEW] block. [MODIFY] must
+    ONLY target pre-existing files already on disk. This prevents hallucinated SEARCH
+    text that doesn't match the actual generated code.
+12. FENCE REQUIREMENT: <<<SEARCH / === / >>> blocks MUST be wrapped inside a code fence
+    (triple backticks). Without fences, the markdown parser misinterprets === as a heading
+    and >>> as a blockquote, breaking the search/replace extraction.
 
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):
 {{
   "header": "{section_title}",
-  "content": "... full markdown content ..."
+  "content": "... full markdown content (NO leading ## or ### header — start with prose or #### blocks) ..."
 }}
 
 CRITICAL: Ensure implementation blocks use repository-relative paths starting with `.agent/src/`.
