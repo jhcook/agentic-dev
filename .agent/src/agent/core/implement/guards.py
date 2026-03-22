@@ -1057,6 +1057,24 @@ def autocorrect_runbook_fences(content: str) -> tuple:
         corrections.append("Added blank lines after code fences")
         content = fixed
 
+    # Fix: demote non-Step ### headers to bold text
+    # AI often generates sub-headers like ### Troubleshooting, ### 1. Foo
+    # that the parser treats as empty steps with 0 operations.
+    def _demote_non_step(match):
+        """Demote non-step headers to bold text."""
+        header_text = match.group(1).strip()
+        if _re.match(r'^Step \d+', header_text):
+            return match.group(0)  # keep actual steps
+        return f'**{header_text}**'
+
+    fixed = _re.sub(r'^### (.+)$', _demote_non_step, content, flags=_re.MULTILINE)
+    if fixed != content:
+        original_count = len(_re.findall(r'^### ', content, _re.MULTILINE))
+        fixed_count = len(_re.findall(r'^### ', fixed, _re.MULTILINE))
+        demoted = original_count - fixed_count
+        corrections.append(f"Demoted {demoted} non-step ### headers to bold text")
+        content = fixed
+
     return content, corrections
 
 
