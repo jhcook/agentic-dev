@@ -27,7 +27,7 @@ from agent.core.implement.parser import (
     validate_runbook_schema,
     _extract_runbook_data,
     parse_skeleton,
-)    InvalidTemplateError,
+    InvalidTemplateError,
 )
 
 
@@ -192,8 +192,8 @@ class TestDeleteBlockPipeline:
             "#### [DELETE] old_file.py\n\n"
             "This module is deprecated and replaced by new_file.py.\n"
         )
-    violations = validate_runbook_schema(content)
-    assert len(violations) == 0
+        violations = validate_runbook_schema(content)
+        assert len(violations) == 0
 
 
 class TestSkeletonParser:

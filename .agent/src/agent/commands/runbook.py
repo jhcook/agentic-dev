@@ -49,7 +49,6 @@ from agent.commands.utils import (
 )
 from agent.core.context import context_loader
 from agent.core.implement.guards import (
-    GuardRail,
     autocorrect_runbook_fences,
     lint_runbook_syntax,
     validate_and_correct_sr_blocks,
@@ -164,7 +163,7 @@ def _validate_version_compatibility(skeleton_version: str):
     if skeleton_version < min_ver:
         raise InvalidTemplateError(f"Skeleton version {skeleton_version} is below minimum {min_ver}")
 
-def generate_runbook(    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
+def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
