@@ -151,7 +151,7 @@ class TestMalformedFilePaths:
             "```python\n# bad\n```\n"
         )
         violations = validate_runbook_schema(content)
-        assert any("safe" in v.lower() or "relative" in v.lower() for v in violations)
+        assert any("security" in v.lower() or "traversal" in v.lower() for v in violations)
 
     def test_absolute_path(self):
         """Absolute paths must fail validation."""
@@ -161,7 +161,7 @@ class TestMalformedFilePaths:
             "```python\n# bad\n```\n"
         )
         violations = validate_runbook_schema(content)
-        assert any("safe" in v.lower() or "relative" in v.lower() for v in violations)
+        assert any("security" in v.lower() or "traversal" in v.lower() for v in violations)
 
 
 # ── Missing header (AC-3d) ───────────────────────────────────

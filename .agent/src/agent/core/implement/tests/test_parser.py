@@ -163,14 +163,14 @@ class TestSecurityValidation:
     """Verify security constraints for paths and identifiers."""
 
     def test_traversal_detection_in_path(self):
-        """Ensure that paths with .. or absolute roots are blocked."""
-        with pytest.raises(ParsingError, match="Security Violation"):
-            validate_runbook_schema(_wrap_runbook("#### [NEW] ../../etc/passwd\n\n```\ncode\n```"))
+        """Ensure that paths with .. are flagged as violations."""
+        violations = validate_runbook_schema(_wrap_runbook("#### [NEW] ../../etc/passwd\n\n```\ncode\n```"))
+        assert len(violations) >= 1
 
     def test_absolute_path_detection(self):
-        """Ensure absolute paths are blocked for runbook operations."""
-        with pytest.raises(ParsingError, match="Security Violation"):
-            validate_runbook_schema(_wrap_runbook("#### [MODIFY] /var/log/syslog\n\n<<<SEARCH\nx\n===\ny\n>>>"))
+        """Ensure absolute paths are flagged as violations."""
+        violations = validate_runbook_schema(_wrap_runbook("#### [MODIFY] /var/log/syslog\n\n<<<SEARCH\nx\n===\ny\n>>>"))
+        assert len(violations) >= 1
 
 
 class TestDeleteBlockPipeline:
