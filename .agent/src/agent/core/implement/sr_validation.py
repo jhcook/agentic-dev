@@ -126,8 +126,8 @@ def validate_and_correct_sr_blocks(
                     f"(similarity: {best_ratio:.0%})[/yellow]"
                 )
                 logging.info(
-                    "sr_validation_corrected file=%s similarity=%.2f",
-                    filepath, best_ratio,
+                    "sr_validation_corrected",
+                    extra={"file": filepath, "similarity": round(best_ratio, 2)},
                 )
             else:
                 _console.print(
@@ -135,8 +135,8 @@ def validate_and_correct_sr_blocks(
                     f"(best match: {best_ratio:.0%} < {threshold:.0%} threshold)[/red]"
                 )
                 logging.warning(
-                    "sr_validation_unfixable file=%s best_ratio=%.2f",
-                    filepath, best_ratio,
+                    "sr_validation_unfixable",
+                    extra={"file": filepath, "best_ratio": round(best_ratio, 2)},
                 )
 
     return corrected_content, total_blocks, corrected_count
@@ -198,13 +198,13 @@ def fuzzy_find_and_replace(
             f"(similarity: {best_ratio:.0%})[/yellow]"
         )
         logging.info(
-            "search_replace_fuzzy_match file=%s block=%d/%d similarity=%.2f",
-            filepath, block_num, total_blocks, best_ratio,
+            "search_replace_fuzzy_match",
+            extra={"file": filepath, "block": f"{block_num}/{total_blocks}", "similarity": round(best_ratio, 2)},
         )
         return content.replace(matched_text, replace, 1)
 
     logging.warning(
-        "search_replace_fuzzy_no_match file=%s block=%d/%d best_ratio=%.2f threshold=%.2f",
-        filepath, block_num, total_blocks, best_ratio, threshold,
+        "search_replace_fuzzy_no_match",
+        extra={"file": filepath, "block": f"{block_num}/{total_blocks}", "best_ratio": round(best_ratio, 2), "threshold": threshold},
     )
     return None

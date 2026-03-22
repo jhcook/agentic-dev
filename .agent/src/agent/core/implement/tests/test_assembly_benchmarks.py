@@ -54,13 +54,26 @@ def test_round_trip_zero_deviation():
 
     engine = AssemblyEngine()
     skeleton = parse_skeleton(source)
-    reconstructed = engine.assemble(skeleton)
+    reconstructed_1 = engine.assemble(skeleton)
+    reconstructed_2 = engine.assemble(skeleton)
 
-    # AssemblyEngine returns assembled content; verify key content is preserved
-    assert "## Section A" in reconstructed
-    assert "Content with specific whitespace and formatting." in reconstructed
-    assert "## Section B" in reconstructed
-    assert "More content." in reconstructed
+    # Deterministic: assembling the same skeleton twice must produce identical output
+    assert reconstructed_1 == reconstructed_2, (
+        f"Non-deterministic assembly detected:\n"
+        f"--- first ---\n{reconstructed_1!r}\n"
+        f"--- second ---\n{reconstructed_2!r}"
+    )
+
+    # Content integrity: all block content preserved in order
+    assert "## Section A" in reconstructed_1
+    assert "Content with specific whitespace and formatting." in reconstructed_1
+    assert "## Section B" in reconstructed_1
+    assert "More content." in reconstructed_1
+
+    # Order check: Section A must appear before Section B
+    pos_a = reconstructed_1.index("## Section A")
+    pos_b = reconstructed_1.index("## Section B")
+    assert pos_a < pos_b, "Block ordering not preserved"
 
 
 def test_partial_injection_integrity():

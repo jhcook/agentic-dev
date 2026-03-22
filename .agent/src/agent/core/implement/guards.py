@@ -848,7 +848,7 @@ def apply_change_to_file(
             span_ctx.end()
         return False
 
-def autocorrect_runbook_fences(content: str) -> tuple:
+def autocorrect_runbook_fences(content: str) -> Tuple[str, List[str]]:
     """Auto-correct common fence issues in generated runbooks.
 
     Fixes:
@@ -897,7 +897,7 @@ def autocorrect_runbook_fences(content: str) -> tuple:
     return content, corrections
 
 
-def lint_runbook_syntax(content: str) -> list:
+def lint_runbook_syntax(content: str) -> List[str]:
     """Check runbook for common syntax issues.
 
     Args:

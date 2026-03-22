@@ -10,11 +10,16 @@ The `parser.py` module converts raw text into a `RunbookSkeleton` object contain
 from agent.core.implement.parser import parse_skeleton
 
 raw_content = """
-<!-- @block header -->
+<!-- block: header -->
 # System Update
-<!-- @end -->
+<!-- /block -->
 """
 
 skeleton = parse_skeleton(raw_content)
 block = skeleton.get_block("header")
 print(f"Found block: {block.id} with content: {block.content}")
+```
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0.

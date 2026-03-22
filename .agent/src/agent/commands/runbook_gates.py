@@ -20,7 +20,8 @@ plus the retry/correction logic that sends combined fixes back to the AI.
 """
 
 import re
-from typing import List, Optional, Set
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
 
 import typer
 from opentelemetry import trace
@@ -71,7 +72,7 @@ def run_generation_gates(
     max_attempts: int,
     gate_corrections: int,
     max_gate_corrections: int,
-) -> tuple:
+) -> Tuple[str, List[str], int, Set[str], int]:
     """Run ALL validation gates on generated runbook content.
 
     This function runs every gate in collect mode — no short-circuiting.
@@ -221,7 +222,7 @@ def run_dod_gate(
     attempt: int,
     gate_corrections: int,
     max_gate_corrections: int,
-) -> tuple:
+) -> Tuple[str, List[str], int, bool]:
     """Run the DoD compliance gate on generated runbook content.
 
     Args:
@@ -382,7 +383,7 @@ def handle_split_request(
     content: str,
     story_id: str,
     story_content: str,
-    story_file,
+    story_file: Path,
     skip_forecast: bool,
 ) -> None:
     """Handle a SPLIT_REQUEST response from the AI.

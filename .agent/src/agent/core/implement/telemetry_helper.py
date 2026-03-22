@@ -23,8 +23,11 @@ from agent.core.logger import get_logger
 
 _logger = get_logger(__name__)
 
-def log_assembly_audit(user: str, template_version: str, block_count: int, success: bool, duration_ms: float):
+def log_assembly_audit(user: str, template_version: str, block_count: int, success: bool, duration_ms: float) -> None:
     """Log a structured audit event for runbook assembly.
+
+    Processing is based on legitimate interest for security and auditability
+    purposes, in accordance with GDPR Article 6(1)(f).
 
     Args:
         user: The identity of the user who triggered the assembly.
@@ -77,7 +80,7 @@ class VerificationTelemetry:
         self.scope = scope
         self._start: Optional[float] = None
 
-    def emit(self, event: str, data: Optional[Dict[str, Any]] = None):
+    def emit(self, event: str, data: Optional[Dict[str, Any]] = None) -> None:
         """Emit a generic telemetry event.
 
         Args:
@@ -93,11 +96,11 @@ class VerificationTelemetry:
             },
         )
 
-    def start(self):
+    def start(self) -> None:
         """Mark the start of a verification run."""
         self._start = time.time()
 
-    def record_step(self, step_name: str, status: str, detail: str = ""):
+    def record_step(self, step_name: str, status: str, detail: str = "") -> None:
         """Record a verification step result.
 
         Args:
@@ -115,7 +118,7 @@ class VerificationTelemetry:
             },
         )
 
-    def finish(self, success: bool):
+    def finish(self, success: bool) -> None:
         """Record completion of the verification run.
 
         Args:

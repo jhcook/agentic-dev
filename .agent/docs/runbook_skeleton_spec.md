@@ -8,11 +8,16 @@ A skeleton is a Markdown or YAML document decomposed into addressable blocks usi
 
 ## Block Tagging Convention
 
-Blocks are defined using start and end markers. 
+Blocks are defined using start and end markers.
 
 **Syntax**
 
 ```markdown
-<!-- @block <ID> [metadata_key=value] -->
+<!-- block: <ID> -->
 Content goes here.
-<!-- @end -->
+<!-- /block -->
+```
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0.

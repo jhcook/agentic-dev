@@ -21,6 +21,7 @@ validation gates, and artifact syncing. Heavy logic is delegated to:
 - ``runbook_generation``: chunked two-phase pipeline
 """
 
+from pathlib import Path
 from typing import List, Optional
 
 import json
@@ -98,8 +99,8 @@ SPLIT_REQUEST_DIRECTIVE = (
 def _write_and_sync(
     content: str,
     story_id: str,
-    story_file,
-    runbook_file,
+    story_file: Path,
+    runbook_file: Path,
 ) -> None:
     """Lint, write, sync, and back-populate a generated runbook.
 
@@ -154,7 +155,7 @@ def _write_and_sync(
     console.print("[yellow]\u26a0\ufe0f  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
 
 
-def _validate_version_compatibility(skeleton_version: str):
+def _validate_version_compatibility(skeleton_version: str) -> None:
     """Enforce version-controlled schema tags."""
     with open(os.path.join(os.path.dirname(__file__), "../../VERSION"), "r") as f:
         lines = f.readlines()
@@ -350,8 +351,8 @@ def _run_monolithic_generation(
     *,
     story_id: str,
     story_content: str,
-    story_file,
-    runbook_file,
+    story_file: Path,
+    runbook_file: Path,
     rules_content: str,
     instructions_content: str,
     adrs_content: str,

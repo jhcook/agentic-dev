@@ -21,15 +21,66 @@ auto-fencing helper for [NEW] blocks.
 
 import json
 import re
-from typing import Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 import typer
 from opentelemetry import trace
 from rich.console import Console
 
 from agent.core.logger import get_logger
-from agent.core.implement.chunk_models import RunbookSkeleton, RunbookBlock
 from agent.core.ai.prompts import generate_skeleton_prompt, generate_block_prompt
+
+
+# ---------------------------------------------------------------------------
+# Generation-domain models (distinct from parser-domain in chunk_models.py)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GenerationSection:
+    """A section in the AI-generated skeleton (table-of-contents entry)."""
+
+    title: str
+    description: str = ""
+    files: List[str] = field(default_factory=list)
+
+
+@dataclass
+class GenerationSkeleton:
+    """AI-generated skeleton: title + ordered list of sections."""
+
+    title: str
+    sections: List[GenerationSection]
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "GenerationSkeleton":
+        """Build from the JSON dict returned by the AI."""
+        sections = [
+            GenerationSection(
+                title=s.get("title", f"Section {i+1}"),
+                description=s.get("description", ""),
+                files=s.get("files", []),
+            )
+            for i, s in enumerate(data.get("sections", []))
+        ]
+        return cls(title=data.get("title", "Untitled Runbook"), sections=sections)
+
+
+@dataclass
+class GenerationBlock:
+    """A single generated implementation block from Phase 2."""
+
+    header: str
+    content: str
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "GenerationBlock":
+        """Build from the JSON dict returned by the AI."""
+        return cls(
+            header=data.get("header", data.get("title", "Untitled")),
+            content=data.get("content", data.get("body", "")),
+        )
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -37,7 +88,7 @@ console = Console()
 error_console = Console(stderr=True)
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw: str) -> Dict[str, Any]:
     """Robustly extract a JSON object from AI output.
 
     Handles:
@@ -165,7 +216,7 @@ def generate_runbook_chunked(
 
         try:
             skeleton_data = _extract_json(skeleton_raw)
-            skeleton = RunbookSkeleton.from_dict(skeleton_data)
+            skeleton = GenerationSkeleton.from_dict(skeleton_data)
             span.set_attribute("section_count", len(skeleton.sections))
             logger.info(
                 "skeleton_generated",
@@ -219,7 +270,7 @@ def generate_runbook_chunked(
             for attempt in range(2):  # 1 retry on parse failure
                 try:
                     block_data = _extract_json(block_raw)
-                    block = RunbookBlock.from_dict(block_data)
+                    block = GenerationBlock.from_dict(block_data)
                     parse_ok = True
                     break
                 except (json.JSONDecodeError, ValueError) as exc:

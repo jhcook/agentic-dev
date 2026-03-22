@@ -16,9 +16,17 @@
 
 # Copyright 2026 Justin Cook
 
-from agent.core.implement.chunk_models import RunbookSkeleton
-
+import os
+import time
 from typing import Dict, Optional
+
+from opentelemetry import trace
+
+from agent.core.implement.chunk_models import RunbookSkeleton
+from agent.core.implement.telemetry_helper import log_assembly_audit
+
+_tracer = trace.get_tracer(__name__)
+
 
 class InvalidTemplateError(Exception):
     """Raised when a skeleton template is malformed or assembly fails."""
@@ -47,23 +55,41 @@ class AssemblyEngine:
         Raises:
             InvalidTemplateError: If the skeleton has no blocks or duplicate IDs.
         """
-        if not skeleton.blocks:
-            raise InvalidTemplateError("Cannot assemble an empty skeleton.")
+        with _tracer.start_as_current_span("assembly_engine.assemble") as span:
+            start = time.monotonic()
+            span.set_attribute("block_count", len(skeleton.blocks))
 
-        injections = injections or {}
-        seen_ids = set()
-        parts = []
+            if not skeleton.blocks:
+                raise InvalidTemplateError("Cannot assemble an empty skeleton.")
 
-        for block in skeleton.blocks:
-            if block.id in seen_ids:
-                raise InvalidTemplateError(f"Duplicate block ID detected: {block.id}")
-            seen_ids.add(block.id)
+            injections = injections or {}
+            seen_ids: set[str] = set()
+            parts: list[str] = []
 
-            # Use injected content if ID matches, else original block content
-            content = injections.get(block.id, block.content)
+            for block in skeleton.blocks:
+                if block.id in seen_ids:
+                    raise InvalidTemplateError(f"Duplicate block ID detected: {block.id}")
+                seen_ids.add(block.id)
 
-            parts.append(block.prefix_whitespace)
-            parts.append(content)
-            parts.append(block.suffix_whitespace)
+                # Use injected content if ID matches, else original block content
+                content = injections.get(block.id, block.content)
 
-        return "".join(parts)
+                parts.append(block.prefix_whitespace)
+                parts.append(content)
+                parts.append(block.suffix_whitespace)
+
+            result = "".join(parts)
+
+            duration_ms = (time.monotonic() - start) * 1000
+            span.set_attribute("duration_ms", duration_ms)
+            span.set_attribute("injection_count", len(injections))
+            log_assembly_audit(
+                user=os.environ.get("USER", "unknown"),
+                template_version=skeleton.version,
+                block_count=len(skeleton.blocks),
+                success=True,
+                duration_ms=duration_ms,
+            )
+
+            return result
+
