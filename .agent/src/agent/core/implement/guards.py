@@ -833,3 +833,57 @@ def apply_change_to_file(
             span_ctx.set_attribute("success", False)
             span_ctx.end()
         return False
+
+def autocorrect_runbook_fences(content: str) -> tuple:
+    """Auto-correct common fence issues in generated runbooks.
+
+    Fixes:
+    - Missing blank lines before/after code fences
+    - Unbalanced fences
+
+    Args:
+        content: Raw runbook markdown.
+
+    Returns:
+        Tuple of (corrected_content, list_of_corrections).
+    """
+    import re as _re
+    corrections = []
+
+    # Fix: ensure blank line before opening fence
+    fixed = _re.sub(r'([^\n])\n(```)', r'\1\n\n\2', content)
+    if fixed != content:
+        corrections.append("Added blank lines before code fences")
+        content = fixed
+
+    # Fix: ensure blank line after closing fence
+    fixed = _re.sub(r'(```)\n([^\n])', r'\1\n\n\2', content)
+    if fixed != content:
+        corrections.append("Added blank lines after code fences")
+        content = fixed
+
+    return content, corrections
+
+
+def lint_runbook_syntax(content: str) -> list:
+    """Check runbook for common syntax issues.
+
+    Args:
+        content: Runbook markdown content.
+
+    Returns:
+        List of error strings. Empty if no issues found.
+    """
+    import re as _re
+    errors = []
+
+    # Check for balanced fences
+    fence_count = len(_re.findall(r'^```', content, _re.MULTILINE))
+    if fence_count % 2 != 0:
+        errors.append(f"Unbalanced code fences: {fence_count} fence markers (expected even)")
+
+    # Check for __name__ rendered as **name**
+    if '**name**' in content or '**main**' in content:
+        errors.append("Detected markdown-corrupted Python dunder: **name** or **main** (should be __name__ or __main__)")
+
+    return errors

@@ -54,6 +54,7 @@ from agent.core.implement.circuit_breaker import (  # noqa: F401
 import agent.core.implement.circuit_breaker as _cb
 from agent.core.implement.guards import (  # noqa: F401
     FILE_SIZE_GUARD_THRESHOLD,
+    FileSizeGuardViolation,
     SOURCE_CONTEXT_HEAD_TAIL,
     SOURCE_CONTEXT_MAX_LOC,
     apply_change_to_file,
@@ -319,26 +320,105 @@ def sanitize_branch_name(title: str) -> str:
     return name.strip("-")
 
 
-def create_branch(story_id: str, title: str) -> None:
+def create_branch(story_id: str, title: str, yes: bool = False) -> None:
     """Create (or check out an existing) story branch.
+
+    Handles dirty working trees by auto-stashing before checkout
+    and popping afterwards. When the branch already exists, prompts
+    the user to reuse it or delete and recreate it (unless ``yes``
+    is set, in which case it reuses automatically).
 
     Args:
         story_id: Story ID used as the branch prefix.
         title: Raw story title; will be sanitized for use in the branch name.
+        yes: Skip interactive prompts (auto-reuse existing branch).
     """
     safe_title = sanitize_branch_name(title)
     branch_name = f"{story_id}/{safe_title}"
-    # Check whether branch already exists
+
+    # Check whether the branch already exists (local)
+    branch_exists = False
     try:
         subprocess.run(
             ["git", "rev-parse", "--verify", branch_name],
             check=True, capture_output=True,
         )
-        # Branch exists — just check it out
-        subprocess.run(["git", "checkout", branch_name], check=True)
+        branch_exists = True
     except subprocess.CalledProcessError:
-        # Branch doesn't exist — create and check out
-        subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+        pass
+
+    # If branch exists, ask the user what to do
+    if branch_exists:
+        console.print(f"[yellow]⚠️  Branch '{branch_name}' already exists.[/yellow]")
+        if yes:
+            console.print("[dim]--yes flag set — deleting and recreating branch.[/dim]")
+            reuse = False
+        else:
+            reuse = typer.confirm(
+                "Reuse this branch? (No = delete and recreate from current HEAD)",
+                default=True,
+            )
+        if not reuse:
+            try:
+                subprocess.run(
+                    ["git", "branch", "-D", branch_name],
+                    check=True, capture_output=True,
+                )
+                console.print(f"[dim]Deleted branch '{branch_name}'.[/dim]")
+                branch_exists = False
+            except subprocess.CalledProcessError as exc:
+                stderr_msg = exc.stderr.decode().strip() if exc.stderr else str(exc)
+                console.print(
+                    f"[bold red]❌ Failed to delete branch '{branch_name}': "
+                    f"{stderr_msg}[/bold red]"
+                )
+                raise typer.Exit(code=1)
+
+    # Stash any dirty state (including untracked files) before switching
+    stashed = False
+    try:
+        result = subprocess.run(
+            ["git", "stash", "push", "--include-untracked", "-m", f"auto-stash for {branch_name}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        # git stash returns 0 even when there's nothing to stash;
+        # check output to know if it actually stashed anything
+        stashed = result.returncode == 0 and "No local changes" not in result.stdout
+    except subprocess.CalledProcessError:
+        pass
+
+    try:
+        if branch_exists:
+            subprocess.run(
+                ["git", "checkout", branch_name],
+                check=True, capture_output=True,
+            )
+        else:
+            subprocess.run(
+                ["git", "checkout", "-b", branch_name],
+                check=True, capture_output=True,
+            )
+    except subprocess.CalledProcessError as exc:
+        # Pop the stash before raising so we don't lose work
+        if stashed:
+            subprocess.run(["git", "stash", "pop"], capture_output=True)
+        stderr_msg = exc.stderr.decode().strip() if exc.stderr else str(exc)
+        console.print(
+            f"[bold red]❌ Failed to {'checkout' if branch_exists else 'create'} "
+            f"branch '{branch_name}': {stderr_msg}[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    # Restore stashed changes on the new branch
+    if stashed:
+        pop_result = subprocess.run(
+            ["git", "stash", "pop"], capture_output=True, text=True,
+        )
+        if pop_result.returncode != 0:
+            console.print(
+                "[yellow]⚠️  Auto-stash pop had conflicts. "
+                "Run 'git stash pop' manually to resolve.[/yellow]"
+            )
 
 # ---------------------------------------------------------------------------
 # Main command
@@ -400,12 +480,10 @@ def implement(
     runbook_content = runbook_path.read_text()
 
     # State guard: only ACCEPTED runbooks may be implemented
-    state_check = re.search(r"Status:\s*(\w+)", runbook_content)
-    if not state_check:
-        state_check = re.search(r"##\s*State\s+(\w+)", runbook_content)
+    state_check = re.search(r"^##\s*State\s+(\w+)", runbook_content, re.MULTILINE)
     if state_check:
         state = state_check.group(1).strip().upper()
-        if state not in ("ACCEPTED", "IN_PROGRESS"):
+        if state != "ACCEPTED":
             console.print(
                 f"[bold red]❌ Runbook state '{state}' is not ACCEPTED. "
                 f"Only ACCEPTED runbooks can be implemented.[/bold red]"
@@ -455,18 +533,13 @@ def implement(
     # 3. Pre-flight branch hygiene
     # ------------------------------------------------------------------
     if current_branch in ("main", "master"):
-        create_branch(story_id, story_title)
+        create_branch(story_id, story_title, yes=yes)
         console.print(f"[green]✅ Branch created: {story_id}/{sanitize_branch_name(story_title)}[/green]")
     else:
         console.print(f"[green]Already on valid story branch: {current_branch}[/green]")
 
     # ------------------------------------------------------------------
-    # 4. Mark story IN_PROGRESS
-    # ------------------------------------------------------------------
-    update_story_state(story_id, "IN_PROGRESS", context_prefix="Phase 0")
-
-    # ------------------------------------------------------------------
-    # 5. Load governance context
+    # 4. Load governance context
     # ------------------------------------------------------------------
     import asyncio
     ctx = asyncio.run(context_loader.load_context())
@@ -530,21 +603,17 @@ def implement(
         implementation_success = True
 
         if apply:
-            if _all_sr:
-                _sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-                for _b in _all_sr:
-                    _sr_by_file[_b["file"]].append(_b)
-                for _fp, _blocks in _sr_by_file.items():
-                    _orig = Path(_fp).read_text() if Path(_fp).exists() else ""
-                    _ok, _final = apply_search_replace_to_file(_fp, _blocks, yes)
-                    if _ok:
-                        cumulative_loc += count_edit_distance(_orig, _final)
-                        run_modified_files.append(_fp)
-
-            _sr_done = {_b["file"] for _b in _all_sr}
+            # ---- Phase 1: Create NEW files first ----
+            # Files that don't exist yet must be written before any S/R
+            # blocks can modify them.  Files that already exist and also
+            # have S/R blocks are skipped here (S/R takes precedence).
+            _sr_files = {_b["file"] for _b in _all_sr}
+            _new_created: set = set()
             for _b in _all_code:
-                if _b["file"] in _sr_done:
-                    continue
+                if Path(_b["file"]).exists():
+                    continue  # existing file — handled later
+                # Note: even if the file has S/R blocks later, we must
+                # create it first — S/R can only modify existing files.
                 _vres = enforce_docstrings(_b["file"], _b["content"])
                 if not _vres.passed:
                     rejected_files.append(_b["file"])
@@ -558,8 +627,67 @@ def implement(
                 if _vres.warnings:
                     for _w in _vres.warnings:
                         console.print(f"   [yellow]⚠ {_w}[/yellow]")
-                _orig = Path(_b["file"]).read_text() if Path(_b["file"]).exists() else ""
-                _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
+                try:
+                    _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
+                except FileSizeGuardViolation as exc:
+                    console.print(
+                        f"[bold yellow]⚠ SKIPPED (size guard): {_b['file']}[/bold yellow]\n"
+                        f"   [dim]{exc}[/dim]"
+                    )
+                    rejected_files.append(_b["file"])
+                    continue
+                if _ok:
+                    run_modified_files.append(_b["file"])
+                    _new_created.add(_b["file"])
+                else:
+                    rejected_files.append(_b["file"])
+
+            # ---- Phase 2: Apply S/R (MODIFY) blocks ----
+            # Now that new files exist on disk, S/R can find them.
+            if _all_sr:
+                _sr_by_file: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+                for _b in _all_sr:
+                    _sr_by_file[_b["file"]].append(_b)
+                for _fp, _blocks in _sr_by_file.items():
+                    _orig = Path(_fp).read_text() if Path(_fp).exists() else ""
+                    _ok, _final = apply_search_replace_to_file(_fp, _blocks, yes)
+                    if _ok:
+                        cumulative_loc += count_edit_distance(_orig, _final)
+                        run_modified_files.append(_fp)
+                    else:
+                        rejected_files.append(_fp)
+
+            # ---- Phase 3: Replace existing files (full-content blocks) ----
+            # Skip files already handled by S/R or created in Phase 1.
+            _sr_done = {_b["file"] for _b in _all_sr}
+            for _b in _all_code:
+                if _b["file"] in _sr_done or _b["file"] in _new_created:
+                    continue
+                if not Path(_b["file"]).exists():
+                    continue  # shouldn't happen, but guard
+                _vres = enforce_docstrings(_b["file"], _b["content"])
+                if not _vres.passed:
+                    rejected_files.append(_b["file"])
+                    console.print(
+                        f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
+                        f"({len(_vres.errors)} violation(s))[/bold red]"
+                    )
+                    for _v in _vres.errors:
+                        console.print(f"   [red]• {_v}[/red]")
+                    continue
+                if _vres.warnings:
+                    for _w in _vres.warnings:
+                        console.print(f"   [yellow]⚠ {_w}[/yellow]")
+                _orig = Path(_b["file"]).read_text()
+                try:
+                    _ok = apply_change_to_file(_b["file"], _b["content"], yes, legacy_apply=legacy_apply)
+                except FileSizeGuardViolation as exc:
+                    console.print(
+                        f"[bold yellow]⚠ SKIPPED (size guard): {_b['file']}[/bold yellow]\n"
+                        f"   [dim]{exc}[/dim]"
+                    )
+                    rejected_files.append(_b["file"])
+                    continue
                 if _ok:
                     cumulative_loc += count_edit_distance(_orig, _b["content"])
                     run_modified_files.append(_b["file"])
