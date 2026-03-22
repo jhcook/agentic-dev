@@ -52,6 +52,7 @@ from agent.core.implement.guards import (
     GuardRail,
     autocorrect_runbook_fences,
     lint_runbook_syntax,
+    validate_and_correct_sr_blocks,
 )
 from agent.db.client import upsert_artifact
 from agent.commands.runbook_helpers import (
@@ -113,6 +114,14 @@ def _write_and_sync(
     content, corrections = autocorrect_runbook_fences(content)
     for fix in corrections:
         console.print(f"[dim]🔧 Auto-fixed: {fix}[/dim]")
+    # Post-generation S/R validation: auto-correct hallucinated SEARCH text
+    content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content)
+    if sr_total > 0:
+        console.print(
+            f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
+            f"{sr_corrected} auto-corrected[/dim]"
+        )
+
     lint_errors = lint_runbook_syntax(content)
     if lint_errors:
         console.print("[bold red]❌ Runbook lint errors (post-autocorrect):[/bold red]")

@@ -621,6 +621,124 @@ def backup_file(file_path: Path) -> Optional[Path]:
 
 
 # ---------------------------------------------------------------------------
+# Post-generation S/R validation
+# ---------------------------------------------------------------------------
+
+
+def validate_and_correct_sr_blocks(
+    runbook_content: str,
+    repo_root: Optional[Path] = None,
+    threshold: float = 0.6,
+) -> tuple[str, int, int]:
+    """Validate S/R SEARCH blocks against actual file content and auto-correct.
+
+    After AI generates a runbook, this function reads each [MODIFY] target
+    file from disk and verifies that every <<<SEARCH block matches actual
+    content.  If a SEARCH block is hallucinated (not found in the file),
+    it uses fuzzy matching to find the best matching region and rewrites
+    the SEARCH text to the verified content.
+
+    Args:
+        runbook_content: Raw runbook markdown string.
+        repo_root: Project root directory. Defaults to cwd.
+        threshold: Minimum fuzzy similarity to auto-correct (0.0–1.0).
+
+    Returns:
+        Tuple of (corrected_content, total_blocks, corrected_count).
+    """
+    if repo_root is None:
+        repo_root = Path.cwd()
+
+    import re as _re
+
+    # Parse file sections - same regex as parser.py
+    file_sections = _re.split(
+        r'(?:^|\n)(?:(?:File|Modify):\s*|####\s*\[(?:MODIFY|NEW)\]\s*)`?([^\n`]+?)`?\s*\n',
+        runbook_content, flags=_re.IGNORECASE,
+    )
+
+    total_blocks = 0
+    corrected_count = 0
+    corrected_content = runbook_content
+
+    for i in range(1, len(file_sections), 2):
+        filepath = file_sections[i].strip()
+        body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
+
+        # Resolve file path
+        resolved = repo_root / filepath
+        if not resolved.exists():
+            continue  # NEW file — nothing to validate against
+
+        actual_content = resolved.read_text()
+
+        # Find all S/R blocks in this section
+        for match in _re.finditer(
+            r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', body, _re.DOTALL
+        ):
+            total_blocks += 1
+            search_text = match.group(1)
+            replace_text = match.group(2)
+
+            if search_text in actual_content:
+                continue  # exact match — no correction needed
+
+            # Fuzzy match: find best matching region
+            search_lines = search_text.splitlines(keepends=True)
+            actual_lines = actual_content.splitlines(keepends=True)
+            window_size = len(search_lines)
+
+            if window_size == 0 or len(actual_lines) == 0:
+                continue
+
+            best_ratio = 0.0
+            best_start = -1
+
+            for start in range(max(1, len(actual_lines) - window_size + 1)):
+                end = min(start + window_size, len(actual_lines))
+                candidate = "".join(actual_lines[start:end])
+                ratio = difflib.SequenceMatcher(
+                    None, candidate, search_text
+                ).ratio()
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_start = start
+
+            if best_ratio >= threshold and best_start >= 0:
+                best_end = min(best_start + window_size, len(actual_lines))
+                correct_text = "".join(actual_lines[best_start:best_end])
+                # Strip trailing newline that splitlines(keepends=True) adds
+                if correct_text.endswith("\n"):
+                    correct_text = correct_text[:-1]
+
+                # Replace the hallucinated SEARCH with verified content
+                old_block = f"<<<SEARCH\n{search_text}\n===\n{replace_text}\n>>>"
+                new_block = f"<<<SEARCH\n{correct_text}\n===\n{replace_text}\n>>>"
+                corrected_content = corrected_content.replace(old_block, new_block, 1)
+                corrected_count += 1
+
+                _console.print(
+                    f"[yellow]🔧 Auto-corrected S/R in {filepath} "
+                    f"(similarity: {best_ratio:.0%})[/yellow]"
+                )
+                logging.info(
+                    "sr_validation_corrected file=%s similarity=%.2f",
+                    filepath, best_ratio,
+                )
+            else:
+                _console.print(
+                    f"[red]⚠ Cannot auto-correct S/R in {filepath} "
+                    f"(best match: {best_ratio:.0%} < {threshold:.0%} threshold)[/red]"
+                )
+                logging.warning(
+                    "sr_validation_unfixable file=%s best_ratio=%.2f",
+                    filepath, best_ratio,
+                )
+
+    return corrected_content, total_blocks, corrected_count
+
+
+# ---------------------------------------------------------------------------
 # Apply helpers
 # ---------------------------------------------------------------------------
 
