@@ -75,7 +75,6 @@ MISMATCH = [
 # Common patches applied to every test so only S/R is the variable.
 COMMON_PATCHES = [
     patch("agent.commands.runbook.validate_runbook_schema", return_value=[]),
-    patch("agent.commands.runbook.validate_code_block", return_value=MagicMock(errors=[], warnings=[])),
     patch("agent.commands.runbook.context_loader", return_value=("", "", "")),
     patch("agent.commands.runbook.config"),
 ]
@@ -119,26 +118,11 @@ class TestSrRetryLoopIntegration:
 
         Assert: runbook file is written, exit code is not raised.
         """
-        runbook_path = tmp_path / "INFRA-999-runbook.md"
-
-        with (
-            patch("agent.commands.runbook.validate_runbook_schema", return_value=[]),
-            patch("agent.commands.runbook.validate_code_block",
-                  return_value=MagicMock(errors=[], warnings=[])),
-            patch("agent.commands.runbook.validate_sr_blocks", return_value=[]) as mock_vsrb,
-            patch("agent.commands.runbook.config") as mock_cfg,
-        ):
-            mock_cfg.runbook_path.return_value = runbook_path
-            mock_cfg.repo_root = tmp_path
-
-            ai_svc = _make_ai_service(VALID_RUNBOOK)
-
-            # Drive the loop directly by calling the validation portion.
-            # Since we can't call new_runbook (it needs full CLI context), we
-            # test that validate_sr_blocks is called once and returns [].
-            result = mock_vsrb(VALID_RUNBOOK)
-            assert result == []
-            mock_vsrb.assert_called_once_with(VALID_RUNBOOK)
+        # Drive the validation mock directly — no real CLI context needed.
+        mock_vsrb = MagicMock(return_value=[])
+        result = mock_vsrb(VALID_RUNBOOK)
+        assert result == []
+        mock_vsrb.assert_called_once_with(VALID_RUNBOOK)
 
     # ------------------------------------------------------------------
     # Test: retry succeeds on second attempt

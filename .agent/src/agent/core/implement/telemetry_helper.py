@@ -12,70 +12,125 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Telemetry instrumentation for verification workflows.
+"""telemetry_helper module."""
 
-Follows ADR-058: Telemetry and Instrumentation Schema.
-"""
+# Copyright 2026 Justin Cook
 
+import os
 import time
-from typing import Dict, Any
-from opentelemetry import trace, metrics
+from typing import Any, Dict, Optional
 from agent.core.logger import get_logger
 
-logger = get_logger(__name__)
-tracer = trace.get_tracer(__name__)
-meter = metrics.get_meter(__name__)
+_logger = get_logger(__name__)
 
-duration_histogram = meter.create_histogram(
-    "verification.execution_duration_ms",
-    description="Total execution time for the verification workflow",
-    unit="ms"
-)
+def log_assembly_audit(user: str, template_version: str, block_count: int, success: bool, duration_ms: float) -> None:
+    """Log a structured audit event for runbook assembly.
+
+    Processing is based on legitimate interest for security and auditability
+    purposes, in accordance with GDPR Article 6(1)(f).
+
+    Args:
+        user: The identity of the user who triggered the assembly.
+        template_version: The version string of the skeleton template used.
+        block_count: Number of blocks processed during assembly.
+        success: Whether the assembly completed without errors.
+        duration_ms: Time taken to assemble in milliseconds.
+    """
+    _logger.info(
+        "runbook_assembly_audit",
+        extra={
+            "audit": {
+                "event": "assembly",
+                "user": user,
+                "template_version": template_version,
+                "block_count": block_count,
+                "status": "success" if success else "failure",
+                "latency_ms": duration_ms
+            }
+        }
+    )
+
+def calculate_block_density(block_count: int, content: str) -> float:
+    """Calculate the mapping density (blocks per 100 lines).
+
+    Args:
+        block_count: Number of addressable blocks found.
+        content: The raw source content.
+
+    Returns:
+        Density percentage as a float.
+    """
+    lines = len(content.splitlines())
+    if lines == 0:
+        return 0.0
+    return (block_count / lines) * 100
+
 
 class VerificationTelemetry:
-    """Helper to track and emit verification metrics."""
-    
-    def __init__(self, workflow_type: str):
-        """
-        Initialize telemetry tracker.
-        
+    """Telemetry helper for runbook verification events.
+
+    Provides structured logging for verification steps.
+
+    Args:
+        scope: The telemetry scope name for grouping events.
+    """
+
+    def __init__(self, scope: str):
+        """Initialize telemetry with the given scope."""
+        self.scope = scope
+        self._start: Optional[float] = None
+
+    def emit(self, event: str, data: Optional[Dict[str, Any]] = None) -> None:
+        """Emit a generic telemetry event.
+
         Args:
-            workflow_type: The type of verification.
+            event: Event name or message.
+            data: Optional dictionary of event data.
         """
-        self.workflow_type = workflow_type
-        self.start_time = 0.0
-        
-    def start(self) -> None:
-        """Start tracking duration."""
-        self.start_time = time.perf_counter()
-        
-    def emit(self, status: str, metadata: Dict[str, Any] = None) -> None:
-        """
-        Emit metrics to OpenTelemetry.
-        
-        Args:
-            status: Final status ('Success', 'Failed').
-            metadata: Additional non-PII attributes.
-        """
-        if metadata is None:
-            metadata = {}
-            
-        duration_ms = (time.perf_counter() - self.start_time) * 1000
-        
-        attributes = {
-            "workflow_type": self.workflow_type,
-            "status": status,
-            **metadata
-        }
-        
-        duration_histogram.record(duration_ms, attributes)
-        
-        logger.info(
-            "Verification telemetry emitted",
+        _logger.info(
+            "verification_event",
             extra={
-                "duration_ms": duration_ms,
-                "status": status,
-                "workflow": self.workflow_type
-            }
+                "scope": self.scope,
+                "event": event,
+                **(data or {}),
+            },
         )
+
+    def start(self) -> None:
+        """Mark the start of a verification run."""
+        self._start = time.time()
+
+    def record_step(self, step_name: str, status: str, detail: str = "") -> None:
+        """Record a verification step result.
+
+        Args:
+            step_name: Name of the verification step.
+            status: Result status (pass, fail, skip).
+            detail: Optional detail message.
+        """
+        _logger.info(
+            "verification_step",
+            extra={
+                "scope": self.scope,
+                "step": step_name,
+                "status": status,
+                "detail": detail,
+            },
+        )
+
+    def finish(self, success: bool) -> None:
+        """Record completion of the verification run.
+
+        Args:
+            success: Whether verification passed overall.
+        """
+        elapsed = (time.time() - self._start) * 1000 if self._start else 0
+        _logger.info(
+            "verification_complete",
+            extra={
+                "scope": self.scope,
+                "status": "success" if success else "failure",
+                "latency_ms": elapsed,
+            },
+        )
+

@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""CLI command for generating implementation runbooks.
+
+Orchestrates context loading, AI generation (chunked or monolithic),
+validation gates, and artifact syncing. Heavy logic is delegated to:
+- ``runbook_helpers``: complexity scoring, decomposition, rule diet
+- ``runbook_gates``: schema/code/S/R/DoD validation gates
+- ``runbook_generation``: chunked two-phase pipeline
+"""
+
+from pathlib import Path
 from typing import List, Optional
 
 import json
@@ -22,7 +32,6 @@ import typer
 from opentelemetry import trace
 from rich.console import Console
 
-# from agent.core.ai import ai_service # Moved to local import
 from agent.core.config import config
 from agent.core.logger import get_logger
 from agent.core.utils import (
@@ -33,43 +42,36 @@ from agent.core.utils import (
 from agent.commands.utils import (
     auto_fix_changelog_step,
     auto_fix_license_headers,
-    build_ac_coverage_prompt,
-    build_adr_catalogue,
-    build_dod_correction_prompt,
-    build_journey_catalogue,
-    check_changelog_entry,
-    check_license_headers,
-    check_otel_spans,
-    check_test_coverage,
-    extract_acs,
     extract_adr_refs,
     extract_journey_refs,
-    generate_sr_correction_prompt,
+    build_adr_catalogue,
+    build_journey_catalogue,
     merge_story_links,
-    parse_ac_gaps,
-    validate_sr_blocks,
 )
 from agent.core.context import context_loader
 from agent.core.implement.guards import (
-    validate_code_block,
-    check_impact_analysis_completeness,
-    check_adr_refs,
-    check_stub_implementations,
+    autocorrect_runbook_fences,
+    lint_runbook_syntax,
+    validate_and_correct_sr_blocks,
 )
-from agent.core.implement.orchestrator import validate_runbook_schema
-from agent.core.implement.parser import parse_code_blocks
-from agent.utils.validation_formatter import format_runbook_errors
 from agent.db.client import upsert_artifact
-from agent.core.implement.chunk_models import RunbookSkeleton, RunbookBlock
-from agent.core.ai.prompts import generate_skeleton_prompt, generate_block_prompt
 from agent.commands.runbook_helpers import (
-    ComplexityMetrics,
     generate_decomposition_plan,
     load_journey_context,
     parse_split_request,
     retrieve_dynamic_rules,
     score_story_complexity,
 )
+from agent.commands.runbook_gates import (
+    run_generation_gates,
+    run_dod_gate,
+    handle_split_request,
+)
+from agent.commands.runbook_generation import generate_runbook_chunked
+from agent.core.implement.parser import validate_runbook_schema
+from agent.core.implement.assembly_engine import AssemblyEngine, InvalidTemplateError
+
+import os
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -94,9 +96,75 @@ SPLIT_REQUEST_DIRECTIVE = (
 )
 
 
+def _write_and_sync(
+    content: str,
+    story_id: str,
+    story_file: Path,
+    runbook_file: Path,
+) -> None:
+    """Lint, write, sync, and back-populate a generated runbook.
 
-def new_runbook(
-    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
+    Args:
+        content: The generated runbook markdown.
+        story_id: The story identifier.
+        story_file: Path to the story file.
+        runbook_file: Path to the runbook output file.
+    """
+    # Post-generation lint: autocorrect then report remaining issues
+    content, corrections = autocorrect_runbook_fences(content)
+    for fix in corrections:
+        console.print(f"[dim]🔧 Auto-fixed: {fix}[/dim]")
+    # Post-generation S/R validation: auto-correct hallucinated SEARCH text
+    content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content)
+    if sr_total > 0:
+        console.print(
+            f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
+            f"{sr_corrected} auto-corrected[/dim]"
+        )
+
+    lint_errors = lint_runbook_syntax(content)
+    if lint_errors:
+        console.print("[bold red]❌ Runbook lint errors (post-autocorrect):[/bold red]")
+        for err in lint_errors:
+            console.print(f"  [red]• {err}[/red]")
+        logger.error("runbook_lint_errors story=%s count=%d", story_id, len(lint_errors))
+        # Still write the file so work isn't lost, but signal failure
+        runbook_file.write_text(content)
+        console.print(f"[yellow]⚠️  Runbook written to {runbook_file} (lint errors present — review required)[/yellow]")
+        raise typer.Exit(code=1)
+
+    runbook_file.write_text(content)
+    console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
+
+    # Back-populate story with identified ADRs and Journeys (INFRA-158)
+    try:
+        adrs = extract_adr_refs(content)
+        journeys = extract_journey_refs(content)
+        if adrs or journeys:
+            merge_story_links(story_file, adrs, journeys)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
+
+    console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
+
+    if upsert_artifact(story_id, "runbook", content, author="agent"):
+        console.print("[bold green]🔄 Synced to local cache[/bold green]")
+    else:
+        console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
+
+    console.print("[yellow]\u26a0\ufe0f  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
+
+
+def _validate_version_compatibility(skeleton_version: str) -> None:
+    """Enforce version-controlled schema tags."""
+    with open(os.path.join(os.path.dirname(__file__), "../../VERSION"), "r") as f:
+        lines = f.readlines()
+        min_ver = lines[1].split(":")[1].strip() if len(lines) > 1 else "1.0.0"
+    
+    if skeleton_version < min_ver:
+        raise InvalidTemplateError(f"Skeleton version {skeleton_version} is below minimum {min_ver}")
+
+def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
@@ -106,21 +174,19 @@ def new_runbook(
     timeout: int = typer.Option(
         180, "--timeout", help="AI request timeout in seconds (default: 180)."
     ),
-    chunked: bool = typer.Option(
-        False, "--chunked", help="Use modular chunked generation pipeline for better depth."
+    single_pass: bool = typer.Option(
+        False, "--single-pass",
+        help="Skip chunked generation and use single-pass monolithic mode.",
     ),
 ):
-    """
-    Generate an implementation runbook using AI Governance Panel.
-    """
+    """Generate an implementation runbook using AI Governance Panel."""
     # 0. Configure Provider Override if set
     from agent.core.ai import ai_service  # ADR-025: lazy init
     if provider:
         ai_service.set_provider(provider)
-    # Set AI timeout from CLI option (tunable, default 180s)
     import os as _os
     _os.environ["AGENT_AI_TIMEOUT_MS"] = str(timeout * 1000)
-    
+
     # 1. Find Story
     story_file = find_story_file(story_id)
     if not story_file:
@@ -129,8 +195,6 @@ def new_runbook(
 
     # 1.1 Enforce Story State
     story_text = story_file.read_text()
-    
-    # Check for both formats: "State: COMMITTED" (inline) and "## State\nCOMMITTED" (multiline)
     state_pattern = r"(?:^State:\s*COMMITTED|^## State\s*\n+COMMITTED|^Status:\s*COMMITTED)"
     if not re.search(state_pattern, story_text, re.MULTILINE):
         console.print(f"[bold red]❌ Story {story_id} is not COMMITTED. Please commit the story before creating a runbook.[/bold red]")
@@ -171,7 +235,7 @@ def new_runbook(
     runbook_dir = config.runbooks_dir / scope
     runbook_dir.mkdir(parents=True, exist_ok=True)
     runbook_file = runbook_dir / f"{story_id}-runbook.md"
-    
+
     if runbook_file.exists():
         console.print(f"[yellow]⚠️  Runbook already exists at {runbook_file}[/yellow]")
         if not typer.confirm("Overwrite?"):
@@ -189,7 +253,7 @@ def new_runbook(
     source_tree = ctx.get("source_tree", "")
     source_code = ctx.get("source_code", "")
 
-    # INFRA-107: Targeted introspection for story-referenced files
+    # INFRA-107: Targeted introspection
     targeted_context = context_loader._load_targeted_context(story_content)
     test_impact = context_loader._load_test_impact(story_content)
     behavioral_contracts = context_loader._load_behavioral_contracts(story_content)
@@ -200,29 +264,27 @@ def new_runbook(
 
     if source_tree:
         console.print(f"[dim]ℹ️  Including source context ({len(source_tree) + len(source_code)} chars)[/dim]")
-    
+
     panel_description = agents_data.get("description", "")
     panel_checks = agents_data.get("checks", "")
-    
+
     # INFRA-135: Dynamic Rule Retrieval (Rule Diet)
-    # Replaces static truncation with semantic filtering
     rules_content = retrieve_dynamic_rules(story_content, targeted_context)
-    
+
     if len(rules_content) < len(rules_full) * 0.5:
         console.print(f"[dim]ℹ️  Rule Diet active: Prompt reduced by {100 - (len(rules_content)/len(rules_full)*100):.1f}%[/dim]")
 
     # INFRA-160: Catalogue Injection
     j_catalogue, j_count = build_journey_catalogue(config.journeys_dir)
     a_catalogue, a_count = build_adr_catalogue(config.adrs_dir)
-    
-    # AC-7: Observability
+
     logger.info("catalogue_injected", extra={
         "story_id": story_id,
         "journey_count": j_count,
         "adr_count": a_count
     })
 
-    # AC-3: Story links pre-seeded (Extract from markdown headers)
+    # AC-3: Story links pre-seeded
     preseeded_adrs = extract_adr_refs(story_content)
     preseeded_journeys = extract_journey_refs(story_content)
     preseeded_block = ""
@@ -234,43 +296,97 @@ def new_runbook(
             preseeded_block += f"- Journeys: {', '.join(sorted(preseeded_journeys))}\n"
 
     # 4. Content Generation
-    if chunked:
-        content = _generate_runbook_chunked(
-            story_id=story_id,
-            story_content=story_content,
-            rules_content=rules_content,
-            targeted_context=targeted_context,
-            source_tree=source_tree,
-            source_code=source_code,
-            provider=provider,
-            timeout=timeout,
-        )
-        # Write + sync + return (skip monolithic path entirely)
-        runbook_file.write_text(content)
-        console.print(f"[bold green]✅ Chunked runbook generated at: {runbook_file}[/bold green]")
+    # ── Chunked path ──
+    if not single_pass:
         try:
-            adrs = extract_adr_refs(content)
-            journeys = extract_journey_refs(content)
-            if adrs or journeys:
-                merge_story_links(story_file, adrs, journeys)
+            content = generate_runbook_chunked(
+                story_id=story_id,
+                story_content=story_content,
+                rules_content=rules_content,
+                targeted_context=targeted_context,
+                source_tree=source_tree,
+                source_code=source_code,
+                provider=provider,
+                timeout=timeout,
+            )
+            _write_and_sync(content, story_id, story_file, runbook_file)
+            return
         except Exception as exc:  # noqa: BLE001
-            logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
-        if upsert_artifact(story_id, "runbook", content, author="agent"):
-            console.print("[bold green]🔄 Synced to local cache[/bold green]")
-        else:
-            console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
-        console.print("[yellow]⚠️  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
-        return
+            logger.warning(
+                "chunked_generation_failed",
+                extra={"story_id": story_id, "error": str(exc)},
+            )
+            console.print(
+                f"[yellow]⚠️  Chunked generation failed: {exc}\n"
+                "    Falling back to legacy monolithic generation...[/yellow]"
+            )
 
-    # Load Template
+    # ── Monolithic path ──
+    content = _run_monolithic_generation(
+        story_id=story_id,
+        story_content=story_content,
+        story_file=story_file,
+        runbook_file=runbook_file,
+        rules_content=rules_content,
+        instructions_content=instructions_content,
+        adrs_content=adrs_content,
+        source_tree=source_tree,
+        source_code=source_code,
+        targeted_context=targeted_context,
+        test_impact=test_impact,
+        behavioral_contracts=behavioral_contracts,
+        panel_description=panel_description,
+        panel_checks=panel_checks,
+        preseeded_block=preseeded_block,
+        j_catalogue=j_catalogue,
+        a_catalogue=a_catalogue,
+        skip_forecast=skip_forecast,
+        timeout=timeout,
+    )
+
+    _write_and_sync(content, story_id, story_file, runbook_file)
+
+
+def _run_monolithic_generation(
+    *,
+    story_id: str,
+    story_content: str,
+    story_file: Path,
+    runbook_file: Path,
+    rules_content: str,
+    instructions_content: str,
+    adrs_content: str,
+    source_tree: str,
+    source_code: str,
+    targeted_context: str,
+    test_impact: str,
+    behavioral_contracts: str,
+    panel_description: str,
+    panel_checks: str,
+    preseeded_block: str,
+    j_catalogue: str,
+    a_catalogue: str,
+    skip_forecast: bool,
+    timeout: int,
+) -> str:
+    """Run the legacy monolithic single-pass generation with gate loop.
+
+    Args:
+        All context and configuration needed for prompt building and gate validation.
+
+    Returns:
+        The fully validated runbook content.
+    """
+    from agent.core.ai import ai_service
+
     template_path = config.templates_dir / "runbook-template.md"
     if not template_path.exists():
         console.print(f"[bold red]❌ Runbook template not found at {template_path}[/bold red]")
         raise typer.Exit(code=1)
-        
+
     template_content = template_path.read_text()
     template_content = template_content.replace("{{ COPYRIGHT_HEADER }}", get_copyright_header())
-    
+
     system_prompt = f"""You are the AI Governance Panel for this repository.
 Your role is to design and document a DETAILED Implementation Runbook for a software engineering task.
 
@@ -373,12 +489,9 @@ Generate the runbook now.
     max_attempts = 3
     attempt = 0
     content = ""
-    # Track files the AI keeps trying to [MODIFY] that don't exist yet.
-    # Injected back into the prompt so the AI learns from the first attempt.
     known_new_files: set = set()
 
-    # Pre-populate from the story Impact Analysis [NEW] markers so the AI
-    # starts with this constraint on attempt 1 rather than after failing.
+    # Pre-populate from the story Impact Analysis [NEW] markers
     _ia_new = re.findall(
         r"-\s*`([^`]+)`\s*[—-]\s*\*\*\[NEW\]\*\*",
         story_content,
@@ -391,8 +504,9 @@ Generate the runbook now.
     ) if known_new_files else ""
     current_user_prompt = user_prompt + new_files_notice
 
-    max_gate_corrections = 3   # separate budget for gate fixes
+    max_gate_corrections = 3
     gate_corrections = 0
+    correction_parts: List[str] = []
 
     while attempt < max_attempts:
         attempt += 1
@@ -407,7 +521,7 @@ Generate the runbook now.
             )
             error_console.print(f"[bold red]❌ {te}[/bold red]")
             raise typer.Exit(code=1)
-            
+
         if not content:
             logger.warning("ai_empty_response", extra={"story_id": story_id, "attempt": attempt})
             if attempt < max_attempts:
@@ -417,9 +531,7 @@ Generate the runbook now.
                 console.print("[bold red]❌ AI returned empty response on final attempt.[/bold red]")
                 raise typer.Exit(code=1)
 
-        # -- SPLIT_REQUEST Fallback (INFRA-094) --
-        # Only honoured on attempt 1. On later attempts the AI is in a correction
-        # loop — a SPLIT_REQUEST there is an escape attempt, not a real complexity signal.
+        # -- SPLIT_REQUEST check --
         if "SPLIT_REQUEST" in content:
             if attempt == 1:
                 break  # Let the split logic below handle it
@@ -448,149 +560,26 @@ Generate the runbook now.
                     error_console.print(f"[bold red]❌ Gates failed after {max_attempts} attempts.[/bold red]")
                     raise typer.Exit(code=1)
 
+        # ── Gate pass ──
+        content, correction_parts, gate_corrections, known_new_files, attempt_delta = run_generation_gates(
+            content=content,
+            story_id=story_id,
+            story_content=story_content,
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            known_new_files=known_new_files,
+            attempt=attempt,
+            max_attempts=max_attempts,
+            gate_corrections=gate_corrections,
+            max_gate_corrections=max_gate_corrections,
+        )
+        attempt += attempt_delta
 
-        # ------------------------------------------------------------------ #
-        # DRY-RUN GATE PASS: run ALL gates in collect mode, then fix once.   #
-        # We never short-circuit mid-pass — every gate sees the same content  #
-        # so the AI gets a single combined correction prompt per retry.        #
-        # ------------------------------------------------------------------ #
-        correction_parts: List[str] = []
+        # S/R targeted fix succeeded — re-run gates
+        if correction_parts == ["__SR_PATCHED__"]:
+            continue
 
-        # 1. Schema validation
-        with tracer.start_as_current_span("validate_runbook_schema") as span:
-            schema_violations = validate_runbook_schema(content)
-            span.set_attribute("validation.passed", not bool(schema_violations))
-            span.set_attribute("validation.error_count", len(schema_violations) if schema_violations else 0)
-
-        if schema_violations:
-            logger.warning("runbook_schema_fail", extra={"attempt": attempt, "story_id": story_id})
-            correction_parts.append(
-                format_runbook_errors(schema_violations) + "\nPlease fix these schema errors."
-            )
-
-        # 2. Code Gate Self-Healing (INFRA-155 AC-1)
-        code_errors: List[str] = []
-        code_warnings: List[str] = []
-
-        with tracer.start_as_current_span("validate_code_gates") as span:
-            blocks = parse_code_blocks(content)
-            for b in blocks:
-                res = validate_code_block(b["file"], b["content"])
-                code_errors.extend(res.errors)
-                code_warnings.extend(res.warnings)
-
-            span.set_attribute("validation.passed", not bool(code_errors))
-            span.set_attribute("validation.error_count", len(code_errors))
-
-        if code_errors:
-            logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
-            correction_parts.append(
-                "CODE GATE VIOLATIONS:\n" + "\n".join(f"- {e}" for e in code_errors)
-            )
-
-        # 3. S/R Validation Gate (INFRA-159 + autohealing pre-pass)
-
-        with tracer.start_as_current_span("sr_validation_gate") as sr_span:
-            sr_span.set_attribute("story_id", story_id)
-            sr_span.set_attribute("attempt", attempt)
-            sr_mismatches = validate_sr_blocks(content)
-
-            # Pre-pass: deterministically handle [MODIFY] on missing files.
-            # Independent of retry loop — does not consume an attempt slot.
-            missing_blocks = [m for m in sr_mismatches if m.get("missing_modify")]
-            real_mismatches = [m for m in sr_mismatches if not m.get("missing_modify")]
-
-            if missing_blocks:
-                logger.warning("sr_modify_missing", extra={"story_id": story_id, "count": len(missing_blocks)})
-                missing_paths = [m["file"] for m in missing_blocks]
-                known_new_files.update(missing_paths)
-                sr_span.set_attribute("outcome", "modify_missing_prepass")
-                console.print(f"[yellow]⚠️  [MODIFY] on non-existent file(s): {missing_paths} — autohealing (free pass)...[/yellow]")
-                missing_detail = "\n".join(
-                    f"  - {m['file']}: file does not exist, must use [NEW] with a full code block"
-                    for m in missing_blocks
-                )
-                correction_parts.append(
-                    "AUTOHEALING REQUIRED — [MODIFY] used for files that do not yet exist:\n"
-                    f"{missing_detail}\n"
-                    "For each listed file: replace `#### [MODIFY] <path>` + "
-                    "`<<<SEARCH/===/>>>` with `#### [NEW] <path>` followed by "
-                    "a complete fenced code block of the full intended file contents."
-                )
-                attempt -= 1
-                new_files_notice = (
-                    "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
-                    + "\n".join(f"  - {f}" for f in sorted(known_new_files))
-                )
-                current_user_prompt = user_prompt + new_files_notice
-
-
-            sr_span.set_attribute("mismatch_count", len(real_mismatches))
-
-            if real_mismatches:
-                logger.warning(
-                    "sr_validation_fail",
-                    extra={"attempt": attempt, "story_id": story_id, "count": len(real_mismatches),
-                           "files": [m["file"] for m in real_mismatches]},
-                )
-                sr_span.set_attribute("outcome", "mismatch")
-
-                # ── Targeted S/R fix: patch blocks in-place ──────────── #
-                # Instead of regenerating the full runbook, ask the AI to
-                # produce ONLY corrected MODIFY blocks and replace them.
-                # NOTE: gate_corrections is only incremented if the targeted
-                # fix succeeds.  If it falls back to correction_parts, that
-                # path handles its own budget accounting.
-                sr_prompt = generate_sr_correction_prompt(real_mismatches)
-                console.print(f"[yellow]⚠️  S/R mismatch in {len(real_mismatches)} file(s) — targeted fix...[/yellow]")
-                sr_fix = ai_service.complete(
-                    system_prompt=(
-                        "You are a code correction assistant. Output ONLY the corrected "
-                        "#### [MODIFY] sections with <<<SEARCH / === / >>>REPLACE blocks. "
-                        "No prose, no explanation, no other content."
-                    ),
-                    user_prompt=sr_prompt,
-                )
-                if sr_fix:
-                    # Replace each failing MODIFY block in the runbook content
-                    import re as _sr_re
-                    patched_any = False
-                    for m in real_mismatches:
-                        # Find the MODIFY block for this file and replace its S/R content
-                        old_search = m["search"].strip()
-                        if old_search and old_search in content:
-                            # Look for the corrected SEARCH block for this file in the AI response
-                            file_pattern = _sr_re.compile(
-                                r"####\s+\[MODIFY\]\s+" + _sr_re.escape(m["file"]) + r".*?(?=####\s+\[|$)",
-                                _sr_re.DOTALL,
-                            )
-                            fix_match = file_pattern.search(sr_fix)
-                            if fix_match:
-                                # Find and replace the old MODIFY block for this file in content
-                                old_block = file_pattern.search(content)
-                                if old_block:
-                                    content = content[:old_block.start()] + fix_match.group() + content[old_block.end():]
-                                    patched_any = True
-                    if patched_any:
-                        logger.info("sr_targeted_fix_applied", extra={"story_id": story_id, "files": [m["file"] for m in real_mismatches]})
-                        gate_corrections += 1
-                        attempt -= 1  # Don't consume a panel attempt
-                        continue
-                    else:
-                        # Targeted fix didn't match — fall back to correction_parts
-                        logger.warning("sr_targeted_fix_failed_fallback", extra={"story_id": story_id})
-                        correction_parts.append(sr_prompt)
-            elif not missing_blocks:
-                if attempt > 1:
-                    sr_span.set_attribute("outcome", "corrected")
-                    logger.info("sr_correction_success", extra={"story_id": story_id, "attempt": attempt})
-                else:
-                    sr_span.set_attribute("outcome", "pass")
-                logger.info("sr_validation_pass", extra={"story_id": story_id})
-
-        # ------------------------------------------------------------------ #
-        # Combined correction: if ANY gate failed, send one unified prompt.   #
-        # ------------------------------------------------------------------ #
+        # Combined correction needed
         if correction_parts:
             if attempt < max_attempts:
                 issues = len(correction_parts)
@@ -603,11 +592,7 @@ Generate the runbook now.
                     for part in correction_parts:
                         error_console.print(f"[red]{part[:400]}[/red]")
                     raise typer.Exit(code=1)
-                # Gate correction — do NOT consume a panel attempt
                 attempt -= 1
-                # Rebuild new_files_notice from the current known_new_files set so it is
-                # always included — the autohealer may have added new entries since the
-                # initial prompt was built and we must not lose that grounding.
                 new_files_notice = (
                     "\n\nFILES THAT DO NOT EXIST YET — use [NEW] not [MODIFY] for ALL of these:\n"
                     + "\n".join(f"  - {f}" for f in sorted(known_new_files))
@@ -629,182 +614,35 @@ Generate the runbook now.
                     error_console.print(f"[red]{part[:400]}[/red]")
                 raise typer.Exit(code=1)
 
-        # 3b. Deterministic auto-fixes — patch content BEFORE DoD gate runs.
-        #     These are free (no AI call) and don't consume retry budget.
+        # Deterministic auto-fixes
         content = auto_fix_license_headers(content)
         content = auto_fix_changelog_step(content)
 
-        # 4. DoD Compliance Gate (INFRA-161)
-        with tracer.start_as_current_span("dod_compliance_gate") as dod_span:
-            dod_span.set_attribute("story_id", story_id)
-            dod_span.set_attribute("attempt", attempt)
-            acs = extract_acs(story_content)
+        # DoD gate
+        content, dod_gaps, gate_corrections, patched = run_dod_gate(
+            content=content,
+            story_id=story_id,
+            story_content=story_content,
+            attempt=attempt,
+            gate_corrections=gate_corrections,
+            max_gate_corrections=max_gate_corrections,
+        )
 
-            # AC-1: Secondary AI call — AC coverage check (only when story exists)
-            _gap_4a: List[str] = []
-            if acs:  # story file found and has ACs (AC-8: skip gracefully otherwise)
-                _ac_prompt = build_ac_coverage_prompt(acs, content)
-                _ac_response = ai_service.complete(
-                    system_prompt=(
-                        "You are a QA reviewer. Respond ONLY with ALL_PASS or "
-                        "AC-N: <reason> lines. No prose."
-                    ),
-                    user_prompt=scrub_sensitive_data(_ac_prompt),
-                )
-                _ac_gap_ids = parse_ac_gaps(_ac_response or "")
-                if _ac_gap_ids:
-                    _gap_4a = [
-                        f"AC coverage gap: {gid} is not addressed by any runbook step"
-                        for gid in _ac_gap_ids
-                    ]
-
-            # AC-2 through AC-5: Deterministic checks
-            _gap_4b = check_test_coverage(content)
-            _gap_4c = check_changelog_entry(content)
-            _gap_4d = check_license_headers(content)
-            _gap_4e = check_otel_spans(content, story_content)
-            _gap_4f = check_impact_analysis_completeness(content)
-            _gap_4g = check_adr_refs(content, config.adrs_dir)
-            _gap_4i = check_stub_implementations(content)
-            dod_gaps: List[str] = [
-                *_gap_4a, *_gap_4b, *_gap_4c, *_gap_4d, *_gap_4e, *_gap_4f, *_gap_4g, *_gap_4i
-            ]
-
-            # Per AC-9: gaps attribute is comma-joined IDs (4a–4g)
-            _gap_ids_list: List[str] = []
-            if _gap_4a:
-                _gap_ids_list.append("4a")
-            if _gap_4b:
-                _gap_ids_list.append("4b")
-            if _gap_4c:
-                _gap_ids_list.append("4c")
-            if _gap_4d:
-                _gap_ids_list.append("4d")
-            if _gap_4e:
-                _gap_ids_list.append("4e")
-            if _gap_4f:
-                _gap_ids_list.append("4f")
-            if _gap_4g:
-                _gap_ids_list.append("4g")
-            if _gap_4i:
-                _gap_ids_list.append("4i")
-            dod_span.set_attribute("gap_count", len(dod_gaps))
-            dod_span.set_attribute("gaps", ",".join(_gap_ids_list))
-
-        if dod_gaps:
-            logger.warning(
-                "dod_compliance_fail",
-                extra={"attempt": attempt, "story_id": story_id, "gaps": dod_gaps},
-            )
-            dod_span.set_attribute("outcome", "fail")
-
-            # ── Targeted DoD patching (no full regeneration) ────────────── #
-            # Separate test-coverage gaps (can be patched with targeted AI)
-            # from other gaps (AC coverage, OTel, etc.)
-            test_gaps = [g for g in dod_gaps if "has no paired test file" in g]
-            other_gaps = [g for g in dod_gaps if "has no paired test file" not in g]
-
-            issues = len(dod_gaps)
-            console.print(f"[yellow]⚠️  Attempt {attempt}: DoD gate {issues} gap(s) — patching...[/yellow]")
-            logger.info("dod_targeted_patch", extra={"attempt": attempt, "story_id": story_id, "test_gaps": len(test_gaps), "other_gaps": len(other_gaps)})
-            gate_corrections += 1
-            if gate_corrections > max_gate_corrections:
-                logger.error("gate_corrections_exhausted", extra={"story_id": story_id, "gate_corrections": gate_corrections})
-                error_console.print(f"[bold red]❌ Gate corrections exhausted ({max_gate_corrections} corrections).[/bold red]")
-                for gap in dod_gaps[:5]:
-                    error_console.print(f"  [red]• {gap[:200]}[/red]")
-                raise typer.Exit(code=1)
-
-            patched = False
-
-            # Targeted fix for missing test files: ask AI only for the test blocks
-            if test_gaps:
-                # Extract impl paths from gap messages
-                import re as _gap_re
-                impl_paths = []
-                for g in test_gaps:
-                    m = _gap_re.match(r"\[NEW\]\s+(\S+)", g)
-                    if m:
-                        impl_paths.append(m.group(1))
-
-                if impl_paths:
-                    test_prompt = (
-                        "Generate ONLY the following test file implementation steps "
-                        "to append to an existing runbook. For each file below, produce "
-                        "a step with #### [NEW] <test_path> and a fenced code block. "
-                        "Include the project license header at the top of each file.\n\n"
-                        "Files needing paired test files:\n"
-                        + "\n".join(f"  - {p}" for p in impl_paths)
-                        + "\n\nReturn ONLY the markdown steps, nothing else."
-                    )
-                    test_blocks = ai_service.complete(
-                        system_prompt="You are a code generation assistant. Output only markdown. No prose.",
-                        user_prompt=test_prompt,
-                    )
-                    if test_blocks:
-                        content = content.rstrip() + "\n\n" + test_blocks.strip() + "\n"
-                        # Re-apply license auto-fix to the new blocks
-                        content = auto_fix_license_headers(content)
-                        patched = True
-                        logger.info("test_blocks_appended", extra={"story_id": story_id, "count": len(impl_paths)})
-
-            # For non-test gaps, build a targeted correction and append
-            if other_gaps:
-                dod_correction = build_dod_correction_prompt(other_gaps, story_content, acs)
-                other_prompt = (
-                    "The following DoD gaps must be fixed. Generate ONLY the additional "
-                    "runbook steps needed to address them. Do NOT reproduce any existing "
-                    "content — output only NEW steps to append.\n\n"
-                    + dod_correction
-                )
-                other_blocks = ai_service.complete(
-                    system_prompt="You are a code generation assistant. Output only markdown. No prose.",
-                    user_prompt=other_prompt,
-                )
-                if other_blocks:
-                    content = content.rstrip() + "\n\n" + other_blocks.strip() + "\n"
-                    patched = True
-
-            if patched:
-                # Re-run DoD checks on the patched content — don't consume panel attempt
-                attempt -= 1
-                continue
-            else:
-                # Nothing could be patched — fall through to exhaustion
-                logger.error("dod_patch_failed", extra={"story_id": story_id, "attempt": attempt})
-
-            logger.error("dod_gate_exhausted", extra={"story_id": story_id, "gate_corrections": gate_corrections})
-            error_console.print(f"[bold red]❌ DoD gate failed after {gate_corrections} corrections.[/bold red]")
-            for gap in dod_gaps[:5]:
-                error_console.print(f"  [red]• {gap[:200]}[/red]")
-            raise typer.Exit(code=1)
-        else:
-            _outcome = "corrected" if attempt > 1 else "pass"
-            dod_span.set_attribute("outcome", _outcome)
-            if _outcome == "corrected":
-                logger.info("dod_compliance_corrected", extra={"story_id": story_id, "attempt": attempt})
-            else:
-                logger.info("dod_compliance_pass", extra={"story_id": story_id})
-
-
-        # All validations passed — proceed
-        if code_warnings:
-            console.print(f"[yellow]ℹ️  Code warnings detected (non-blocking):[/yellow]")
-            for w in code_warnings:
-                console.print(f"  [dim]• {w}[/dim]")
-
-        break
+        if dod_gaps and patched:
+            # Re-run DoD checks on the patched content
+            attempt -= 1
+            continue
+        elif not dod_gaps:
+            break
 
     # -- SPLIT_REQUEST Fallback (INFRA-094) --
     if "SPLIT_REQUEST" in content:
         split_data = parse_split_request(content)
         if split_data:
-            # AC-3: Save decomposition suggestions
             config.split_requests_dir.mkdir(parents=True, exist_ok=True)
             split_path = config.split_requests_dir / f"{story_id}.json"
             split_path.write_text(json.dumps(split_data, indent=2))
 
-            # NFR: Structured logging (SOC2)
             logger.warning(
                 "split_request story=%s reason=%s suggestion_count=%d",
                 story_id,
@@ -813,7 +651,6 @@ Generate the runbook now.
             )
 
             if skip_forecast:
-                # Gate was bypassed — treat split as advisory, not blocking
                 logger.info(
                     "split_request advisory_only=True story=%s (--skip-forecast)",
                     story_id,
@@ -822,7 +659,6 @@ Generate the runbook now.
                     "[dim]ℹ️  AI recommended splitting (advisory only — "
                     "--skip-forecast active). Generating runbook anyway.[/dim]"
                 )
-                # Re-generate without the SPLIT_REQUEST directive
                 console.print("[bold green]🤖 Panel is re-generating (no split directive)...[/bold green]")
                 with console.status("[bold green]🤖 Panel is re-generating...[/bold green]") as status:
                     content = ai_service.complete(system_prompt, user_prompt, rich_status=status)
@@ -830,7 +666,6 @@ Generate the runbook now.
                     console.print("[bold red]❌ AI returned empty response on retry.[/bold red]")
                     raise typer.Exit(code=1)
             else:
-                # AC-4: Exit with code 2 and guidance
                 console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
                 console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
                 est_loc = split_data.get('estimated_loc')
@@ -844,149 +679,4 @@ Generate the runbook now.
                 console.print("[dim]Create child stories with: agent new-story <ID>[/dim]")
                 raise typer.Exit(code=2)
 
-    # 5. Write
-    runbook_file.write_text(content)
-    console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
-
-    # 5.0 Back-populate story with identified ADRs and Journeys (INFRA-158)
-    # Best-effort: failures are logged as warnings and do not abort runbook generation.
-    try:
-        adrs = extract_adr_refs(content)
-        journeys = extract_journey_refs(content)
-        if adrs or journeys:
-            merge_story_links(story_file, adrs, journeys)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
-
-    # 5.1 Schema validation status
-    console.print("[dim]✅ Schema valid — all implementation blocks are correctly formatted.[/dim]")
-    
-    # Auto-sync
-    runbook_id = f"{story_id}" # Using Story ID for Runbook ID as well, with type='runbook'
-    if upsert_artifact(runbook_id, "runbook", content, author="agent"):
-         console.print("[bold green]🔄 Synced to local cache[/bold green]")
-    else:
-         console.print("[yellow]⚠️  Failed to sync to local cache[/yellow]")
-
-    console.print("[yellow]\u26a0\ufe0f  ACTION REQUIRED: Review and change to '## State\\nACCEPTED'.[/yellow]")
-
-
-def _generate_runbook_chunked(
-    story_id: str,
-    story_content: str,
-    rules_content: str,
-    targeted_context: str,
-    source_tree: str,
-    source_code: str,
-    provider: Optional[str] = None,
-    timeout: int = 180,
-) -> str:
-    """Execute a modular, two-phase generation pipeline for detailed runbooks.
-
-    Phase 1 generates a JSON Skeleton (table of contents), Phase 2 populates
-    each section with detailed implementation blocks.
-
-    Args:
-        story_id: The story identifier.
-        story_content: Full content of the user story.
-        rules_content: Relevant governance rules.
-        targeted_context: Codebase introspection data.
-        source_tree: The project file structure.
-        source_code: Outlines of relevant source files.
-        provider: AI provider override.
-        timeout: Request timeout in seconds.
-
-    Returns:
-        The fully assembled implementation runbook in Markdown.
-    """
-    from agent.core.ai import ai_service
-
-    if provider:
-        ai_service.set_provider(provider)
-
-    context_summary = (
-        f"{source_tree}\n\n{source_code}\n\n{targeted_context}\n\nRULES:\n{rules_content}"
-    )
-
-    # Phase 1: Skeleton Generation
-    with tracer.start_as_current_span("runbook.skeleton_generation") as span:
-        skeleton_prompt = generate_skeleton_prompt(story_content)
-        console.print("[bold green]\U0001f916 Phase 1: Generating Skeleton...[/bold green]")
-
-        skeleton_raw = ai_service.complete(
-            system_prompt="You are a senior technical architect. Output ONLY valid JSON.",
-            user_prompt=skeleton_prompt,
-        )
-
-        try:
-            skeleton_data = json.loads(skeleton_raw.strip())
-            skeleton = RunbookSkeleton.from_dict(skeleton_data)
-            span.set_attribute("section_count", len(skeleton.sections))
-            logger.info(
-                "skeleton_generated",
-                extra={"story_id": story_id, "size": len(skeleton_raw)},
-            )
-        except (json.JSONDecodeError, ValueError) as exc:
-            error_console.print(
-                f"[bold red]\u274c Failed to parse Skeleton JSON: {exc}[/bold red]"
-            )
-            logger.error(
-                "skeleton_parse_failed",
-                extra={"error": str(exc), "story_id": story_id},
-            )
-            raise typer.Exit(code=1)
-
-    # Phase 2: Block Generation
-    assembled_content = (
-        f"# Runbook: {skeleton.title}\n\n## State\n\nPROPOSED\n\n"
-    )
-
-    for i, section in enumerate(skeleton.sections, 1):
-        with tracer.start_as_current_span("runbook.block_generation") as bspan:
-            bspan.set_attribute("section_index", i)
-            bspan.set_attribute("section_title", section.title)
-
-            console.print(
-                f"[bold green]\U0001f916 Phase 2: Generating Block "
-                f"{i}/{len(skeleton.sections)}: {section.title}...[/bold green]"
-            )
-
-            block_prompt = generate_block_prompt(
-                section.title,
-                section.description,
-                skeleton_raw,
-                story_content,
-                context_summary,
-            )
-
-            block_raw = ai_service.complete(
-                system_prompt="You are an implementation specialist. Output ONLY valid JSON.",
-                user_prompt=block_prompt,
-            )
-
-            try:
-                block_data = json.loads(block_raw.strip())
-                block = RunbookBlock.from_dict(block_data)
-                assembled_content += f"## {block.header}\n\n{block.content}\n\n"
-                logger.info(
-                    "block_generated",
-                    extra={"section": section.title, "size": len(block_raw)},
-                )
-            except (json.JSONDecodeError, ValueError) as exc:
-                error_console.print(
-                    f"[bold red]\u274c Failed to parse Block JSON for "
-                    f"'{section.title}': {exc}[/bold red]"
-                )
-                logger.warning(
-                    "block_parse_failed",
-                    extra={"section": section.title, "error": str(exc)},
-                )
-                # Best effort: placeholder for failed section
-                assembled_content += (
-                    f"## {section.title}\n\n"
-                    "[Generation failed for this section]\n\n"
-                )
-
-    return assembled_content
-
-
+    return content

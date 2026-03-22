@@ -32,7 +32,7 @@ tracer = trace.get_tracer(__name__)
 
 # Valid story states recognised by the agent workflow.
 _VALID_STATES = frozenset({
-    "DRAFT", "READY", "IN_PROGRESS", "COMMITTED", "DONE",
+    "DRAFT", "READY", "COMMITTED", "DONE",
     "BLOCKED", "RETIRED", "DEPRECATED", "SUPERSEDED", "REVIEW_NEEDED",
 })
 
@@ -49,12 +49,12 @@ def update_story_state(
 
     Called by:
         - ``agent commit`` (workflow.py) — sets state to ``COMMITTED``
-        - ``agent implement`` (implement.py) — sets state to ``IN_PROGRESS``
+        - ``agent implement`` (implement.py) — validates state is ``COMMITTED``
         - ``agent decompose-story`` — sets state to ``SUPERSEDED`` with an annotation
 
     Args:
         story_id: The story identifier (e.g. ``INFRA-023``).
-        new_state: Target state string (e.g. ``IN_PROGRESS``, ``COMMITTED``).
+        new_state: Target state string (e.g. ``COMMITTED``, ``DONE``).
         context_prefix: Optional label for log output (e.g. ``Phase 0``, ``Post-Commit``).
         annotation: Optional suffix appended to the state token in the file,
             e.g. ``'(see plan: INFRA-157-plan.md)'``.  The full persisted value

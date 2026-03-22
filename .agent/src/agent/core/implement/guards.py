@@ -621,8 +621,14 @@ def backup_file(file_path: Path) -> Optional[Path]:
 
 
 # ---------------------------------------------------------------------------
-# Apply helpers
+# Post-generation S/R validation (extracted to sr_validation.py)
 # ---------------------------------------------------------------------------
+
+from agent.core.implement.sr_validation import (  # noqa: E402
+    validate_and_correct_sr_blocks,
+    fuzzy_find_and_replace as _fuzzy_find_and_replace,
+)
+
 
 def apply_search_replace_to_file(
     filepath: str,
@@ -665,24 +671,32 @@ def apply_search_replace_to_file(
     working_content = original_content
 
     for i, block in enumerate(blocks):
-        if block["search"] not in working_content:
-            _console.print(
-                f"[bold red]❌ Search block {i+1}/{len(blocks)} not found in {filepath}.[/bold red]"
+        if block["search"] in working_content:
+            match_count = working_content.count(block["search"])
+            if match_count > 1:
+                logging.warning(
+                    "search_replace_ambiguous file=%s block=%d match_count=%d",
+                    filepath, i + 1, match_count,
+                )
+            working_content = working_content.replace(block["search"], block["replace"], 1)
+        else:
+            # Fuzzy match fallback: find best matching region
+            _fuzzy_result = _fuzzy_find_and_replace(
+                working_content, block["search"], block["replace"], filepath, i + 1, len(blocks)
             )
-            logging.warning(
-                "search_replace_match_failure file=%s block=%d/%d",
-                filepath, i + 1, len(blocks),
-            )
-            if span_ctx:
-                span_ctx.end()
-            return False, original_content
-        match_count = working_content.count(block["search"])
-        if match_count > 1:
-            logging.warning(
-                "search_replace_ambiguous file=%s block=%d match_count=%d",
-                filepath, i + 1, match_count,
-            )
-        working_content = working_content.replace(block["search"], block["replace"], 1)
+            if _fuzzy_result is not None:
+                working_content = _fuzzy_result
+            else:
+                _console.print(
+                    f"[bold red]❌ Search block {i+1}/{len(blocks)} not found in {filepath}.[/bold red]"
+                )
+                logging.warning(
+                    "search_replace_match_failure file=%s block=%d/%d",
+                    filepath, i + 1, len(blocks),
+                )
+                if span_ctx:
+                    span_ctx.end()
+                return False, original_content
 
     _console.print(f"\n[bold cyan]📝 Search/Replace for: {filepath}[/bold cyan]")
     diff_lines = list(difflib.unified_diff(
@@ -833,3 +847,75 @@ def apply_change_to_file(
             span_ctx.set_attribute("success", False)
             span_ctx.end()
         return False
+
+def autocorrect_runbook_fences(content: str) -> Tuple[str, List[str]]:
+    """Auto-correct common fence issues in generated runbooks.
+
+    Fixes:
+    - Missing blank lines before/after code fences
+    - Unbalanced fences
+
+    Args:
+        content: Raw runbook markdown.
+
+    Returns:
+        Tuple of (corrected_content, list_of_corrections).
+    """
+    import re as _re
+    corrections = []
+
+    # Fix: ensure blank line before opening fence
+    fixed = _re.sub(r'([^\n])\n(```)', r'\1\n\n\2', content)
+    if fixed != content:
+        corrections.append("Added blank lines before code fences")
+        content = fixed
+
+    # Fix: ensure blank line after closing fence
+    fixed = _re.sub(r'(```)\n([^\n])', r'\1\n\n\2', content)
+    if fixed != content:
+        corrections.append("Added blank lines after code fences")
+        content = fixed
+
+    # Fix: demote non-Step ### headers to bold text
+    # AI often generates sub-headers like ### Troubleshooting, ### 1. Foo
+    # that the parser treats as empty steps with 0 operations.
+    def _demote_non_step(match):
+        """Demote non-step headers to bold text."""
+        header_text = match.group(1).strip()
+        if _re.match(r'^Step \d+', header_text):
+            return match.group(0)  # keep actual steps
+        return f'**{header_text}**'
+
+    fixed = _re.sub(r'^### (.+)$', _demote_non_step, content, flags=_re.MULTILINE)
+    if fixed != content:
+        original_count = len(_re.findall(r'^### ', content, _re.MULTILINE))
+        fixed_count = len(_re.findall(r'^### ', fixed, _re.MULTILINE))
+        demoted = original_count - fixed_count
+        corrections.append(f"Demoted {demoted} non-step ### headers to bold text")
+        content = fixed
+
+    return content, corrections
+
+
+def lint_runbook_syntax(content: str) -> List[str]:
+    """Check runbook for common syntax issues.
+
+    Args:
+        content: Runbook markdown content.
+
+    Returns:
+        List of error strings. Empty if no issues found.
+    """
+    import re as _re
+    errors = []
+
+    # Check for balanced fences
+    fence_count = len(_re.findall(r'^```', content, _re.MULTILINE))
+    if fence_count % 2 != 0:
+        errors.append(f"Unbalanced code fences: {fence_count} fence markers (expected even)")
+
+    # Check for __name__ rendered as **name**
+    if '**name**' in content or '**main**' in content:
+        errors.append("Detected markdown-corrupted Python dunder: **name** or **main** (should be __name__ or __main__)")
+
+    return errors

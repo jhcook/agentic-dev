@@ -15,52 +15,52 @@
 """Tests for runbook chunking data models."""
 
 import pytest
-from agent.core.implement.chunk_models import RunbookSkeleton, RunbookBlock, SkeletonSection
+from agent.core.implement.chunk_models import RunbookSkeleton, RunbookBlock
 
 
-def test_skeleton_from_dict_valid():
-    """Test parsing a valid skeleton dictionary."""
-    data = {
-        "title": "Test Runbook",
-        "sections": [
-            {"title": "Section 1", "description": "Desc 1", "estimated_tokens": 100},
-            {"title": "Section 2", "description": "Desc 2", "estimated_tokens": 200}
-        ]
-    }
-    skeleton = RunbookSkeleton.from_dict(data)
-    assert skeleton.title == "Test Runbook"
-    assert len(skeleton.sections) == 2
-    assert skeleton.sections[0].title == "Section 1"
-    assert skeleton.sections[1].estimated_tokens == 200
+def test_runbook_block_creation():
+    """Test creating a RunbookBlock with required fields."""
+    block = RunbookBlock(id="block-1", content="Hello world")
+    assert block.id == "block-1"
+    assert block.content == "Hello world"
+    assert block.metadata == {}
+    assert block.prefix_whitespace == ""
+    assert block.suffix_whitespace == ""
+    assert block.block_type == "markdown"
 
 
-def test_skeleton_from_dict_missing_fields():
-    """Test parsing a skeleton with missing fields raises ValueError."""
-    data = {"title": "Incomplete"}
-    with pytest.raises(ValueError, match="Skeleton JSON must contain 'title' and 'sections'"):
-        RunbookSkeleton.from_dict(data)
+def test_runbook_block_with_metadata():
+    """Test creating a RunbookBlock with metadata."""
+    block = RunbookBlock(
+        id="block-2",
+        content="Content",
+        metadata={"version": "2.0", "tags": "infra,test"},
+    )
+    assert block.metadata["version"] == "2.0"
+    assert "infra" in block.metadata["tags"]
 
 
-def test_skeleton_from_dict_invalid_sections():
-    """Test parsing a skeleton with invalid sections raises ValueError."""
-    data = {"title": "Bad Sections", "sections": "not a list"}
-    with pytest.raises(ValueError, match="'sections' must be a JSON array"):
-        RunbookSkeleton.from_dict(data)
+def test_skeleton_get_block_found():
+    """Test retrieving a block by ID from a skeleton."""
+    blocks = [
+        RunbookBlock(id="a", content="first"),
+        RunbookBlock(id="b", content="second"),
+    ]
+    skeleton = RunbookSkeleton(blocks=blocks)
+    result = skeleton.get_block("b")
+    assert result is not None
+    assert result.content == "second"
 
 
-def test_block_from_dict_valid():
-    """Test parsing a valid block dictionary."""
-    data = {
-        "header": "Implementation Steps",
-        "content": "### Step 1\nModify file.py"
-    }
-    block = RunbookBlock.from_dict(data)
-    assert block.header == "Implementation Steps"
-    assert "Modify file.py" in block.content
+def test_skeleton_get_block_not_found():
+    """Test retrieving a nonexistent block returns None."""
+    skeleton = RunbookSkeleton(blocks=[RunbookBlock(id="a", content="x")])
+    assert skeleton.get_block("missing") is None
 
 
-def test_block_from_dict_missing_fields():
-    """Test parsing a block with missing fields raises ValueError."""
-    data = {"header": "Missing Content"}
-    with pytest.raises(ValueError, match="Block JSON must contain 'header' and 'content'"):
-        RunbookBlock.from_dict(data)
+def test_skeleton_defaults():
+    """Test RunbookSkeleton default field values."""
+    skeleton = RunbookSkeleton(blocks=[])
+    assert skeleton.source_path is None
+    assert skeleton.version == "1.0.0"
+    assert skeleton.blocks == []
