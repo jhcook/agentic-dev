@@ -883,6 +883,10 @@ ADRs:
                     fallback_needed = False
                     chunks = []
 
+            # INFRA-169: Create a single event loop for all serial chunk
+            # applications, avoiding the asyncio.run-per-chunk anti-pattern.
+            _loop = asyncio.new_event_loop()
+
             for idx, chunk in enumerate(chunks):
                 if len(chunks) > 1:
                     console.print(
@@ -897,7 +901,7 @@ ADRs:
                         f"[dim]⚡ Step {idx+1}: verbatim ({len(c_sr)} S/R, "
                         f"{len(c_code)} full-file) — no AI[/dim]"
                     )
-                    step_loc, step_files = asyncio.run(
+                    step_loc, step_files = _loop.run_until_complete(
                         orchestrator.apply_chunk(chunk, idx + 1)
                     )
                     full_content += f"\n[verbatim step {idx+1}]"
@@ -962,7 +966,7 @@ ADRs:
                 full_content += f"\n\n{chunk_result}"
 
                 if apply:
-                    step_loc, step_files = asyncio.run(
+                    step_loc, step_files = _loop.run_until_complete(
                         orchestrator.apply_chunk(chunk_result, idx + 1)
                     )
                     cumulative_loc += step_loc

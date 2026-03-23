@@ -1195,7 +1195,7 @@ async def test_orchestrator_parallel_chunk_success():
 
         # Process chunk (assuming orchestrator.apply_chunk became async or uses async internally)
         # Note: If apply_chunk is still sync, this test targets the new async core methods
-        loc, modified = await orchestrator.apply_chunk_async(chunk_content, 1)
+        loc, modified = await orchestrator.apply_chunk(chunk_content, 1)
         
         assert len(modified) == 2
         assert "file1.py" in modified
@@ -1221,7 +1221,7 @@ async def test_orchestrator_transient_failure_recovery():
 
 ```
 
-        loc, modified = await orchestrator.apply_chunk_async(chunk_content, 1)
+        loc, modified = await orchestrator.apply_chunk(chunk_content, 1)
         
         assert "file_retry.py" in modified
         assert mock_apply.call_count == 2
@@ -1241,7 +1241,7 @@ async def test_orchestrator_permanent_failure_halts_downstream():
 #### [NEW] doomed.py\n```python\npass\n```"
         
         with pytest.raises(MaxRetriesExceededError):
-            await orchestrator.apply_chunk_async(chunk_content, 1)
+            await orchestrator.apply_chunk(chunk_content, 1)
 
 ```
 
@@ -1293,7 +1293,7 @@ async def test_orchestrator_concurrency_limit():
         chunk_content = "\n".join(content_parts)
         
         start_time = time.time()
-        await orchestrator.apply_chunk_async(chunk_content, 1)
+        await orchestrator.apply_chunk(chunk_content, 1)
         duration = time.time() - start_time
         
         # If parallel without limit: ~0.1s
@@ -1316,7 +1316,7 @@ async def test_orchestrator_stability_high_volume():
 #### [NEW] mass_{i}.py\n```python\npass\n```" for i in range(50)]
         chunk_content = "\n".join(content_parts)
         
-        loc, modified = await orchestrator.apply_chunk_async(chunk_content, 1)
+        loc, modified = await orchestrator.apply_chunk(chunk_content, 1)
         
         assert len(modified) == 50
         assert mock_apply.call_count == 50
@@ -1347,8 +1347,8 @@ Chunks within a phase are executed using `asyncio.gather`. This allows multiple 
 
 **2. Concurrency Limiting (Semaphore)**
 To prevent resource exhaustion (OS file descriptor limits or LLM API rate limits), a `BoundedSemaphore` is used to restrict the number of active concurrent tasks. 
-- **Default Limit**: 5 concurrent chunks.
-- **Implementation**: Managed within the `Orchestrator` via an internal semaphore used during `apply_chunk_async` calls.
+- **Default Limit**: 4 concurrent chunks.
+- **Implementation**: Managed within the `Orchestrator` via an internal semaphore used during `apply_chunk` calls.
 
 **3. Phase-Gate Integrity**
 Parallelism is strictly confined to the *current phase*. The orchestrator ensures all chunks in a phase are resolved (either successful or failed) before evaluating the gate for the next phase. A single permanent chunk failure will halt the entire runbook to preserve system integrity and prevent inconsistent modifications in downstream phases.
