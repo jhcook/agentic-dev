@@ -17,6 +17,9 @@ As a **Backend Engineer**, I want **the orchestrator to execute generation phase
 - [ ] **Scenario 1**: Given a generation task with multiple independent chunks in a single phase, When the orchestrator is triggered, Then it must process those chunks in parallel using async/await patterns.
 - [ ] **Scenario 2**: If a specific chunk fails due to a transient error, the orchestrator must execute a retry (with exponential backoff) specifically for that chunk without restarting the entire phase.
 - [ ] **Negative Test**: System handles a "Max Retries Exceeded" event gracefully by marking the specific chunk as failed and preventing downstream phases from starting, while preserving the state of successful chunks.
+- [ ] **Idempotency — implement**: Running `agent implement` a second time must skip already-applied S/R blocks (REPLACE text present) and identical [NEW] files, producing no changes.
+- [ ] **Idempotency — new-runbook**: Running `agent new-runbook` when a valid runbook exists must validate it and exit cleanly. Use `--force` to regenerate.
+- [ ] **[NEW] file guard**: Runbook generation must refuse to mark existing on-disk files as `[NEW]`. Files that exist must use `[MODIFY]` with S/R blocks.
 
 ## Non-Functional Requirements
 
