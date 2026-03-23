@@ -84,7 +84,7 @@ def test_validate_fuzzy_correction(tmp_path: Path):
 
 
 def test_validate_below_threshold(tmp_path: Path):
-    """Does not correct when best match is below threshold."""
+    """Does not correct when best match is below threshold and AI re-anchor fails."""
     target = tmp_path / "app.py"
     target.write_text("completely different content\nnothing matches\n")
 
@@ -99,11 +99,47 @@ def test_validate_below_threshold(tmp_path: Path):
         >>>
     """)
 
-    corrected, total, fixed = validate_and_correct_sr_blocks(
-        runbook, repo_root=tmp_path, threshold=0.9
-    )
+    from unittest.mock import patch
+
+    with patch(
+        "agent.core.implement.sr_validation._ai_reanchor_search", return_value=None
+    ):
+        corrected, total, fixed = validate_and_correct_sr_blocks(
+            runbook, repo_root=tmp_path, threshold=0.9
+        )
     assert total == 1
-    assert fixed == 0  # below threshold
+    assert fixed == 0  # below threshold, AI also failed
+
+
+def test_validate_ai_reanchor(tmp_path: Path):
+    """AI re-anchoring fixes a block that fuzzy matching cannot."""
+    target = tmp_path / "app.py"
+    actual = "def greet(name):\n    return f'Hello {name}'\n"
+    target.write_text(actual)
+
+    runbook = textwrap.dedent(f"""\
+        #### [MODIFY] `{target}`
+        <<<SEARCH
+        something completely wrong
+        ===
+        def greet(name):
+            return f'Goodbye {{name}}'
+        >>>
+    """)
+
+    from unittest.mock import patch
+
+    # Simulate AI returning the correct region
+    with patch(
+        "agent.core.implement.sr_validation._ai_reanchor_search",
+        return_value="def greet(name):\n    return f'Hello {name}'",
+    ):
+        corrected, total, fixed = validate_and_correct_sr_blocks(
+            runbook, repo_root=tmp_path, threshold=0.9
+        )
+    assert total == 1
+    assert fixed == 1
+    assert "Hello {name}" in corrected
 
 
 def test_validate_missing_file(tmp_path: Path):
