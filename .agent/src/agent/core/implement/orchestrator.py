@@ -159,7 +159,7 @@ class Orchestrator:
         apply_orchestration_filter()
 
     @staticmethod
-    def _on_chunk_retry(attempt, exc, self_ref, chunk_result, step_index):
+    def _on_chunk_retry(attempt: int, exc: Exception, self_ref: "Orchestrator", chunk_result: str, step_index: int) -> None:
         """Emit structured telemetry for chunk retry events."""
         from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(
@@ -168,7 +168,7 @@ class Orchestrator:
         )
 
     @staticmethod
-    def _on_chunk_failure(attempts, exc, self_ref, chunk_result, step_index):
+    def _on_chunk_failure(attempts: int, exc: Exception, self_ref: "Orchestrator", chunk_result: str, step_index: int) -> None:
         """Emit structured telemetry for permanent chunk failure."""
         from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(

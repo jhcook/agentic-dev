@@ -1,7 +1,7 @@
 # Concurrent Orchestration Design
 
 ## Overview
-The orchestrator now supports parallel execution of implementation chunks within a single generation phase. This transition from serial to concurrent execution reduces latency for large-scale tasks by overlapping I/O-bound operations.
+The orchestrator now supports parallel execution of implementation chunks within a single generation phase. Concurrency is applied to **verbatim** (pre-written) chunks where file operations are I/O-bound. AI-generated chunks are processed serially by design, as concurrent AI generation targeting overlapping files can produce conflicting edits.
 
 ## Key Mechanisms
 
@@ -10,8 +10,8 @@ Chunks within a phase are executed using `asyncio.gather`. This allows multiple 
 
 **2. Concurrency Limiting (Semaphore)**
 To prevent resource exhaustion (OS file descriptor limits or LLM API rate limits), a `BoundedSemaphore` is used to restrict the number of active concurrent tasks. 
-- **Default Limit**: 5 concurrent chunks.
-- **Implementation**: Managed within the `Orchestrator` via an internal semaphore used during `apply_chunk_async` calls.
+- **Default Limit**: 4 concurrent chunks.
+- **Implementation**: Managed within the `Orchestrator` via an internal semaphore used during `apply_chunk` calls.
 
 **3. Phase-Gate Integrity**
 Parallelism is strictly confined to the *current phase*. The orchestrator ensures all chunks in a phase are resolved (either successful or failed) before evaluating the gate for the next phase. A single permanent chunk failure will halt the entire runbook to preserve system integrity and prevent inconsistent modifications in downstream phases.

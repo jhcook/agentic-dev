@@ -53,6 +53,9 @@ As a **Backend Engineer**, I want **the orchestrator to execute generation phase
   - `.agent/docs/backend/orchestration-concurrency.md` — concurrency design documentation
   - `.agent/docs/backend/retry-and-error-states.md` — retry/error state documentation
   - `.agent/src/agent/core/implement/tests/` — new tests for orchestrator, retry, telemetry, security
+  - `.agent/src/agent/core/tests/__init__.py` — package init to resolve test name collisions
+  - `.agent/src/agent/core/implement/tests/__init__.py` — package init for test discovery
+  - `.agent/rules/400-lean-code.mdc` — updated cognitive complexity thresholds (cross-ref: INFRA-170)
 
 ## Test Strategy
 
