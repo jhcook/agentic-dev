@@ -43,10 +43,15 @@ As a **Backend Engineer**, I want **the orchestrator to execute generation phase
   - `.agent/src/agent/core/implement/retry.py` — `retry_with_backoff` with `on_retry`/`on_failure` callbacks, `MaxRetriesExceededError`
   - `.agent/src/agent/core/implement/telemetry_helper.py` — `emit_chunk_event` for structured chunk lifecycle logging
   - `.agent/src/agent/core/implement/guards.py` — idempotency checks for S/R and `[NEW]` file blocks
+  - `.agent/src/agent/core/implement/security.py` — `OrchestrationSecurityFilter`, `sanitize_error_message`
+  - `.agent/src/agent/core/implement/sr_validation.py` — S/R block validation and re-anchoring
   - `.agent/src/agent/commands/implement.py` — `asyncio.run()` wiring, `use_concurrency` parallel branch
   - `.agent/src/agent/commands/runbook.py` — `--force` flag, existing runbook validation
   - `.agent/src/agent/commands/runbook_generation.py` — `[NEW]` file guard for existing files
   - `.agent/src/agent/core/config.py` — `ENABLE_CONCURRENT_ORCHESTRATION` feature flag
+  - `.agent/src/agent/core/ai/prompts.py` — prompt engineering for chunk generation
+  - `.agent/docs/backend/orchestration-concurrency.md` — concurrency design documentation
+  - `.agent/docs/backend/retry-and-error-states.md` — retry/error state documentation
   - `.agent/src/agent/core/implement/tests/` — new tests for orchestrator, retry, telemetry, security
 
 ## Test Strategy
@@ -54,6 +59,10 @@ As a **Backend Engineer**, I want **the orchestrator to execute generation phase
 - **Unit Testing**: Validate the core loop logic in `orchestrator.py` using mocked dependencies.
 - **Integration Testing**: Simulate transient network failures to verify that retry logic triggers and succeeds.
 - **Concurrency Testing**: Execute batch jobs with high chunk counts to ensure `asyncio` loop stability and correct phase sequencing.
+- **Idempotency Testing**: Verify S/R blocks skip when REPLACE content already present; verify `[NEW]` file blocks skip when content identical.
+- **File Guard Testing**: Verify `[NEW]` file guard errors when targeting pre-existing files during runbook generation.
+- **Security Testing**: Verify `OrchestrationSecurityFilter` scrubs API keys from log output; verify `sanitize_error_message` redacts sensitive data.
+- **Telemetry Testing**: Verify `emit_chunk_event` produces structured log entries for chunk_start, chunk_success, chunk_retry, chunk_failure lifecycle events.
 
 ## Rollback Plan
 

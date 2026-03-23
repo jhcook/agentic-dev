@@ -29,3 +29,8 @@ Engineers should monitor the `agent.core.implement.telemetry` logger for the fol
 - `chunk_retry`: Emitted when a transient error triggers a retry attempt.
 - `chunk_failure`: Emitted when a chunk reaches the retry limit.
 - `retry_count`: Metadata field providing the attempt sequence (1, 2, 3).
+
+
+## Copyright
+
+Copyright 2026 Justin Cook

@@ -19,3 +19,8 @@ Parallelism is strictly confined to the *current phase*. The orchestrator ensure
 ## Operational Impact
 - **Latency**: Significant reduction in total implementation time for multi-step runbooks.
 - **Logs**: Logs are now interleaved. Engineers should rely on the `step_index` and `story_id` fields in structured logs to reconstruct the timeline for a specific chunk.
+
+
+## Copyright
+
+Copyright 2026 Justin Cook

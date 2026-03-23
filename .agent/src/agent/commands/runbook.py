@@ -413,11 +413,13 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
             ))
             _write_and_sync(content, story_id, story_file, runbook_file)
         except MaxRetriesExceededError as e:
-            console.print(f"\n[bold red]❌ Runbook generation failed after retries: {e}[/bold red]")
+            from agent.core.implement.security import sanitize_error_message
+            console.print(f"\n[bold red]❌ Runbook generation failed after retries: {sanitize_error_message(e)}[/bold red]")
             logger.error("runbook_generation_max_retries_exceeded", extra={"story_id": story_id})
             raise typer.Exit(code=1)
         except Exception as e:
-            console.print(f"\n[bold red]❌ Unexpected generation error: {e}[/bold red]")
+            from agent.core.implement.security import sanitize_error_message
+            console.print(f"\n[bold red]❌ Unexpected generation error: {sanitize_error_message(e)}[/bold red]")
             logger.exception("runbook_generation_unexpected_error", extra={"story_id": story_id})
             raise typer.Exit(code=1)
 

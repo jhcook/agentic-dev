@@ -154,21 +154,26 @@ class Orchestrator:
         self.use_concurrency = config.ENABLE_CONCURRENT_ORCHESTRATION
         self.semaphore = asyncio.Semaphore(concurrency_limit)
         self.chunk_states: Dict[int, ChunkStatus] = {}
+        # Activate log scrubbing for implementation-related logs (INFRA-169)
+        from agent.core.implement.security import apply_orchestration_filter
+        apply_orchestration_filter()
 
     @staticmethod
     def _on_chunk_retry(attempt, exc, self_ref, chunk_result, step_index):
         """Emit structured telemetry for chunk retry events."""
+        from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(
             "chunk_retry", self_ref.story_id, step_index,
-            error=str(exc), attempt=attempt,
+            error=sanitize_error_message(exc), attempt=attempt,
         )
 
     @staticmethod
     def _on_chunk_failure(attempts, exc, self_ref, chunk_result, step_index):
         """Emit structured telemetry for permanent chunk failure."""
+        from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(
             "chunk_failure", self_ref.story_id, step_index,
-            error=str(exc), attempt=attempts,
+            error=sanitize_error_message(exc), attempt=attempts,
         )
 
     @retry_with_backoff(
@@ -178,6 +183,10 @@ class Orchestrator:
     )
     async def apply_chunk(self, chunk_result: str, step_index: int) -> Tuple[int, List[str]]:
         """Apply all blocks in a single AI-generated chunk.
+
+        This is an ``async`` coroutine decorated with ``@retry_with_backoff``
+        (max 3 retries, exponential backoff). On permanent failure it raises
+        :class:`~agent.core.implement.retry.MaxRetriesExceededError`.
 
         Processes search/replace blocks first, then full-file blocks.
         For each full-file block runs the docstring gate (AC-10) before
@@ -192,6 +201,9 @@ class Orchestrator:
 
         Returns:
             Tuple of ``(step_loc, step_modified_files)``.
+
+        Raises:
+            MaxRetriesExceededError: If all retry attempts are exhausted.
         """
         start_time = time.perf_counter()
         emit_chunk_event("chunk_start", self.story_id, step_index)
