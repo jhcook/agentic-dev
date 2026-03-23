@@ -213,6 +213,9 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
         False, "--single-pass",
         help="Skip chunked generation and use single-pass monolithic mode.",
     ),
+    force: bool = typer.Option(
+        False, "--force", help="Force regeneration even if runbook already exists and is valid.",
+    ),
 ):
     """Generate an implementation runbook using AI Governance Panel."""
     # 0. Configure Provider Override if set
@@ -271,10 +274,71 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
     runbook_dir.mkdir(parents=True, exist_ok=True)
     runbook_file = runbook_dir / f"{story_id}-runbook.md"
 
-    if runbook_file.exists():
+    if runbook_file.exists() and not force:
+        # Convergent idempotency: validate existing runbook before regenerating
         console.print(f"[yellow]⚠️  Runbook already exists at {runbook_file}[/yellow]")
-        if not typer.confirm("Overwrite?"):
+        console.print("[cyan]🔍 Validating existing runbook...[/cyan]")
+        from agent.core.implement.parser import (
+            validate_runbook_schema,
+            parse_search_replace_blocks,
+        )
+        from agent.core.implement.orchestrator import resolve_path
+        existing_content = runbook_file.read_text()
+        issues = []
+
+        # 1. Schema validation
+        schema_errors = validate_runbook_schema(existing_content)
+        if schema_errors:
+            issues.extend([f"Schema: {e}" for e in schema_errors])
+
+        # 2. [NEW] file targeting existing files
+        new_paths = re.findall(
+            r'####\s+\[NEW\]\s+(.+?)(?:\n|$)', existing_content
+        )
+        for raw_path in new_paths:
+            path = raw_path.strip().strip('`')
+            resolved = resolve_path(path)
+            if resolved and resolved.exists():
+                issues.append(
+                    f"[NEW] targets existing file: {path}"
+                )
+
+        # 3. S/R block fidelity — check SEARCH text matches actual files
+        sr_blocks = parse_search_replace_blocks(existing_content)
+        for sr in sr_blocks:
+            sr_path = sr.get("path", "")
+            resolved = resolve_path(sr_path)
+            if resolved and resolved.exists():
+                file_content = resolved.read_text()
+                for block in sr.get("blocks", []):
+                    search = block.get("search", "")
+                    replace = block.get("replace", "")
+                    if search not in file_content and replace not in file_content:
+                        issues.append(
+                            f"S/R mismatch: SEARCH not found in {sr_path} "
+                            f"(and REPLACE not present either)"
+                        )
+
+        if not issues:
+            console.print("[bold green]✅ Existing runbook is valid. No regeneration needed.[/bold green]")
+            console.print(f"   Use --force to regenerate anyway.")
+            logger.info("runbook_validation_pass story=%s", story_id)
             raise typer.Exit(code=0)
+        else:
+            console.print(f"[bold yellow]⚠️  Found {len(issues)} issue(s):[/bold yellow]")
+            for issue in issues:
+                console.print(f"  • {issue}")
+            console.print(
+                "\n[bold]Use --force to regenerate the runbook.[/bold]"
+            )
+            logger.warning(
+                "runbook_validation_fail story=%s issues=%d",
+                story_id, len(issues),
+            )
+            raise typer.Exit(code=1)
+    elif runbook_file.exists() and force:
+        console.print(f"[yellow]⚠️  --force: Overwriting existing runbook at {runbook_file}[/yellow]")
+        logger.info("runbook_force_regenerate story=%s", story_id)
 
     # 3. Context — single source via context_loader
     console.print(f"🛈 invoking AI Governance Panel for {story_id}...")

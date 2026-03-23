@@ -22,6 +22,7 @@ auto-fencing helper for [NEW] blocks.
 import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import typer
@@ -251,6 +252,29 @@ def generate_runbook_chunked(
                 f"{i}/{len(skeleton.sections)}: {section.title}...[/bold green]"
             )
 
+            # Layer 1 S/R fix: read actual file content for MODIFY targets
+            # so the AI has ground truth when writing <<<SEARCH blocks.
+            modify_contents: Dict[str, str] = {}
+            for fpath in section.files:
+                try:
+                    p = Path(fpath)
+                    if not p.is_absolute():
+                        p = Path.cwd() / fpath
+                    if p.exists() and p.is_file():
+                        modify_contents[fpath] = p.read_text(encoding="utf-8")
+                except OSError:
+                    pass  # unreadable — skip silently
+
+            if modify_contents:
+                logger.info(
+                    "modify_targets_loaded",
+                    extra={
+                        "section": section.title,
+                        "files": list(modify_contents.keys()),
+                        "total_chars": sum(len(v) for v in modify_contents.values()),
+                    },
+                )
+
             block_prompt = generate_block_prompt(
                 section.title,
                 section.description,
@@ -258,6 +282,7 @@ def generate_runbook_chunked(
                 story_content,
                 context_summary,
                 prior_changes=prior_changes if prior_changes else None,
+                modify_file_contents=modify_contents if modify_contents else None,
             )
 
             block_raw = ai_service.complete(
@@ -316,6 +341,18 @@ def generate_runbook_chunked(
                     if not clean:
                         continue
                     if action == "NEW":
+                        # Validate: [NEW] must target files that don't exist yet
+                        from agent.core.config import resolve_repo_path as _resolve_repo
+                        _new_path = _resolve_repo(clean)
+                        if _new_path and _new_path.exists():
+                            error_console.print(
+                                f"[bold red]❌ File '{clean}' exists on disk but "
+                                f"is marked as [NEW]. Use [MODIFY] with S/R blocks.[/bold red]"
+                            )
+                            logger.error(
+                                "new_block_targets_existing_file file=%s step=%d",
+                                clean, i,
+                            )
                         # Extract the actual code content for this [NEW] block
                         # so later sections can write accurate SEARCH blocks
                         new_code = ""
