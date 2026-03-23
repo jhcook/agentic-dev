@@ -281,6 +281,8 @@ def retry_with_backoff(
     backoff_factor: float = 2.0,
     jitter: bool = True,
     exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (Exception,),
+    on_retry: Optional[Callable[..., None]] = None,
+    on_failure: Optional[Callable[..., None]] = None,
 ):
     """
     Decorator for async functions to apply exponential backoff and jitter.
@@ -307,6 +309,8 @@ def retry_with_backoff(
                             "chunk_retry_failed_permanently func=%s attempts=%d error=%s",
                             func.__qualname__, attempt - 1, str(e)
                         )
+                        if on_failure:
+                            on_failure(attempt - 1, e, *args, **kwargs)
                         raise MaxRetriesExceededError(
                             f"Failed after {attempt - 1} retries: {e}"
                         ) from e
@@ -319,6 +323,8 @@ def retry_with_backoff(
                         "chunk_retry func=%s attempt=%d/%d delay=%.2fs error=%s",
                         func.__qualname__, attempt, max_retries, delay, str(e),
                     )
+                    if on_retry:
+                        on_retry(attempt, e, *args, **kwargs)
                     retry_counter.add(
                         1, {"exception": type(e).__name__, "mode": "async_backoff"}
                     )

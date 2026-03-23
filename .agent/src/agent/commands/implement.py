@@ -851,6 +851,38 @@ ADRs:
                 approved_files=_approved, cross_cutting_files=_cross_cutting,
             )
 
+            # INFRA-169: Parallel path when all chunks are verbatim
+            if orchestrator.use_concurrency and apply:
+                all_verbatim = all(
+                    parse_search_replace_blocks(c) or parse_code_blocks(c)
+                    for c in chunks
+                )
+                if all_verbatim:
+                    console.print(
+                        f"[bold cyan]⚡ Concurrent mode: applying {len(chunks)} "
+                        f"verbatim chunks in parallel[/bold cyan]"
+                    )
+                    results = asyncio.run(orchestrator.apply_chunks_parallel(chunks))
+                    for idx, (step_loc, step_files) in enumerate(results):
+                        cumulative_loc += step_loc
+                        run_modified_files.extend(step_files)
+                        completed_steps = idx + 1
+                        if commit:
+                            _micro_commit_step(
+                                story_id, idx + 1, step_loc,
+                                cumulative_loc, step_files,
+                            )
+                    console.print(
+                        f"[green]✅ Parallel apply complete "
+                        f"({cumulative_loc} LOC, {len(chunks)} chunks)[/green]"
+                    )
+                    rejected_files = orchestrator.rejected_files
+                    orchestrator.print_incomplete_summary()
+                    implementation_success = True
+                    # Skip the serial loop below
+                    fallback_needed = False
+                    chunks = []
+
             for idx, chunk in enumerate(chunks):
                 if len(chunks) > 1:
                     console.print(
@@ -865,8 +897,8 @@ ADRs:
                         f"[dim]⚡ Step {idx+1}: verbatim ({len(c_sr)} S/R, "
                         f"{len(c_code)} full-file) — no AI[/dim]"
                     )
-                    step_loc, step_files = orchestrator.apply_chunk(
-                        chunk, idx + 1
+                    step_loc, step_files = asyncio.run(
+                        orchestrator.apply_chunk(chunk, idx + 1)
                     )
                     full_content += f"\n[verbatim step {idx+1}]"
                     cumulative_loc += step_loc
@@ -930,7 +962,9 @@ ADRs:
                 full_content += f"\n\n{chunk_result}"
 
                 if apply:
-                    step_loc, step_files = orchestrator.apply_chunk(chunk_result, idx + 1)
+                    step_loc, step_files = asyncio.run(
+                        orchestrator.apply_chunk(chunk_result, idx + 1)
+                    )
                     cumulative_loc += step_loc
                     completed_steps = idx + 1
                     run_modified_files.extend(step_files)
@@ -974,7 +1008,7 @@ ADRs:
                 story_id, yes=yes, legacy_apply=legacy_apply,
                 approved_files=_approved, cross_cutting_files=_cross_cutting,
             )
-            step_loc, step_files = orchestrator_fc.apply_chunk(full_content, 1)
+            step_loc, step_files = asyncio.run(orchestrator_fc.apply_chunk(full_content, 1))
             cumulative_loc += step_loc
             run_modified_files.extend(step_files)
             rejected_files = orchestrator_fc.rejected_files

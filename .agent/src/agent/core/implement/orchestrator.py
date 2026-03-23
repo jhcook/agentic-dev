@@ -155,7 +155,27 @@ class Orchestrator:
         self.semaphore = asyncio.Semaphore(concurrency_limit)
         self.chunk_states: Dict[int, ChunkStatus] = {}
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @staticmethod
+    def _on_chunk_retry(attempt, exc, self_ref, chunk_result, step_index):
+        """Emit structured telemetry for chunk retry events."""
+        emit_chunk_event(
+            "chunk_retry", self_ref.story_id, step_index,
+            error=str(exc), attempt=attempt,
+        )
+
+    @staticmethod
+    def _on_chunk_failure(attempts, exc, self_ref, chunk_result, step_index):
+        """Emit structured telemetry for permanent chunk failure."""
+        emit_chunk_event(
+            "chunk_failure", self_ref.story_id, step_index,
+            error=str(exc), attempt=attempts,
+        )
+
+    @retry_with_backoff(
+        max_retries=3, base_delay=1.0,
+        on_retry=_on_chunk_retry.__func__,
+        on_failure=_on_chunk_failure.__func__,
+    )
     async def apply_chunk(self, chunk_result: str, step_index: int) -> Tuple[int, List[str]]:
         """Apply all blocks in a single AI-generated chunk.
 
