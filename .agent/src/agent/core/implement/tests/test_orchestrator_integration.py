@@ -39,7 +39,7 @@ async def test_orchestrator_parallel_chunk_success():
     orchestrator = Orchestrator(story_id="INFRA-169", yes=True)
     
     # Mock the internal async applier (added in Step 2)
-    with patch("agent.core.implement.orchestrator.apply_change_to_file", new_callable=AsyncMock) as mock_apply:
+    with patch("agent.core.implement.guards.apply_change_to_file", new_callable=AsyncMock) as mock_apply:
         mock_apply.return_value = True
         
         chunk_content = "#### [NEW] file1.py\n```python\nprint(1)\n```\n#### [NEW] file2.py\n```python\nprint(2)\n```"

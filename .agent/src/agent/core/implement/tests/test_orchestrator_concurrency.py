@@ -32,7 +32,7 @@ async def test_orchestrator_concurrency_limit():
         await asyncio.sleep(0.1)
         return True
 
-    with patch("agent.core.implement.orchestrator.apply_change_to_file", side_effect=slow_apply):
+    with patch("agent.core.implement.guards.apply_change_to_file", side_effect=slow_apply):
         # Construct a massive chunk with 10 files
         content_parts = []
         for i in range(10):
