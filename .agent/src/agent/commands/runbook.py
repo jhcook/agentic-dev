@@ -54,6 +54,7 @@ from agent.core.implement.guards import (
     lint_runbook_syntax,
     validate_and_correct_sr_blocks,
 )
+from agent.core.implement.retry import MaxRetriesExceededError
 from agent.db.client import upsert_artifact
 from agent.commands.runbook_helpers import (
     generate_decomposition_plan,
@@ -70,6 +71,7 @@ from agent.commands.runbook_gates import (
 from agent.commands.runbook_generation import generate_runbook_chunked
 from agent.core.implement.parser import validate_runbook_schema
 from agent.core.implement.assembly_engine import AssemblyEngine, InvalidTemplateError
+from agent.core.implement.orchestrator import ChunkStatus
 
 import os
 
@@ -115,12 +117,45 @@ def _write_and_sync(
     for fix in corrections:
         console.print(f"[dim]🔧 Auto-fixed: {fix}[/dim]")
     # Post-generation S/R validation: auto-correct hallucinated SEARCH text
+    # (Layer 1 prevents most hallucinations; Layer 2 AI-reanchors the rest)
     content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content)
     if sr_total > 0:
         console.print(
             f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
             f"{sr_corrected} auto-corrected[/dim]"
         )
+
+    # Layer 3 hard gate: if unfixable S/R blocks remain, refuse to write.
+    # Import here to avoid circular dependency.
+    from agent.commands.utils import validate_sr_blocks as gate_validate_sr
+    remaining_mismatches = gate_validate_sr(content)
+    # Filter out NEW-file entries and parse errors — only block on real S/R mismatches
+    real_failures = [
+        m for m in remaining_mismatches
+        if not m.get("missing_modify") and not m.get("parse_error")
+    ]
+    if real_failures:
+        console.print(
+            f"[bold red]❌ {len(real_failures)} S/R block(s) still failed after "
+            f"fuzzy + AI correction:[/bold red]"
+        )
+        for m in real_failures[:5]:  # Show max 5
+            console.print(f"  [red]• {m['file']} (block #{m['index']})[/red]")
+        logger.error(
+            "sr_hard_gate_failed",
+            extra={
+                "story_id": story_id,
+                "failures": len(real_failures),
+                "files": list({m["file"] for m in real_failures}),
+            },
+        )
+        # Still write so work isn't lost, but signal failure
+        runbook_file.write_text(content)
+        console.print(
+            f"[yellow]⚠️  Runbook written to {runbook_file} "
+            f"(S/R failures present — review required)[/yellow]"
+        )
+        raise typer.Exit(code=1)
 
     lint_errors = lint_runbook_syntax(content)
     if lint_errors:
@@ -298,8 +333,11 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
     # 4. Content Generation
     # ── Chunked path ──
     if not single_pass:
+        console.print("[bold blue]🚀 Starting phased generation (concurrency enabled)...[/bold blue]")
         try:
-            content = generate_runbook_chunked(
+            # INFRA-169: Bridge Typer CLI to the async phased generation engine.
+            # Internal chunk-level retries are handled by the orchestrator; fatal exhaustion bubbles here.
+            content = asyncio.run(generate_runbook_chunked(
                 story_id=story_id,
                 story_content=story_content,
                 rules_content=rules_content,
@@ -308,18 +346,16 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
                 source_code=source_code,
                 provider=provider,
                 timeout=timeout,
-            )
+            ))
             _write_and_sync(content, story_id, story_file, runbook_file)
-            return
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "chunked_generation_failed",
-                extra={"story_id": story_id, "error": str(exc)},
-            )
-            console.print(
-                f"[yellow]⚠️  Chunked generation failed: {exc}\n"
-                "    Falling back to legacy monolithic generation...[/yellow]"
-            )
+        except MaxRetriesExceededError as e:
+            console.print(f"\n[bold red]❌ Runbook generation failed after retries: {e}[/bold red]")
+            logger.error("runbook_generation_max_retries_exceeded", extra={"story_id": story_id})
+            raise typer.Exit(code=1)
+        except Exception as e:
+            console.print(f"\n[bold red]❌ Unexpected generation error: {e}[/bold red]")
+            logger.exception("runbook_generation_unexpected_error", extra={"story_id": story_id})
+            raise typer.Exit(code=1)
 
     # ── Monolithic path ──
     content = _run_monolithic_generation(

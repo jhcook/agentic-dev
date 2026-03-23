@@ -43,7 +43,13 @@ class ConsoleConfig(BaseModel):
     personality_file: Optional[str] = None
     system_prompt: Optional[str] = None
 
+
 class Config:
+    """Central configuration for the agent."""
+
+    # Toggle for INFRA-169: Enables parallel chunk processing and per-chunk retries.
+    ENABLE_CONCURRENT_ORCHESTRATION: bool = False
+
     def __init__(self):
         self.repo_root = self._find_repo_root()
         

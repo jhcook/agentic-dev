@@ -19,12 +19,15 @@ and the per-step apply+commit loop. The CLI facade delegates to
 :class:`Orchestrator` after handling argument parsing.
 """
 
+import asyncio
 import logging
 import re
 import subprocess
+import time
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from .parser import (
     parse_code_blocks,
     parse_search_replace_blocks,
@@ -36,6 +39,9 @@ from .parser import (
     split_runbook_into_chunks,
 )
 from .resolver import resolve_path, extract_story_id
+from .retry import retry_with_backoff, MaxRetriesExceededError
+from .telemetry_helper import emit_chunk_event
+from agent.core.config import config
 
 from rich.console import Console
 
@@ -46,6 +52,17 @@ except ImportError:
     _tracer = None
 
 _console = Console()
+
+
+class ChunkStatus(Enum):
+    """Execution states for an orchestration chunk."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    RETRYING = "retrying"
+    SUCCESS = "success"
+    FAILED = "failed"
+
 
 def build_source_context(file_paths: List[str]) -> str:
     """Build a source-context string from current file contents.
@@ -112,6 +129,7 @@ class Orchestrator:
         legacy_apply: bool = False,
         approved_files: Optional[Set[str]] = None,
         cross_cutting_files: Optional[Set[str]] = None,
+        concurrency_limit: int = 4,
     ) -> None:
         """Initialise the Orchestrator.
 
@@ -121,6 +139,7 @@ class Orchestrator:
             legacy_apply: Bypass safe-apply size guard.
             approved_files: Set of file paths declared in the runbook (AC-2).
             cross_cutting_files: Files with cross_cutting relaxation (AC-4).
+            concurrency_limit: Max parallel chunk tasks (INFRA-169).
         """
         self.story_id = story_id
         self.yes = yes
@@ -131,8 +150,13 @@ class Orchestrator:
         self.run_modified_files: List[str] = []
         self.total_blocks: int = 0
         self.scope_violations: int = 0
+        # Initialize preference from feature flag (INFRA-169)
+        self.use_concurrency = config.ENABLE_CONCURRENT_ORCHESTRATION
+        self.semaphore = asyncio.Semaphore(concurrency_limit)
+        self.chunk_states: Dict[int, ChunkStatus] = {}
 
-    def apply_chunk(self, chunk_result: str, step_index: int) -> Tuple[int, List[str]]:
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    async def apply_chunk(self, chunk_result: str, step_index: int) -> Tuple[int, List[str]]:
         """Apply all blocks in a single AI-generated chunk.
 
         Processes search/replace blocks first, then full-file blocks.
@@ -149,6 +173,9 @@ class Orchestrator:
         Returns:
             Tuple of ``(step_loc, step_modified_files)``.
         """
+        start_time = time.perf_counter()
+        emit_chunk_event("chunk_start", self.story_id, step_index)
+
         span = None
         if _tracer:
             span = _tracer.start_span("implement.apply_chunk")
@@ -190,8 +217,9 @@ class Orchestrator:
                 if not self._check_scope(sr_filepath, step_index):
                     continue
                 fp = resolve_path(sr_filepath) or Path(sr_filepath)
-                original_content = fp.read_text() if fp.exists() else ""
-                success, final_content = apply_search_replace_to_file(
+                original_content = await asyncio.to_thread(lambda: fp.read_text() if fp.exists() else "")
+                success, final_content = await asyncio.to_thread(
+                    apply_search_replace_to_file, 
                     sr_filepath, file_blocks, self.yes
                 )
                 if success:
@@ -217,14 +245,15 @@ class Orchestrator:
                 )
 
             fp = resolve_path(block["file"]) or Path(block["file"])
-            original_content = fp.read_text() if fp.exists() else ""
+            original_content = await asyncio.to_thread(lambda: fp.read_text() if fp.exists() else "")
 
             # AC-9 bug fix: initialise block_loc to 0 before each apply call
             block_loc = 0
             
             from agent.core.implement.guards import FileSizeGuardViolation
             try:
-                success = apply_change_to_file(
+                success = await asyncio.to_thread(
+                    apply_change_to_file,
                     block["file"], block["content"], self.yes,
                     legacy_apply=self.legacy_apply,
                 )
@@ -248,8 +277,18 @@ class Orchestrator:
             step_loc += block_loc
 
         self.run_modified_files.extend(step_modified_files)
+        duration = time.perf_counter() - start_time
+        
+        emit_chunk_event(
+            "chunk_success", 
+            self.story_id, 
+            step_index, 
+            duration=duration, 
+            modified_files=step_modified_files
+        )
 
         if span:
+            span.set_attribute("duration_sec", duration)
             span.set_attribute("files_modified", len(step_modified_files))
             span.set_attribute("scope_violations", self.scope_violations)
             span.set_attribute("hallucination_rate", self.get_hallucination_rate())
@@ -315,3 +354,22 @@ class Orchestrator:
                 "implement_incomplete story=%s rejected_files=%r",
                 self.story_id, self.rejected_files,
             )
+
+    async def apply_chunks_parallel(self, chunks: List[str]) -> List[Tuple[int, List[str]]]:
+        """Process multiple chunks concurrently using a semaphore.
+
+        Args:
+            chunks: List of raw AI-generated chunk strings.
+
+        Returns:
+            List of (step_loc, step_modified_files) for each chunk.
+        """
+        async def _bounded_apply(chunk: str, idx: int):
+            async with self.semaphore:
+                return await self.apply_chunk(chunk, idx)
+
+        tasks = [
+            _bounded_apply(chunk, i + 1)
+            for i, chunk in enumerate(chunks)
+        ]
+        return await asyncio.gather(*tasks)
