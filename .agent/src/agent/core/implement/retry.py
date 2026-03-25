@@ -267,3 +267,67 @@ def with_retry(
                 )
             return wrapper
     return decorator
+
+
+class MaxRetriesExceededError(Exception):
+    """Raised when an operation fails after all retry attempts are exhausted."""
+    pass
+
+
+def retry_with_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    backoff_factor: float = 2.0,
+    jitter: bool = True,
+    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (Exception,),
+    on_retry: Optional[Callable[..., None]] = None,
+    on_failure: Optional[Callable[..., None]] = None,
+):
+    """
+    Decorator for async functions to apply exponential backoff and jitter.
+
+    Args:
+        max_retries: Number of retry attempts.
+        base_delay: Initial delay in seconds.
+        max_delay: Maximum delay in seconds.
+        backoff_factor: Multiplier for the delay after each failure.
+        jitter: If True, adds random jitter to the delay.
+        exceptions: The exception class or tuple of classes to catch and retry.
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            attempt = 0
+            while True:
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    attempt += 1
+                    if attempt > max_retries:
+                        logger.error(
+                            "chunk_retry_failed_permanently func=%s attempts=%d error=%s",
+                            func.__qualname__, attempt - 1, str(e)
+                        )
+                        if on_failure:
+                            on_failure(attempt - 1, e, *args, **kwargs)
+                        raise MaxRetriesExceededError(
+                            f"Failed after {attempt - 1} retries: {e}"
+                        ) from e
+
+                    delay = min(base_delay * (backoff_factor ** (attempt - 1)), max_delay)
+                    if jitter:
+                        delay = delay * (0.5 + random.random())
+
+                    logger.warning(
+                        "chunk_retry func=%s attempt=%d/%d delay=%.2fs error=%s",
+                        func.__qualname__, attempt, max_retries, delay, str(e),
+                    )
+                    if on_retry:
+                        on_retry(attempt, e, *args, **kwargs)
+                    retry_counter.add(
+                        1, {"exception": type(e).__name__, "mode": "async_backoff"}
+                    )
+                    await asyncio.sleep(delay)
+        return wrapper
+    return decorator

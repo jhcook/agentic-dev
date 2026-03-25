@@ -130,16 +130,99 @@ def validate_and_correct_sr_blocks(
                     extra={"file": filepath, "similarity": round(best_ratio, 2)},
                 )
             else:
-                _console.print(
-                    f"[red]⚠ Cannot auto-correct S/R in {filepath} "
-                    f"(best match: {best_ratio:.0%} < {threshold:.0%} threshold)[/red]"
+                # Layer 2: AI re-anchoring fallback
+                reanchored = _ai_reanchor_search(
+                    filepath, actual_content, search_text, replace_text,
                 )
-                logging.warning(
-                    "sr_validation_unfixable",
-                    extra={"file": filepath, "best_ratio": round(best_ratio, 2)},
-                )
+                if reanchored is not None:
+                    old_block = f"<<<SEARCH\n{search_text}\n===\n{replace_text}\n>>>"
+                    new_block = f"<<<SEARCH\n{reanchored}\n===\n{replace_text}\n>>>"
+                    corrected_content = corrected_content.replace(old_block, new_block, 1)
+                    corrected_count += 1
+                    _console.print(
+                        f"[cyan]🤖 AI re-anchored S/R in {filepath}[/cyan]"
+                    )
+                    logging.info(
+                        "sr_validation_ai_reanchored",
+                        extra={"file": filepath},
+                    )
+                else:
+                    _console.print(
+                        f"[red]⚠ Cannot auto-correct S/R in {filepath} "
+                        f"(best match: {best_ratio:.0%} < {threshold:.0%} threshold, "
+                        f"AI re-anchor also failed)[/red]"
+                    )
+                    logging.warning(
+                        "sr_validation_unfixable",
+                        extra={"file": filepath, "best_ratio": round(best_ratio, 2)},
+                    )
 
     return corrected_content, total_blocks, corrected_count
+
+
+def _ai_reanchor_search(
+    filepath: str,
+    actual_content: str,
+    hallucinated_search: str,
+    replace_text: str,
+) -> Optional[str]:
+    """Use the AI to re-anchor a hallucinated SEARCH block against actual file content.
+
+    When fuzzy matching fails (< threshold), sends the actual file content and
+    the hallucinated SEARCH text to the AI, asking it to identify the correct
+    region. This is a small, focused call — one file + one block.
+
+    Args:
+        filepath: Path to the file (for logging/prompt context).
+        actual_content: The real on-disk file content.
+        hallucinated_search: The AI-generated SEARCH text that didn't match.
+        replace_text: The REPLACE text (for context on intent).
+
+    Returns:
+        Corrected SEARCH text that exists in actual_content, or None if
+        the AI couldn't produce a valid match.
+    """
+    try:
+        from agent.core.ai import ai_service
+    except Exception:  # noqa: BLE001
+        return None
+
+    prompt = (
+        "A code generation tool produced a SEARCH block that does NOT match the actual file.\n"
+        "Your job: find the EXACT lines in the actual file that the SEARCH block was trying to target,\n"
+        "and output ONLY those exact lines — nothing else.\n\n"
+        f"FILE: {filepath}\n\n"
+        f"ACTUAL FILE CONTENT:\n```\n{actual_content}\n```\n\n"
+        f"HALLUCINATED SEARCH (does NOT match the file):\n```\n{hallucinated_search}\n```\n\n"
+        f"INTENDED REPLACEMENT:\n```\n{replace_text}\n```\n\n"
+        "OUTPUT RULES:\n"
+        "1. Output ONLY the corrected SEARCH text — the exact contiguous lines from the actual file.\n"
+        "2. Do NOT wrap in markdown fences or add any explanation.\n"
+        "3. The output must appear VERBATIM in the actual file content above.\n"
+        "4. Preserve exact whitespace, indentation, and line breaks.\n"
+    )
+
+    try:
+        result = ai_service.complete(
+            system_prompt="You extract exact code regions from files. Output raw code only.",
+            user_prompt=prompt,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+    # Strip any markdown fences the AI may have added despite instructions
+    corrected = result.strip()
+    if corrected.startswith("```"):
+        # Remove opening fence (with optional language tag)
+        corrected = corrected.split("\n", 1)[1] if "\n" in corrected else ""
+    if corrected.endswith("```"):
+        corrected = corrected[:-3].rstrip()
+
+    # Validate: the corrected text must actually exist in the file
+    if corrected and corrected in actual_content:
+        return corrected
+
+    return None
 
 
 def fuzzy_find_and_replace(

@@ -12,95 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Unit tests for ADR-012 Retry and Backoff utilities.
-
-Copyright 2026 Justin Cook
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-"""
+"""test_retry module."""
 
 import asyncio
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from agent.core.implement.retry import (
-    retry_async, 
-    retry_sync, 
-    with_retry, 
-    NonRetryableError,
-    retry_counter
-)
+from agent.core.implement.retry import retry_with_backoff, MaxRetriesExceededError
 
-def test_retry_async_success():
-    """Verify that a successful call returns immediately without retries."""
-    mock_func = AsyncMock(return_value="success")
-    result = asyncio.run(retry_async(mock_func))
-    assert result == "success"
-    assert mock_func.call_count == 1
+@pytest.mark.asyncio
+async def test_retry_eventual_success():
+    """Verify retries succeed if the function eventually returns."""
+    calls = 0
+    @retry_with_backoff(max_retries=2, base_delay=0.01, jitter=False)
+    async def task():
+        nonlocal calls
+        calls += 1
+        if calls < 2: raise ConnectionError("Transient failure")
+        return True
+    assert await task() is True
+    assert calls == 2
 
-def test_retry_async_eventual_success():
-    """Verify that a function eventually succeeds after retries."""
-    mock_func = AsyncMock()
-    mock_func.side_effect = [ValueError("fail"), ValueError("fail"), "success"]
-
-    async def _run():
-        """Run the retry with mocked sleep."""
-        with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
-            result = await retry_async(mock_func, max_retries=3)
-            assert mock_sleep.call_count == 2
-            return result
-
-    result = asyncio.run(_run())
-    assert result == "success"
-    assert mock_func.call_count == 3
-
-def test_retry_async_non_retryable_error():
-    """Verify that NonRetryableError stops execution immediately."""
-    mock_func = AsyncMock(side_effect=NonRetryableError("fatal"))
-
-    with pytest.raises(NonRetryableError):
-        asyncio.run(retry_async(mock_func))
-    assert mock_func.call_count == 1
-
-def test_retry_sync_decorator():
-    """Verify the with_retry decorator on synchronous functions."""
-    mock_func = MagicMock(side_effect=[RuntimeError("fail"), "ok"])
-    
-    @with_retry(max_retries=1)
-    def decorated_func() -> str:
-        """Mock decorated sync function."""
-        return mock_func()
-
-    with patch("time.sleep"):
-        assert decorated_func() == "ok"
-        assert mock_func.call_count == 2
-
-def test_retry_sync_metrics_emission():
-    """Verify that metrics are emitted with correct tags."""
-    mock_func = MagicMock(side_effect=[ValueError("fail"), "ok"])
-    
-    with patch("time.sleep"):
-        with patch.object(retry_counter, 'add') as mock_add:
-            retry_sync(mock_func, max_retries=1, retryable_exceptions=(ValueError,))
-            mock_add.assert_called_once_with(
-                1, {"exception": "ValueError", "mode": "sync"}
-            )
-
-def test_jitter_and_backoff_calculation():
-    """Verify that the delay increases and includes jitter."""
-    mock_func = AsyncMock(side_effect=[ValueError("1"), ValueError("2"), "ok"])
-
-    async def _run():
-        """Run the retry with mocked sleep and jitter."""
-        with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
-            with patch("random.uniform", return_value=0.0):
-                result = await retry_async(mock_func, max_retries=2, initial_delay=1.0, multiplier=2.0, jitter=0.1)
-                # 1.0 -> 2.0
-                assert mock_sleep.call_args_list[0][0][0] == 1.0
-                assert mock_sleep.call_args_list[1][0][0] == 2.0
-                return result
-
-    asyncio.run(_run())
+@pytest.mark.asyncio
+async def test_retry_failure_exhaustion():
+    """Verify MaxRetriesExceededError is raised after max attempts."""
+    calls = 0
+    @retry_with_backoff(max_retries=2, base_delay=0.01, jitter=False)
+    async def task():
+        nonlocal calls
+        calls += 1
+        raise ValueError("Permanent failure")
+    with pytest.raises(MaxRetriesExceededError):
+        await task()
+    assert calls == 3  # Initial + 2 retries

@@ -24,13 +24,33 @@ alwaysApply: true
 ## Python Rules (Backend)
 - **Stack**: FastAPI, Pydantic V2, Poetry, Python 3.14+.
 - Use the Python standard library whenever possible before adding third-party packages.
-- Functions should generally be ≤ 50 lines; split larger logic into smaller helpers.
 - Avoid deeply nested conditionals; prefer early returns and guard clauses.
 - Use type hints for clarity, but keep them concise.
 - Do not generate boilerplate classes if a simple function suffices.
 - Follow PEP8 style, with `black` and `isort` formatting enforced.
 - Ensure docstrings are one-liners unless more detail is essential.
 - Prefer list/dict comprehensions over verbose loops when readability is maintained.
+
+### Function Length (Cognitive Limit)
+- Functions should ideally be ≤ 20 lines (fits in one mental model).
+- Functions between 21–50 lines should be flagged as a WARNING; consider decomposing into helper functions.
+- Functions exceeding 50 lines must be decomposed before merge (BLOCK).
+- Lines counted: non-blank, non-comment lines in the function body (excluding `def` and docstring).
+
+### File Length
+- Files should be ≤ 500 lines.
+- Files exceeding 500 lines should be flagged as a WARNING and decomposed into sub-modules.
+
+### Class Size
+- Classes should have ≤ 10 methods.
+- Classes with 11–15 methods should be flagged as a WARNING; consider extracting delegates.
+- Classes exceeding 15 methods must be decomposed (BLOCK).
+
+### Exceptions to Thresholds
+These limits may be relaxed only with an explicit ADR or EXC reference:
+- Configuration/constants files (e.g., `config.py`, `prompts.py`)
+- Auto-generated code
+- Test files (test functions tend to be longer due to setup/assertions)
 
 ---
 

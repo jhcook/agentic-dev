@@ -16,12 +16,14 @@
 
 # Copyright 2026 Justin Cook
 
+import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from agent.core.logger import get_logger
 
 _logger = get_logger(__name__)
+_chunk_logger = logging.getLogger("agent.core.implement.telemetry")
 
 def log_assembly_audit(user: str, template_version: str, block_count: int, success: bool, duration_ms: float) -> None:
     """Log a structured audit event for runbook assembly.
@@ -133,4 +135,57 @@ class VerificationTelemetry:
                 "latency_ms": elapsed,
             },
         )
+
+
+def emit_chunk_event(
+    event_type: str,
+    story_id: str,
+    step_index: int,
+    duration: Optional[float] = None,
+    retry_count: int = 0,
+    error: Optional[str] = None,
+    modified_files: Optional[List[str]] = None,
+) -> None:
+    """Emit a structured telemetry event for a chunk processing lifecycle stage.
+
+    Args:
+        event_type: One of 'chunk_start', 'chunk_success', 'chunk_retry', 'chunk_failure'.
+        story_id: The identifier of the story being implemented.
+        step_index: The 1-based index of the current implementation step.
+        duration: Time taken in seconds (for success/failure/retry).
+        retry_count: Current retry attempt number.
+        error: Exception message if the event is a failure or retry.
+        modified_files: List of files affected by this chunk.
+    """
+    payload: Dict[str, Any] = {
+        "event": event_type,
+        "story_id": story_id,
+        "step_index": step_index,
+        "retry_count": retry_count,
+    }
+    if duration is not None:
+        payload["duration_ms"] = round(duration * 1000, 2)
+    if error:
+        payload["error"] = error
+    if modified_files:
+        payload["files"] = modified_files
+
+    log_msg = f"{event_type} story={story_id} step={step_index}"
+    if event_type == "chunk_failure":
+        _chunk_logger.error(log_msg, extra=payload)
+    elif event_type == "chunk_retry":
+        _chunk_logger.warning(log_msg, extra=payload)
+    else:
+        _chunk_logger.info(log_msg, extra=payload)
+
+    try:
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        if span.is_recording():
+            span.add_event(event_type, payload)
+            if duration:
+                span.set_attribute(f"{event_type}.duration_ms", payload["duration_ms"])
+    except ImportError:
+        pass
+
 

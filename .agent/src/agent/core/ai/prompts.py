@@ -69,6 +69,37 @@ CRITICAL: Do NOT include credentials, PII, or secrets. Use placeholders if neces
     return prompt.strip()
 
 
+def _build_modify_targets_block(modify_file_contents: Optional[Dict[str, str]]) -> str:
+    """Build a prompt section with actual file contents for MODIFY targets.
+
+    Injects the exact on-disk content of files the AI may generate <<<SEARCH
+    blocks for, eliminating hallucination.
+
+    Args:
+        modify_file_contents: Mapping of repo-relative paths to file content.
+
+    Returns:
+        Formatted prompt section, or empty string if no contents provided.
+    """
+    if not modify_file_contents:
+        return ""
+
+    entries: List[str] = []
+
+    for path, content in modify_file_contents.items():
+        # Infer language for syntax highlighting
+        ext = path.rsplit(".", 1)[-1] if "." in path else ""
+        lang = {"py": "python", "yaml": "yaml", "yml": "yaml",
+                "json": "json", "md": "markdown", "toml": "toml"}.get(ext, "")
+        entries.append(f"\n### {path}\n```{lang}\n{content}\n```")
+
+    return (
+        "\n\nMODIFY TARGET FILES — EXACT ON-DISK CONTENT "
+        "(copy lines VERBATIM for <<<SEARCH blocks):\n"
+        + "\n".join(entries)
+    )
+
+
 def generate_block_prompt(
     section_title: str,
     section_desc: str,
@@ -76,6 +107,7 @@ def generate_block_prompt(
     story_content: str,
     context_summary: str,
     prior_changes: Optional[Dict[str, str]] = None,
+    modify_file_contents: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Generate a Phase 2 prompt for creating a detailed implementation block.
@@ -88,6 +120,9 @@ def generate_block_prompt(
         context_summary: Relevant codebase context (targeted introspection).
         prior_changes: Dict mapping file paths to a summary of changes
             already applied by earlier sections.
+        modify_file_contents: Dict mapping file paths to their actual on-disk
+            content. When provided, injected verbatim so the AI can write
+            exact <<<SEARCH blocks without hallucinating.
 
     Returns:
         A system prompt for the AI.
@@ -128,6 +163,7 @@ STORY CONTEXT:
 
 TARGETED FILE CONTENTS (this is the GROUND TRUTH — base all SEARCH blocks on these exact contents):
 {context_summary}
+{_build_modify_targets_block(modify_file_contents)}
 {dedup_block}
 TASK:
 Provide the full technical content for this section.

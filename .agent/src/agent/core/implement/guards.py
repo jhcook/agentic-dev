@@ -680,6 +680,17 @@ def apply_search_replace_to_file(
                 )
             working_content = working_content.replace(block["search"], block["replace"], 1)
         else:
+            # Idempotency: check if REPLACE text already exists (already applied)
+            if block["replace"] and block["replace"] in working_content:
+                logging.info(
+                    "search_replace_already_applied file=%s block=%d/%d",
+                    filepath, i + 1, len(blocks),
+                )
+                _console.print(
+                    f"[dim]⏭️  Block {i+1}/{len(blocks)} already applied to {filepath}[/dim]"
+                )
+                continue
+
             # Fuzzy match fallback: find best matching region
             _fuzzy_result = _fuzzy_find_and_replace(
                 working_content, block["search"], block["replace"], filepath, i + 1, len(blocks)
@@ -797,6 +808,22 @@ def apply_change_to_file(
                 "Hint: Update runbook step to use <<<SEARCH/===/>>> blocks for incremental changes, "
                 "or pass --legacy-apply to bypass."
             )
+
+    # Idempotency: if file exists with identical content, skip
+    if file_path.exists():
+        existing_content = file_path.read_text()
+        if existing_content.strip() == content.strip():
+            logging.info(
+                "apply_change_already_applied file=%s", filepath,
+            )
+            _console.print(
+                f"[dim]⏭️  {filepath} already has identical content — skipping[/dim]"
+            )
+            if span_ctx:
+                span_ctx.set_attribute("success", True)
+                span_ctx.set_attribute("skipped", True)
+                span_ctx.end()
+            return True
 
     _console.print(f"\n[bold cyan]📝 Changes for: {filepath}[/bold cyan]")
     if file_path.exists():
