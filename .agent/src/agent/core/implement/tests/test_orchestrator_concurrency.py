@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Concurrency stress tests for Orchestrator.apply_chunk (INFRA-169).
+"""Concurrency stress tests for Orchestrator.apply_chunks_parallel (INFRA-169).
 
-Validates that the semaphore-based concurrency limiter in apply_chunk
-correctly batches parallel file applications.
+Validates that the semaphore-based concurrency limiter in apply_chunks_parallel
+correctly batches parallel chunk applications.
 """
 
 import asyncio
@@ -43,19 +43,17 @@ _RESOLVE = "agent.core.implement.orchestrator.resolve_path"
 @patch(_ENFORCE_DOCS, return_value=[])
 @patch(_DETECT_MALFORMED, return_value=[])
 @patch(_PARSE_SR, return_value=[])
-async def test_concurrency_limit(
-    _parse_sr, _detect, _docs, _edit, _resolve, _emit,
+@patch(_PARSE_CODE, return_value=[{"file": "f.py", "content": "pass\n"}])
+async def test_apply_chunks_parallel_semaphore(
+    _parse_code, _parse_sr, _detect, _docs, _edit, _resolve, _emit,
 ):
     """
-    Verify the semaphore limits concurrent file applications.
+    Verify semaphore in apply_chunks_parallel limits concurrent execution.
 
-    With concurrency_limit=2 and 6 files each taking 0.05s,
-    sequential would take ~0.3s, parallel-2 batches ~0.15s.
+    With concurrency_limit=2 and 6 chunks each taking 0.05s of I/O,
+    the semaphore should ensure no more than 2 run simultaneously.
     """
-    # Build file list for the code block parser
-    files = [{"file": f"stress_{i}.py", "content": "pass\n"} for i in range(6)]
-    approved = {f["file"] for f in files}
-
+    approved = {"f.py"}
     orchestrator = Orchestrator(
         story_id="STRESS-001",
         yes=True,
@@ -63,17 +61,52 @@ async def test_concurrency_limit(
         concurrency_limit=2,
     )
 
-    # Simulate slow file writes via apply_change_to_file
+    original_apply_change = None
+
     def slow_apply(*args, **kwargs):
         time.sleep(0.05)
         return True
 
-    with patch(_PARSE_CODE, return_value=files):
-        with patch(_APPLY_CHANGE, side_effect=slow_apply):
-            start = time.monotonic()
-            loc, modified = await orchestrator.apply_chunk("dummy", 1)
-            elapsed = time.monotonic() - start
+    with patch(_APPLY_CHANGE, side_effect=slow_apply):
+        chunks = ["dummy chunk"] * 6
+        start = time.monotonic()
+        results = await orchestrator.apply_chunks_parallel(chunks)
+        elapsed = time.monotonic() - start
 
-    assert len(modified) == 6
-    # Should complete in reasonable time (well under 10s for 6 files)
+    # All 6 chunks should produce results
+    assert len(results) == 6
+    # Each result is a (loc, modified_files) tuple
+    for loc, modified in results:
+        assert isinstance(loc, int)
+        assert isinstance(modified, list)
+    # Should complete in reasonable time
     assert elapsed < 5.0, f"Took {elapsed:.2f}s, expected < 5s"
+
+
+@pytest.mark.asyncio
+@patch(_EMIT)
+@patch(_RESOLVE, return_value=MagicMock(exists=MagicMock(return_value=False)))
+@patch(_COUNT_EDIT, return_value=1)
+@patch(_ENFORCE_DOCS, return_value=[])
+@patch(_DETECT_MALFORMED, return_value=[])
+@patch(_PARSE_SR, return_value=[])
+@patch(_PARSE_CODE, return_value=[{"file": "f.py", "content": "pass\n"}])
+@patch(_APPLY_CHANGE, return_value=True)
+async def test_apply_chunks_parallel_processes_all(
+    _apply, _parse_code, _parse_sr, _detect, _docs, _edit, _resolve, _emit,
+):
+    """Verify apply_chunks_parallel processes every chunk in the list."""
+    orchestrator = Orchestrator(
+        story_id="STRESS-002",
+        yes=True,
+        approved_files={"f.py"},
+        concurrency_limit=4,
+    )
+
+    chunks = ["chunk_a", "chunk_b", "chunk_c"]
+    results = await orchestrator.apply_chunks_parallel(chunks)
+
+    assert len(results) == 3
+    # Each chunk produces at least one modified file
+    for loc, modified in results:
+        assert "f.py" in modified

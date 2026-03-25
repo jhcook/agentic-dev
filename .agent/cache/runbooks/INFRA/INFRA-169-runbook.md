@@ -1546,6 +1546,10 @@ rm .agent/src/agent/core/implement/telemetry_helper.py
 
 **Troubleshooting & Observability**
 
-- **Deadlock Detection**: If implementation tasks hang indefinitely, check for unreleased semaphores in `orchestrator.py`. The concurrency limit is strictly enforced (default: 5).
+- **Deadlock Detection**: If implementation tasks hang indefinitely, check for unreleased semaphores in `orchestrator.py`. The concurrency limit is strictly enforced (default: 4).
 - **Log Fragmentation**: Logs for different chunks will be interleaved. Always use the `step_index` and `story_id` keys in JSON logs to reconstruct the state of a specific task.
 - **Audit Compliance**: If sensitive data is found in logs despite the `OrchestrationSecurityFilter`, immediately invoke Level 1 Rollback and check the scrubbing regexes in `security.py`.
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0.
