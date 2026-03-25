@@ -1338,24 +1338,30 @@ This section provides technical documentation for the concurrent orchestration a
 # Concurrent Orchestration Design
 
 ## Overview
-The orchestrator now supports parallel execution of implementation chunks within a single generation phase. This transition from serial to concurrent execution reduces latency for large-scale tasks by overlapping I/O-bound operations.
+The orchestrator supports async execution of implementation chunks. **Concurrency is intentionally limited to verbatim (non-AI) chunks only.** AI-generated chunks are processed serially to prevent race conditions and ensure deterministic edits. Verbatim chunks (pure search/replace or full-file blocks with no AI generation) use `asyncio.to_thread` for I/O overlap.
 
 ## Key Mechanisms
 
-**1. Async Task Gathering**
-Chunks within a phase are executed using `asyncio.gather`. This allows multiple AI requests and file system modifications to happen simultaneously.
+**1. Async I/O via `asyncio.to_thread`**
+Within `apply_chunk`, file reads and writes are delegated to worker threads via `asyncio.to_thread`. This keeps the event loop non-blocking while the filesystem I/O completes.
 
 **2. Concurrency Limiting (Semaphore)**
-To prevent resource exhaustion (OS file descriptor limits or LLM API rate limits), a `BoundedSemaphore` is used to restrict the number of active concurrent tasks. 
-- **Default Limit**: 4 concurrent chunks.
-- **Implementation**: Managed within the `Orchestrator` via an internal semaphore used during `apply_chunk` calls.
+A `Semaphore` limits concurrent file operations within a single `apply_chunk` call.
+- **Default Limit**: 4 concurrent operations.
+- **Scope**: Applies to verbatim chunks only. AI-generated chunks are serialised.
+- **Implementation**: Managed within the `Orchestrator` via `self.semaphore`.
 
 **3. Phase-Gate Integrity**
-Parallelism is strictly confined to the *current phase*. The orchestrator ensures all chunks in a phase are resolved (either successful or failed) before evaluating the gate for the next phase. A single permanent chunk failure will halt the entire runbook to preserve system integrity and prevent inconsistent modifications in downstream phases.
+All chunks in a phase must resolve (success or failure) before the next phase starts. A permanent chunk failure halts the entire runbook.
+
+**4. Idempotency Guards**
+- **S/R blocks**: If REPLACE text already exists in the file, the block is skipped (`search_replace_already_applied`).
+- **Full-file writes**: If the file already has identical content (stripped), the write is skipped (`apply_change_already_applied`).
+- **[NEW] file guard**: If a `[NEW]` block targets an existing file, it is rejected with an error during runbook generation.
 
 ## Operational Impact
-- **Latency**: Significant reduction in total implementation time for multi-step runbooks.
-- **Logs**: Logs are now interleaved. Engineers should rely on the `step_index` and `story_id` fields in structured logs to reconstruct the timeline for a specific chunk.
+- **Latency**: Reduced for verbatim chunks via async I/O. AI chunks remain serial.
+- **Logs**: Use `step_index` and `story_id` fields in structured logs to trace chunk lifecycle.
 
 ```
 
