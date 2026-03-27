@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+**Security**
+- Added automated PII scrubbing for per-section vector query strings in the runbook generation pipeline (INFRA-172).
 
 **Added**
 - INFRA-170: Deterministic Complexity Gates (File LOC > 500, Function > 50).
