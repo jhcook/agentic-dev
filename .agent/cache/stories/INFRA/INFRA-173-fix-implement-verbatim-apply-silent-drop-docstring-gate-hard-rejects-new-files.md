@@ -34,20 +34,42 @@ As a developer, I want the agent to apply new files even if they have minor docs
 
 ## Impact Analysis Summary
 
-Components touched:
-- `.agent/src/agent/commands/implement.py`: Phase 1 verbatim-apply loop updated — test file detection pattern expanded, docstring violations downgraded to warnings, `_display_implementation_summary()` helper added.
-- `.agent/src/agent/utils/validation_formatter.py`: Added `format_implementation_summary()` for tri-state (SUCCESS / SUCCESS WITH WARNINGS / INCOMPLETE) CLI panel.
-- `.agent/src/agent/utils/path_security.py`: New module — secure path anchoring utility (`is_test_file_secure`) used to prevent traversal-based docstring gate bypasses.
-- `.agent/src/agent/utils/rollback_infra_173.py`: New rollback verification script.
-- `.agent/src/agent/commands/gates.py`: `GateStatus` enum and `TEST_FILE_PATTERNS` constants added.
-- `.agent/docs/implementation-engine.md`: New doc — validation severity levels and exclusion patterns.
+### Core Deliverables (In-Scope)
 
-Workflows affected:
-- `agent implement` Phase 1 (File application)
+| Status | File | Change Summary |
+| :--- | :--- | :--- |
+| `MODIFIED` | `.agent/src/agent/commands/implement.py` | Phase 1 verbatim-apply loop updated: test file detection expanded, docstring violations downgraded to `WARNING`, `_display_implementation_summary()` helper added |
+| `MODIFIED` | `.agent/src/agent/commands/gates.py` | `GateStatus` enum added; `TEST_FILE_PATTERNS: List[str]` constant defined |
+| `MODIFIED` | `.agent/src/agent/utils/validation_formatter.py` | `format_implementation_summary()` added — renders tri-state (SUCCESS / SUCCESS WITH WARNINGS / INCOMPLETE) `rich` panel |
+| `ADDED` | `.agent/src/agent/utils/path_security.py` | New module — `is_test_file_secure()` secure path anchoring to prevent traversal-based docstring gate bypasses |
+| `ADDED` | `.agent/docs/implementation-engine.md` | New documentation — validation severity levels and test file exclusion patterns |
+
+### Tests Added (In-Scope)
+
+| Status | File | Coverage |
+| :--- | :--- | :--- |
+| `ADDED` | `.agent/tests/agent/core/implement/test_path_security.py` | `is_test_file_secure` — traversal anchoring, pattern coverage, case insensitivity, edge cases |
+| `ADDED` | `.agent/tests/gates/test_docstring_validator.py` | `DocstringValidator` — bypass logic, downgrade-to-warning, path anchoring, error handling |
+| `ADDED` | `.agent/tests/implement/test_engine.py` | `ImplementationEngine.get_verdict()` — SUCCESS WITH WARNINGS vs INCOMPLETE |
+| `ADDED` | `.agent/tests/implement/test_verbatim_apply.py` | `VerbatimApplier.apply()` — file is written even when WARNING status returned |
+
+### Co-commits (Out-of-Scope Changes on This Branch)
+
+| Status | File | Reason |
+| :--- | :--- | :--- |
+| `MODIFIED` | `.agent/src/agent/commands/runbook_generation.py` | Incidental fix applied during debugging session |
+| `MODIFIED` | `.agent/src/agent/core/tests/test_guardrails.py` | Guardrail test update applied as part of preflight autoheal |
+| `MODIFIED` | `CHANGELOG.md` | Auto-updated by `agent commit` |
+| `MODIFIED` | `.agent/cache/journeys/INFRA/JRN-004-distributed-cache-synchronization-with-sqlite-and-supabase.yaml` | Auto-linked by implementation engine |
+
+### Workflows Affected
+
+- `agent implement` Phase 1 (file application and gate evaluation)
 - Automated preflight check reporting
 
-Risks identified:
-- Increased technical debt if developers ignore docstring warnings surfaced in the preflight stage.
+### Risks
+
+- Increased technical debt if developers ignore docstring warnings surfaced at preflight stage.
 
 ## Test Strategy
 
