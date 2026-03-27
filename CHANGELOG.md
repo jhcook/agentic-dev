@@ -3,6 +3,13 @@
 ## [Unreleased] (Updated by story)
 
 ## [Unreleased]
+
+**Added**
+- Two-pass execution logic for runbook generation to ensure test-implementation coherence (INFRA-174).
+- Heuristic-based section classification (implementation vs verification).
+- Implementation context injection for verification block prompts. (Updated by story)
+
+## [Unreleased]
 **Added**
 - Architecture review and domain boundaries for tool consolidation (INFRA-143). (Updated by story)
 
