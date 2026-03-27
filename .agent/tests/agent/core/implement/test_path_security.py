@@ -18,7 +18,7 @@ Unit tests for secure path anchoring and exclusion logic.
 import pytest
 from agent.utils.path_security import is_test_file_secure
 
-def test_strict_anchoring_resolution():
+def test_strict_anchoring_resolution() -> None:
     """Verify that deceptive traversal paths do not bypass docstring gates."""
     # Deceptive path targeting auth.py via a test directory segment
     # The resolved basename is 'auth.py', which should NOT match 'test_*'
@@ -31,7 +31,7 @@ def test_strict_anchoring_resolution():
     assert is_test_file_secure("test_auth.py") is True
     assert is_test_file_secure("auth.py") is False
 
-def test_standard_pattern_coverage():
+def test_standard_pattern_coverage() -> None:
     """Verify all standard test naming conventions from Rule 000 are covered."""
     # Python / Pytest
     assert is_test_file_secure("test_utility.py") is True
@@ -45,12 +45,12 @@ def test_standard_pattern_coverage():
     assert is_test_file_secure("__init__.py") is True
     assert is_test_file_secure("agent/core/__init__.py") is True
 
-def test_case_insensitivity():
+def test_case_insensitivity() -> None:
     """Verify that naming checks are case-insensitive for platform compatibility."""
     assert is_test_file_secure("TEST_UTILITY.PY") is True
     assert is_test_file_secure("Test_Component.Spec.JS") is True
 
-def test_edge_cases():
+def test_edge_cases() -> None:
     """Verify handling of empty, null, or malformed inputs."""
     assert is_test_file_secure("") is False
     assert is_test_file_secure(None) is False

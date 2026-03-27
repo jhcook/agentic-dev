@@ -19,7 +19,7 @@ from implement.verbatim_apply import VerbatimApplier
 
 @patch("implement.verbatim_apply.write_file")
 @patch("implement.verbatim_apply.DocstringValidator")
-def test_apply_writes_on_warning(mock_validator_cls, mock_write):
+def test_apply_writes_on_warning(mock_validator_cls: MagicMock, mock_write: MagicMock) -> None:
     """Verify that files with WARNING status are still written to the filesystem.
     
     Ensures work is not discarded even if linting/doc gaps exist.

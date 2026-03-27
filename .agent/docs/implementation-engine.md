@@ -40,3 +40,7 @@ If a file is missing from your workspace after an implementation run:
 1. Check the CLI output for any `REJECTED` entries.
 2. Review the validation error message; if it is a syntax error or security violation, the gate correctly blocked the write.
 3. Check `.agent/src/agent/core/implement/engine.py` for logic updates regarding `rejected_files` collection.
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0

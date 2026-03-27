@@ -24,7 +24,7 @@ except ImportError:
     print("Error: Could not find DocstringValidator. Check source tree.")
     sys.exit(1)
 
-def main():
+def main() -> None:
     """Main verification routine."""
     validator = DocstringValidator()
     # test_*.py files were bypassed/downgraded in INFRA-173.

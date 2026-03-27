@@ -15,7 +15,7 @@
 import pytest
 from implement.engine import ImplementationEngine
 
-def test_engine_summary_logic():
+def test_engine_summary_logic() -> None:
     """Verify implement summary banner distinguishes between SUCCESS and WARNINGS.
     
     Covers Scenario 3: Banner only triggers INCOMPLETE for critical failures.
@@ -37,7 +37,7 @@ def test_engine_summary_logic():
     assert engine.get_verdict() == "INCOMPLETE IMPLEMENTATION"
     assert "broken_file.py" in engine.rejected_files
 
-def test_regression_syntax_errors():
+def test_regression_syntax_errors() -> None:
     """Ensure syntax errors in new files still trigger hard rejections."""
     engine = ImplementationEngine()
     # Assume a mock validator returns FAIL for syntax errors

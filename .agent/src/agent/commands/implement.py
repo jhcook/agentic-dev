@@ -39,8 +39,6 @@ from agent.core.utils import find_runbook_file, get_next_id, scrub_sensitive_dat
 from agent.commands import gates
 from agent.commands.utils import update_story_state
 from agent.utils.validation_formatter import format_implementation_summary
-from agent.utils.validation_formatter import format_implementation_summary
-from agent.utils.validation_formatter import format_implementation_summary
 
 # ---------------------------------------------------------------------------
 # Re-export core symbols so existing tests (import from agent.commands.implement)

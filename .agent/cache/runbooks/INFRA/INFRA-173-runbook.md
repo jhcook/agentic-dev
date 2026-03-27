@@ -524,3 +524,7 @@ In the event that downgrading implementations to warnings leads to unacceptable 
     ```
 
 3. **Verification**: Run `pytest .agent/tests/gates/test_docstring_validator.py` to confirm that docstring gaps once again trigger hard rejections (baseline behavior).
+
+## Copyright
+
+Copyright 2026 Justin Cook. Licensed under the Apache License, Version 2.0
