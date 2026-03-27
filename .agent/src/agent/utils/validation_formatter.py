@@ -23,7 +23,7 @@ errors, Pydantic ``ErrorDict`` structures (with ``loc`` / ``msg`` fields),
 and gracefully falls back for unexpected types.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 from rich.panel import Panel
 
