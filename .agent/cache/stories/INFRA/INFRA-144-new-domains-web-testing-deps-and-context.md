@@ -32,6 +32,7 @@ As a **Platform Developer**, I want **web, testing, dependency, and context mana
 ## Linked ADRs
 
 - ADR-043: Tool Registry Foundation
+- ADR-046: Audit and Observability Framework
 
 ## Linked Journeys
 
@@ -39,8 +40,17 @@ As a **Platform Developer**, I want **web, testing, dependency, and context mana
 
 ## Impact Analysis Summary
 
-Components touched: `web.py`, `testing.py`, `deps.py`, `context.py` (all NEW in `.agent/src/agent/tools/`)
-Workflows affected: Documentation access, test execution, dependency management, edit safety.
+Components touched: 
+- `web.py`, `testing.py`, `deps.py`, `context.py` (all NEW in `.agent/src/agent/tools/`)
+- `.agent/src/agent/tools/interfaces.py` and `.agent/src/agent/tools/__init__.py`
+- `.agent/src/agent/core/governance/audit_handler.py` and `.agent/tests/agent/core/governance/test_audit_handler.py`
+- `.agent/src/agent/core/net_utils.py` and `.agent/src/agent/utils/tool_security.py`
+- `.agent/etc/agent.yaml`
+- `.agent/docs/tools_reference.md` and `CHANGELOG.md`
+- Tests: `.agent/tests/agent/tools/test_context.py`, `test_deps.py`, `test_testing.py`, `test_web.py`
+- Utils: `.agent/src/agent/utils/rollback_infra_144.py`, `verify_infra_144.py`
+
+Workflows affected: Documentation access, test execution, dependency management, edit safety, structured logging, OpenTelemetry tracing.
 Risks identified: `context.py` checkpoint strategy needs careful design — git stash vs file copies.
 
 ## Test Strategy
@@ -48,6 +58,7 @@ Risks identified: `context.py` checkpoint strategy needs careful design — git 
 - Unit tests for each tool with mocked subprocess/HTTP.
 - Integration test: checkpoint → edit → rollback verifies file restoration.
 - Integration test: `run_tests` parses real pytest output into structured result.
+- *Note: the coverage_report and full coverage_pct scraping features are explicitly deferred to a future iteration.*
 
 ## Rollback Plan
 
