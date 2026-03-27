@@ -19,6 +19,17 @@ As a developer, I want all test files consolidated into the canonical `.agent/te
 - [ ] **Scenario 3**: Automated Generation. Runbook and code generation prompts must be updated to ensure any generated tests are placed in `.agent/tests/` or equivalent top-level test directories for other managed components (e.g., `backend/tests/`).
 - [ ] **Negative Test**: If a developer attempts to create a test in `.agent/src/agent/core/`, the linting/rule system should flag a violation.
 
+### Pipeline Simplification (in-session additions)
+
+- [x] **AC-P1**: `RunbookStep.operations` schema relaxed from `min_length=1` to `default_factory=list`, allowing prose-only steps without triggering schema validation errors.
+- [x] **AC-P2**: `block_no_file_operations` retry loop removed from `runbook_generation.py`, eliminating forced AI round-trips and hallucinated CHANGELOG blocks.
+- [x] **AC-P3**: Filesystem oracle uses root-level `"*"` glob instead of hardcoded `_WELL_KNOWN_FILES` list, enabling dynamic discovery of all root files.
+- [x] **AC-P4**: `_escape_dunder_paths` docstring converted to raw string (`r"""`) to fix `SyntaxWarning` for `\_` escape sequence under Python 3.12+.
+- [x] **AC-P5**: `MD048` set to `consistent` and `MD029` disabled in `.markdownlint.yaml` so generated runbooks pass lint without fragile post-processing.
+- [x] **AC-P6**: `test_reformatted_markers_fail_validation` updated to match relaxed schema contract — asserts schema passes but `extract_modify_files` returns empty when `[NEW]` markers are stripped.
+- [x] **AC-P7**: Autoheal test healing wrapped in `rich.Status` spinner so the terminal shows activity during AI repair instead of going silent.
+
+
 ## Non-Functional Requirements
 
 - **Maintainability**: Standardizes the directory structure across all repositories (Agent, Backend, etc.).
