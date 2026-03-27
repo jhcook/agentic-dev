@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Architecture Review INFRA-143: Domain isolation verified for tools.project and tools.knowledge.
 from agent.main import app
 
 if __name__ == "__main__":

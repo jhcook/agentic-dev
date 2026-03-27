@@ -22,9 +22,38 @@ from datetime import datetime
 from agent.core.governance import run_audit, log_governance_event
 from agent.core.formatters import format_audit_report
 from agent.core.security import scrub_sensitive_data
+from agent.tools.telemetry import get_tool_metrics
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
+
+@app.command()
+def tool_stats(
+    tool: Optional[str] = typer.Option(None, help="Filter by specific tool name"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON data")
+):
+    """
+    View observability metrics and performance stats for integrated tools.
+    """
+    metrics = get_tool_metrics(tool)
+    
+    if json_output:
+        typer.echo(json.dumps(metrics, indent=2))
+        return
+
+    if not metrics:
+        typer.echo("No tool metrics recorded in this session.")
+        return
+
+    for t_name, entries in metrics.items():
+        if not entries: continue
+        avg_latency = sum(e['latency_ms'] for e in entries) / len(entries)
+        hits = sum(1 for e in entries if e['hit'])
+        typer.echo(f"\n[Tool: {t_name}]")
+        typer.echo(f"  Calls: {len(entries)}")
+        typer.echo(f"  Avg Latency: {avg_latency:.2f}ms")
+        typer.echo(f"  Hit Rate: {(hits/len(entries))*100:.1f}%")
+
 
 @app.command()
 def audit(

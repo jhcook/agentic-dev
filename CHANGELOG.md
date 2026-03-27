@@ -3,6 +3,10 @@
 ## [Unreleased] (Updated by story)
 
 ## [Unreleased]
+**Added**
+- Architecture review and domain boundaries for tool consolidation (INFRA-143). (Updated by story)
+
+## [Unreleased]
 **Changed**
 - Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
 - Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
