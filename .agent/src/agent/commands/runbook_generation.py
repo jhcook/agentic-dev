@@ -176,9 +176,10 @@ def _ensure_new_blocks_fenced(content: str) -> str:
     If not, wraps it in a fenced code block with language inferred from
     the file extension.
 
-    Note: ``.md`` files use tilde fences (``~~~``) so that any inner
-    triple-backtick code examples in the embedded document content do
-    not prematurely close the outer fence.
+    Always uses backtick fences (MD048). The inner content of .md files
+    is written by the AI and typically does not contain triple-backtick
+    code blocks — and when it does, the fence rebalancer closes any
+    orphaned fences deterministically.
     """
     ext_lang = {
         ".py": "python", ".yaml": "yaml", ".yml": "yaml",
@@ -201,74 +202,64 @@ def _ensure_new_blocks_fenced(content: str) -> str:
                 ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
                 lang = ext_lang.get(ext, "")
                 body_stripped = body.strip('\n')
-                # Use tilde fences for markdown files to avoid nested-fence issues
-                if ext == ".md":
-                    parts[idx + 1] = f"\n~~~{lang}\n{body_stripped}\n~~~\n"
-                else:
-                    parts[idx + 1] = f"\n```{lang}\n{body_stripped}\n```\n"
+                parts[idx + 1] = f"\n```{lang}\n{body_stripped}\n```\n"
     return "".join(result)
 
 
-def _fix_md_content_fences(content: str) -> str:
-    r"""Convert backtick fences on [NEW] *.md blocks to tilde fences.
+def _normalize_list_markers(content: str) -> str:
+    """Normalise bullet and ordered-list markers to satisfy MD004/MD030.
 
-    The AI often ignores the tilde-fence instruction and emits
-    \`\`\`markdown for embedded ``.md`` file content.  When that file
-    contains its own code examples (triple-backtick fenced), the outer
-    fence closes prematurely, corrupting the runbook and causing
-    markdownlint MD001 failures on subsequent headings.
-
-    This post-pass finds every ``#### [NEW] *.md`` block whose outer
-    fence is `` ` `` and replaces open/close fences with ``~~~``.
+    Converts ``*   item`` (asterisk + 3 spaces) to ``- item`` (dash +
+    1 space) and ``N.  item`` (2+ spaces after period) to ``N. item``
+    (1 space).  Only operates on lines that are clearly list items
+    (outside of fenced code blocks).
     """
-    # Match: [NEW] header for a .md file, optional blank line, then
-    # an opening backtick fence (3+ backticks, optional lang tag).
-    pattern = re.compile(
-        r'(####\s+\[NEW\]\s+[^\n]+\.md[^\n]*\n\n?)'
-        r'(`{3,})(\w*)\n',
-        re.IGNORECASE,
+    lines = content.splitlines(keepends=True)
+    in_fence = False
+    result = []
+    for line in lines:
+        # Track fence state so we don't mangle code inside blocks
+        stripped = line.lstrip()
+        if re.match(r'^(`{3,}|~{3,})\S*\s*$', stripped):
+            in_fence = not in_fence
+        if not in_fence:
+            # MD004: asterisk bullet → dash
+            line = re.sub(r'^(\s*)\*( {2,})', lambda m: m.group(1) + '- ', line)
+            # MD030: multiple spaces after ordered-list period
+            line = re.sub(r'^(\s*\d+\.)(\s{2,})', lambda m: m.group(1) + ' ', line)
+        result.append(line)
+    return "".join(result)
+
+
+def _fix_changelog_sr_headings(content: str) -> str:
+    """Rewrite CHANGELOG S/R SEARCH blocks to avoid MD024/MD025 violations.
+
+    The AI consistently uses ``# Changelog`` as the SEARCH anchor, which
+    is a top-level heading inside the runbook and triggers MD025 (multiple
+    H1s) and MD024 (duplicate headings).  This pass rewrites the SEARCH
+    side to use the first sub-heading inside the file (``## [Unreleased]``)
+    instead, which is equally unique but doesn't violate heading rules.
+    """
+    # Pattern: inside a fenced block, a <<<SEARCH that anchors on # Changelog
+    return re.sub(
+        r'<<<SEARCH\n# Changelog\n===\n# Changelog',
+        '<<<SEARCH\n## [Unreleased]\n===\n## [Unreleased] (Updated by story)',
+        content,
     )
 
-    def _swap_fence(m: re.Match) -> str:
-        header = m.group(1)
-        ticks = m.group(2)
-        lang = m.group(3)
-        # Replace opening backtick fence with tilde fence of same width
-        tildes = "~" * len(ticks)
-        return f"{header}{tildes}{lang}\n"
 
-    result = pattern.sub(_swap_fence, content)
+def _ensure_blank_lines_around_fences(content: str) -> str:
+    """Ensure every fenced code block is surrounded by blank lines (MD031).
 
-    # Now close any backtick fences that were opened inside a [NEW] *.md
-    # block.  Strategy: locate each ~~~<lang> opener we just created and
-    # find its matching closing ``` — replace it with ~~~.
-    # We iterate block-by-block to avoid false positives.
-    block_open = re.compile(
-        r'(####\s+\[NEW\]\s+[^\n]+\.md[^\n]*\n\n?)(~{3,})(\w*)\n',
-        re.IGNORECASE,
-    )
-    segments = []
-    last = 0
-    for m in block_open.finditer(result):
-        segments.append(result[last:m.end()])
-        last = m.end()
-        tildes = m.group(2)
-        # Find the closing backtick fence (same width as the original)
-        close_ticks = "`" * len(tildes)
-        close_pat = re.compile(
-            r'^' + re.escape(close_ticks) + r'\s*$',
-            re.MULTILINE,
-        )
-        rest = result[last:]
-        close_m = close_pat.search(rest)
-        if close_m:
-            # Replace matching closing ``` with ~~~
-            segments.append(rest[:close_m.start()])
-            segments.append(tildes + "\n")
-            last = m.end() + close_m.end()
-        # else: no closing fence found — leave as-is
-    segments.append(result[last:])
-    return "".join(segments)
+    Inserts a blank line before an opening fence when the previous line
+    is non-empty prose, and after a closing fence when the next line is
+    non-empty.  Skips fences already correctly surrounded.
+    """
+    # Blank line before an opening fence if immediately preceded by text
+    content = re.sub(r'([^\n])\n(```|~~~)', r'\1\n\n\2', content)
+    # Blank line after a closing fence if immediately followed by text
+    content = re.sub(r'(^```|^~~~)(\n)([^\n`~])', r'\1\2\n\3', content, flags=re.MULTILINE)
+    return content
 
 
 def _rebalance_fences(content: str) -> str:
@@ -905,15 +896,18 @@ def generate_runbook_chunked(
                     "[Generation failed for this section — JSON parse error]\n\n"
                 )
 
-    # Post-generation passes
+    # Post-generation passes (order matters)
     assembled_content = _ensure_modify_blocks_fenced(assembled_content)
     assembled_content = _dedup_modify_blocks(assembled_content)
     assembled_content = _escape_dunder_paths(assembled_content)
-    # Convert backtick fences on [NEW] *.md blocks → tilde fences so embedded
-    # code examples don't prematurely close the outer fence.
-    assembled_content = _fix_md_content_fences(assembled_content)
     # Deterministic fence balancer: close any orphaned fences per Step block.
     # This is a pipeline guarantee — the LLM is not trusted to balance fences.
     assembled_content = _rebalance_fences(assembled_content)
+    # Normalise list markers: * → -, double-space → single-space (MD004/MD030)
+    assembled_content = _normalize_list_markers(assembled_content)
+    # Rewrite # Changelog in S/R SEARCH blocks to avoid MD024/MD025
+    assembled_content = _fix_changelog_sr_headings(assembled_content)
+    # Ensure blank lines surround fenced blocks (MD031)
+    assembled_content = _ensure_blank_lines_around_fences(assembled_content)
 
     return assembled_content
