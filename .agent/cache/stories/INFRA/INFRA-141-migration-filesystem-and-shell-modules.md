@@ -16,11 +16,11 @@ As a **Platform Developer**, I want **filesystem and shell tools in dedicated do
 
 ## Acceptance Criteria
 
-- [ ] **AC-1**: `agent/tools/filesystem.py` implements: `read_file`, `edit_file`, `patch_file`, `create_file`, `delete_file`, `find_files`, `move_file`, `copy_file`, `file_diff`.
-- [ ] **AC-2**: `agent/tools/shell.py` implements: `run_command`, `send_command_input`, `check_command_status`, `interactive_shell`.
-- [ ] **AC-3**: All tools include path validation and sandbox enforcement (carried over from `make_interactive_tools()`).
-- [ ] **AC-4**: Tools are registered as plain callables via `ToolRegistry.register()`.
-- [ ] **Negative Test**: `move_file` and `copy_file` reject paths outside the sandbox.
+- [x] **AC-1**: `agent/tools/filesystem.py` implements: `read_file`, `edit_file`, `patch_file`, `create_file`, `delete_file`, `find_files`, `move_file`, `copy_file`, `file_diff`.
+- [x] **AC-2**: `agent/tools/shell.py` implements: `run_command`, `send_command_input`, `check_command_status`, `interactive_shell`.
+- [x] **AC-3**: All tools include path validation and sandbox enforcement (carried over from `make_interactive_tools()`).
+- [x] **AC-4**: Tools are registered as plain callables via `ToolRegistry.register()`.
+- [x] **Negative Test**: `move_file` and `copy_file` reject paths outside the sandbox.
 
 ## Non-Functional Requirements
 
