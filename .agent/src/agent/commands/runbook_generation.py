@@ -676,7 +676,7 @@ def generate_runbook_chunked(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
-            console=Console(),
+            console=console,
             transient=True,
         ) as prog:
             pbar = prog.add_task(

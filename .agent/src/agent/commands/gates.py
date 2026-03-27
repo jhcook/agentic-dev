@@ -25,12 +25,32 @@ import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional
-
 from opentelemetry import trace
-
 from agent.core.logger import get_logger
+
+class GateStatus(Enum):
+    """Status of a gate check."""
+    SUCCESS = "success"
+    WARNING = "warning"
+    FAILURE = "failure"
+
+# Language-agnostic test file patterns per Rule 000
+TEST_FILE_PATTERNS: List[str] = [
+    r"^test_.*",
+    r".*_test$",
+    r".*\.spec\..*",
+    r".*\.test\..*"
+]
+
+@dataclass
+class GateResult:
+    """Result of a gate check, including status and message."""
+    status: GateStatus
+    message: str
+    resource_id: Optional[str] = None
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
