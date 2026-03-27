@@ -572,25 +572,21 @@ class AIService:
                     provider_to_use = routed_provider
                     model_to_use = route.get("deployment_id")
                 else:
-                    console.print(
-                        f"[dim][yellow]⚠️ Smart Router suggested {routed_provider}, "
+                    logger.warning(
+                        f"Smart Router suggested {routed_provider}, "
                         "but it is not configured. Falling back to default."
-                        "[/yellow][/dim]"
                     )
 
         if not provider_to_use:
-             console.print(
-                 "[red]❌ No valid AI provider found (Gemini key, OpenAI key, "
-                 "or GH CLI). AI features disabled.[/red]"
-             )
+             logger.error("No valid AI provider found (Gemini key, OpenAI key, or GH CLI). AI features disabled.")
              return ""
 
         # Security / Compliance Warning
-        sec_msg = "[dim]🔒 Security Pre-check: Ensuring no PII/Secrets in context...[/dim]"
+        sec_msg = "Security Pre-check: Ensuring no PII/Secrets in context..."
         if rich_status:
-            rich_status.update(f"{rich_status.status}\n{sec_msg}")
+            rich_status.update(f"{rich_status.status}\n[dim]🔒 {sec_msg}[/dim]")
         else:
-            console.print(sec_msg)
+            logger.debug(sec_msg)
         
         # Fallback Loop
         attempted_providers = set()

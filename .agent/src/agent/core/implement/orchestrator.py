@@ -397,11 +397,35 @@ class Orchestrator:
             List of (step_loc, step_modified_files) for each chunk.
         """
         async def _bounded_apply(chunk: str, idx: int):
-            async with self.semaphore:
-                return await self.apply_chunk(chunk, idx)
+            if _tracer:
+                with _tracer.start_as_current_span(f"implement.chunk_execution_{idx}") as span:
+                    span.set_attribute("chunk_id", idx)
+                    span.set_attribute("story_id", self.story_id)
+                    try:
+                        async with self.semaphore:
+                            result = await self.apply_chunk(chunk, idx)
+                        span.set_attribute("status", "success")
+                        return result
+                    except Exception as e:
+                        span.set_attribute("status", "failure")
+                        span.record_exception(e)
+                        raise
+            else:
+                async with self.semaphore:
+                    return await self.apply_chunk(chunk, idx)
 
-        tasks = [
-            _bounded_apply(chunk, i + 1)
-            for i, chunk in enumerate(chunks)
-        ]
-        return await asyncio.gather(*tasks)
+        if _tracer:
+            with _tracer.start_as_current_span("implement.orchestration_task") as span:
+                span.set_attribute("story_id", self.story_id)
+                span.set_attribute("total_chunks", len(chunks))
+                tasks = [
+                    _bounded_apply(chunk, i + 1)
+                    for i, chunk in enumerate(chunks)
+                ]
+                return await asyncio.gather(*tasks)
+        else:
+            tasks = [
+                _bounded_apply(chunk, i + 1)
+                for i, chunk in enumerate(chunks)
+            ]
+            return await asyncio.gather(*tasks)
