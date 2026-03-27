@@ -121,6 +121,7 @@ def generate_block_prompt(
     prior_changes: Optional[Dict[str, str]] = None,
     modify_file_contents: Optional[Dict[str, str]] = None,
     existing_files: Optional[List[str]] = None,
+    implementation_context: Optional[str] = None,
 ) -> str:
     """
     Generate a Phase 2 prompt for creating a detailed implementation block.
@@ -172,6 +173,15 @@ Using [NEW] for any of these files is an ERROR. If you need to change them, use
 [MODIFY] with <<<SEARCH / === / >>> blocks based on the file content provided above.
 """
 
+    impl_context_block = ""
+    if implementation_context:
+        impl_context_block = f"""
+IMPLEMENTATION CONTEXT (Created in Pass 1):
+{implementation_context}
+
+Ensure all generated tests exactly match the logic, classes, and APIs within this context.
+"""
+
     prompt = f"""
 You are the Implementation Specialist in the AI Governance Panel.
 Your task is to generate a DETAILED implementation block for a specific section of a runbook.
@@ -191,6 +201,7 @@ TARGETED FILE CONTENTS (this is the GROUND TRUTH — base all SEARCH blocks on t
 {_build_modify_targets_block(modify_file_contents)}
 {dedup_block}
 {existing_block}
+{impl_context_block}
 TASK:
 Provide the full technical content for this section.
 IMPORTANT: Do NOT start the content with a section header (## or ### title). The section header

@@ -94,6 +94,15 @@ class GenerationBlock:
             content=data.get("content", data.get("body", "")),
         )
 
+
+def _is_verification_section(section: GenerationSection) -> bool:
+    """Check if a section is a verification/test block based on heuristics."""
+    v_patterns = ("test", "verify", "verification", "validate", "qa", "suite", "check")
+    title_match = any(p in section.title.lower() for p in v_patterns)
+    file_match = any("tests/" in f.lower() or "test_" in f.lower() or "_test" in f.lower() for f in section.files)
+    return title_match or file_match
+
+
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 console = Console()
@@ -101,23 +110,7 @@ error_console = Console(stderr=True)
 
 
 def _extract_json(raw: str) -> Dict[str, Any]:
-    """Robustly extract a JSON object from AI output.
-
-    Handles:
-    - Raw JSON strings
-    - JSON wrapped in markdown ```json fences
-    - Leading/trailing garbage text around JSON
-    - Balanced brace extraction for nested objects
-
-    Args:
-        raw: Raw AI response text.
-
-    Returns:
-        Parsed dict.
-
-    Raises:
-        json.JSONDecodeError: If no valid JSON can be extracted.
-    """
+    """Robustly extract a JSON object from AI output."""
     text = raw.strip()
 
     # Strip markdown code fences
@@ -655,11 +648,9 @@ def generate_runbook_chunked(
         section_inputs.append((i, section, block_prompt, modify_contents))
 
     # ─────────────────────────────────────────────────────────────────────
-    # Phase 2b: Parallel block generation via TaskExecutor + live Progress
-    # AI completions are I/O-bound — run them concurrently in a thread
-    # pool bounded by TaskExecutor's semaphore.
+    # Phase 2b: Two-Pass Parallel block generation via TaskExecutor
     # ─────────────────────────────────────────────────────────────────────
-    async def _run_parallel_blocks() -> List[Dict[str, Any]]:
+    async def _run_parallel_blocks(inputs: List[Any], pass_name: str) -> List[Dict[str, Any]]:
         async def _gen(step: int, prompt: str) -> Dict[str, Any]:
             raw = await asyncio.to_thread(
                 ai_service.complete,
@@ -670,47 +661,56 @@ def generate_runbook_chunked(
                 tracker.record_call(_model_hint, _token_count(prompt), _token_count(raw))
             return {"step": step, "raw": raw}
 
+        if not inputs: return []
         task_exe = TaskExecutor(max_concurrency=3)
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-            transient=True,
-        ) as prog:
-            pbar = prog.add_task(
-                f"[bold blue]⚡ Phase 2: Generating {len(section_inputs)} blocks in parallel...",
-                total=len(section_inputs),
-            )
-            callables = [
-                (lambda s=step, p=prompt: _gen(s, p))
-                for step, _, prompt, _ in section_inputs
-            ]
-            return await task_exe.run_parallel(
-                callables,
-                on_progress=lambda _: prog.advance(pbar),
-            )
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console, transient=True) as prog:
+            pbar = prog.add_task(f"[bold blue]⚡ {pass_name}: Generating {len(inputs)} blocks...", total=len(inputs))
+            return await task_exe.run_parallel([(lambda s=step, p=prompt: _gen(s, p)) for step, _, prompt, _ in inputs], on_progress=lambda _: prog.advance(pbar))
 
-    try:
-        _par_results = asyncio.run(_run_parallel_blocks())
-    except RuntimeError:  # already inside an event loop (e.g. pytest-asyncio)
-        _loop = asyncio.new_event_loop()
-        try:
-            _par_results = _loop.run_until_complete(_run_parallel_blocks())
-        finally:
-            _loop.close()
+    pass_1_inputs = [i for i in section_inputs if not _is_verification_section(i[1])]
+    pass_2_inputs = [i for i in section_inputs if _is_verification_section(i[1])]
 
+    def _run_async(c: Any) -> Any:
+        try: return asyncio.run(c)
+        except RuntimeError:
+            l = asyncio.new_event_loop()
+            try: return l.run_until_complete(c)
+            finally: l.close()
+
+    _par_results_1 = _run_async(_run_parallel_blocks(pass_1_inputs, "Pass 1 (Implementation)"))
     raw_by_step: Dict[int, str] = {}
-    for _r in _par_results:
+    pass_1_context = []
+
+    for _r in _par_results_1:
         if _r["status"] == "success":
-            _d = _r["data"]
-            raw_by_step[_d["step"]] = _d["raw"]
+            raw_by_step[_r["data"]["step"]] = _r["data"]["raw"]
+            try:
+                b = GenerationBlock.from_dict(_extract_json(_r["data"]["raw"]))
+                pass_1_context.append(f"### {b.header}\n\n{b.content}")
+            except Exception: pass
         else:
-            logger.error(
-                "block_parallel_generation_failed",
-                extra={"index": _r["index"], "error": _r.get("error", "")},
-            )
+            logger.error("block_parallel_generation_failed", extra={"index": _r["index"], "error": _r.get("error", "")})
+
+    if pass_2_inputs:
+        if pass_1_inputs and not pass_1_context:
+            logger.error("pass_1_failed_aborting_pass_2", extra={"detail": "Pass 1 yielded no code; aborting Pass 2"})
+            for step, sec, _, _ in pass_2_inputs:
+                raw_by_step[step] = f"{{\"header\": \"{sec.title}\", \"content\": \"[Aborted: Pass 1 Failed]\"}}"
+        else:
+            pass_1_compiled = "\n".join(pass_1_context) if pass_1_context else None
+            new_pass_2_inputs = []
+            for step, sec, _old_prompt, mod_contents in pass_2_inputs:
+                b_prompt = generate_block_prompt(
+                    sec.title, sec.description, skeleton_raw, story_content, context_summary,
+                    None, mod_contents or None, all_existing_files or None, pass_1_compiled
+                )
+                new_pass_2_inputs.append((step, sec, b_prompt, mod_contents))
+            
+            for _r in _run_async(_run_parallel_blocks(new_pass_2_inputs, "Pass 2 (Verification)")):
+                if _r["status"] == "success":
+                    raw_by_step[_r["data"]["step"]] = _r["data"]["raw"]
+                else:
+                    logger.error("block_parallel_generation_failed", extra={"index": _r["index"], "error": _r.get("error", "")})
 
     # ─────────────────────────────────────────────────────────────────────
     # Phase 2c: Sequential assembly — parse, clean, dedup, checkpoint
