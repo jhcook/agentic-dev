@@ -14,10 +14,10 @@ As a developer, I want the agent to apply new files even if they have minor docs
 
 ## Acceptance Criteria
 
-- [ ] **Scenario 1**: Given a new file named `test_utility.py`, When the `verbatim-apply` engine processes it, Then the docstring gate must be bypassed regardless of function-level documentation presence.
-- [ ] **Scenario 2**: Given a new file `token_counter.py` with a missing `__init__` docstring, When the engine runs, Then the file must be written to the filesystem and the violation downgraded to a warning.
-- [ ] **Scenario 3**: The "INCOMPLETE IMPLEMENTATION" banner must only trigger for critical application failures, not for files that were successfully written with docstring warnings.
-- [ ] **Negative Test**: System handles non-existent file paths or filesystem permission errors gracefully without attributing them to docstring violations.
+- [x] **Scenario 1**: Given a new file named `test_utility.py`, When the `verbatim-apply` engine processes it, Then the docstring gate must be bypassed regardless of function-level documentation presence.
+- [x] **Scenario 2**: Given a new file `token_counter.py` with a missing `__init__` docstring, When the engine runs, Then the file must be written to the filesystem and the violation downgraded to a warning.
+- [x] **Scenario 3**: The "INCOMPLETE IMPLEMENTATION" banner must only trigger for critical application failures, not for files that were successfully written with docstring warnings.
+- [x] **Negative Test**: System handles non-existent file paths or filesystem permission errors gracefully without attributing them to docstring violations.
 
 ## Non-Functional Requirements
 
@@ -35,9 +35,12 @@ As a developer, I want the agent to apply new files even if they have minor docs
 ## Impact Analysis Summary
 
 Components touched:
-- `.agent/src/gates/docstring_validator.py`: Updated to include exclusion logic for `test_*.py` patterns and logic to return warnings instead of hard failures.
-- `.agent/src/implement/verbatim_apply.py`: Modified to handle "warning" states from gates and ensure file writing proceeds for non-critical violations.
-- `.agent/src/implement/engine.py`: Updated rejection logic to prevent files with only documentation warnings from being added to the `rejected_files` collection.
+- `.agent/src/agent/commands/implement.py`: Phase 1 verbatim-apply loop updated — test file detection pattern expanded, docstring violations downgraded to warnings, `_display_implementation_summary()` helper added.
+- `.agent/src/agent/utils/validation_formatter.py`: Added `format_implementation_summary()` for tri-state (SUCCESS / SUCCESS WITH WARNINGS / INCOMPLETE) CLI panel.
+- `.agent/src/agent/utils/path_security.py`: New module — secure path anchoring utility (`is_test_file_secure`) used to prevent traversal-based docstring gate bypasses.
+- `.agent/src/agent/utils/rollback_infra_173.py`: New rollback verification script.
+- `.agent/src/agent/commands/gates.py`: `GateStatus` enum and `TEST_FILE_PATTERNS` constants added.
+- `.agent/docs/implementation-engine.md`: New doc — validation severity levels and exclusion patterns.
 
 Workflows affected:
 - `agent implement` Phase 1 (File application)
