@@ -12,33 +12,66 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from implement.engine import ImplementationEngine
+"""Tests for the tri-state summary panel from format_implementation_summary (INFRA-173).
 
-def test_engine_summary_logic() -> None:
-    """Verify implement summary banner distinguishes between SUCCESS and WARNINGS.
-    
-    Covers Scenario 3: Banner only triggers INCOMPLETE for critical failures.
+Validates the banner logic introduced in INFRA-173:
+- SUCCESS: no rejections, no warnings.
+- SUCCESS WITH WARNINGS: files written with doc gaps.
+- INCOMPLETE IMPLEMENTATION: one or more files rejected.
+"""
+
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+
+from rich.panel import Panel
+from agent.utils.validation_formatter import format_implementation_summary
+
+
+def test_engine_summary_success_with_warnings() -> None:
+    """Verify that the banner shows SUCCESS WITH WARNINGS when warned_files is populated.
+
+    Covers Scenario 3: banner must distinguish warnings from hard failures.
     """
-    engine = ImplementationEngine()
-    
-    # Case 1: Success with warnings
-    engine.results = {
-        "test_auth.py": "PASS",
-        "utils.py": "WARNING"
-    }
-    assert engine.get_verdict() == "SUCCESS WITH WARNINGS"
-    assert len(engine.rejected_files) == 0
+    panel = format_implementation_summary(
+        applied_files=["test_auth.py", "utils.py"],
+        warned_files={"utils.py": ["missing function docstring"]},
+        rejected_files=[],
+    )
+    assert isinstance(panel, Panel)
+    assert "SUCCESS WITH WARNINGS" in str(panel.title)
 
-    # Case 2: Critical implementation failure
-    engine.results = {
-        "broken_file.py": "FAIL"
-    }
-    assert engine.get_verdict() == "INCOMPLETE IMPLEMENTATION"
-    assert "broken_file.py" in engine.rejected_files
 
-def test_regression_syntax_errors() -> None:
-    """Ensure syntax errors in new files still trigger hard rejections."""
-    engine = ImplementationEngine()
-    # Assume a mock validator returns FAIL for syntax errors
-    engine.results = {"invalid.py": "FAIL"}
-    assert engine.get_verdict() == "INCOMPLETE IMPLEMENTATION"
+def test_engine_summary_incomplete_implementation() -> None:
+    """Verify that INCOMPLETE IMPLEMENTATION triggers when rejected_files is non-empty."""
+    panel = format_implementation_summary(
+        applied_files=[],
+        warned_files={},
+        rejected_files=["broken_file.py"],
+    )
+    assert isinstance(panel, Panel)
+    assert "INCOMPLETE" in str(panel.title)
+
+
+def test_engine_summary_clean_success() -> None:
+    """Verify that plain SUCCESS renders when no warnings or rejections exist."""
+    panel = format_implementation_summary(
+        applied_files=["auth.py"],
+        warned_files={},
+        rejected_files=[],
+    )
+    assert isinstance(panel, Panel)
+    assert "SUCCESS" in str(panel.title)
+    assert "INCOMPLETE" not in str(panel.title)
+    assert "WARNINGS" not in str(panel.title)
+
+
+def test_regression_rejected_files_not_in_success() -> None:
+    """Ensure syntax-error rejections never produce a SUCCESS banner."""
+    panel = format_implementation_summary(
+        applied_files=[],
+        warned_files={},
+        rejected_files=["invalid.py"],
+    )
+    assert "INCOMPLETE" in str(panel.title)

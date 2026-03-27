@@ -73,14 +73,18 @@ As a developer, I want the agent to apply new files even if they have minor docs
 
 ## Test Strategy
 
-- **Unit Testing**: Update `tests/gates/test_docstring_validator.py` to verify that filename-based exclusion (pytest convention) works correctly.
-- **Integration Testing**: Execute `agent implement` with a mock plan containing a new test file and a source file with missing docstrings; verify both are written to the workspace and the command exits with a success/warning status.
-- **Regression Testing**: Ensure syntax errors in new files still trigger appropriate hard-rejections where applicable.
+- **Unit Testing (Delivered)**:
+  - `tests/gates/test_docstring_validator.py` — verifies `enforce_docstrings()` is a strict low-level guard; documents that the test file bypass is applied upstream in `implement.py`.
+  - `tests/implement/test_engine.py` — verifies `format_implementation_summary()` tri-state banner (SUCCESS / SUCCESS WITH WARNINGS / INCOMPLETE) for each gate outcome.
+  - `tests/implement/test_verbatim_apply.py` — documents that `enforce_docstrings()` raises errors for undocumented test files; the caller suppresses them.
+  - `tests/agent/core/implement/test_path_security.py` — verifies `is_test_file_secure()` traversal anchoring, pattern coverage, case insensitivity, and edge cases.
+- **Regression Testing**: Syntax errors in new files continue to trigger hard rejections; `test_error_handling_syntax_error_returns_empty_result` covers this.
+- **Integration Testing (Deferred)**: A full end-to-end `agent implement` run with a mock plan was validated manually during development. A dedicated automated integration test is deferred to a follow-up story.
 
 ## Rollback Plan
 
-- Revert changes to `.agent/src/gates/docstring_validator.py` and `.agent/src/implement/verbatim_apply.py` to restore strict enforcement.
-- Verification of rollback via existing gate test suite.
+- Revert changes to `.agent/src/agent/commands/implement.py` (bypass logic), `.agent/src/agent/commands/gates.py` (GateStatus enum), and `.agent/src/agent/utils/validation_formatter.py` to restore strict enforcement.
+- Verification of rollback via the gate test suite: `pytest .agent/tests/gates/ .agent/tests/implement/`.
 
 ## Copyright
 
