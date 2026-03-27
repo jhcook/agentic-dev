@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased] - INFRA-171
+## [Unreleased] (Updated by INFRA-142)
+
+### Added
+- Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.
+- AST-aware `find_symbol` tool for precise navigation of Python classes and functions.
+- `find_references` capability for impact analysis. (Updated by INFRA-142)
+
+### Added
+- Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.
+- AST-aware `find_symbol` tool for precise navigation of Python classes and functions.
+- `find_references` capability for impact analysis. - INFRA-171
 **Added**
 - Explicit `testpaths` configuration in `.agent/pyproject.toml` to ensure discovery of consolidated tests.
 

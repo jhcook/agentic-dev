@@ -14,6 +14,11 @@
 
 """
 Core tool registry and foundational models for agentic tools.
+
+Architecture Review (INFRA-142):
+- AST-aware search utilizes lazy parsing for symbol lookup.
+- Git module uses structured subprocess calls (shell=False).
+- Registry integration uses domain-specific registration methods.
 """
 
 from pathlib import Path

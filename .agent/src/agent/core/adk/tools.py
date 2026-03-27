@@ -62,20 +62,65 @@ def _sanitize_query(query: str) -> str:
         raise ValueError("Query exceeds maximum length of 500 characters.")
     # Safe: subprocess.run uses list-form (no shell=True), so args go
     # directly to the process without shell interpretation. The regex
-    # strip prevents rg flag injection via chars like --include.
+    # strip prevents flag injection via chars like --include.
     return sanitized
-
 
 def _validate_path(path: str, repo_root: Path) -> Path:
     """Validates a path is within the repository root.
 
+    Ensures the path does not contain directory traversal tokens and resolves
+    strictly within the repo_root sandbox.
+
+    Args:
+        path: The path string to validate.
+        repo_root: The absolute path to the repository root.
+
+    Returns:
+        The resolved Path object.
+
     Raises:
-        ValueError: If the resolved path escapes the repo root.
+        ValueError: If the path escapes the repo root or contains traversal tokens.
     """
-    resolved = Path(path).resolve()
-    if not resolved.is_relative_to(repo_root):
+    # Fail fast on explicit traversal tokens
+    if ".." in str(path).replace("\\", "/").split("/"):
+        raise ValueError(f"Path '{path}' contains forbidden directory traversal tokens.")
+
+    resolved = (repo_root / path).resolve()
+    if not resolved.is_relative_to(repo_root.resolve()):
         raise ValueError(f"Path '{path}' is outside the repository root.")
     return resolved
+
+def _sanitize_git_ref(ref: str) -> str:
+    """Sanitizes a git reference (branch or tag name) to prevent injection.
+
+    Args:
+        ref: The reference string to sanitize.
+
+    Returns:
+        The sanitized reference.
+
+    Raises:
+        ValueError: If the reference is empty or starts with a dash.
+    """
+    if not ref or ref.startswith("-"):
+        raise ValueError("Git reference cannot be empty or start with a dash.")
+
+    # Allow only safe characters: alphanumeric, slash, dot, underscore, hyphen
+    sanitized = re.sub(r"[^a-zA-Z0-9/_.-]", "", ref)
+    if not sanitized:
+        raise ValueError("Git reference contains no valid characters.")
+    return sanitized
+
+def _sanitize_commit_message(message: str) -> str:
+    """Sanitizes a commit message to prevent null-byte injection.
+
+    Args:
+        message: The message to sanitize.
+
+    Returns:
+        The sanitized message.
+    """
+    return message.replace("\x00", "").strip()
 
 
 def _stage_file(filepath: Path, repo_root: Path) -> None:
@@ -341,7 +386,8 @@ def make_interactive_tools(
             except ValueError as e:
                 return f"Error: Sandbox violation: {e}"
 
-            # Use Popen for real-time streaming of output lines, now with shell=True as per EXC-003.
+            # Use Popen for real-time streaming of output lines.
+            # shell=False is enforced to prevent shell injection vulnerabilities.
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             
