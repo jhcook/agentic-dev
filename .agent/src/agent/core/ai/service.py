@@ -94,6 +94,12 @@ PROVIDERS = {
         "secret_key": None,
         "env_var": "OLLAMA_HOST",
     },
+    "vertex-anthropic": {
+        "name": "Claude on Vertex AI",
+        "service": "vertex",
+        "secret_key": None,
+        "env_var": "GOOGLE_CLOUD_PROJECT",
+    },
 }
 
 
@@ -115,6 +121,7 @@ class AIService:
             'vertex': 'gemini-2.0-flash',
             'openai': os.getenv("OPENAI_MODEL", "gpt-4o"),
             'anthropic': 'claude-sonnet-4-5-20250929',
+            'vertex-anthropic': 'claude-sonnet-4-5-20250929',
             'ollama': os.getenv("OLLAMA_MODEL", "llama3"),
         }
         
@@ -319,6 +326,27 @@ class AIService:
         else:
             logging.debug("Skipping Anthropic: ANTHROPIC_API_KEY not found in environment or secrets.")
 
+        # 5b. Check Claude on Vertex AI (uses ADC, no Anthropic API key needed)
+        if 'vertex' in self.clients:
+            try:
+                from anthropic import AnthropicVertex
+                _anthropic_timeout = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
+                vertex_project = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+                vertex_location = os.getenv("GOOGLE_CLOUD_LOCATION", "asia-southeast1")
+                self.clients['vertex-anthropic'] = AnthropicVertex(
+                    project_id=vertex_project,
+                    region=vertex_location,
+                    timeout=_anthropic_timeout,
+                )
+                logging.debug(
+                    "Vertex-Anthropic provider initialized (project=%s, region=%s)",
+                    vertex_project, vertex_location,
+                )
+            except ImportError:
+                logging.debug("Skipping Vertex-Anthropic: anthropic package not installed.")
+            except Exception as e:
+                logging.debug("Skipping Vertex-Anthropic: initialization failed: %s", e)
+
         # 6. Check Ollama (Self-hosted, no API key required)
         ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         # @Security: Guard against remote Ollama hosts to prevent data exfiltration
@@ -482,10 +510,10 @@ class AIService:
         Switches to the next available provider in the chain.
         Returns True if switched, False if no providers left.
         """
-        # Chain order: gemini -> vertex -> openai -> anthropic -> ollama -> gh
+        # Chain order: gemini -> vertex -> openai -> anthropic -> vertex-anthropic -> ollama -> gh
         # gh is last: free-tier rate limits make it an absolute last resort
         # (context limits are handled by chunking, not provider selection)
-        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'ollama', 'gh']
+        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'vertex-anthropic', 'ollama', 'gh']
         
         current_idx = -1
         try:
@@ -762,8 +790,8 @@ class AIService:
                         # If it's not the error we're looking for, re-raise it.
                         raise e
 
-            elif provider == "anthropic":
-                client = self.clients["anthropic"]
+            elif provider in ("anthropic", "vertex-anthropic"):
+                client = self.clients[provider]
                 stream_kwargs = {
                     "model": model_used,
                     "max_tokens": 4096,
@@ -1070,8 +1098,8 @@ class AIService:
                     logging.error(f"GH Error: {result.stderr}")
                     raise Exception(f"GH Error: {result.stderr.strip()}")
 
-                elif provider == "anthropic":
-                    client = self.clients['anthropic']
+                elif provider in ("anthropic", "vertex-anthropic"):
+                    client = self.clients[provider]
                     _timeout_s = int(os.environ.get("AGENT_AI_TIMEOUT_MS", 180000)) / 1000
                     full_text = ""
                     # Use streaming to prevent timeouts with large contexts

@@ -98,7 +98,8 @@ def preflight(
     autoheal: bool = typer.Option(False, "--autoheal", help="Autonomously fix BLOCK verdicts: extract REQUIRED_CHANGES, apply AI edits, re-run per role."),
     budget: int = typer.Option(3, "--budget", help="Max autoheal attempts per blocked role (default: 3)."),
     panel_engine: Optional[str] = typer.Option(None, "--panel-engine", help="Override panel engine: 'adk' or 'native'."),
-    thorough: bool = typer.Option(False, "--thorough", help="Enable thorough AI review with full-file context and post-processing validation (uses more tokens)."),
+    thorough: bool = typer.Option(True, "--thorough", help="Enable thorough AI review with full-file context (Default: True)."),
+    quick: bool = typer.Option(False, "--quick", help="Opt out of thorough mode for fast/cheap runs."),
     legacy_context: bool = typer.Option(False, "--legacy-context", help="Use full legacy context instead of Oracle Pattern."),
     gate: Optional[str] = typer.Option(None, "--gate", help="Run a specific gate isolated.")
 ):

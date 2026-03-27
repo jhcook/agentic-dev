@@ -38,7 +38,8 @@ METADATA:
 
 TASK:
 Identify all necessary sections for a comprehensive implementation runbook.
-For each section, provide a title, a brief description of what it should cover, and an estimated token weight.
+For each section, provide a title, a brief description of what it should cover,
+an estimated token weight, AND a list of files that section will touch.
 
 MANDATORY SECTIONS (always include these, plus any story-specific ones):
 - Architecture & Design Review
@@ -51,6 +52,12 @@ MANDATORY SECTIONS (always include these, plus any story-specific ones):
 CONDITIONAL SECTIONS (include when the story's Acceptance Criteria warrant it):
 - Documentation Updates — if the story introduces new commands, CLI flags, or user-facing behavioral changes, include a section that creates or updates docs in `.agent/docs/`
 
+CRITICAL FILE ASSIGNMENT RULE:
+Each file path MUST appear in exactly ONE section's "files" list.
+If multiple sections need to modify the same file, consolidate ALL changes for
+that file into a SINGLE section. This prevents cascading search/replace conflicts
+where later sections search for text that earlier sections already changed.
+
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):
 {{
@@ -59,6 +66,7 @@ Return ONLY a JSON object with this structure (no markdown fences, no prose):
     {{
       "title": "Section Title",
       "description": "Short description of what to implement/review here.",
+      "files": [".agent/src/path/to/file.py"],
       "estimated_tokens": 500
     }}
   ]
@@ -108,6 +116,7 @@ def generate_block_prompt(
     context_summary: str,
     prior_changes: Optional[Dict[str, str]] = None,
     modify_file_contents: Optional[Dict[str, str]] = None,
+    existing_files: Optional[List[str]] = None,
 ) -> str:
     """
     Generate a Phase 2 prompt for creating a detailed implementation block.
@@ -134,17 +143,29 @@ def generate_block_prompt(
         for path, summary in prior_changes.items():
             entries.append(f"  - `{path}`: {summary}")
         change_list = "\n".join(entries)
+        forbidden_list = ", ".join(f"`{p}`" for p in prior_changes)
         dedup_block = f"""
-ALREADY HANDLED BY EARLIER SECTIONS (DO NOT duplicate — this wastes tokens and breaks apply):
+FORBIDDEN FILES — these were already handled by earlier sections.
+You MUST NOT emit any [NEW] or [MODIFY] block for these files:
+{forbidden_list}
+
+Prior changes detail:
 {change_list}
 
-DEDUPLICATION RULES:
-1. Do NOT emit a [NEW] block for any file listed above.
-2. Do NOT re-add imports that were already added above.
-3. If you need to [MODIFY] a file listed above, your SEARCH block MUST use the EXACT
-   function names, class names, and signatures shown in the prior content above.
-   Do NOT guess or paraphrase — copy the exact lines from the content shown.
-4. If your section has no unique changes for a file already listed, skip it entirely.
+If you generate a [NEW] or [MODIFY] block for ANY file listed above, the runbook
+will fail validation and be rejected. Skip those files entirely.
+"""
+
+    # Build existing-files constraint to prevent [NEW] on existing files
+    existing_block = ""
+    if existing_files:
+        existing_list = ", ".join(f"`{p}`" for p in existing_files)
+        existing_block = f"""
+EXISTING FILES ON DISK — these files ALREADY EXIST and MUST use [MODIFY], NOT [NEW]:
+{existing_list}
+
+Using [NEW] for any of these files is an ERROR. If you need to change them, use
+[MODIFY] with <<<SEARCH / === / >>> blocks based on the file content provided above.
 """
 
     prompt = f"""
@@ -165,6 +186,7 @@ TARGETED FILE CONTENTS (this is the GROUND TRUTH — base all SEARCH blocks on t
 {context_summary}
 {_build_modify_targets_block(modify_file_contents)}
 {dedup_block}
+{existing_block}
 TASK:
 Provide the full technical content for this section.
 IMPORTANT: Do NOT start the content with a section header (## or ### title). The section header
@@ -200,9 +222,21 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     creating a new file, include ALL final code in a single [NEW] block. [MODIFY] must
     ONLY target pre-existing files already on disk. This prevents hallucinated SEARCH
     text that doesn't match the actual generated code.
-12. FENCE REQUIREMENT: <<<SEARCH / === / >>> blocks MUST be wrapped inside a code fence
+12. TEST PLACEMENT: Test files MUST be placed in the top-level `tests/` directory,
+    NEVER inside `src/`. The pattern is `<component>/tests/` mirroring the source structure.
+    Example: tests for `.agent/src/agent/core/ai/` go in `.agent/tests/core/ai/`.
+    Do NOT create `[NEW] .agent/src/**/tests/` paths.
+13. FENCE REQUIREMENT: <<<SEARCH / === / >>> blocks MUST be wrapped inside a code fence
     (triple backticks). Without fences, the markdown parser misinterprets === as a heading
     and >>> as a blockquote, breaking the search/replace extraction.
+14. HEADING LEVELS: NEVER use `### ` (h3) headings inside block content. The `### Step N:` 
+    heading is placed by the pipeline automatically. Sub-sections MUST use `**Bold Text**`
+    or `#### [NEW/MODIFY/DELETE]` headers only. Using `### ` headings will corrupt the
+    runbook step structure by creating empty phantom steps.
+15. FILE OPERATION REQUIRED: Every step MUST contain at least one `#### [NEW]`,
+    `#### [MODIFY]`, or `#### [DELETE]` block. Prose-only steps fail schema validation.
+    If the section is procedural (e.g. Deployment, Rollback), you MUST still emit a
+    `#### [MODIFY] CHANGELOG.md` S/R block recording the change. No exceptions.
 
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):

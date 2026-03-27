@@ -84,6 +84,16 @@ These limits may be relaxed only with an explicit ADR or EXC reference:
 - Ensure error handling is concise and avoids redundant logging.
 - Prefer explicitness over magic — avoid hidden side effects.
 
+### Test Directory Structure (MANDATORY)
+- Test files MUST live in a dedicated `tests/` directory at the **same level** as `src/`, NEVER inside `src/`.
+- The canonical pattern is: `<component>/src/` for source code, `<component>/tests/` for tests.
+- Examples:
+  - `.agent/src/agent/core/ai/` -> `.agent/tests/core/ai/`
+  - `backend/src/` -> `backend/tests/`
+- Do NOT create `tests/` subdirectories inside any `src/` package.
+- Test files may mirror the source hierarchy but must be rooted under the top-level `tests/` directory.
+- This rule applies to ALL code this project generates or manages, including runbook `[NEW]` blocks.
+
 ---
 
 ## Enforcement

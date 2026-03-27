@@ -106,6 +106,11 @@ def resolve_path(filepath: str) -> Optional[Path]:
         Resolved :class:`pathlib.Path`, or ``None`` if ambiguous/invalid.
     """
     repo_root = config.repo_root
+    # Strip runbook markers that may be passed through from upstream callers
+    filepath = re.sub(r"^\[(?:NEW|MODIFY|DELETE)\]\s*", "", filepath)
+    # Guard: empty path after stripping resolves to repo_root (a directory) — reject early
+    if not filepath.strip():
+        return None
     file_path = repo_root / filepath
     if file_path.exists():
         return file_path
@@ -119,6 +124,13 @@ def resolve_path(filepath: str) -> Optional[Path]:
     if bare_path.name not in COMMON_FILES:
         candidates = _find_file_in_repo(bare_path.name)
         exact = [c for c in candidates if Path(c).name == bare_path.name]
+        # Require directory overlap when the original path has parent dirs.
+        # This prevents `governance/panel.py` from matching
+        # `.agent/src/agent/commands/panel.py` (no shared directory component).
+        if len(bare_path.parts) > 1:
+            original_dirs = set(bare_path.parts[:-1])
+            exact = [c for c in exact
+                     if original_dirs & set(Path(c).parts[:-1])]
         if len(exact) == 1:
             new_path = exact[0]
             if new_path != filepath:
@@ -133,7 +145,7 @@ def resolve_path(filepath: str) -> Optional[Path]:
                 )
             return repo_root / new_path
         if len(exact) > 1:
-            _console.print(f"[bold red]❌ Ambiguous file path '{filepath}'. Found {len(exact)} matches.[/bold red]")
+            logging.debug("Ambiguous file path '%s', found %d matches", filepath, len(exact))
             return None
 
     parts = bare_path.parts
@@ -142,10 +154,10 @@ def resolve_path(filepath: str) -> Optional[Path]:
     for i, part in enumerate(parts[:-1]):
         next_check = current_check / part
         if not next_check.exists():
-            _console.print(f"[dim]Directory '{next_check}' not found; searching for '{part}'...[/dim]")
+            logging.debug("Directory '%s' not found; searching for '%s'", next_check, part)
             dir_candidates = _find_directories_in_repo(str(part))
             if len(dir_candidates) == 0:
-                _console.print(f"[bold red]❌ Cannot resolve directory '{part}'.[/bold red]")
+                logging.debug("Cannot resolve directory '%s'", part)
                 return None
             if len(dir_candidates) == 1:
                 rest = Path(*parts[i + 1:])
@@ -160,7 +172,7 @@ def resolve_path(filepath: str) -> Optional[Path]:
                     }
                 )
                 return new_full
-            _console.print(f"[bold red]❌ Ambiguous directory '{part}'. Found {len(dir_candidates)} matches.[/bold red]")
+            logging.debug("Ambiguous directory '%s', found %d matches", part, len(dir_candidates))
             return None
         current_check = next_check
 

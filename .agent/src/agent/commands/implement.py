@@ -436,10 +436,14 @@ def implement(
     legacy_apply: bool = typer.Option(False, "--legacy-apply", help="Bypass safe-apply size guard"),
     model: Optional[str] = typer.Option(None, "--model", help="Override AI model"),
     provider: Optional[str] = typer.Option(None, "--provider", help="Force specific AI provider"),
-    thorough: bool = typer.Option(False, "--thorough", help="Use thorough governance context"),
+    thorough: bool = typer.Option(True, "--thorough", help="Use thorough governance context (Default: True)"),
+    quick: bool = typer.Option(False, "--quick", help="Opt out of thorough mode for fast/cheap runs"),
     allow_dirty: bool = typer.Option(False, "--allow-dirty", help="Allow running with uncommitted changes"),
 ) -> None:
     """Implement a story from its accepted runbook.
+
+    if quick:
+        thorough = False
 
     Finds the runbook for STORY_ID, detects whether it contains verbatim
     code blocks (applied directly, no AI), or delegates to the AI for
@@ -1100,7 +1104,33 @@ ADRs:
         gate_results.append(pr_size)
         _print_gate(pr_size)
 
-
+        # INFRA-170: Deterministic Complexity Gates (ADR-012)
+        # Enforces file length (>500 LOC) and function length (21-50 WARN, >50 BLOCK)
+        from agent.core.governance.complexity import get_complexity_report
+        complexity_passed = True
+        complexity_details = []
+        for f in modified_paths:
+            if f.suffix == ".py":
+                try:
+                    report = get_complexity_report(f.read_text(errors="ignore"), str(f))
+                    if report.file_verdict != "PASS":
+                        complexity_details.append(f"WARN: {f.name} is {report.total_loc} LOC (limit: 500)")
+                    for fn in report.functions:
+                        if fn.verdict == "BLOCK":
+                            complexity_passed = False
+                            complexity_details.append(f"BLOCK: {f.name} function '{fn.name}' is {fn.length} lines (limit: 50)")
+                        elif fn.verdict == "WARN":
+                            complexity_details.append(f"WARN: {f.name} function '{fn.name}' is {fn.length} lines (threshold: 20)")
+                except Exception as e:
+                    complexity_details.append(f"ERROR: Failed to analyze {f.name}: {e}")
+        comp_gate = gates.GateResult(
+            name="Complexity Standards",
+            passed=complexity_passed,
+            details="\n".join(complexity_details) if complexity_details else "All modified functions meet ADR-012 standards.",
+            elapsed_seconds=0.1
+        )
+        gate_results.append(comp_gate)
+        _print_gate(comp_gate)
 
         if linked_journey_ids:
             try:

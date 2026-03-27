@@ -15,14 +15,16 @@
 panel:   # native | adk
   engine: adk
   num_retries: 5
-agent:     # anthropic | gemini | gh | ollama | openai | vertex
-  provider: vertex
+agent:     # anthropic | gemini | gh | ollama | openai | vertex | vertex-anthropic
+  provider: vertex-anthropic
   test_commands:
     .agent/: cd .agent/src && ../../.venv/bin/python -m pytest agent/ -q --tb=short
   models:
     gemini: models/gemini-3.1-pro-preview
     vertex: gemini-2.5-pro
     openai: gpt-4o
+    anthropic: claude-sonnet-4-5-20250929
+    vertex-anthropic: claude-sonnet-4-5-20250929
   github:
     tool: mcp
   mcp:
