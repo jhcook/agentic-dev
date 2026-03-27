@@ -50,6 +50,9 @@ class Config:
     # Toggle for INFRA-169: Enables parallel chunk processing and per-chunk retries.
     ENABLE_CONCURRENT_ORCHESTRATION: bool = False
 
+    # Toggle for INFRA-172: Enables per-section vector queries to reduce prompt size.
+    USE_PER_SECTION_CONTEXT: bool = os.environ.get("USE_PER_SECTION_CONTEXT", "false").lower() == "true"
+
     def __init__(self):
         self.repo_root = self._find_repo_root()
         

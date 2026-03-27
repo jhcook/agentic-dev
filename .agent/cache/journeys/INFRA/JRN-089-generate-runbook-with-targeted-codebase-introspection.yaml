@@ -15,6 +15,7 @@
 
 
 
+
 id: JRN-089
 title: Generate Runbook with Targeted Codebase Introspection
 state: COMMITTED
@@ -54,15 +55,16 @@ steps:
   system_response: 'CLI loads story content, then calls _load_targeted_context() which
     extracts file paths from story annotations and reads their import/signature lines.
     When a path does not resolve exactly, the system falls back to fuzzy resolution
-    via resolve_path() which auto-corrects partial paths (e.g. parser.py to
-    .agent/src/agent/core/implement/parser.py).
+    via resolve_path() which auto-corrects partial paths (e.g. parser.py to .agent/src/agent/core/implement/parser.py).
 
     '
   assertions:
   - Story content is read and file paths are parsed via regex
   - For each referenced file, function signatures are extracted (not invented)
-  - Partial or bare file paths are auto-resolved via fuzzy matching before emitting FILE NOT FOUND
-  - Missing files (after fuzzy resolution fails) emit FILE NOT FOUND (verify path!) warning
+  - Partial or bare file paths are auto-resolved via fuzzy matching before emitting
+    FILE NOT FOUND
+  - Missing files (after fuzzy resolution fails) emit FILE NOT FOUND (verify path!)
+    warning
 - id: 2
   action: CLI loads test impact matrix via _load_test_impact()
   system_response: 'System walks .agent/tests/, reads each .py file, finds all patch()
@@ -153,10 +155,16 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/cache/stories/INFRA/INFRA-172-per-section-vector-query-for-runbook-block-generation.md
   - .agent/src/agent/commands/runbook.py
+  - .agent/src/agent/commands/runbook_generation.py
   - .agent/src/agent/commands/tests/test_story_link_helpers.py
   - .agent/src/agent/commands/utils.py
+  - .agent/src/agent/core/config.py
   - .agent/src/agent/core/context.py
+  - .agent/src/agent/core/utils/logging.py
   - .agent/templates/runbook-template.md
+  - .agent/tests/commands/test_runbook_generation.py
+  - CHANGELOG.md
   tests:
   - .agent/tests/test_infra_107.py
