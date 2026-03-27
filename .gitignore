@@ -70,3 +70,6 @@ agentic-executive-premium/
 
 # Split-request artifacts are ephemeral AI output; not source-controlled
 .agent/cache/split_requests/
+
+# Runbook generation checkpoints (transient; cleaned up on success)
+*.partial

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Added**
+- INFRA-170: Deterministic Complexity Gates (File LOC > 500, Function > 50).
+- AI Finding Cross-Validation: AI syntax claims verified via py_compile.
+
+**Changed**
+- Governance architecture: Transitioned from _governance_legacy.py to modular sub-package.
+- Default Preflight Mode: Thorough analysis enabled by default; added --quick flag.
+
 ### Added
 - **INFRA-165**: Introduced a modular, two-phase chunked generation pipeline for runbooks, including Phase 1 Skeleton and Phase 2 Block generation with JSON validation and OTel tracing.
 - **INFRA-142**: Migrated search and git tools to dedicated modules with AST-aware symbol lookup and git history.

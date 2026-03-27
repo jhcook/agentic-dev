@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -34,10 +34,16 @@ As a Developer or DevOps Engineer, I want the agent's preflight checks to be rig
 ## Linked ADRs
 
 - ADR-012: Code Quality and Complexity Standards
+- ADR-005: ADR-005: AI-Driven Governance Preflight
+- ADR-025: ADR-025: Lazy AIService Initialization
+- ADR-027: ADR-027: Security Blocklist Pattern
+- ADR-001: ADR-001: Git-like Distributed Synchronization Architecture
 
 ## Linked Journeys
 
 - JRN-004: Developer Local Preflight Workflow
+- JRN-065: JRN-065-circuit-breaker-during-implementation
+- JRN-001: JRN-001-smart-ai-router-and-python-rewrite
 
 ## Impact Analysis Summary
 

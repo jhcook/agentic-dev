@@ -23,10 +23,11 @@ Extracted so far:
   - load_roles → agent.core.governance.roles (INFRA-101)
 
 Pending extraction:
-  - log_governance_event, GateResult aggregation → validation.py (INFRA-101.2)
-  - _parse_findings, _filter_relevant_roles, prompt helpers → panel_prompts.py (INFRA-101.3)
-  - convene_council_full, convene_council_fast → panel.py (INFRA-101.4)
-  - __init__.py cleanup + delete this file → INFRA-101.5
+  - log_governance_event, GateResult aggregation → validation.py (INFRA-170)
+  - _parse_findings, _filter_relevant_roles, prompt helpers → prompts.py (INFRA-170)
+  - convene_council_full, convene_council_fast → panel.py (INFRA-170)
+  - report formatting → reports.py (INFRA-170)
+  - __init__.py cleanup + delete this file → INFRA-170
 """
 
 import re

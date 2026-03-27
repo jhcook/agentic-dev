@@ -277,7 +277,7 @@ The CLI provides commands to drive the Agentic Workflow (Stories -> Plans -> Run
 
 | Command | Description |
 |---------|-------------|
-| `agent new-story [ID]` | Create a new user story (interactive). |
+| `agent new-story [ID]` | Create a new user story with codebase-aware Impact Analysis (injects real file tree). |
 | `agent new-runbook <STORY_ID>` | Generate an implementation runbook for a committed story. |
 | `agent implement <RUNBOOK_ID>` | Implement a feature from an accepted runbook. |
 | `agent pr` | Create a Pull Request with automated preflight checks (displays blocking reasons on failure). |
@@ -424,6 +424,14 @@ agent preflight [OPTIONS]
 - `--base [BRANCH]`: Verify changes against a specific base branch (default: staged vs HEAD).
 - `--skip-tests`: Skip automated tests.
 - `--panel-engine [ENGINE]`: Override panel engine: `adk` or `native`.
+- `--thorough`: Enable thorough AI review with full-file context (Default: True). This is now the default behavior to ensure maximum accuracy.
+- `--quick`: Opt-out of thorough mode for faster, localized review using only diff context.
+
+#### Complexity Gates
+
+Preflight now enforces deterministic code quality standards (ADR-012):
+- **File Length**: A **Warning** is issued if a modified file exceeds 500 lines of code.
+- **Function Length**: A **Warning** is issued for functions between 21 and 50 lines. A **Hard Block** (failure) occurs if any function exceeds 50 lines.
 
 ### Voice Agent Integration
 

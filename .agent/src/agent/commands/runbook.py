@@ -168,8 +168,15 @@ def _write_and_sync(
         console.print(f"[yellow]⚠️  Runbook written to {runbook_file} (lint errors present — review required)[/yellow]")
         raise typer.Exit(code=1)
 
+    # Normalise to exactly one trailing newline (AI blocks often emit \n\n at EOF)
+    content = content.rstrip("\n") + "\n"
+
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
+
+    # Auto-fix common markdown issues (trailing whitespace, blank lines, etc.)
+    from agent.commands.lint import run_markdownlint
+    run_markdownlint([str(runbook_file)], fix=True)
 
     # Back-populate story with identified ADRs and Journeys (INFRA-158)
     try:
@@ -308,7 +315,7 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
         for sr in sr_blocks:
             sr_path = sr.get("path", "")
             resolved = resolve_path(sr_path)
-            if resolved and resolved.exists():
+            if resolved and resolved.exists() and resolved.is_file():
                 file_content = resolved.read_text()
                 for block in sr.get("blocks", []):
                     search = block.get("search", "")
@@ -339,6 +346,13 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
     elif runbook_file.exists() and force:
         console.print(f"[yellow]⚠️  --force: Overwriting existing runbook at {runbook_file}[/yellow]")
         logger.info("runbook_force_regenerate story=%s", story_id)
+        # Note: .partial checkpoint is intentionally preserved here.
+        # --force only unlocks the "already exists" gate; resume from checkpoint
+        # is independent and automatic. To discard the checkpoint and start truly
+        # fresh, delete the .partial file manually before running.
+        _checkpoint = runbook_file.with_suffix(".partial")
+        if _checkpoint.exists():
+            console.print(f"[dim]⏩ .partial checkpoint found — generation will resume from it.[/dim]")
 
     # 3. Context — single source via context_loader
     console.print(f"🛈 invoking AI Governance Panel for {story_id}...")
@@ -399,9 +413,10 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
     if not single_pass:
         console.print("[bold blue]🚀 Starting phased generation (concurrency enabled)...[/bold blue]")
         try:
-            # INFRA-169: Bridge Typer CLI to the async phased generation engine.
+            # INFRA-169: Phased generation engine (synchronous — no asyncio.run needed).
             # Internal chunk-level retries are handled by the orchestrator; fatal exhaustion bubbles here.
-            content = asyncio.run(generate_runbook_chunked(
+            checkpoint_path = runbook_file.with_suffix(".partial")
+            content = generate_runbook_chunked(
                 story_id=story_id,
                 story_content=story_content,
                 rules_content=rules_content,
@@ -410,16 +425,25 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
                 source_code=source_code,
                 provider=provider,
                 timeout=timeout,
-            ))
+                checkpoint_path=checkpoint_path,
+            )
+            # Clean up checkpoint on success — it's now in the final runbook file
+            if checkpoint_path.exists():
+                checkpoint_path.unlink(missing_ok=True)
             _write_and_sync(content, story_id, story_file, runbook_file)
+            return
         except MaxRetriesExceededError as e:
             from agent.core.implement.security import sanitize_error_message
-            console.print(f"\n[bold red]❌ Runbook generation failed after retries: {sanitize_error_message(e)}[/bold red]")
+            from rich.markup import escape as _esc
+            console.print(f"\n[bold red]Runbook generation failed after retries: {_esc(sanitize_error_message(e))}[/bold red]")
             logger.error("runbook_generation_max_retries_exceeded", extra={"story_id": story_id})
             raise typer.Exit(code=1)
+        except (typer.Exit, SystemExit):
+            raise  # Let controlled exits propagate without wrapping
         except Exception as e:
             from agent.core.implement.security import sanitize_error_message
-            console.print(f"\n[bold red]❌ Unexpected generation error: {sanitize_error_message(e)}[/bold red]")
+            from rich.markup import escape as _esc
+            console.print(f"\n[bold red]Unexpected generation error: {_esc(sanitize_error_message(e))}[/bold red]")
             logger.exception("runbook_generation_unexpected_error", extra={"story_id": story_id})
             raise typer.Exit(code=1)
 

@@ -20,8 +20,10 @@ to work without modification throughout the multi-slice decomposition.
 
 Decomposition status:
   - roles.py      ✅ Extracted (INFRA-101)
-  - validation.py ⏳ Pending (INFRA-101.2)
-  - panel.py      ⏳ Pending (INFRA-101.4)
+  - validation.py ⏳ Pending (INFRA-170)
+  - panel.py      ⏳ Pending (INFRA-170)
+  - complexity.py ⏳ Pending (INFRA-170)
+  - prompts.py    ⏳ Pending (INFRA-170)
 """
 
 # ── Roles sub-module (INFRA-101) ──────────────────────────────────────────
