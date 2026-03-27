@@ -473,3 +473,167 @@ def register_domain_tools(registry: "ToolRegistry", repo_root: Path) -> None:
             handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
             category="knowledge",
         ))
+
+    # ------------------------------------------------------------------
+    # Web tools (INFRA-144)
+    # ------------------------------------------------------------------
+    from agent.tools import web  # noqa: PLC0415
+    web_specs = [
+        (
+            "fetch_url",
+            web.fetch_url,
+            "Fetches content from a URL and converts it to markdown.",
+            {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch."},
+                },
+                "required": ["url"],
+            },
+        ),
+        (
+            "read_docs",
+            web.read_docs,
+            "Reads and cleans documentation from a URL for LLM consumption.",
+            {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Docs URL."},
+                },
+                "required": ["url"],
+            },
+        ),
+    ]
+
+    for name, handler, desc, params in web_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="web",
+        ))
+
+    # ------------------------------------------------------------------
+    # Testing tools (INFRA-144)
+    # ------------------------------------------------------------------
+    from agent.tools import testing  # noqa: PLC0415
+    test_specs = [
+        (
+            "run_tests",
+            testing.run_tests,
+            "Runs the project test suite and returns structured results.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to tests.", "default": "."},
+                },
+            },
+        ),
+        (
+            "run_single_test",
+            testing.run_single_test,
+            "Runs a single test file.",
+            {
+                "type": "object",
+                "properties": {
+                    "test_path": {"type": "string", "description": "Path to test file."},
+                },
+                "required": ["test_path"],
+            },
+        ),
+        (
+            "coverage_report",
+            testing.coverage_report,
+            "Generates a test coverage report.",
+            {"type": "object", "properties": {}},
+        ),
+    ]
+
+    for name, handler, desc, params in test_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="testing",
+        ))
+
+    # ------------------------------------------------------------------
+    # Dependency tools (INFRA-144)
+    # ------------------------------------------------------------------
+    from agent.tools import deps  # noqa: PLC0415
+    dep_specs = [
+        (
+            "add_dependency",
+            deps.add_dependency,
+            "Adds a new dependency using uv.",
+            {
+                "type": "object",
+                "properties": {
+                    "package": {"type": "string", "description": "Package name."},
+                },
+                "required": ["package"],
+            },
+        ),
+        (
+            "audit_dependencies",
+            deps.audit_dependencies,
+            "Audits project dependencies for security vulnerabilities.",
+            {"type": "object", "properties": {}},
+        ),
+        (
+            "list_outdated",
+            deps.list_outdated,
+            "Lists outdated project dependencies.",
+            {"type": "object", "properties": {}},
+        ),
+    ]
+
+    for name, handler, desc, params in dep_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="deps",
+        ))
+
+    # ------------------------------------------------------------------
+    # Context tools (INFRA-144)
+    # ------------------------------------------------------------------
+    from agent.tools import context  # noqa: PLC0415
+    ctx_specs = [
+        (
+            "checkpoint",
+            context.checkpoint,
+            "Snapshots the current working tree state.",
+            {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Checkpoint name."},
+                },
+            },
+        ),
+        (
+            "rollback",
+            context.rollback,
+            "Rolls back the repository to the last checkpoint.",
+            {"type": "object", "properties": {}},
+        ),
+        (
+            "summarize_changes",
+            context.summarize_changes,
+            "Summarizes changes since the last checkpoint.",
+            {"type": "object", "properties": {}},
+        ),
+    ]
+
+    for name, handler, desc, params in ctx_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="context",
+        ))

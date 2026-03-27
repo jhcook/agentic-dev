@@ -12,8 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
+import requests
+from typing import Generator
+
+def fetch_with_resource_guards(url: str, timeout: float = 10.0, max_bytes: int = 5_000_000) -> bytes:
+    """
+    Fetch a URL with strict safety guards for timeout and payload size.
+
+    Args:
+        url: The HTTP/HTTPS URL to fetch.
+        timeout: Maximum seconds to wait for connection/response.
+        max_bytes: Maximum allowed response body size (default 5MB).
+
+    Returns:
+        The raw response content as bytes.
+
+    Raises:
+        ValueError: If protocol is unsafe or size limit is exceeded.
+        requests.RequestException: For network-level errors including timeouts.
+    """
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("Security Violation: Only http/https protocols allowed.")
+
+    with requests.get(url, timeout=timeout, stream=True) as response:
+        response.raise_for_status()
+        content = bytearray()
+        size = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            size += len(chunk)
+            if size > max_bytes:
+                raise ValueError(f"Security Violation: Response size exceeded {max_bytes} bytes limit.")
+            content.extend(chunk)
+        return bytes(content)
 from typing import Optional
+import logging
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,35 @@ This module provides helpers to prevent directory traversal and ensure that
 natural language inputs are safe for processing by the vector database.
 """
 
-import os
+import shlex
+import re
+from typing import List
+
+def sanitize_and_validate_args(args: List[str]) -> List[str]:
+    """
+    Sanitize and validate shell arguments to prevent injection attacks.
+
+    This function checks each argument against a whitelist of safe characters and
+    applies shell quoting. It is intended for use with UV, pytest, and git wrappers.
+
+    Args:
+        args: List of command line arguments (e.g., ["add", "requests"]).
+
+    Returns:
+        List of sanitized and quoted argument strings.
+
+    Raises:
+        ValueError: If an argument contains characters that could bypass shell escaping.
+    """
+    # Whitelist: alphanumeric, paths, dots, dashes, underscores, spaces, colons, and equals
+    safe_pattern = re.compile(r"^[a-zA-Z0-9\.\/\_\-\s\:\@\=\+]*$")
+    sanitized = []
+    for arg in args:
+        arg_str = str(arg)
+        if not safe_pattern.match(arg_str):
+            raise ValueError(f"Security Violation: Argument contains potentially unsafe characters: {arg_str}")
+        sanitized.append(shlex.quote(arg_str))
+    return sanitized
 from pathlib import Path
 from typing import Union
 

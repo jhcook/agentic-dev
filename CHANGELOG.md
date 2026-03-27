@@ -1,71 +1,29 @@
 # Changelog
 
-## [Unreleased] (Updated by story)
-
-## [Unreleased]
-
-**Added**
-- Two-pass execution logic for runbook generation to ensure test-implementation coherence (INFRA-174).
-- Heuristic-based section classification (implementation vs verification).
-- Implementation context injection for verification block prompts. (Updated by story)
-
-## [Unreleased]
-**Added**
-- Architecture review and domain boundaries for tool consolidation (INFRA-143). (Updated by story)
-
-## [Unreleased]
-**Changed**
-- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
-- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
-
-## [Unreleased]
-**Changed**
-- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
-- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
-
-## [Unreleased]
-**Changed**
-- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
-- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
-
-## [2.1.0] - 2026-02-24
-**Added**
-- Parallel runbook execution engine supporting concurrent task processing (ADR-012).
-- OpenTelemetry integration for tracking execution latency and LLM token consumption (ADR-015).
-- New `--legacy-gen` flag to maintain backward compatibility with sequential generation logic.
-- Runbook v2 JSON schema to support dependency-aware task orchestration. (Updated by INFRA-142)
-
-### Added
-- Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.
-- AST-aware `find_symbol` tool for precise navigation of Python classes and functions.
-- `find_references` capability for impact analysis. (Updated by INFRA-142)
-
-### Added
-- Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.
-- AST-aware `find_symbol` tool for precise navigation of Python classes and functions.
-- `find_references` capability for impact analysis. - INFRA-171
-**Added**
-- Explicit `testpaths` configuration in `.agent/pyproject.toml` to ensure discovery of consolidated tests.
-
-**Changed**
-- Identified 49 orphaned test files in `.agent/src/` for migration to top-level `.agent/tests/` directory.
-
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-**Security**
-- Added automated PII scrubbing for per-section vector query strings in the runbook generation pipeline (INFRA-172).
 
-**Added**
+### Added
+- Defined structured interfaces and git-stash checkpointing strategy for INFRA-144 tool domains.
+- Two-pass execution logic for runbook generation to ensure test-implementation coherence (INFRA-174).
+- Heuristic-based section classification (implementation vs verification).
+- Implementation context injection for verification block prompts.
+- Architecture review and domain boundaries for tool consolidation (INFRA-143).
 - INFRA-170: Deterministic Complexity Gates (File LOC > 500, Function > 50).
 - AI Finding Cross-Validation: AI syntax claims verified via py_compile.
 
-**Changed**
+### Changed
+- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
+- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000.
 - Governance architecture: Transitioned from _governance_legacy.py to modular sub-package.
 - Default Preflight Mode: Thorough analysis enabled by default; added --quick flag.
+
+### Security
+- Added automated PII scrubbing for per-section vector query strings in the runbook generation pipeline (INFRA-172).
 
 ### Added
 - **INFRA-165**: Introduced a modular, two-phase chunked generation pipeline for runbooks, including Phase 1 Skeleton and Phase 2 Block generation with JSON validation and OTel tracing.
@@ -175,6 +133,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Refactored `agent implement` chunked processing loop to support atomic save points and size enforcement.
+
+
+## [2.1.0] - 2026-02-24
+### Added
+- Parallel runbook execution engine supporting concurrent task processing (ADR-012).
+- OpenTelemetry integration for tracking execution latency and LLM token consumption (ADR-015).
+- New `--legacy-gen` flag to maintain backward compatibility with sequential generation logic.
+- Runbook v2 JSON schema to support dependency-aware task orchestration.
+- Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.
+- AST-aware `find_symbol` tool for precise navigation of Python classes and functions.
+- `find_references` capability for impact analysis. (INFRA-171)
+- Explicit `testpaths` configuration in `.agent/pyproject.toml` to ensure discovery of consolidated tests.
+
+### Changed
+- Identified 49 orphaned test files in `.agent/src/` for migration to top-level `.agent/tests/` directory.
 
 ## Copyright
 
