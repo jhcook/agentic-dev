@@ -38,7 +38,7 @@ class GateStatus(Enum):
     FAILURE = "failure"
 
 # Language-agnostic test file patterns per Rule 000
-TEST_FILE_PATTERNS = [
+TEST_FILE_PATTERNS: List[str] = [
     r"^test_.*",
     r".*_test$",
     r".*\.spec\..*",
