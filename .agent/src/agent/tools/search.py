@@ -152,7 +152,3 @@ def find_references(symbol_name: str, repo_root: Path) -> str:
         return "No references found."
     except Exception as e:
         return f"Error finding references: {str(e)}"
-
-~~~
-
-#### [MODIFY] CHANGELOG.md

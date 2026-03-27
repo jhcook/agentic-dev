@@ -133,7 +133,7 @@ class ToolRegistry:
 
 def register_domain_tools(registry: "ToolRegistry", repo_root: Path) -> None:
     """
-    Registers filesystem and shell tools into the ToolRegistry.
+    Registers filesystem, shell, project, and knowledge tools into the ToolRegistry.
 
     Each handler is wrapped in a lambda that captures ``handler`` by value at
     definition time via a default argument (``h=handler``).  Without this
@@ -144,7 +144,7 @@ def register_domain_tools(registry: "ToolRegistry", repo_root: Path) -> None:
         registry: The ToolRegistry instance to populate.
         repo_root: The repository root used for path validation and sandboxing.
     """
-    from agent.tools import filesystem, shell  # noqa: PLC0415 – lazy to avoid circular imports
+    from agent.tools import filesystem, shell, project, knowledge  # noqa: PLC0415 – lazy to avoid circular imports
 
     # ------------------------------------------------------------------
     # Filesystem tools
@@ -339,4 +339,137 @@ def register_domain_tools(registry: "ToolRegistry", repo_root: Path) -> None:
             # Capture `handler` by value at loop-iteration time via default arg.
             handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
             category="shell",
+        ))
+
+    # ------------------------------------------------------------------
+    # Project tools (INFRA-143)
+    # ------------------------------------------------------------------
+    project_specs = [
+        (
+            "match_story",
+            project.match_story,
+            "Matches a natural language query against available stories.",
+            {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search term for matching stories."},
+                },
+                "required": ["query"],
+            },
+        ),
+        (
+            "read_story",
+            project.read_story,
+            "Reads the content of a specific story by ID.",
+            {
+                "type": "object",
+                "properties": {
+                    "story_id": {"type": "string", "description": "The ID of the story (e.g., INFRA-143)."},
+                },
+                "required": ["story_id"],
+            },
+        ),
+        (
+            "read_runbook",
+            project.read_runbook,
+            "Reads the implementation runbook for a specific story.",
+            {
+                "type": "object",
+                "properties": {
+                    "story_id": {"type": "string", "description": "The ID of the story whose runbook to read."},
+                },
+                "required": ["story_id"],
+            },
+        ),
+        (
+            "list_stories",
+            project.list_stories,
+            "Lists available story IDs in the repository.",
+            {"type": "object", "properties": {}},
+        ),
+        (
+            "list_workflows",
+            project.list_workflows,
+            "Lists available automated workflows.",
+            {"type": "object", "properties": {}},
+        ),
+        (
+            "fix_story",
+            project.fix_story,
+            "Applies an update or correction to a story document.",
+            {
+                "type": "object",
+                "properties": {
+                    "story_id": {"type": "string", "description": "ID of the story to fix."},
+                    "update": {"type": "string", "description": "Corrective content to apply."},
+                },
+                "required": ["story_id", "update"],
+            },
+        ),
+        (
+            "list_capabilities",
+            project.list_capabilities,
+            "Lists all available tool capabilities and their descriptions.",
+            {"type": "object", "properties": {}},
+        ),
+    ]
+
+    for name, handler, desc, params in project_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root, registry=registry),
+            category="project",
+        ))
+
+    # ------------------------------------------------------------------
+    # Knowledge tools (INFRA-143)
+    # ------------------------------------------------------------------
+    knowledge_specs = [
+        (
+            "read_adr",
+            knowledge.read_adr,
+            "Reads an Architecture Decision Record (ADR) by ID.",
+            {
+                "type": "object",
+                "properties": {
+                    "adr_id": {"type": "string", "description": "The numeric ID or name of the ADR."},
+                },
+                "required": ["adr_id"],
+            },
+        ),
+        (
+            "read_journey",
+            knowledge.read_journey,
+            "Reads a User Journey definition document.",
+            {
+                "type": "object",
+                "properties": {
+                    "journey_id": {"type": "string", "description": "The Journey ID (e.g. JRN-072)."},
+                },
+                "required": ["journey_id"],
+            },
+        ),
+        (
+            "search_knowledge",
+            knowledge.search_knowledge,
+            "Searches documentation and history using vector similarity.",
+            {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language search query."},
+                },
+                "required": ["query"],
+            },
+        ),
+    ]
+
+    for name, handler, desc, params in knowledge_specs:
+        registry.register(Tool(
+            name=name,
+            description=desc,
+            parameters=params,
+            handler=lambda *args, h=handler, **kwargs: h(*args, **kwargs, repo_root=repo_root),
+            category="knowledge",
         ))
