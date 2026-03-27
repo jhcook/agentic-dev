@@ -66,10 +66,13 @@ depends_on: []
 implementation:
   routes: []
   files:
+  - .agent/docs/implementation-engine.md
   - .agent/etc/agents.yaml
   - .agent/pyproject.toml
   - .agent/src/agent/commands/adr.py
   - .agent/src/agent/commands/check.py
+  - .agent/src/agent/commands/gates.py
+  - .agent/src/agent/commands/implement.py
   - .agent/src/agent/commands/list.py
   - .agent/src/agent/commands/match.py
   - .agent/src/agent/commands/plan.py
@@ -95,6 +98,14 @@ implementation:
   - .agent/src/agent/main.py
   - .agent/src/agent/sync/cli.py
   - .agent/src/agent/sync/sync.py
+  - .agent/src/agent/utils/path_security.py
+  - .agent/src/agent/utils/rollback_infra_173.py
+  - .agent/src/agent/utils/validation_formatter.py
+  - .agent/tests/agent/core/implement/test_path_security.py
+  - .agent/tests/gates/test_docstring_validator.py
+  - .agent/tests/implement/test_engine.py
+  - .agent/tests/implement/test_verbatim_apply.py
+  - CHANGELOG.md
   - README.md
   - sync.yaml
   tests:

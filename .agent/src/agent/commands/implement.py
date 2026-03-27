@@ -38,6 +38,9 @@ from agent.core import utils as agent_utils
 from agent.core.utils import find_runbook_file, get_next_id, scrub_sensitive_data
 from agent.commands import gates
 from agent.commands.utils import update_story_state
+from agent.utils.validation_formatter import format_implementation_summary
+from agent.utils.validation_formatter import format_implementation_summary
+from agent.utils.validation_formatter import format_implementation_summary
 
 # ---------------------------------------------------------------------------
 # Re-export core symbols so existing tests (import from agent.commands.implement)
@@ -1233,4 +1236,11 @@ def _print_gate(result: "gates.GateResult") -> None:
     )
     if result.details:
         console.print(f"    [dim]{result.details}[/dim]")
+
+def _display_implementation_summary(applied: List[str], warned: Dict[str, List[str]], failed: List[str]) -> None:
+    """Renders the final implementation state to the CLI console."""
+    console = Console()
+    panel = format_implementation_summary(applied, warned, failed)
+    console.print("\n")
+    console.print(panel)
 # nolint: loc-ceiling

@@ -2,6 +2,21 @@
 
 ## [Unreleased] (Updated by story)
 
+## [Unreleased]
+**Changed**
+- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
+- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
+
+## [Unreleased]
+**Changed**
+- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
+- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
+
+## [Unreleased]
+**Changed**
+- Updated implementation gate architecture to support tri-state validation (SUCCESS, WARNING, FAILURE) to prevent silent implement drops (INFRA-173).
+- Defined language-agnostic test file exclusion patterns for docstring validation per Rule 000. (Updated by story)
+
 ## [2.1.0] - 2026-02-24
 **Added**
 - Parallel runbook execution engine supporting concurrent task processing (ADR-012).
