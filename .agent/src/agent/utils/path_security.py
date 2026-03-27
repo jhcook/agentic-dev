@@ -17,7 +17,6 @@ Security utility for strict path anchoring and normalization in implementation g
 """
 import os
 import fnmatch
-from pathlib import PurePosixPath
 
 def is_test_file_secure(path: str) -> bool:
     """

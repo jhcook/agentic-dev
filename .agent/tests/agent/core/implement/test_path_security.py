@@ -15,7 +15,6 @@
 """
 Unit tests for secure path anchoring and exclusion logic.
 """
-import pytest
 from agent.utils.path_security import is_test_file_secure
 
 def test_strict_anchoring_resolution() -> None:
