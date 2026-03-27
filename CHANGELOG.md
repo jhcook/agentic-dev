@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] - INFRA-171
+**Added**
+- Explicit `testpaths` configuration in `.agent/pyproject.toml` to ensure discovery of consolidated tests.
+
+**Changed**
+- Identified 49 orphaned test files in `.agent/src/` for migration to top-level `.agent/tests/` directory.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

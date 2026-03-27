@@ -132,7 +132,7 @@ class RunbookStep(BaseModel):
     """A logical step in the implementation containing one or more operations."""
     
     title: str = Field(..., min_length=5, description="Step title.")
-    operations: List[Union[ModifyBlock, NewBlock, DeleteBlock]] = Field(..., min_length=1)
+    operations: List[Union[ModifyBlock, NewBlock, DeleteBlock]] = Field(default_factory=list)
 
 class RunbookSchema(BaseModel):
     """The complete structure of a runbook implementation section."""

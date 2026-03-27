@@ -58,6 +58,10 @@ If multiple sections need to modify the same file, consolidate ALL changes for
 that file into a SINGLE section. This prevents cascading search/replace conflicts
 where later sections search for text that earlier sections already changed.
 
+TEST FILE PLACEMENT RULE:
+Test files MUST be assigned to the top-level `tests/` directory mirroring the 
+source hierarchy (e.g., `.agent/tests/...`). NEVER place tests inside a `src/` directory.
+
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):
 {{
@@ -223,8 +227,9 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     ONLY target pre-existing files already on disk. This prevents hallucinated SEARCH
     text that doesn't match the actual generated code.
 12. TEST PLACEMENT: Test files MUST be placed in the top-level `tests/` directory,
-    NEVER inside `src/`. The pattern is `<component>/tests/` mirroring the source structure.
-    Example: tests for `.agent/src/agent/core/ai/` go in `.agent/tests/core/ai/`.
+    NEVER inside `src/`. Colocated tests are strictly forbidden as they are ignored by the test runner.
+    The pattern is `<component>/tests/` mirroring the source structure.
+    Example: tests for `.agent/src/agent/core/ai/` go in `.agent/tests/agent/core/ai/`.
     Do NOT create `[NEW] .agent/src/**/tests/` paths.
 13. FENCE REQUIREMENT: <<<SEARCH / === / >>> blocks MUST be wrapped inside a code fence
     (triple backticks). Without fences, the markdown parser misinterprets === as a heading
@@ -237,6 +242,21 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     `#### [MODIFY]`, or `#### [DELETE]` block. Prose-only steps fail schema validation.
     If the section is procedural (e.g. Deployment, Rollback), you MUST still emit a
     `#### [MODIFY] CHANGELOG.md` S/R block recording the change. No exceptions.
+16. CHANGELOG.md: If it exists on disk (listed in EXISTING FILES ON DISK above), you MUST
+    use `#### [MODIFY] CHANGELOG.md` with a `<<<SEARCH / === / >>>` block that inserts
+    the new entry immediately after the `# Changelog` header line. Only use `#### [NEW]`
+    if CHANGELOG.md is NOT present in the EXISTING FILES ON DISK list.
+17. MARKDOWN FILE FENCES: When the content of a `[NEW] *.md` file contains code
+    examples (triple-backtick blocks), wrap the ENTIRE file content with TILDE fences
+    (``~~~markdown`` / ``~~~``) instead of backtick fences. This prevents inner
+    triple-backtick blocks from prematurely closing the outer fence and corrupting
+    the runbook structure. Example:
+    ~~~markdown
+    # My Doc
+    ```python
+    def foo(): ...
+    ```
+    ~~~
 
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):
