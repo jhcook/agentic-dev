@@ -232,7 +232,7 @@ def fuzzy_find_and_replace(
     filepath: str,
     block_num: int,
     total_blocks: int,
-    threshold: float = 0.6,
+    threshold: float = 0.90,
 ) -> Optional[str]:
     """Find the best fuzzy match for search text in content and apply replacement.
 

@@ -642,9 +642,16 @@ def implement(
                             f"into [NEW] {_b['file']}[/cyan]"
                         )
 
-                # Auto-fix missing module docstrings for NEW files
-                _vres = enforce_docstrings(_b["file"], _content)
-                if not _vres.passed:
+                # Auto-fix missing module docstrings for NEW files.
+                # Test files are explicitly exempt — test functions intentionally
+                # lack docstrings and this is standard pytest convention.
+                _is_test_file = (
+                    Path(_b["file"]).name.startswith("test_")
+                    or Path(_b["file"]).name.endswith("_test.py")
+                    or "/tests/" in _b["file"].replace("\\", "/")
+                )
+                _vres = enforce_docstrings(_b["file"], _content) if not _is_test_file else None
+                if _vres and not _vres.passed:
                     # Try auto-fixing: add a module docstring
                     _mod_name = Path(_b["file"]).stem
                     _docstring = f'"""{_mod_name} module."""\n\n'
@@ -652,18 +659,21 @@ def implement(
                     console.print(
                         f"[yellow]🔧 Auto-added module docstring for {_b['file']}[/yellow]"
                     )
-                    # Re-validate after fix
+                    # Re-validate after fix — downgrade remaining violations to
+                    # warnings so the file is still written.  Hard-blocking here
+                    # silently drops [NEW] files that have minor function-level
+                    # docstring gaps (e.g. token_counter.__init__), which is the
+                    # root cause of the INCOMPLETE IMPLEMENTATION false-positives.
+                    # Preflight will surface any remaining gaps after apply.
                     _vres = enforce_docstrings(_b["file"], _content)
                     if not _vres.passed:
-                        rejected_files.append(_b["file"])
                         console.print(
-                            f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
-                            f"({len(_vres.errors)} violation(s))[/bold red]"
+                            f"[yellow]⚠ DOCSTRING WARN: {_b['file']} "
+                            f"({len(_vres.errors)} gap(s) — file will be written, fix before preflight)[/yellow]"
                         )
                         for _v in _vres.errors:
-                            console.print(f"   [red]• {_v}[/red]")
-                        continue
-                if _vres.warnings:
+                            console.print(f"   [yellow]• {_v}[/yellow]")
+                if _vres and _vres.warnings:
                     for _w in _vres.warnings:
                         console.print(f"   [yellow]⚠ {_w}[/yellow]")
                 try:
@@ -704,8 +714,13 @@ def implement(
                 if not Path(_b["file"]).exists():
                     continue  # shouldn't happen, but guard
                 _content = _b["content"]
-                _vres = enforce_docstrings(_b["file"], _content)
-                if not _vres.passed:
+                _is_test_file = (
+                    Path(_b["file"]).name.startswith("test_")
+                    or Path(_b["file"]).name.endswith("_test.py")
+                    or "/tests/" in _b["file"].replace("\\", "/")
+                )
+                _vres = enforce_docstrings(_b["file"], _content) if not _is_test_file else None
+                if _vres and not _vres.passed:
                     # Auto-fix: add module docstring
                     _mod_name = Path(_b["file"]).stem
                     _docstring = f'"""{_mod_name} module."""\n\n'
@@ -715,15 +730,13 @@ def implement(
                     )
                     _vres = enforce_docstrings(_b["file"], _content)
                     if not _vres.passed:
-                        rejected_files.append(_b["file"])
                         console.print(
-                            f"[bold red]❌ DOCSTRING GATE: {_b['file']} "
-                            f"({len(_vres.errors)} violation(s))[/bold red]"
+                            f"[yellow]⚠ DOCSTRING WARN: {_b['file']} "
+                            f"({len(_vres.errors)} gap(s) — file will be written, fix before preflight)[/yellow]"
                         )
                         for _v in _vres.errors:
-                            console.print(f"   [red]• {_v}[/red]")
-                        continue
-                if _vres.warnings:
+                            console.print(f"   [yellow]• {_v}[/yellow]")
+                if _vres and _vres.warnings:
                     for _w in _vres.warnings:
                         console.print(f"   [yellow]⚠ {_w}[/yellow]")
                 _orig = Path(_b["file"]).read_text()

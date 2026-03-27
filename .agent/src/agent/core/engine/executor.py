@@ -453,3 +453,88 @@ CRITICAL RULES:
         })
         return context_str
 
+
+
+# ---------------------------------------------------------------------------
+# INFRA-167: Concurrent task executor for runbook generation pipeline
+# ---------------------------------------------------------------------------
+
+class TaskExecutor:
+    """Engine for executing runbook generation tasks with concurrency limiting.
+
+    Runs zero-argument async callables in parallel, bounded by a semaphore,
+    with optional OpenTelemetry tracing and error metric export.
+    """
+
+    def __init__(self, max_concurrency: int = 5) -> None:
+        """Initialise the executor with a concurrency semaphore.
+
+        Args:
+            max_concurrency: Maximum number of tasks to run in parallel.
+        """
+        self.semaphore = asyncio.Semaphore(max_concurrency)
+        self._logger = logging.getLogger(__name__)
+
+    async def run_parallel(
+        self,
+        tasks: "List[Callable[[], Any]]",
+        on_progress: "Optional[Callable[[int], None]]" = None,
+    ) -> "List[Dict[str, Any]]":
+        """Execute tasks in parallel with concurrency limiting.
+
+        Args:
+            tasks: Zero-argument async callables to execute concurrently.
+            on_progress: Optional callback invoked with task index on success.
+
+        Returns:
+            List of result dicts with ``index``, ``status``, and ``data``/``error``.
+        """
+        try:
+            from opentelemetry import trace as _otel_trace
+            _tracer_local = _otel_trace.get_tracer(__name__)
+        except ImportError:
+            _tracer_local = None
+
+        try:
+            from observability.telemetry import record_task_error as _rte
+        except ImportError:
+            _rte = None
+
+        async def _wrapped(idx: int, task_fn: "Callable[[], Any]") -> "Dict[str, Any]":
+            span_ctx = (
+                _tracer_local.start_as_current_span(f"task.execute.{idx}")
+                if _tracer_local is not None
+                else _NoopSpan()
+            )
+            async with self.semaphore:
+                with span_ctx as span:
+                    try:
+                        result = await task_fn()
+                        if on_progress:
+                            on_progress(idx)
+                        if span is not None:
+                            span.set_attribute("task.index", idx)
+                            span.set_attribute("task.status", "success")
+                        return {"index": idx, "status": "success", "data": result}
+                    except Exception as exc:  # noqa: BLE001
+                        etype = type(exc).__name__
+                        self._logger.error("Task %d failed: %s", idx, exc)
+                        if span is not None:
+                            span.set_attribute("task.index", idx)
+                            span.set_attribute("task.status", "failed")
+                            span.record_exception(exc)
+                        if _rte is not None:
+                            _rte(str(idx), etype)
+                        return {"index": idx, "status": "failed", "error": str(exc)}
+
+        return await asyncio.gather(*[_wrapped(i, t) for i, t in enumerate(tasks)])
+
+
+class _NoopSpan:
+    """No-op context manager used when OpenTelemetry is not installed."""
+
+    def __enter__(self) -> None:  # noqa: D105
+        return None
+
+    def __exit__(self, *_: object) -> None:  # noqa: D105
+        pass

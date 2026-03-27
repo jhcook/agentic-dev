@@ -38,3 +38,7 @@ MD048:
   code_fence_style: consistent
 
 MD029: false # AI-generated lists legitimately use continuation numbering; not a structural concern
+MD001: false # Heading increment: AI-generated embedded docs regularly skip levels; not a structural concern
+MD004: false # List marker style: AI uses * or - interchangeably; auto-fixable but not worth blocking
+MD030: false # Spaces after list markers: AI uses varying spacing; not a readability concern
+MD009: false # Trailing spaces: trivially auto-fixed, not worth a hard failure

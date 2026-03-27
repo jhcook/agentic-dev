@@ -25,11 +25,13 @@ def scrub_sensitive_data(text: str) -> str:
     if not text:
         return text
 
-    # Email addresses
+    # Email addresses — local part must start with alphanumeric to prevent
+    # false positives on git diff lines like `+@pytest.mark.asyncio` where the
+    # `+` diff prefix would otherwise be treated as the start of a local part.
     text = re.sub(
-        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", 
-        "[REDACTED_EMAIL]", 
-        text
+        r"[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+        "[REDACTED_EMAIL]",
+        text,
     )
 
     # Generic API Keys (high entropy alphanumeric strings, e.g., sk-..., gcp-...)

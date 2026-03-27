@@ -40,6 +40,14 @@ As a **DevOps Engineer**, I want **enhanced execution controls and real-time fee
 - **Components touched**: CLI Parser, Agent Execution Engine, Logging/Observability Module.
 - **Workflows affected**: Runbook creation lifecycle.
 - **Risks identified**: Potential for rate-limiting by LLM providers due to parallel requests; race conditions in progress bar rendering.
+- **Out-of-scope changes made during implementation**:
+  - `implement.py` — Docstring gate demoted from hard-block to warning for `[NEW]` files; test files exempted (tracked in INFRA-173).
+  - `runbook.py` — S/R fuzzy-match threshold raised 0.6→0.80 to prevent over-broad auto-corrections on critical files.
+  - `runbook_generation.py` — Syntax error removed (garbled class stub injected by prior S/R apply).
+  - `sr_validation.py` — Adjusted as part of chunked-pipeline stabilisation.
+  - `prompts.py` — Updated skeleton and block prompts for two-phase generation.
+  - `.markdownlint.yaml` — Disabled `MD001` (heading increment), `MD004` (list marker style), `MD030` (spaces after list markers), and `MD009` (trailing spaces) for AI-generated runbook content.
+  - INFRA-173 story created to formally track the verbatim-apply silent-drop fix.
 
 ## Test Strategy
 

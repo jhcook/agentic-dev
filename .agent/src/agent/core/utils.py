@@ -252,7 +252,9 @@ def scrub_sensitive_data(text: str) -> str:
         return ""
 
     patterns = {
-        "EMAIL": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
+        # Local part must start with alphanumeric to avoid matching git diff line
+        # prefixes (+ / -) before Python decorators like +@pytest.mark.asyncio.
+        "EMAIL": r"[a-zA-Z0-9][a-zA-Z0-9_.+-]*@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
         # Simple IP regex, avoiding loopback/local matches might be too complex for a single regex,
         # so we redact all IPv4-looking strings to be safe foundation models don't ingest infrastructure IPs.
         "IP": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",

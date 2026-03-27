@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import json
+import os
 import re
 import time
 
@@ -72,14 +73,17 @@ from agent.commands.runbook_generation import generate_runbook_chunked
 from agent.core.implement.parser import validate_runbook_schema
 from agent.core.implement.assembly_engine import AssemblyEngine, InvalidTemplateError
 
-
-import os
-
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 app = typer.Typer()
 console = Console()
 error_console = Console(stderr=True)
+
+try:
+    from observability.telemetry import setup_telemetry as _setup_telemetry
+    _setup_telemetry(service_name="agent-cli")
+except Exception:  # noqa: BLE001 — OTel init must never crash the CLI
+    pass
 
 # Complexity Gatekeeper directive injected into the runbook system prompt (INFRA-094)
 SPLIT_REQUEST_DIRECTIVE = (
@@ -118,7 +122,7 @@ def _write_and_sync(
         console.print(f"[dim]🔧 Auto-fixed: {fix}[/dim]")
     # Post-generation S/R validation: auto-correct hallucinated SEARCH text
     # (Layer 1 prevents most hallucinations; Layer 2 AI-reanchors the rest)
-    content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content)
+    content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content, threshold=0.80)
     if sr_total > 0:
         console.print(
             f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
@@ -206,7 +210,8 @@ def _validate_version_compatibility(skeleton_version: str) -> None:
     if skeleton_version < min_ver:
         raise InvalidTemplateError(f"Skeleton version {skeleton_version} is below minimum {min_ver}")
 
-def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
+def new_runbook(
+    story_id: str = typer.Argument(..., help="The ID of the story to create a runbook for."),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Force AI provider (gh, gemini, vertex, openai, anthropic, ollama)."
     ),
@@ -216,8 +221,8 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
     timeout: int = typer.Option(
         180, "--timeout", help="AI request timeout in seconds (default: 180)."
     ),
-    single_pass: bool = typer.Option(
-        False, "--single-pass",
+    legacy_gen: bool = typer.Option(
+        False, "--legacy-gen",
         help="Skip chunked generation and use single-pass monolithic mode.",
     ),
     force: bool = typer.Option(
@@ -410,7 +415,7 @@ def new_runbook(    story_id: str = typer.Argument(..., help="The ID of the stor
 
     # 4. Content Generation
     # ── Chunked path ──
-    if not single_pass:
+    if not legacy_gen:
         console.print("[bold blue]🚀 Starting phased generation (concurrency enabled)...[/bold blue]")
         try:
             # INFRA-169: Phased generation engine (synchronous — no asyncio.run needed).
