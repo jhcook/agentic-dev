@@ -28,3 +28,13 @@ MD036: false # Allow emphasis used instead of a heading
 MD040: false # Allow fenced code blocks without a specified language
 MD022: false # Allow headings that aren't surrounded by blank lines
 MD032: false # Allow lists that aren't surrounded by blank lines
+
+# Allow tilde fences (~~~) in addition to backtick fences.
+# We intentionally use tilde fences for [NEW] *.md content blocks so that
+# inner code examples inside those embedded files don't prematurely close
+# the outer fence.  "consistent" means either style is fine as long as the
+# doc itself is internally consistent.
+MD048:
+  code_fence_style: consistent
+
+MD029: false # AI-generated lists legitimately use continuation numbering; not a structural concern

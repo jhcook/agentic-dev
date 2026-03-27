@@ -166,6 +166,8 @@ def _extract_json(raw: str) -> Dict[str, Any]:
     return json.loads(text)  # Will raise JSONDecodeError
 
 
+
+
 def _ensure_new_blocks_fenced(content: str) -> str:
     """Wrap unfenced [NEW] block content in code fences.
 
@@ -173,6 +175,10 @@ def _ensure_new_blocks_fenced(content: str) -> str:
     between that header and the next ``####`` / ``###`` header is fenced.
     If not, wraps it in a fenced code block with language inferred from
     the file extension.
+
+    Note: ``.md`` files use tilde fences (``~~~``) so that any inner
+    triple-backtick code examples in the embedded document content do
+    not prematurely close the outer fence.
     """
     ext_lang = {
         ".py": "python", ".yaml": "yaml", ".yml": "yaml",
@@ -194,10 +200,138 @@ def _ensure_new_blocks_fenced(content: str) -> str:
                 path = path_match.group(1).strip().strip('`') if path_match else ""
                 ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
                 lang = ext_lang.get(ext, "")
-                # Wrap the body in fences
                 body_stripped = body.strip('\n')
-                parts[idx + 1] = f"\n```{lang}\n{body_stripped}\n```\n"
+                # Use tilde fences for markdown files to avoid nested-fence issues
+                if ext == ".md":
+                    parts[idx + 1] = f"\n~~~{lang}\n{body_stripped}\n~~~\n"
+                else:
+                    parts[idx + 1] = f"\n```{lang}\n{body_stripped}\n```\n"
     return "".join(result)
+
+
+def _fix_md_content_fences(content: str) -> str:
+    r"""Convert backtick fences on [NEW] *.md blocks to tilde fences.
+
+    The AI often ignores the tilde-fence instruction and emits
+    \`\`\`markdown for embedded ``.md`` file content.  When that file
+    contains its own code examples (triple-backtick fenced), the outer
+    fence closes prematurely, corrupting the runbook and causing
+    markdownlint MD001 failures on subsequent headings.
+
+    This post-pass finds every ``#### [NEW] *.md`` block whose outer
+    fence is `` ` `` and replaces open/close fences with ``~~~``.
+    """
+    # Match: [NEW] header for a .md file, optional blank line, then
+    # an opening backtick fence (3+ backticks, optional lang tag).
+    pattern = re.compile(
+        r'(####\s+\[NEW\]\s+[^\n]+\.md[^\n]*\n\n?)'
+        r'(`{3,})(\w*)\n',
+        re.IGNORECASE,
+    )
+
+    def _swap_fence(m: re.Match) -> str:
+        header = m.group(1)
+        ticks = m.group(2)
+        lang = m.group(3)
+        # Replace opening backtick fence with tilde fence of same width
+        tildes = "~" * len(ticks)
+        return f"{header}{tildes}{lang}\n"
+
+    result = pattern.sub(_swap_fence, content)
+
+    # Now close any backtick fences that were opened inside a [NEW] *.md
+    # block.  Strategy: locate each ~~~<lang> opener we just created and
+    # find its matching closing ``` — replace it with ~~~.
+    # We iterate block-by-block to avoid false positives.
+    block_open = re.compile(
+        r'(####\s+\[NEW\]\s+[^\n]+\.md[^\n]*\n\n?)(~{3,})(\w*)\n',
+        re.IGNORECASE,
+    )
+    segments = []
+    last = 0
+    for m in block_open.finditer(result):
+        segments.append(result[last:m.end()])
+        last = m.end()
+        tildes = m.group(2)
+        # Find the closing backtick fence (same width as the original)
+        close_ticks = "`" * len(tildes)
+        close_pat = re.compile(
+            r'^' + re.escape(close_ticks) + r'\s*$',
+            re.MULTILINE,
+        )
+        rest = result[last:]
+        close_m = close_pat.search(rest)
+        if close_m:
+            # Replace matching closing ``` with ~~~
+            segments.append(rest[:close_m.start()])
+            segments.append(tildes + "\n")
+            last = m.end() + close_m.end()
+        # else: no closing fence found — leave as-is
+    segments.append(result[last:])
+    return "".join(segments)
+
+
+def _rebalance_fences(content: str) -> str:
+    """Deterministically close any orphaned code fences in each Step block.
+
+    The LLM cannot reliably balance nested fences, especially when embedding
+    ``.md`` files that contain their own code examples.  Rather than trusting
+    the model, this pass makes fence balance a *pipeline guarantee*.
+
+    Strategy
+    --------
+    1. Split the assembled runbook on ``### Step N:`` boundaries.
+    2. Within each block, walk line-by-line tracking open/close state of
+       *backtick* fences and *tilde* fences independently (separate
+       namespaces in CommonMark).
+    3. If a block ends with an open fence, append the matching closer
+       (``` or ~~~) before the next step begins.
+
+    This is purely syntactic — no AI involved.
+    """
+    step_pat = re.compile(r'(?=^### Step \d+:)', re.MULTILINE)
+    parts = step_pat.split(content)
+
+    fixed_parts: list = []
+    total_closers_added = 0
+
+    backtick_fence_re = re.compile(r'^\s*(`{3,})\w*\s*$')
+    tilde_fence_re = re.compile(r'^\s*(~{3,})\w*\s*$')
+
+    for part in parts:
+        backtick_open = False
+        tilde_open = False
+
+        for line in part.splitlines():
+            if backtick_fence_re.match(line):
+                backtick_open = not backtick_open
+            elif tilde_fence_re.match(line):
+                tilde_open = not tilde_open
+
+        closers = ""
+        if backtick_open:
+            closers += "```\n"
+            total_closers_added += 1
+            logger.warning(
+                "fence_rebalanced",
+                extra={"type": "backtick", "block_preview": part[:80].strip()},
+            )
+        if tilde_open:
+            closers += "~~~\n"
+            total_closers_added += 1
+            logger.warning(
+                "fence_rebalanced",
+                extra={"type": "tilde", "block_preview": part[:80].strip()},
+            )
+        fixed_parts.append(part + closers)
+
+    if total_closers_added:
+        console.print(
+            f"[yellow]🔧 Fence rebalancer: closed {total_closers_added} "
+            f"orphaned fence(s)[/yellow]"
+        )
+
+    return "".join(fixed_parts)
 
 
 def _ensure_modify_blocks_fenced(content: str) -> str:
@@ -312,7 +446,7 @@ def _dedup_modify_blocks(content: str) -> str:
 
 
 def _escape_dunder_paths(content: str) -> str:
-    """Escape double underscores in [NEW/MODIFY/DELETE] header paths.
+    r"""Escape double underscores in [NEW/MODIFY/DELETE] header paths.
 
     Markdown interprets ``__init__`` as bold (``**init**``). This pass
     finds file paths in block headers and escapes ``__`` → ``\_\_`` so
@@ -435,9 +569,15 @@ def generate_runbook_chunked(
     # ground truth for all files the AI could plausibly touch.
     repo_root = Path.cwd()
     _oracle_globs = [
+        "*",              # root-level files: CHANGELOG.md, README.md, .coveragerc, etc.
         ".agent/src/**/*",
         ".agent/tests/**/*",
         "tests/**/*",
+        "backend/**/*",
+        ".agent/*.toml",
+        ".agent/*.md",
+        ".agent/rules/**/*",
+        ".agent/docs/**/*",
     ]
     all_existing_files: List[str] = []
     for pattern in _oracle_globs:
@@ -445,7 +585,8 @@ def generate_runbook_chunked(
             if p.is_file():
                 try:
                     rel = str(p.relative_to(repo_root))
-                    all_existing_files.append(rel)
+                    if rel not in all_existing_files:
+                        all_existing_files.append(rel)
                 except ValueError:
                     pass
 
@@ -571,59 +712,8 @@ def generate_runbook_chunked(
                             user_prompt=block_prompt,
                         )
 
-            if parse_ok:
-                # Post-parse safety check: every step MUST have at least one
-                # file operation. If the AI generated prose-only, retry once.
-                _op_check = re.findall(
-                    r'####\s+\[(NEW|MODIFY|DELETE)\]', block.content,
-                )
-                if not _op_check:
-                    logger.warning(
-                        "block_no_file_operations",
-                        extra={"section": section.title, "step": i},
-                    )
-                    console.print(
-                        f"[yellow]⚠️  Step {i} has no file operations — retrying "
-                        f"with hard constraint...[/yellow]"
-                    )
-                    try:
-                        _retry_prompt = (
-                            block_prompt
-                            + "\n\nCRITICAL: Your previous response contained NO "
-                            "[NEW], [MODIFY], or [DELETE] blocks. This is a schema "
-                            "violation. You MUST include at least one file operation. "
-                            "If this section is procedural, emit a "
-                            "[MODIFY] CHANGELOG.md block with the relevant entry."
-                        )
-                        _retry_raw = ai_service.complete(
-                            system_prompt="You are an implementation specialist. Output ONLY valid JSON.",
-                            user_prompt=_retry_prompt,
-                        )
-                        _retry_data = _extract_json(_retry_raw)
-                        _retry_block = GenerationBlock.from_dict(_retry_data)
-                        # Only accept the retry if it actually has ops now
-                        if re.findall(r'####\s+\[(NEW|MODIFY|DELETE)\]', _retry_block.content):
-                            block = _retry_block
-                            logger.info(
-                                "block_no_file_operations_retry_success",
-                                extra={"section": section.title},
-                            )
-                        else:
-                            logger.error(
-                                "block_no_file_operations_retry_failed",
-                                extra={"section": section.title},
-                            )
-                            console.print(
-                                f"[bold red]❌ Step {i} still has no file "
-                                f"operations after retry. Runbook will fail "
-                                f"schema validation.[/bold red]"
-                            )
-                    except (json.JSONDecodeError, ValueError, TimeoutError) as _retry_exc:
-                        logger.error(
-                            "block_no_file_operations_retry_error",
-                            extra={"section": section.title, "error": str(_retry_exc)},
-                        )
 
+            if parse_ok:
                 # Safety net: strip leading ## or ### headers the AI may
                 # have included despite prompt instructions
                 cleaned = block.content.lstrip("\n")
@@ -819,5 +909,11 @@ def generate_runbook_chunked(
     assembled_content = _ensure_modify_blocks_fenced(assembled_content)
     assembled_content = _dedup_modify_blocks(assembled_content)
     assembled_content = _escape_dunder_paths(assembled_content)
+    # Convert backtick fences on [NEW] *.md blocks → tilde fences so embedded
+    # code examples don't prematurely close the outer fence.
+    assembled_content = _fix_md_content_fences(assembled_content)
+    # Deterministic fence balancer: close any orphaned fences per Step block.
+    # This is a pipeline guarantee — the LLM is not trusted to balance fences.
+    assembled_content = _rebalance_fences(assembled_content)
 
     return assembled_content

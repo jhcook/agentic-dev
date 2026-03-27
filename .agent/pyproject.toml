@@ -114,6 +114,7 @@ build-backend = "hatchling.build"
 per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 norecursedirs = [
     ".git", 
     ".venv", 

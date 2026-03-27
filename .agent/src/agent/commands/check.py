@@ -284,8 +284,11 @@ def preflight(
                         # Re-run with capture to collect the traceback for healing.
                         cap = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
                         traceback = (cap.stdout or "") + (cap.stderr or "")
-                        console.print(f"  [cyan]🩹 Autoheal: attempting test fix (attempt {_test_healer._attempts + 1}/{budget})...[/cyan]")
-                        healed = _test_healer.heal_failure(traceback, cmd, cwd)
+                        attempt_num = _test_healer._attempts + 1
+                        console.print(f"  [cyan]🩹 Autoheal: attempting test fix (attempt {attempt_num}/{budget})...[/cyan]")
+                        from rich.status import Status
+                        with Status(f"  [cyan]🩹 Autoheal: AI healing tests (attempt {attempt_num}/{budget})...[/cyan]", console=console):
+                            healed = _test_healer.heal_failure(traceback, cmd, cwd)
                         if healed:
                             console.print(f"  [green]✅ Autoheal fixed {cmd_name}.[/green]")
                         else:

@@ -129,10 +129,22 @@ class TestImplementationStepsPreservation:
         assert len(violations) >= 1, "Expected at least one violation for empty steps"
 
     def test_reformatted_markers_fail_validation(self):
-        """A runbook where AI reformats [NEW] to prose headers must fail validation."""
+        """Reformatted [NEW] markers (e.g. '#### New File:') are not parseable as
+        file operations.  Under the relaxed schema (operations is optional), this
+        no longer causes a *schema* violation — prose-only steps are intentionally
+        valid.  However extract_modify_files MUST return an empty list, confirming
+        that the markers were not silently accepted as file ops."""
+        from agent.core.implement.parser import extract_modify_files
         broken = FULL_RUNBOOK.replace("#### [NEW]", "#### New File:")
+        # Schema should now pass (prose-only steps are valid)
         violations = validate_runbook_schema(broken)
-        assert len(violations) >= 1, "Expected validation failure when [NEW] markers are reformatted"
+        assert violations == [], f"Unexpected schema violations: {violations}"
+        # But no file paths must be extractable — the markers were lost
+        files = extract_modify_files(broken)
+        assert files == [], (
+            f"Expected no extractable files when [NEW] markers are stripped, got {files}"
+        )
+
 
     def test_truncated_code_blocks_fail_validation(self):
         """A runbook where AI truncates code blocks to empty must fail validation."""
