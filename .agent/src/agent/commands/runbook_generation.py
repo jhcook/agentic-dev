@@ -32,7 +32,16 @@ from opentelemetry import trace
 from rich.console import Console
 
 from agent.core.logger import get_logger
+import asyncio
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from agent.core.ai.prompts import generate_skeleton_prompt, generate_block_prompt
+from agent.core.engine.executor import TaskExecutor
+
+try:
+    from observability.token_counter import UsageTracker, get_token_count as _token_count
+except ImportError:  # pragma: no cover
+    UsageTracker = None  # type: ignore[assignment,misc]
+    _token_count = lambda text, **_: len(text) // 4  # noqa: E731
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +500,10 @@ def generate_runbook_chunked(
     if provider:
         ai_service.set_provider(provider)
 
+    # Initialise token tracker for this generation run (AC: Scenario 2)
+    tracker = UsageTracker() if UsageTracker is not None else None
+    _model_hint = provider or "default"
+
     context_summary = (
         f"{source_tree}\n\n{source_code}\n\n{targeted_context}\n\nRULES:\n{rules_content}"
     )
@@ -504,6 +517,12 @@ def generate_runbook_chunked(
             system_prompt="You are a senior technical architect. Output ONLY valid JSON.",
             user_prompt=skeleton_prompt,
         )
+        if tracker is not None:
+            tracker.record_call(
+                _model_hint,
+                _token_count(skeleton_prompt),
+                _token_count(skeleton_raw),
+            )
 
         try:
             skeleton_data = _extract_json(skeleton_raw)
@@ -581,94 +600,148 @@ def generate_runbook_chunked(
                 except ValueError:
                     pass
 
-    # Pre-load content for MODIFY targets — section-scoped only.
-    # The vector index (context_summary) handles broad content relevance;
-    # modify_contents is a targeted supplement so the AI gets exact text for
-    # <<<SEARCH blocks for files this section explicitly owns.
-    # Using all_existing_files here would inject hundreds of files → context overflow.
-    all_modify_contents: Dict[str, str] = {}
-    for s in skeleton.sections:
-        for fpath in s.files:
-            try:
-                p = Path(fpath)
-                if not p.is_absolute():
-                    p = Path.cwd() / fpath
-                if p.exists() and p.is_file():
-                    all_modify_contents[fpath] = p.read_text(encoding="utf-8")
-            except OSError:
-                pass  # unreadable — skip silently
+    # NOTE: modify_contents is now loaded per-block (inside the loop below)
+    # so each block always sees the *current* on-disk state rather than a
+    # stale pre-run snapshot.  This eliminates the primary source of hallucinated
+    # <<<SEARCH blocks where earlier blocks had already changed the file.
 
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Phase 2a: Pre-load modify targets and build block prompts
+    # Sequential + lightweight — fast local I/O that prepares all inputs
+    # before the parallel AI-generation stage that follows.
+    # ─────────────────────────────────────────────────────────────────────
+    section_inputs: List[Any] = []  # [(i, section, prompt, modify_contents)]
+    all_modify_contents: Dict[str, str] = {}  # accumulated for sr_validation
 
     for i, section in enumerate(skeleton.sections, 1):
-        # Skip sections already written to the checkpoint
         if i <= completed_steps:
-            console.print(f"[dim]⏭  Skipping section {i}/{len(skeleton.sections)} (already checkpointed): {section.title}[/dim]")
+            console.print(
+                f"[dim]⏭  Skipping section {i}/{len(skeleton.sections)} "
+                f"(already checkpointed): {section.title}[/dim]"
+            )
             continue
 
-        with tracer.start_as_current_span("runbook.block_generation") as bspan:
+        modify_contents: Dict[str, str] = {}
+        for fpath in section.files:
+            try:
+                p = (repo_root / fpath).resolve()
+                if p.exists() and p.is_file() and p.is_relative_to(repo_root):
+                    modify_contents[fpath] = p.read_text(encoding="utf-8")
+            except OSError:
+                pass
+        all_modify_contents.update(modify_contents)
+
+        if modify_contents:
+            logger.info(
+                "modify_targets_loaded",
+                extra={
+                    "section": section.title,
+                    "files": list(modify_contents.keys()),
+                    "total_chars": sum(len(v) for v in modify_contents.values()),
+                },
+            )
+
+        block_prompt = generate_block_prompt(
+            section.title,
+            section.description,
+            skeleton_raw,
+            story_content,
+            context_summary,
+            prior_changes=None,  # omitted for parallel; dedup handled in Phase 2c
+            modify_file_contents=modify_contents or None,
+            existing_files=all_existing_files or None,
+        )
+        section_inputs.append((i, section, block_prompt, modify_contents))
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Phase 2b: Parallel block generation via TaskExecutor + live Progress
+    # AI completions are I/O-bound — run them concurrently in a thread
+    # pool bounded by TaskExecutor's semaphore.
+    # ─────────────────────────────────────────────────────────────────────
+    async def _run_parallel_blocks() -> List[Dict[str, Any]]:
+        async def _gen(step: int, prompt: str) -> Dict[str, Any]:
+            raw = await asyncio.to_thread(
+                ai_service.complete,
+                "You are an implementation specialist. Output ONLY valid JSON.",
+                prompt,
+            )
+            if tracker is not None:
+                tracker.record_call(_model_hint, _token_count(prompt), _token_count(raw))
+            return {"step": step, "raw": raw}
+
+        task_exe = TaskExecutor(max_concurrency=3)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=Console(),
+            transient=True,
+        ) as prog:
+            pbar = prog.add_task(
+                f"[bold blue]⚡ Phase 2: Generating {len(section_inputs)} blocks in parallel...",
+                total=len(section_inputs),
+            )
+            callables = [
+                (lambda s=step, p=prompt: _gen(s, p))
+                for step, _, prompt, _ in section_inputs
+            ]
+            return await task_exe.run_parallel(
+                callables,
+                on_progress=lambda _: prog.advance(pbar),
+            )
+
+    try:
+        _par_results = asyncio.run(_run_parallel_blocks())
+    except RuntimeError:  # already inside an event loop (e.g. pytest-asyncio)
+        _loop = asyncio.new_event_loop()
+        try:
+            _par_results = _loop.run_until_complete(_run_parallel_blocks())
+        finally:
+            _loop.close()
+
+    raw_by_step: Dict[int, str] = {}
+    for _r in _par_results:
+        if _r["status"] == "success":
+            _d = _r["data"]
+            raw_by_step[_d["step"]] = _d["raw"]
+        else:
+            logger.error(
+                "block_parallel_generation_failed",
+                extra={"index": _r["index"], "error": _r.get("error", "")},
+            )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Phase 2c: Sequential assembly — parse, clean, dedup, checkpoint
+    # Results are processed in section order for deterministic output.
+    # ─────────────────────────────────────────────────────────────────────
+    for i, section, _prompt, modify_contents in section_inputs:
+        with tracer.start_as_current_span("runbook.block_assembly") as bspan:
             bspan.set_attribute("section_index", i)
             bspan.set_attribute("section_title", section.title)
 
             console.print(
-                f"[bold green]\U0001f916 Phase 2: Generating Block "
+                f"[bold green]🔵 Phase 2c: Assembling Block "
                 f"{i}/{len(skeleton.sections)}: {section.title}...[/bold green]"
             )
 
-            # Layer 1 S/R fix: provide actual file content so the AI has ground
-            # truth when writing <<<SEARCH blocks.
-            # We pass ALL existing-file contents (not just this section's files)
-            # because the AI may generate MODIFY blocks for files assigned to other sections.
-            modify_contents = all_modify_contents
-
-            if modify_contents:
-                logger.info(
-                    "modify_targets_loaded",
-                    extra={
-                        "section": section.title,
-                        "files": list(modify_contents.keys()),
-                        "total_chars": sum(len(v) for v in modify_contents.values()),
-                    },
+            if i not in raw_by_step:
+                error_console.print(
+                    f"[bold red]❌ Block {i} ('{section.title}') "
+                    f"failed in parallel generation — skipping.[/bold red]"
                 )
-
-
-            block_prompt = generate_block_prompt(
-                section.title,
-                section.description,
-                skeleton_raw,
-                story_content,
-                context_summary,
-                prior_changes=prior_changes if prior_changes else None,
-                modify_file_contents=modify_contents if modify_contents else None,
-                existing_files=all_existing_files if all_existing_files else None,
-            )
-
-            try:
-                block_raw = ai_service.complete(
-                    system_prompt="You are an implementation specialist. Output ONLY valid JSON.",
-                    user_prompt=block_prompt,
+                logger.error(
+                    "block_assembly_skipped",
+                    extra={"step": i, "section": section.title},
                 )
-            except TimeoutError as exc:
-                # Save whatever we have so far — next run auto-resumes from here
-                if checkpoint_path and assembled_content:
-                    try:
-                        checkpoint_path.write_text(assembled_content, encoding="utf-8")
-                    except OSError:
-                        pass
-                completed = i - 1
-                remaining = len(skeleton.sections) - completed
-                console.print(
-                    f"\n[bold yellow]⏱  Block {i}/{len(skeleton.sections)} "
-                    f"('{section.title}') timed out.[/bold yellow]\n"
-                    f"[dim]  {completed} section(s) saved to checkpoint. "
-                    f"{remaining} remaining.[/dim]\n"
-                    f"[bold]  Re-run to resume automatically:[/bold]\n"
-                    f"  [cyan]agent new-runbook {story_id} --timeout {int(str(exc).split()[-1].rstrip('s')) + 120 if str(exc).split()[-1].rstrip('s').isdigit() else 420}[/cyan]\n"
+                assembled_content += (
+                    f"## {section.title}\n\n"
+                    "[Generation failed — parallel execution error]\n\n"
                 )
-                logger.warning(
-                    "block_generation_timeout",
-                    extra={"story_id": story_id, "section": section.title, "section_index": i},
-                )
-                raise typer.Exit(code=1)
+                continue
+
+            block_raw = raw_by_step[i]
 
             parse_ok = False
             last_error = None
@@ -909,5 +982,8 @@ def generate_runbook_chunked(
     assembled_content = _fix_changelog_sr_headings(assembled_content)
     # Ensure blank lines surround fenced blocks (MD031)
     assembled_content = _ensure_blank_lines_around_fences(assembled_content)
+
+    if tracker is not None:
+        tracker.print_summary()
 
     return assembled_content

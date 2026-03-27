@@ -246,17 +246,6 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     use `#### [MODIFY] CHANGELOG.md` with a `<<<SEARCH / === / >>>` block that inserts
     the new entry immediately after the `# Changelog` header line. Only use `#### [NEW]`
     if CHANGELOG.md is NOT present in the EXISTING FILES ON DISK list.
-17. MARKDOWN FILE FENCES: When the content of a `[NEW] *.md` file contains code
-    examples (triple-backtick blocks), wrap the ENTIRE file content with TILDE fences
-    (``~~~markdown`` / ``~~~``) instead of backtick fences. This prevents inner
-    triple-backtick blocks from prematurely closing the outer fence and corrupting
-    the runbook structure. Example:
-    ~~~markdown
-    # My Doc
-    ```python
-    def foo(): ...
-    ```
-    ~~~
 
 OUTPUT FORMAT:
 Return ONLY a JSON object with this structure (no markdown fences, no prose):

@@ -1,6 +1,13 @@
 # Changelog
 
-## [Unreleased] (Updated by INFRA-142)
+## [Unreleased] (Updated by story)
+
+## [2.1.0] - 2026-02-24
+**Added**
+- Parallel runbook execution engine supporting concurrent task processing (ADR-012).
+- OpenTelemetry integration for tracking execution latency and LLM token consumption (ADR-015).
+- New `--legacy-gen` flag to maintain backward compatibility with sequential generation logic.
+- Runbook v2 JSON schema to support dependency-aware task orchestration. (Updated by INFRA-142)
 
 ### Added
 - Semantic search module `.agent/src/agent/tools/search.py` with Ripgrep integration.

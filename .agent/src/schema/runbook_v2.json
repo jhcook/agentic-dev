@@ -1,0 +1,80 @@
+"""runbook_v2 module."""
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Runbook Definition v2",
+  "description": "Schema for parallel runbook execution and observability tracking",
+  "type": "object",
+  "required": ["version", "title", "sections"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Runbook schema version",
+      "pattern": "^2\\.0\\.0$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "parallel": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable/disable global parallel execution"
+    },
+    "max_concurrency": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "tasks"],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "description"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_-]+$"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "depends_on": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "IDs of tasks that must complete before this one starts"
+                },
+                "estimated_tokens": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "trace_execution": {
+          "type": "boolean",
+          "default": true
+        },
+        "export_metrics": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}
