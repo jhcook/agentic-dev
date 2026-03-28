@@ -56,9 +56,13 @@ As a **Platform Developer**, I want **`agent new-runbook` to extract ADR and Jou
 - `agent/commands/utils.py` — **[MODIFY]** add `extract_adr_refs(text)`, `extract_journey_refs(text)`, and `merge_story_links(story_file, adrs, journeys)` helpers with ID-based idempotency
 - `agent/commands/tests/__init__.py` — **[NEW]** package init with Apache 2.0 header
 - `agent/commands/tests/test_story_link_helpers.py` — **[NEW]** 17 unit tests covering all ACs and negative cases
+- `.agent/tests/integration/test_agent_integration.py` — **[MODIFY]** optimize memory copying to fix integration test suite RAM exhaustion
+- `.agent/tests/journeys/test_infra_077.py` — **[MODIFY]** update test expectations due to GDPR cookie extraction disablement
+- `.agent/tests/journeys/test_jrn_001.py` — **[MODIFY]** fix infinite pytest recursion loop
+- `.agent/tests/commands/test_basic_commands.py` — **[MODIFY]** resolve cache directory pollution issue in pr command tests
 - `CHANGELOG.md` — **[MODIFY]** add INFRA-158 entry under Unreleased
 - `INFRA-156-preflight-finding-verification-gate.md` — **[MODIFY]** AC-6 and AC-7 added documenting the `agent implement` silent S/R mismatch failure mode discovered during INFRA-158 investigation
-
+- `.agent/tests/commands/test_runbook.py` — **[MODIFY]** Update integration tests and mock behaviors to align with the new pipeline, fixing legacy assertions.
 **Workflows affected:** `agent new-runbook` — purely additive post-processing step after successful generation.
 
 **Risks identified:**

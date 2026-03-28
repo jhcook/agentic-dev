@@ -25,7 +25,7 @@ def test_jrn_001_step_1():
     Assertions: Command exits with status 0, Expected output displayed
     """
     try:
-        result = subprocess.run(['uv', 'run', 'agent', 'preflight', '--offline'], capture_output=True, text=True, check=True)
+        result = subprocess.run(['uv', 'run', 'agent', 'preflight', '--skip-tests', '--offline'], capture_output=True, text=True, check=True)
         assert result.returncode == 0, f"Expected return code 0, but got {result.returncode}"
         assert re.search(r"Preflight", result.stdout) or "ADR Enforcement" in result.stdout, "Expected output not found"
 

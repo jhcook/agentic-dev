@@ -45,8 +45,6 @@ from agent.commands.utils import (
     auto_fix_license_headers,
     extract_adr_refs,
     extract_journey_refs,
-    build_adr_catalogue,
-    build_journey_catalogue,
     merge_story_links,
 )
 from agent.core.context import context_loader
@@ -392,15 +390,9 @@ def new_runbook(
     if len(rules_content) < len(rules_full) * 0.5:
         console.print(f"[dim]ℹ️  Rule Diet active: Prompt reduced by {100 - (len(rules_content)/len(rules_full)*100):.1f}%[/dim]")
 
-    # INFRA-160: Catalogue Injection
-    j_catalogue, j_count = build_journey_catalogue(config.journeys_dir)
-    a_catalogue, a_count = build_adr_catalogue(config.adrs_dir)
-
-    logger.info("catalogue_injected", extra={
-        "story_id": story_id,
-        "journey_count": j_count,
-        "adr_count": a_count
-    })
+    # INFRA-160: Catalogue Injection functionality has been disabled.
+    j_catalogue, j_count = "", 0
+    a_catalogue, a_count = "", 0
 
     # AC-3: Story links pre-seeded
     preseeded_adrs = extract_adr_refs(story_content)

@@ -48,6 +48,7 @@ def mock_fs(tmp_path):
     (agent_dir / "plans" / "INFRA").mkdir(parents=True)
     (agent_dir / "adrs").mkdir()
     (agent_dir / "templates").mkdir()
+    (agent_dir / "cache").mkdir()
     
     # Mock Config
     with patch("agent.core.config.config.agent_dir", agent_dir), \
@@ -55,6 +56,7 @@ def mock_fs(tmp_path):
          patch("agent.core.config.config.plans_dir", agent_dir / "plans"), \
          patch("agent.core.config.config.adrs_dir", agent_dir / "adrs"), \
          patch("agent.core.config.config.templates_dir", agent_dir / "templates"), \
+         patch("agent.core.config.config.cache_dir", agent_dir / "cache"), \
          patch("agent.core.utils.console.print"): # Silence console
         yield agent_dir
 

@@ -28,7 +28,7 @@ runner = CliRunner()
 @patch("agent.commands.mcp.config")
 @patch("agent.commands.secret._prompt_password")
 @patch("agent.commands.mcp.Confirm.ask")
-def test_infra_077(mock_confirm, mock_prompt, mock_config, mock_sm_class, mock_get_secret):
+def test_infra_077(mock_confirm, mock_prompt, mock_config, mock_sm_class, mock_get_secret, caplog):
     mock_prompt.return_value = "fake_password"
     mock_confirm.return_value = True
     """
@@ -39,17 +39,17 @@ def test_infra_077(mock_confirm, mock_prompt, mock_config, mock_sm_class, mock_g
     2. Reset local cache.
     """
     
-    # 1. Authenticate
-    # Mocking successful cookie extraction by patching subprocess.run
-    mock_subprocess_result = MagicMock()
-    mock_subprocess_result.stdout = '{"status": "success", "cookies": {"TOKEN": "123"}, "browser": "Chrome"}'
-    mock_subprocess_result.returncode = 0
-    
-    with patch("agent.commands.mcp.subprocess.run", return_value=mock_subprocess_result):
-        # Run agent mcp auth notebooklm --auto
-        result = runner.invoke(mcp_app, ["auth", "notebooklm", "--auto"], input="y\n")
-        assert result.exit_code == 0
-        assert mock_sm_class.return_value.set_secret.called
+    # 1. Authenticate (--auto) should fail due to GDPR block
+    result_auto = runner.invoke(mcp_app, ["auth", "notebooklm", "--auto"])
+    assert result_auto.exit_code == 1
+    assert "GDPR compliance review" in result_auto.stdout or "GDPR" in result_auto.stderr or "GDPR compliance review" in '\n'.join([record.message for record in caplog.records])
+
+    # 2. Authenticate (--file) should succeed
+    with patch("agent.commands.mcp.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        result_file = runner.invoke(mcp_app, ["auth", "notebooklm", "--file", "dummy.json"])
+        assert result_file.exit_code == 0
+        mock_run.assert_called_once()
 
     
     # 2. Sync reset

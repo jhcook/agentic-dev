@@ -213,14 +213,19 @@ def merge_story_links(
             num = jrn_id.split("-")[1]
             matches = list(Path(journeys_dir).rglob(f"JRN-{num}*.yaml"))
             if matches:
-                # Try to read the name field from the YAML
+                # 1. Try to read the name field from the YAML
+                name = None
                 try:
                     data = yaml.safe_load(matches[0].read_text())
-                    name = data.get("name", matches[0].stem) if isinstance(data, dict) else matches[0].stem
+                    if isinstance(data, dict):
+                        name = data.get("name")
                 except (yaml.YAMLError, OSError):
-                    name = matches[0].stem
-                resolved_journeys.append(f"- {jrn_id}: {name}")
-                journeys_added.append(jrn_id)
+                    pass
+                
+                # Only add if a valid name was found in the YAML
+                if name:
+                    resolved_journeys.append(f"- {jrn_id}: {name}")
+                    journeys_added.append(jrn_id)
 
     if not resolved_adrs and not resolved_journeys:
         return  # Nothing resolvable — leave story unchanged
@@ -262,21 +267,27 @@ def merge_story_links(
             )
 
     # --- Write atomically ----------------------------------------------------
-    tmp = story_file.with_suffix(".tmp")
-    try:
-        tmp.write_text(content, encoding="utf-8")
-        tmp.replace(story_file)
-        story_id = story_file.stem.split("-")[0] + "-" + story_file.stem.split("-")[1]
-        logger.info(
-            "story_links_updated",
-            extra={"story_id": story_id, "adrs_added": adrs_added, "journeys_added": journeys_added},
-        )
-        console.print(
-            f"[dim]📎 Back-populated story links — ADRs: {adrs_added or 'none'}, "
-            f"Journeys: {journeys_added or 'none'}[/dim]"
-        )
-    except OSError as exc:
-        logger.warning("merge_story_links: cannot write %s: %s", story_file, exc)
+    with tracer.start_as_current_span(
+        "merge_story_links_io",
+        attributes={"story_file": str(story_file)}
+    ) as span:
+        tmp = story_file.with_suffix(".tmp")
+        try:
+            tmp.write_text(content, encoding="utf-8")
+            tmp.replace(story_file)
+            
+            story_id = story_file.stem.split("-")[0] + "-" + story_file.stem.split("-")[1]
+            logger.info("story_links_updated", extra={
+                "story_id": story_id,
+                "adrs_added": adrs_added,
+                "journeys_added": journeys_added,
+            })
+            console.print(
+                f"[dim]📎 Back-populated story links — ADRs: {adrs_added or 'none'}, "
+                f"Journeys: {journeys_added or 'none'}[/dim]"
+            )
+        except OSError as exc:
+            logger.warning("merge_story_links: cannot write %s: %s", story_file, exc)
         if tmp.exists():
             tmp.unlink(missing_ok=True)
 
@@ -508,109 +519,7 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     return "\n".join(lines)
 
 
-def build_journey_catalogue(journeys_dir: Path) -> tuple[str, int]:
-    """Build a sorted, capped catalogue of available Journeys for AI context.
 
-    Scans the journeys directory recursively for YAML files, extracts the ID and
-    title/name, and returns a formatted markdown list. Capped at 30 entries
-    sorted by numeric ID descending.
-
-    Args:
-        journeys_dir: Path to the directory containing JRN-*.yaml files.
-
-    Returns:
-        A tuple of (formatted_catalogue_string, total_count_found).
-    """
-    with tracer.start_as_current_span("build_journey_catalogue") as span:
-        if not journeys_dir.exists():
-            logger.debug("Journeys directory missing: %s", journeys_dir)
-            span.set_attribute("journey_count", 0)
-            return "", 0
-
-        entries: list[tuple[str, str]] = []
-        for jf in journeys_dir.rglob("*.yaml"):
-            try:
-                data = yaml.safe_load(jf.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    jid = data.get("id", jf.stem)
-                    # Prefer 'title' per AC, fall back to 'name' or stem
-                    title = data.get("title") or data.get("name") or jf.stem
-                    entries.append((str(jid), str(title)))
-            except Exception:  # noqa: BLE001
-                continue
-
-        if not entries:
-            span.set_attribute("journey_count", 0)
-            return "", 0
-
-        total_count = len(entries)
-        span.set_attribute("journey_count", total_count)
-
-        # Sort by numeric ID descending: JRN-089 -> 89
-        def sort_key(e: tuple[str, str]) -> int:
-            match = re.search(r"(\d+)", e[0])
-            return int(match.group(1)) if match else 0
-
-        entries.sort(key=sort_key, reverse=True)
-        top_30 = entries[:30]
-
-        lines = ["Available Journeys:"]
-        for jid, title in top_30:
-            lines.append(f"- {jid}: {title}")
-        return "\n".join(lines), total_count
-
-
-def build_adr_catalogue(adrs_dir: Path) -> tuple[str, int]:
-    """Build a sorted, capped catalogue of available ADRs for AI context.
-
-    Scans the ADRs directory for markdown files, extracts the H1 title,
-    and returns a formatted markdown list. Capped at 30 entries sorted by
-    numeric ID descending.
-
-    Args:
-        adrs_dir: Path to the directory containing ADR-*.md files.
-
-    Returns:
-        A tuple of (formatted_catalogue_string, total_count_found).
-    """
-    with tracer.start_as_current_span("build_adr_catalogue") as span:
-        if not adrs_dir.exists():
-            logger.debug("ADRs directory missing: %s", adrs_dir)
-            span.set_attribute("adr_count", 0)
-            return "", 0
-
-        entries: list[tuple[str, str]] = []
-        for af in adrs_dir.glob("ADR-*.md"):
-            try:
-                content = af.read_text(encoding="utf-8")
-                h1_match = re.search(r"^#\s+(.+)", content, re.MULTILINE)
-                title = h1_match.group(1).strip() if h1_match else af.stem
-                # Extract ID from filename (e.g. ADR-041)
-                id_match = re.match(r"(ADR-\d+)", af.name)
-                aid = id_match.group(1) if id_match else af.stem
-                entries.append((str(aid), str(title)))
-            except Exception:  # noqa: BLE001
-                continue
-
-        if not entries:
-            span.set_attribute("adr_count", 0)
-            return "", 0
-
-        total_count = len(entries)
-        span.set_attribute("adr_count", total_count)
-
-        # Sort by numeric ID descending
-        def sort_key(e: tuple[str, str]) -> int:
-            match = re.search(r"(\d+)", e[0])
-            return int(match.group(1)) if match else 0
-
-        entries.sort(key=sort_key, reverse=True)
-        top_30 = entries[:30]
-
-        lines = ["Available ADRs:"]
-        for aid, title in top_30:
-            lines.append(f"- {aid}: {title}")
-        return "\n".join(lines), total_count
 
 
 # ---------------------------------------------------------------------------

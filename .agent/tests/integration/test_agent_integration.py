@@ -47,7 +47,7 @@ def agent_sandbox(tmp_path):
     
     def _ignore_heavy_dirs(directory, contents):
         """Exclude __pycache__, .venv, node_modules, and .git to reduce memory footprint."""
-        return {c for c in contents if c in ('__pycache__', '.venv', 'node_modules', '.git', '.pytest_cache')}
+        return {c for c in contents if c in ('__pycache__', '.venv', 'node_modules', '.git', '.pytest_cache', 'web')}
     
     shutil.copytree(src_agent, dest_agent, ignore=_ignore_heavy_dirs)
     

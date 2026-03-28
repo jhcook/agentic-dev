@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **INFRA-158**: Added ADR and Journey back-population from runbook generation to the parent story file, ensuring accurate architectural relationships. Fixed critical test sandbox memory exhaustion in integration tests.
 - Defined structured interfaces and git-stash checkpointing strategy for INFRA-144 tool domains.
 - Two-pass execution logic for runbook generation to ensure test-implementation coherence (INFRA-174).
 - Heuristic-based section classification (implementation vs verification).

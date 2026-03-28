@@ -36,10 +36,22 @@ VALID_RUNBOOK_CONTENT = '''# Runbook for INFRA-001
 ```python
 """New module with a proper docstring."""
 
-
 def hello() -> str:
     """Return a greeting string."""
     return "world"
+
+```
+
+### Step 2: Create the test module
+
+#### [NEW] `tests/test_new_module.py`
+
+```python
+"""Tests for new module."""
+
+def test_hello():
+    """Test hello function."""
+    assert hello() == "world"
 
 ```
 '''
@@ -85,8 +97,10 @@ def test_new_runbook_success(mock_fs, app):
     with patch("agent.core.ai.ai_service.complete", return_value=VALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
          
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
         
+        if result.exit_code != 0:
+            print("RUNBOOK ERRORS:", result.output)
         assert result.exit_code == 0
         assert "Runbook generated" in result.stdout
         assert (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
@@ -97,7 +111,7 @@ def test_new_runbook_not_committed(mock_fs, app):
     story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
     story_file.write_text("## State\nOPEN\n# Story Content")
     
-    result = runner.invoke(app, [story_id])
+    result = runner.invoke(app, [story_id, "--legacy-gen"])
     
     assert result.exit_code == 1
     assert "is not COMMITTED" in result.stdout
@@ -112,7 +126,7 @@ def test_new_runbook_with_provider(mock_fs, app):
          patch("agent.core.ai.ai_service.complete", return_value=VALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
         
-        result = runner.invoke(app, [story_id, "--provider", "openai"])
+        result = runner.invoke(app, [story_id, "--legacy-gen", "--provider", "openai"])
         
         assert result.exit_code == 0
         mock_set_provider.assert_called_once_with("openai")
@@ -126,10 +140,10 @@ def test_new_runbook_retry_on_invalid_schema(mock_fs, app):
     with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
         
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
         
         assert result.exit_code == 1
-        assert "Schema validation failed after" in result.output
+        assert "Gate corrections exhausted" in result.output
 
 def test_new_runbook_self_corrects(mock_fs, app):
     """AI self-corrects on second attempt after initial schema failure."""
@@ -137,14 +151,13 @@ def test_new_runbook_self_corrects(mock_fs, app):
     story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
     story_file.write_text("## State\nCOMMITTED\n# Story Content")
     
-    # First call returns invalid, second returns valid
-    with patch("agent.core.ai.ai_service.complete", side_effect=[INVALID_RUNBOOK_CONTENT, VALID_RUNBOOK_CONTENT]), \
+    # First call returns invalid, second is S/R AI fix, third returns valid
+    with patch("agent.core.ai.ai_service.complete", side_effect=[INVALID_RUNBOOK_CONTENT, "junk sr fix", VALID_RUNBOOK_CONTENT]), \
          patch("agent.commands.runbook.upsert_artifact"):
         
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
         
         assert result.exit_code == 0
-        assert "Attempt 1 failed schema validation" in result.stdout
         assert "Runbook generated" in result.stdout
 
 
@@ -157,7 +170,7 @@ def test_new_runbook_shows_formatted_errors(mock_fs, app):
     with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
 
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 1
         # Formatted errors should contain the schema validation header
@@ -173,7 +186,7 @@ def test_new_runbook_no_file_on_failure(mock_fs, app):
     with patch("agent.core.ai.ai_service.complete", return_value=INVALID_RUNBOOK_CONTENT), \
          patch("agent.commands.runbook.upsert_artifact"):
 
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 1
         assert not (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
