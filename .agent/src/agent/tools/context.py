@@ -36,7 +36,7 @@ def checkpoint(message: str = "agent_checkpoint", repo_root: Optional[Path] = No
     try:
         # Ensure we are in a git repo
         subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo_root, check=True, capture_output=True)
-        
+
         # Push to stash with message
         # We use --include-untracked to ensure new files are saved
         cmd = sanitize_and_validate_args(["git", "stash", "push", "--include-untracked", "-m", f"CHECKPOINT:{message}"])
@@ -44,8 +44,13 @@ def checkpoint(message: str = "agent_checkpoint", repo_root: Optional[Path] = No
             cmd,
             cwd=repo_root, capture_output=True, text=True
         )
-        
-        # Since stash push clears the worktree, we apply it immediately back 
+
+        # If there were no local changes, stash push emits "No local changes to save"
+        # and creates no stash entry. Treat this as a successful no-op checkpoint.
+        if "No local changes to save" in (res.stdout + res.stderr):
+            return {"success": True, "output": "Checkpoint created (working tree was clean — no changes to stash)."}
+
+        # Since stash push clears the worktree, we apply it immediately back
         # so the agent can keep working, but we now have a restorable state.
         subprocess.run(["git", "stash", "apply", "stash@{0}"], cwd=repo_root, check=True, capture_output=True)
 
@@ -78,10 +83,11 @@ def rollback(repo_root: Optional[Path] = None) -> ContextToolResult:
         if stash_idx is None:
              return {"success": False, "error": "No valid checkpoint found."}
 
-        # Hard reset and apply stash
-        subprocess.run(["git", "reset", "--hard"], cwd=repo_root, check=True)
-        subprocess.run(["git", "stash", "apply", stash_idx], cwd=repo_root, check=True)
-        
+        # Hard reset tracked files and clean all untracked files/dirs
+        subprocess.run(["git", "reset", "--hard"], cwd=repo_root, check=True, capture_output=True)
+        subprocess.run(["git", "clean", "-fd"], cwd=repo_root, check=True, capture_output=True)
+        subprocess.run(["git", "stash", "apply", stash_idx], cwd=repo_root, check=True, capture_output=True)
+
         return {"success": True, "output": f"Rolled back to {stash_idx}."}
     except Exception as e:
         return {"success": False, "error": f"Rollback failed: {str(e)}"}

@@ -60,7 +60,7 @@ def test_implement_success(clean_env, app):
     # Setup Runbook
     runbook_id = "INFRA-001"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n## Implementation Steps")
+    runbook_file.write_text("## State ACCEPTED\n# Runbook Content\n## Implementation Steps\n\n### Step 1: Mock Step Title\n\nSome explanation here.\n")
     
     # Setup Guide
     guide_file = clean_env / ".agent" / "workflows" / "implement.md"
@@ -82,7 +82,7 @@ def test_implement_runbook_not_found(clean_env, app):
 def test_implement_scrubbing(clean_env, app):
     runbook_id = "SEC-001"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n## Implementation Steps\nContext with api_key: sk-1234567890abcdef1234567890abcdef")
+    runbook_file.write_text("## State ACCEPTED\n# Runbook Content\n## Implementation Steps\nContext with api_key: sk-1234567890abcdef1234567890abcdef\n\n### Step 1: Mock Step Title\n\nSome explanation here.\n")
     
     with patch("agent.core.ai.ai_service.complete") as mock_complete:
         mock_complete.return_value = "Safe output"
@@ -100,7 +100,7 @@ def test_implement_scrubbing(clean_env, app):
 def test_implement_not_accepted(clean_env, app):
     runbook_id = "INFRA-002"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("Status: DRAFT\n# Runbook Content\n## Implementation Steps")
+    runbook_file.write_text("## State DRAFT\n# Runbook Content\n## Implementation Steps\n\n### Step 1: Mock Step Title\n\nSome explanation here.\n")
     
     result = runner.invoke(app, [runbook_id])
     assert result.exit_code == 1
@@ -109,7 +109,7 @@ def test_implement_not_accepted(clean_env, app):
 def test_implement_with_provider(clean_env, app):
     runbook_id = "INFRA-003"
     runbook_file = clean_env / "runbooks" / f"{runbook_id}-runbook.md"
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n## Implementation Steps")
+    runbook_file.write_text("## State ACCEPTED\n# Runbook Content\n## Implementation Steps\n\n### Step 1: Mock Step Title\n\nSome explanation here.\n")
     
     with patch("agent.core.ai.ai_service.set_provider") as mock_set_provider, \
          patch("agent.core.ai.ai_service.complete", return_value="Steps"):
@@ -138,7 +138,7 @@ def test_implement_journey_gate_blocks(tmp_path):
 
     runbook_file = tmp_path / "runbooks" / "INFRA-005-runbook.md"
     (tmp_path / "runbooks").mkdir(exist_ok=True)
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n## Implementation Steps")
+    runbook_file.write_text("## State ACCEPTED\n# Runbook Content\n## Implementation Steps\n\n### Step 1: Mock Step Title\n\nSome explanation here.\n")
 
     with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
          patch("agent.core.config.config.agent_dir", tmp_path / ".agent"), \

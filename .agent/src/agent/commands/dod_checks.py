@@ -233,7 +233,8 @@ def check_license_headers(runbook_content: str) -> List[str]:
     }
 
     # Read key phrases from the license header template
-    template_path = Path(".agent/templates/license_header.txt")
+    from agent.core.config import config
+    template_path = Path(config.templates_dir) / "license_header.txt" if config.templates_dir else Path(".agent/templates/license_header.txt")
     if template_path.exists():
         template_text = template_path.read_text()
         # Extract the first non-empty line as the key phrase to check for
@@ -300,7 +301,8 @@ def auto_fix_license_headers(runbook_content: str) -> str:
         ".html", ".css", ".csv", ".xml", ".svg", ".lock", ".env",
     }
 
-    template_path = Path(".agent/templates/license_header.txt")
+    from agent.core.config import config
+    template_path = Path(config.templates_dir) / "license_header.txt" if config.templates_dir else Path(".agent/templates/license_header.txt")
     if not template_path.exists():
         return runbook_content  # nothing to inject
 

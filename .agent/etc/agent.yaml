@@ -18,7 +18,7 @@ panel:   # native | adk
 agent:     # anthropic | gemini | gh | ollama | openai | vertex | vertex-anthropic
   provider: vertex
   test_commands:
-    .agent/: cd .agent/src && ../../.venv/bin/python -m pytest agent/ -q --tb=short
+    .agent/: cd .agent && PYTHONPATH=src ../.venv/bin/python -m pytest tests/ -q --tb=short
   models:
     gemini: models/gemini-3.1-pro-preview
     vertex: gemini-2.5-pro

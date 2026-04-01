@@ -47,20 +47,20 @@ def test_check_imports_undeclared():
     assert not any("undeclared dependency 'agent'" in e for e in res.errors)
 
 def test_validate_code_block_requires_trailing_newline() -> None:
-    """AC-1: validate_code_block raises an error when content has no trailing newline.
+    """AC-1: validate_code_block auto-corrects when content has no trailing newline.
 
-    parse_code_blocks returns content **as captured** (raw) without normalising
-    trailing newlines.  A trailing newline is only present when the AI includes
-    a blank line before the closing fence.  Content without a trailing newline
-    therefore represents a genuine violation that should trigger self-healing.
+    The AI panel routinely omits the final \\n; treating it as a hard error
+    burns retry budget on a trivial mechanical issue. Auto-correct and warn.
     """
     content_no_newline = '"""Module."""\n\n\ndef foo() -> None:\n    """Foo."""\n    pass'
     res = validate_code_block("test.py", content_no_newline)
-    assert any("missing trailing newline" in e for e in res.errors), (
-        f"Expected trailing-newline error, got: {res.errors}"
+    assert not any("missing trailing newline" in e for e in res.errors)
+    assert any("missing trailing newline" in w for w in res.warnings), (
+        f"Expected trailing-newline warning, got: {res.warnings}"
     )
 
-    # Content with trailing newline (blank line before closing fence) passes AC-1
+    # Content with trailing newline passes AC-1 without warning
     content_with_newline = content_no_newline + "\n"
     res_ok = validate_code_block("test.py", content_with_newline)
     assert not any("missing trailing newline" in e for e in res_ok.errors)
+    assert not any("missing trailing newline" in w for w in res_ok.warnings)

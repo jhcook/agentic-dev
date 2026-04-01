@@ -63,19 +63,20 @@ def test_is_git_dirty_dirty():
         assert is_git_dirty() is True
 
 def test_create_branch_new():
-    with patch("subprocess.run") as mock_run:
-        # First call fails (check existence), second succeeds (create)
+    with patch("subprocess.run") as mock_run, patch("typer.confirm", return_value=True):
+        # First call fails (check existence), second is stash, third succeeds (create)
         mock_run.side_effect = [
             subprocess.CalledProcessError(1, "git"), # git rev-parse (not found)
+            MagicMock(returncode=0, stdout="No local changes", stderr=""), # git stash push
             MagicMock(returncode=0) # git checkout -b
         ]
         
         create_branch("INFRA-123", "my-title")
         
         # Verify calls
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 3
         # Check checkout -b call
-        call_args = mock_run.call_args_list[1]
+        call_args = mock_run.call_args_list[2]
         cmd = call_args[0][0]
         assert "git" in cmd
         assert "checkout" in cmd
@@ -83,20 +84,21 @@ def test_create_branch_new():
         assert "INFRA-123/my-title" in cmd
 
 def test_create_branch_existing():
-    with patch("subprocess.run") as mock_run:
-        # First call succeeds (branch exists), second succeeds (checkout)
+    with patch("subprocess.run") as mock_run, patch("typer.confirm", return_value=True):
+        # First call succeeds (branch exists), second is stash, third succeeds (checkout)
         mock_run.side_effect = [
              MagicMock(returncode=0), # git rev-parse (found)
+             MagicMock(returncode=0, stdout="No local changes", stderr=""), # git stash push
              MagicMock(returncode=0)  # git checkout (no -b)
         ]
         
         create_branch("INFRA-123", "my-title")
         
         # Verify calls
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 3
         
         # Check checkout call (NO -b)
-        call_args = mock_run.call_args_list[1]
+        call_args = mock_run.call_args_list[2]
         cmd = call_args[0][0]
         assert "git" in cmd
         assert "checkout" in cmd
@@ -120,7 +122,7 @@ def mock_deps(tmp_path):
         
         # Setup runbook
         rb_path = tmp_path / "INFRA-055-runbook.md"
-        rb_path.write_text("Status: ACCEPTED\n# Content\n## Implementation Steps\n1. Do something")
+        rb_path.write_text("## State ACCEPTED\n# Content\n## Implementation Steps\n\n### Step 1: Mock Step Title\n1. Do something")
         mock_find_runbook.return_value = rb_path
         
         # Setup story
@@ -151,7 +153,8 @@ def test_implement_wrong_branch_fails(app, mock_deps):
     result = runner.invoke(app, ["INFRA-055"])
     
     assert result.exit_code == 1
-    assert "You must be on 'main'" in result.stdout
+    assert "You must be on " in result.stdout
+    assert "'main'" in result.stdout
 
 def test_implement_from_main_creates_branch(app, mock_deps):
     mock_deps["dirty"].return_value = False
@@ -160,8 +163,7 @@ def test_implement_from_main_creates_branch(app, mock_deps):
     result = runner.invoke(app, ["INFRA-055"])
     
     assert result.exit_code == 0
-    # Code passes the RAW title, create_branch handles sanitization
-    mock_deps["create"].assert_called_once_with("INFRA-055", "Automate Stuff")
+    mock_deps["create"].assert_called_once_with("INFRA-055", "Automate Stuff", yes=False)
 
 def test_implement_from_correct_branch_proceeds(app, mock_deps):
     mock_deps["dirty"].return_value = False

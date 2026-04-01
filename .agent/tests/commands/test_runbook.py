@@ -72,6 +72,7 @@ def mock_fs(tmp_path):
     templates_dir = tmp_path / "templates"
     templates_dir.mkdir()
     (templates_dir / "runbook-template.md").write_text("# Runbook Template\n## Plan\n<plan>")
+    (templates_dir / "license_header.txt").write_text("Copyright 2026 Test")
 
     # Mock config paths
     with patch("agent.core.config.config.runbooks_dir", tmp_path / "runbooks"), \
@@ -101,7 +102,7 @@ def test_new_runbook_success(mock_fs, app):
         
         if result.exit_code != 0:
             print("RUNBOOK ERRORS:", result.output)
-        assert result.exit_code == 0
+        assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
         assert "Runbook generated" in result.stdout
         assert (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
 

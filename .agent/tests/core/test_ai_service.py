@@ -70,24 +70,24 @@ def test_metrics_increment(ai_service):
     assert ai_service._try_complete.call_count == 1
 
 def test_fallback_logic(ai_service):
-    ai_service.clients = {'gh': 'mock', 'gemini': 'mock', 'openai': 'mock'}
-    ai_service.provider = 'gh'
+    ai_service.clients = {'gemini': 'mock', 'openai': 'mock', 'gh': 'mock'}
+    ai_service.provider = 'gemini'
     ai_service.is_forced = True
     
     def side_effect(provider, system, user, model=None, **kwargs):
-        if provider == "gh":
-            raise Exception("GH Failed")
         if provider == "gemini":
+            raise Exception("Gemini Failed")
+        if provider == "openai":
             return "Success"
         return ""
 
     ai_service._try_complete = MagicMock(side_effect=side_effect)
     
     # Run complete
-    result = ai_service.complete("sys", "user")
+    result = ai_service.complete("sys", "user", auto_fallback=True)
     
     assert result == "Success"
-    assert ai_service.provider == "gemini"
+    assert ai_service.provider == "openai"
 
 def test_complete_no_provider(ai_service):
     ai_service.clients = {}
@@ -291,6 +291,6 @@ def test_fallback_chain_reaches_ollama():
 
     service._try_complete = MagicMock(side_effect=side_effect)
 
-    result = service.complete("sys", "user")
+    result = service.complete("sys", "user", auto_fallback=True)
     assert result == "Ollama success"
     assert service.provider == "ollama"

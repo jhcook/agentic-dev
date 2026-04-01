@@ -189,11 +189,14 @@ def test_pr_workflow_inferred(mock_branch, mock_journey_index, mock_sync, mock_c
     assert args[0][0:3] == ["gh", "pr", "create"]
     assert "main" in args[0] # base branch
 
+@patch("subprocess.check_output")
 @patch("subprocess.run")
-def test_commit_command(mock_run):
+def test_commit_command(mock_run, mock_check_output):
+    mock_check_output.return_value = "fake diff"
     with patch("agent.commands.workflow.validate_credentials"), \
          patch("agent.core.ai.ai_service.complete", return_value="AI Commit Msg"), \
-         patch("agent.commands.workflow.typer.edit", return_value="Fix bug"):
+         patch("agent.commands.workflow.typer.edit", return_value="Fix bug"), \
+         patch("sys.stdin.isatty", return_value=True):
         # commit requires story ID if branch inference fails (let's assume it fails here)
         with patch("agent.commands.workflow.infer_story_id", return_value=None):
             result = runner.invoke(app, ["commit"], input="Commit message\n")
@@ -201,9 +204,9 @@ def test_commit_command(mock_run):
             assert "Story ID is required" in result.stdout
 
         # commit with explicit args
-        result = runner.invoke(app, ["commit", "--story", "INFRA-100"], input="Fix bug\n")
-        assert result.exit_code == 0
-        assert "[INFRA-100] Fix bug" in str(mock_run.call_args)
+        result = runner.invoke(app, ["commit", "--story", "INFRA-100"])
+        assert result.exit_code == 0, f"Stdout: {result.stdout}\nException: {result.exception}"
+        assert "[INFRA-100] AI Commit Msg" in str(mock_run.call_args)
 
 @patch("subprocess.Popen")
 @patch("subprocess.run")

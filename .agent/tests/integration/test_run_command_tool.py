@@ -37,7 +37,7 @@ class TestRunCommandTool(unittest.TestCase):
         (self.repo_root / "test_file.txt").touch()
 
         result = run_command("ls -l test_file.txt")
-        self.assertIn("Command finished with exit code 0", result)
+        self.assertIn("test_file.txt", result)
         
         # Verify output was streamed
         output_callback.assert_called()

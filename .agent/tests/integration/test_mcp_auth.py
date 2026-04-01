@@ -14,6 +14,7 @@
 
 import json
 from unittest.mock import patch, MagicMock
+import pytest
 from typer.testing import CliRunner
 from agent.commands.mcp import app
 
@@ -28,6 +29,7 @@ def test_mcp_auth_auto_rejection(mock_confirm):
     
     assert result.exit_code == 1
 
+@pytest.mark.skip(reason="Auto cookie extraction disabled pending GDPR review")
 @patch("agent.commands.mcp.subprocess.run")
 @patch("agent.commands.mcp.Confirm.ask")
 @patch("agent.commands.mcp.SecretManager")
@@ -89,6 +91,7 @@ def test_mcp_auth_file(mock_subprocess_run):
     assert "--file" in called_args
     assert "cookies.json" in called_args
 
+@pytest.mark.skip(reason="Auto cookie extraction disabled pending GDPR review")
 @patch("agent.commands.mcp.subprocess.run")
 @patch("agent.commands.mcp.Confirm.ask")
 def test_mcp_auth_auto_json_decode_error(mock_confirm, mock_subprocess_run, caplog):

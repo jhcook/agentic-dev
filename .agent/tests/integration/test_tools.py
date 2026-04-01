@@ -38,8 +38,8 @@ from backend.voice.tools.get_installed_packages import get_installed_packages
 @pytest.fixture
 def cleanup_custom_tools():
     # Build absolute path matching what create_tool uses
-    import backend.voice.tools.create_tool as ct_module
-    custom_dir = os.path.join(os.path.dirname(os.path.abspath(ct_module.__file__)), "custom")
+    import agent.tools.dynamic as dyn_module
+    custom_dir = os.path.join(os.path.dirname(os.path.abspath(dyn_module.__file__)), "custom")
     test_file = os.path.join(custom_dir, "integration_test_tool.py")
     dirty_file = os.path.join(custom_dir, "dirty.py")
     
@@ -69,8 +69,8 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     
     filename = "integration_test_tool.py"
     # Build absolute path matching what create_tool uses internally
-    import backend.voice.tools.create_tool as ct_module
-    custom_dir = os.path.join(os.path.dirname(os.path.abspath(ct_module.__file__)), "custom")
+    import agent.tools.dynamic as dyn_module
+    custom_dir = os.path.join(os.path.dirname(os.path.abspath(dyn_module.__file__)), "custom")
     os.makedirs(custom_dir, exist_ok=True)
     
     abs_path = os.path.join(custom_dir, filename)
@@ -104,7 +104,7 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     dirty_path = os.path.join(custom_dir, "dirty.py")
     with open(dirty_path, "w") as f:
         f.write("api_key = '[REDACTED_SECRET]'")
-        f.write("\nemail = '[REDACTED_EMAIL]'")
+        f.write("\nemail = 'test@example.com'")
         
     scan_res_dirty = scan_file_for_secrets.invoke({"file_path": dirty_path})
     assert "Potential API Key found" in scan_res_dirty

@@ -122,7 +122,7 @@ implementation:
   - .agent/src/agent/sync/progress.py
   - .agent/src/agent/sync/sync.py
   tests:
-  - .agent/src/agent/core/ai/tests/test_vertex_provider.py
+  - .agent/tests/core/ai/test_vertex_provider.py
   - .agent/tests/commands/test_basic_commands.py
   - .agent/tests/commands/test_implement.py
   - .agent/tests/commands/test_implement_pathing.py

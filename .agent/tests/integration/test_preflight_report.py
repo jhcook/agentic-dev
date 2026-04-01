@@ -40,31 +40,54 @@ class TestPreflightReport(unittest.TestCase):
         self.mock_run.return_value.returncode = 0
         self.mock_run.return_value.stdout = "some_file.py"
         
-        self.mock_validate_patch = patch('agent.commands.check.validate_story')
+        self.mock_validate_patch = patch('agent.core.check.system.validate_story')
         self.mock_validate = self.mock_validate_patch.start()
-        self.mock_validate.return_value = True
+        self.mock_validate.return_value = {"passed": True, "error": None, "story_file": None}
 
-        self.mock_analyzer_patch = patch('agent.commands.check.DependencyAnalyzer') # Incorrect path? Check imports
-        # check.py imports DependencyAnalyzer inside the function or file?
-        # It imports inside the function: `from agent.core.dependency_analyzer import DependencyAnalyzer`
-        # So we need to patch verify where it is imported. 
-        # Actually it imports it inside `preflight`.
-        # so we patch 'agent.core.dependency_analyzer.DependencyAnalyzer'
         self.mock_analyzer_patch = patch('agent.core.dependency_analyzer.DependencyAnalyzer')
         self.mock_analyzer = self.mock_analyzer_patch.start()
         self.mock_analyzer.return_value.get_file_dependencies.return_value = set()
 
         self.mock_convene_patch = patch('agent.commands.check.convene_council_full')
         self.mock_convene = self.mock_convene_patch.start()
+        self.mock_convene.return_value = {
+            "verdict": "PASS",
+            "log_file": "log.md",
+            "json_report": {
+                "roles": [],
+                "overall_verdict": "PASS"
+            }
+        }
 
         self.mock_journey_patch = patch('agent.commands.check.validate_linked_journeys')
         self.mock_journey = self.mock_journey_patch.start()
         self.mock_journey.return_value = {"passed": True, "journey_ids": [], "error": None}
+        
+        # Additional mock gates
+        self.mock_adr_patch = patch('agent.commands.lint.run_adr_enforcement')
+        self.mock_adr = self.mock_adr_patch.start()
+        self.mock_adr.return_value = True
+        
+        self.mock_cq_patch = patch('agent.commands.check.check_code_quality', create=True)
+        self.mock_cq = self.mock_cq_patch.start()
+        # Create a mock namedtuple/object for quality_result
+        class MockQR:
+            passed = True
+            name = "Code Quality"
+            details = "All good"
+        self.mock_cq.return_value = MockQR()
+        
+        self.mock_coverage_patch = patch('agent.core.check.journeys.check_journey_coverage_gate')
+        self.mock_coverage = self.mock_coverage_patch.start()
+        self.mock_coverage.return_value = {"passed": True, "warnings": [], "error": None, "linked": 0, "total": 0}
+
+        self.mock_mapping_patch = patch('agent.core.check.journeys.run_journey_impact_mapping')
+        self.mock_mapping = self.mock_mapping_patch.start()
+        self.mock_mapping.return_value = {}
 
         # Mock Notion and NotebookLM interactions
         self.mock_sync_notebooklm_patch = patch('agent.sync.notebooklm.ensure_notebooklm_sync')
         self.mock_sync_notebooklm = self.mock_sync_notebooklm_patch.start()
-
 
     def tearDown(self):
         self.mock_console_patch.stop()
@@ -73,6 +96,10 @@ class TestPreflightReport(unittest.TestCase):
         self.mock_analyzer_patch.stop()
         self.mock_convene_patch.stop()
         self.mock_journey_patch.stop()
+        self.mock_adr_patch.stop()
+        self.mock_cq_patch.stop()
+        self.mock_coverage_patch.stop()
+        self.mock_mapping_patch.stop()
         self.mock_sync_notebooklm_patch.stop()
         shutil.rmtree(self.test_dir)
 
@@ -89,7 +116,9 @@ class TestPreflightReport(unittest.TestCase):
                 base=None,
                 provider=None,
                 ignore_tests=False,
-                interactive=False
+                interactive=False,
+                autoheal=False,
+                budget=3
             )
         except typer.Exit:
             pass # Typer always exits
@@ -121,7 +150,9 @@ class TestPreflightReport(unittest.TestCase):
                 base=None,
                 provider=None,
                 ignore_tests=False,
-                interactive=False
+                interactive=False,
+                autoheal=False,
+                budget=3
             )
         except typer.Exit as e:
             self.assertEqual(e.exit_code, 1)

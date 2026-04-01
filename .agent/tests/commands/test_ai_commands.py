@@ -79,8 +79,8 @@ def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
             
             # Let's trust logic if command succeeded
 
-@patch("agent.core.ai.ai_service.complete")
-def test_new_runbook_command(mock_complete, mock_deps):
+@patch("agent.commands.runbook.generate_runbook_chunked")
+def test_new_runbook_command(mock_generate, mock_deps):
     # Create template dir with template file
     templates_dir = mock_deps["root"] / ".agent" / "templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
@@ -99,12 +99,12 @@ def test_new_runbook_command(mock_complete, mock_deps):
                  patch("agent.core.context.context_loader.load_context", return_value={"rules": "Rules", "agents": {"description": "", "checks": ""}, "instructions": "", "adrs": ""}), \
                  patch("agent.commands.runbook.upsert_artifact"):
                  
-                mock_complete.return_value = (
+                mock_generate.return_value = (
                     "# Runbook Content\n\n"
                     "## Implementation Steps\n\n"
-                    "### Step 1: Update module\n\n"
-                    "#### [MODIFY] .agent/src/agent/core/config.py\n\n"
-                    "```\n<<<SEARCH\nold code\n===\nnew code\n>>>\n```\n"
+                    "### Step 1: Create module\n\n"
+                    "#### [NEW] `test_module.py`\n\n"
+                    "```python\ndef my_func(): pass\n```\n"
                 )
                 
                 result = runner.invoke(app, ["new-runbook", "STORY-123"])

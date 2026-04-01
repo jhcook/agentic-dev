@@ -64,7 +64,7 @@ def test_keeps_legitimate_syntax_error(tmp_path):
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
         # Force a PyCompileError to simulate real compiler failure
-        with patch("py_compile.compile", side_effect=py_compile.PyCompileError("Syntax Error", "broken.py")):
+        with patch("py_compile.compile", side_effect=py_compile.PyCompileError(SyntaxError, SyntaxError("invalid syntax"), "broken.py")):
             validated = cross_validate_syntax_findings(findings)
             assert len(validated) == 1
             assert "Syntax error" in validated[0]

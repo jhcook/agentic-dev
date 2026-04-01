@@ -88,7 +88,7 @@ implementation:
   - .agent/src/agent/core/implement/chunk_models.py
   - .agent/src/agent/core/implement/parser.py
   - .agent/src/agent/core/implement/telemetry_helper.py
-  - .agent/src/agent/core/implement/tests/test_runbook_validation.py
+  - .agent/tests/core/implement/test_runbook_validation.py
   - .agent/src/agent/core/logger.py
   - .agent/src/agent/core/router.py
   - .agent/src/agent/core/tokens.py

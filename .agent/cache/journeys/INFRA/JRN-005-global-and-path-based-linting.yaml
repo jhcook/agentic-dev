@@ -80,7 +80,7 @@ implementation:
   - .agent/src/agent/commands/plan.py
   - .agent/src/agent/commands/runbook.py
   - .agent/src/agent/commands/story.py
-  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/tests/commands/test_story_link_helpers.py
   - .agent/src/agent/commands/utils.py
   - .agent/src/agent/commands/workflow.py
   - .agent/src/agent/core/ai/prompts.py

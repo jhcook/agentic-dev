@@ -158,7 +158,7 @@ implementation:
   - .agent/cache/stories/INFRA/INFRA-172-per-section-vector-query-for-runbook-block-generation.md
   - .agent/src/agent/commands/runbook.py
   - .agent/src/agent/commands/runbook_generation.py
-  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/tests/commands/test_story_link_helpers.py
   - .agent/src/agent/commands/utils.py
   - .agent/src/agent/core/config.py
   - .agent/src/agent/core/context.py

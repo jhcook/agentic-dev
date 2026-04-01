@@ -212,15 +212,94 @@ def preflight(
     if not _story_result["passed"]:
         if _story_result["story_file"] is None:
             msg = f"Story file not found for {story_id}"
+            console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
+            if report_file:
+                 json_report["error"] = msg
+                 import json
+                 report_file.write_text(json.dumps(json_report, indent=2))
+            raise typer.Exit(code=1)
         else:
             msg = _story_result["error"] or "Story validation failed."
-        console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
-        console.print(f"[red]{msg}[/red]")
-        if report_file:
-             json_report["error"] = msg
-             import json
-             report_file.write_text(json.dumps(json_report, indent=2))
-        raise typer.Exit(code=1)
+            console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
+            if interactive:
+                from agent.core.fixer import InteractiveFixer
+                import os
+                import rich.prompt
+                from pathlib import Path
+                
+                fixer = InteractiveFixer()
+                story_file_path = Path(_story_result["story_file"])
+                
+                context = {
+                    "story_id": story_id,
+                    "missing_sections": [msg],
+                    "file_path": str(story_file_path)
+                }
+                options = fixer.analyze_failure("story_schema", context)
+                
+                if options:
+                    if os.getenv("AGENT_VOICE_MODE"):
+                        console.print("\n[bold]Found the following fix options:[/bold]")
+                        for i, opt in enumerate(options):
+                            desc = opt.get('description', '')
+                            # For voice mode, we print the option on a single line
+                            console.print(f"Option {i + 1}: {opt['title']}. {desc}")
+                        
+                        selection = rich.prompt.Prompt.ask("\nSelect an option (or say quit)")
+                        if selection.lower() in ("q", "quit", "exit"):
+                            raise typer.Exit(code=1)
+                    else:
+                        console.print("\n[bold yellow]🔧 Fix Options:[/bold yellow]")
+                        for i, opt in enumerate(options):
+                            if opt.get("action") == "open_editor":
+                                console.print(f"  [bold]{i + 1}.[/bold] {opt['title']} - {opt['description']}")
+                            else:
+                                console.print(f"  [bold]{i + 1}.[/bold] {opt['title']}\n     [dim]{opt['description']}[/dim]")
+                        
+                        selection = rich.prompt.Prompt.ask("\nSelect an option (or 'q' to quit)", default="1")
+                        if selection.lower() == 'q':
+                            raise typer.Exit(code=1)
+                            
+                    try:
+                        idx = int(selection) - 1
+                        if 0 <= idx < len(options):
+                            selected_opt = options[idx]
+                            
+                            if selected_opt.get("action") == "open_editor":
+                                fixer.apply_fix(selected_opt, story_file_path)
+                            else:
+                                console.print("\n[cyan]Applying fix...[/cyan]")
+                                if fixer.apply_fix(selected_opt, story_file_path):
+                                    console.print(f"[green]✅ Applied fix: {selected_opt['title']}[/green]")
+                                else:
+                                    console.print("[red]❌ Failed to apply fix[/red]")
+                                    raise typer.Exit(code=1)
+                            
+                            def verify_story_callback():
+                                res = _validate_story_core(story_id)
+                                return res["passed"]
+                            
+                            if fixer.verify_fix(verify_story_callback):
+                                console.print("[green]✅ Verification Passed[/green]")
+                            else:
+                                console.print("[red]❌ Verification Failed even after fix.[/red]")
+                                raise typer.Exit(code=1)
+                        else:
+                            console.print("[red]Invalid selection.[/red]")
+                            raise typer.Exit(code=1)
+                    except ValueError:
+                        console.print("[red]Invalid selection input.[/red]")
+                        raise typer.Exit(code=1)
+                else:
+                    console.print("[red]No fix options generated.[/red]")
+                    raise typer.Exit(code=1)
+            else:
+                if report_file:
+                     json_report["error"] = msg
+                     import json
+                     report_file.write_text(json.dumps(json_report, indent=2))
+                raise typer.Exit(code=1)
+
     console.print(f"[bold green]✅ Story schema validation passed for {story_id}[/bold green]")
 
     # 1.1 Notion Sync Awareness (Oracle Pattern)

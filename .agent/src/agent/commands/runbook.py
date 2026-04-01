@@ -427,6 +427,48 @@ def new_runbook(
             # Clean up checkpoint on success — it's now in the final runbook file
             if checkpoint_path.exists():
                 checkpoint_path.unlink(missing_ok=True)
+
+            # -- SPLIT_REQUEST Fallback in Chunked (INFRA-094) --
+            if "SPLIT_REQUEST" in content:
+                from agent.commands.runbook_helpers import parse_split_request
+                split_data = parse_split_request(content)
+                if split_data:
+                    config.split_requests_dir.mkdir(parents=True, exist_ok=True)
+                    split_path = config.split_requests_dir / f"{story_id}.json"
+                    split_path.write_text(json.dumps(split_data, indent=2))
+
+                    logger.warning(
+                        "split_request story=%s reason=%s suggestion_count=%d",
+                        story_id,
+                        scrub_sensitive_data(split_data.get("reason", ""))[:200],
+                        len(split_data.get("suggestions", [])),
+                    )
+
+                    if skip_forecast:
+                        logger.info(
+                            "split_request advisory_only=True story=%s (--skip-forecast)",
+                            story_id,
+                        )
+                        console.print(
+                            "[dim]ℹ️  AI recommended splitting (advisory only — "
+                            "--skip-forecast active). Chunked path cannot currently retry without it. Failing.[/dim]"
+                        )
+                        console.print("[bold red]❌ Advisory only not fully supported in chunked mode yet.[/bold red]")
+                        raise typer.Exit(code=1)
+                    else:
+                        console.print("[bold yellow]⚠️  AI recommends splitting this story.[/bold yellow]")
+                        console.print(f"  • Reason: {split_data.get('reason', 'N/A')}")
+                        est_loc = split_data.get('estimated_loc')
+                        est_files = split_data.get('estimated_files')
+                        if est_loc or est_files:
+                            console.print(f"  • Estimated scope: ~{est_loc or '?'} LOC across {est_files or '?'} files")
+                        console.print(f"  • Suggestions: {len(split_data.get('suggestions', []))}")
+                        for i, s in enumerate(split_data.get("suggestions", []), 1):
+                            console.print(f"    {i}. {s}")
+                        console.print(f"\nDecomposition saved to: {split_path}")
+                        console.print("[dim]Create child stories with: agent new-story <ID>[/dim]")
+                        raise typer.Exit(code=2)
+                        
             _write_and_sync(content, story_id, story_file, runbook_file)
             return
         except MaxRetriesExceededError as e:

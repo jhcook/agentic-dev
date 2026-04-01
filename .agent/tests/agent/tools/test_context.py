@@ -41,11 +41,14 @@ def test_checkpoint_and_rollback_integration(git_repo):
     test_file = git_repo / "test.txt"
     assert test_file.read_text() == "initial state"
 
-    # 1. Create a checkpoint
+    # Mutate the file to create uncommitted changes — checkpoint requires a dirty tree
+    test_file.write_text("pre-checkpoint modification")
+
+    # 1. Create a checkpoint (saves the dirty state and re-applies it)
     checkpoint_result = checkpoint("integration_test", repo_root=git_repo)
     assert checkpoint_result["success"] is True
 
-    # 2. Mutate the file
+    # 2. Mutate the file again to simulate work done after the checkpoint
     test_file.write_text("modified state")
 
     # 3. Add a new untracked file
@@ -56,8 +59,8 @@ def test_checkpoint_and_rollback_integration(git_repo):
     rollback_result = rollback(repo_root=git_repo)
     assert rollback_result["success"] is True
 
-    # 5. Assert the state is completely restored
-    assert test_file.read_text() == "initial state"
+    # 5. Assert the state is restored to pre-checkpoint modification
+    assert test_file.read_text() == "pre-checkpoint modification"
     assert not new_file.exists()
 
 def test_rollback_no_checkpoint_error(git_repo):

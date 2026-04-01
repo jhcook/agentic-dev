@@ -28,14 +28,14 @@ implementation:
   - .agent/src/agent/commands/check.py
   - .agent/src/agent/commands/match.py
   - .agent/src/agent/commands/preflight.py
-  - .agent/src/agent/commands/tests/test_preflight_autoheal.py
+  - .agent/tests/commands/test_preflight_autoheal.py
   - .agent/src/agent/core/engine/executor.py
   - .agent/src/agent/core/fixer.py
   - .agent/src/agent/core/formatters.py
   - .agent/src/agent/core/governance.py
   - .agent/src/agent/core/preflight/healer.py
-  - .agent/src/agent/core/preflight/test_healer.py
+  - .agent/tests/core/preflight/test_healer.py
   - .agent/src/agent/core/utils.py
   - .agent/src/agent/main.py
   tests:
-  - .agent/src/agent/commands/tests/test_preflight_autoheal.py
+  - .agent/tests/commands/test_preflight_autoheal.py

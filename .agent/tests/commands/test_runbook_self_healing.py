@@ -50,7 +50,7 @@ _RUNBOOK_TPL = '''\
 
 def helper() -> None:
     """No-op helper."""
-    pass
+    return None
 ```
 '''
 
@@ -70,6 +70,9 @@ def mock_fs(tmp_path):
     templates_dir.mkdir()
     (templates_dir / "runbook-template.md").write_text(
         "# Runbook Template\n## Plan\n<plan>"
+    )
+    (templates_dir / "license_header.txt").write_text(
+        "Copyright Mock\nLICENSE Mock"
     )
 
     with (
@@ -118,14 +121,14 @@ def test_code_gate_self_healing_success(mock_fs, app) -> None:
         patch("agent.core.ai.ai_service.complete", return_value=runbook_content),
         patch("agent.commands.runbook.upsert_artifact"),
         patch(
-            "agent.commands.runbook.validate_code_block",
+            "agent.commands.runbook_gates.validate_code_block",
             side_effect=[gate_fail, gate_pass],
         ),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 0, result.output
-        assert "failed code gates" in result.stdout
+        assert "gate issue(" in result.stdout
         assert "Runbook generated" in result.stdout
         assert (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
 
@@ -142,12 +145,12 @@ def test_code_gate_exhausted_retries(mock_fs, app) -> None:
     with (
         patch("agent.core.ai.ai_service.complete", return_value=runbook_content),
         patch("agent.commands.runbook.upsert_artifact"),
-        patch("agent.commands.runbook.validate_code_block", return_value=gate_fail),
+        patch("agent.commands.runbook_gates.validate_code_block", return_value=gate_fail),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 1
-        assert "Code gates failed" in result.output
+        assert "Gate corrections exhausted" in result.output
         assert not (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
 
 
@@ -166,11 +169,11 @@ def test_code_gate_warnings_non_blocking(mock_fs, app) -> None:
         patch("agent.core.ai.ai_service.complete", return_value=runbook_content),
         patch("agent.commands.runbook.upsert_artifact"),
         patch(
-            "agent.commands.runbook.validate_code_block",
+            "agent.commands.runbook_gates.validate_code_block",
             return_value=gate_warnings_only,
         ),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 0, result.output
         assert "Runbook generated" in result.stdout

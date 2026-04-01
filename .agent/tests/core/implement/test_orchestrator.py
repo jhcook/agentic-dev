@@ -110,7 +110,8 @@ class TestSplitRunbookIntoChunks:
 class TestOrchestrator:
     """Tests for Orchestrator.apply_chunk."""
 
-    def test_apply_chunk_new_file(self, tmp_path, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_apply_chunk_new_file(self, tmp_path, monkeypatch):
         """New-file blocks are written and step_loc is non-zero."""
         monkeypatch.chdir(tmp_path)
         orch = Orchestrator("INFRA-001", yes=True)
@@ -120,16 +121,17 @@ class TestOrchestrator:
             '"""New module."""\n\n\ndef foo():\n    """Foo."""\n    pass\n'
             '```'
         )
-        step_loc, modified = orch.apply_chunk(chunk, step_index=1)
+        step_loc, modified = await orch.apply_chunk(chunk, step_index=1)
         assert "new_module.py" in modified
         assert step_loc > 0
 
-    def test_apply_chunk_docstring_violation_warned_not_rejected(self, tmp_path, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_apply_chunk_docstring_violation_warned_not_rejected(self, tmp_path, monkeypatch):
         """Files missing docstrings produce warnings but are still written."""
         monkeypatch.chdir(tmp_path)
         orch = Orchestrator("INFRA-001", yes=True)
         chunk = "File: bad_module.py\n```python\ndef foo():\n    pass\n```"
-        _, modified = orch.apply_chunk(chunk, step_index=1)
+        _, modified = await orch.apply_chunk(chunk, step_index=1)
         # Docstring gate demoted to warning — file is NOT rejected
         assert "bad_module.py" not in orch.rejected_files
         assert "bad_module.py" in modified
@@ -373,7 +375,7 @@ class TestValidateRunbookSchema:
             '"""Tests."""\n\n'
             'SAMPLE = (\n'
             '    "#### [MODIFY] .agent/src/agent/core/config.py\\n\\n"\n'
-            '    "```\\n<<<SEARCH\\nold\\n===\\nnew\\n>>>\\n```\\n"\n'
+            '    "```\\n<<<FIND\\nold\\n===\\nnew\\n>>>\\n```\\n"\n'
             '    "#### [NEW] .agent/src/agent/core/helper.py\\n\\n"\n'
             '    "```python\\ndef helper(): pass\\n```\\n"\n'
             '    "#### [DELETE] .agent/src/agent/core/old.py\\n\\n"\n'

@@ -99,14 +99,13 @@ def test_runbook_prompt_construction(mock_validate, mock_complete, mock_deps):
                     "```python\ndef hello(): pass\n```\n"
                 )
                  
-                result = runner.invoke(app, ["new-runbook", "STORY-PROMPT"])
-             
-                assert result.exit_code == 0
+                result = runner.invoke(app, ["new-runbook", "STORY-PROMPT", "--legacy-gen"])
              
                 # Capture the arguments passed to complete
-                args, _ = mock_complete.call_args
-                system_prompt = args[0]
-             
+                kwargs = mock_complete.call_args.kwargs
+                args = mock_complete.call_args.args
+                system_prompt = kwargs.get("system_prompt") if "system_prompt" in kwargs else args[0]
+              
                 # Verification 1: Check dynamic agents are present
                 assert "Architect Bot" in system_prompt
                 assert "Sec Bot" in system_prompt

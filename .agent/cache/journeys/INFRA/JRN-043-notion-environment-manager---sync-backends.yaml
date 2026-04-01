@@ -76,7 +76,7 @@ implementation:
   - .agent/src/agent/sync/cli.py
   - .agent/src/agent/sync/notion.py
   - .agent/src/agent/sync/sync.py
-  - .agent/src/agent/sync/test_spacing.py
+  - .agent/tests/sync/test_spacing.py
   tests:
   - .agent/tests/commands/test_runbook_prompt.py
   - .agent/tests/commands/test_sync.py
