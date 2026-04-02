@@ -22,7 +22,7 @@ import re
 def test_jrn_010_step_1():
     """Developer runs `agent impact` and verifies the output."""
     try:
-        result = subprocess.run(['agent', 'impact'], capture_output=True, text=True, check=True)
+        result = subprocess.run(['agent', 'impact'], capture_output=True, text=True, check=True, timeout=30)
         assert result.returncode == 0, f"Command failed with error: {result.stderr}"
 
         expected_output_patterns = [

@@ -21,7 +21,7 @@ import re
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Set, Tuple, Union, Optional
+from typing import Dict, Any, List, Set, Tuple, TypedDict, Union, Optional
 
 import mistune
 
@@ -48,9 +48,38 @@ except ImportError:
 _logger = get_logger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Typed structures returned by the AST parser
+# ---------------------------------------------------------------------------
+
+class RunbookOperationDict(TypedDict, total=False):
+    """A single [MODIFY], [NEW], or [DELETE] operation parsed from a runbook step."""
+
+    path: str
+    """Repo-relative file path declared in the operation header."""
+    blocks: List[Dict[str, str]]
+    """For MODIFY — list of {'search': str, 'replace': str} pairs."""
+    content: str
+    """For NEW — full file content to write."""
+    rationale: str
+    """For DELETE — human-readable reason for deletion."""
+    malformed: bool
+    """True when the operation header is present but its body is invalid."""
+
+
+class RunbookStepDict(TypedDict):
+    """A structured implementation step from a runbook's ## Implementation Steps section."""
+
+    title: str
+    """Step title with the 'Step N: ' prefix stripped."""
+    operations: List[RunbookOperationDict]
+    """Ordered list of file operations belonging to this step."""
+
+
 class InvalidTemplateError(Exception):
     """Raised when a runbook skeleton is malformed or lacks addressable blocks."""
     pass
+
 
 
 def validate_path_safety(path_str: str) -> str:
@@ -445,7 +474,7 @@ def _extract_fenced_content(block_body: str) -> str:
     return ""
 
 
-def _extract_runbook_data_ast(content: str) -> List[dict]:
+def _extract_runbook_data_ast(content: str) -> List[RunbookStepDict]:
     """Extract implementation steps using an AST parser.
 
     Uses mistune to parse markdown into tokens and walks the tree to identify
@@ -502,7 +531,7 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
                 parts.append('\n')
         return ''.join(parts).strip()
 
-    steps: List[dict] = []
+    steps: List[RunbookStepDict] = []
     current_step: Optional[dict] = None
     current_op: Optional[dict] = None
     in_impl_steps = False

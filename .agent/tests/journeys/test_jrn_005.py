@@ -23,7 +23,7 @@ def test_jrn_005_step_1():
     Assertions: Command exits with status 0, Expected output displayed
     """
     expected_output = "No issues found."
-    result = subprocess.run(['agent', 'lint'], capture_output=True, text=True)
+    result = subprocess.run(['agent', 'lint'], capture_output=True, text=True, timeout=30)
 
     assert result.returncode == 0
     assert expected_output in result.stdout
@@ -34,7 +34,7 @@ def test_jrn_005_step_2():
     Assertions: Command exits with status 0, Expected output displayed
     """
     expected_output = "No issues found."
-    result = subprocess.run(['agent', 'lint', '--all'], capture_output=True, text=True)
+    result = subprocess.run(['agent', 'lint', '--all'], capture_output=True, text=True, timeout=30)
 
     assert result.returncode == 0
     assert expected_output in result.stdout

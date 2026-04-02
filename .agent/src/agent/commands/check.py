@@ -223,7 +223,6 @@ def preflight(
             console.print(f"[bold red]❌ Story schema validation failed for {story_id}[/bold red]")
             if interactive:
                 from agent.core.fixer import InteractiveFixer
-                import os
                 import rich.prompt
                 from pathlib import Path
                 
@@ -356,12 +355,15 @@ def preflight(
 
             try:
                 # Stream output live so the terminal doesn't appear frozen.
-                res = subprocess.run(cmd, cwd=cwd)
+                # Propagate AGENT_SKIP_KEYRING so pytest subprocess never triggers
+                # macOS keychain dialogs (which would block unattended CI runs).
+                _test_env = {**os.environ, "AGENT_SKIP_KEYRING": "1"}
+                res = subprocess.run(cmd, cwd=cwd, env=_test_env)
                 if res.returncode != 0:
                     console.print(f"  [bold red]❌ {cmd_name} failed.[/bold red]")
                     if _test_healer:
                         # Re-run with capture to collect the traceback for healing.
-                        cap = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+                        cap = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=_test_env)
                         traceback = (cap.stdout or "") + (cap.stderr or "")
                         attempt_num = _test_healer._attempts + 1
                         console.print(f"  [cyan]🩹 Autoheal: attempting test fix (attempt {attempt_num}/{budget})...[/cyan]")
@@ -378,6 +380,9 @@ def preflight(
                 else:
                     console.print(f"  [green]✅ {cmd_name} passed.[/green]")
 
+            except subprocess.TimeoutExpired:
+                console.print(f"  [bold red]❌ {cmd_name} timed out — killed.[/bold red]")
+                tests_ok = False
             except Exception as e:
                 console.print(f"  [bold red]❌ Failed to execute {cmd_name}: {e}[/bold red]")
                 tests_ok = False
@@ -593,12 +598,14 @@ def preflight(
                 try:
                     def _progress(msg: str):
                         msg_stripped = msg.strip()
-                        # Start spinner on "is reviewing"
+                        # Start spinner on "is reviewing" — guard against duplicates
+                        # from ADK retries sending the same message multiple times.
                         start_match = re.search(r"🤖 @(\w+) is reviewing", msg)
                         if start_match:
                             role = start_match.group(1)
-                            task_id = progress.add_task(f"[dim]  - {msg_stripped}[/dim]", total=None)
-                            tasks[role] = task_id
+                            if role not in tasks:
+                                task_id = progress.add_task(f"[dim]  - {msg_stripped}[/dim]", total=None)
+                                tasks[role] = task_id
                             return
                         
                         # Complete spinner on final verdict

@@ -15,18 +15,23 @@
 """AI-generated regression tests for JRN-018."""
 import pytest
 import subprocess
+import shutil
 
 @pytest.mark.journey("JRN-018")
 def test_jrn_018_step_1():
     """Developer runs `agent config`."""
-    result = subprocess.run(["agent", "config"], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(["agent", "config"], capture_output=True, text=True, timeout=30)
     assert result.returncode == 2
     assert "Usage:" in result.stderr or "Usage:" in result.stdout
 
 @pytest.mark.journey("JRN-018")
 def test_jrn_018_step_2():
     """Developer runs `agent config --help`."""
-    result = subprocess.run(["agent", "config", "--help"], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(["agent", "config", "--help"], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Usage:" in result.stdout
     assert "--help" in result.stdout
@@ -34,13 +39,17 @@ def test_jrn_018_step_2():
 @pytest.mark.journey("JRN-018")
 def test_jrn_018_step_3():
     """Developer runs `agent config list`."""
-    result = subprocess.run(["agent", "config", "list"], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(["agent", "config", "list"], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "No configuration file found" in result.stdout or "No configuration file found" in result.stderr or "agent.yaml" in result.stdout or "router.yaml" in result.stdout
 
 @pytest.mark.journey("JRN-018")
 def test_jrn_018_step_4():
     """Developer runs `agent preflight`."""
-    result = subprocess.run(["agent", "preflight", "--help"], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(["agent", "preflight", "--help"], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Usage:" in result.stdout

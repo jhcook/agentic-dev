@@ -18,7 +18,13 @@ panel:   # native | adk
 agent:     # anthropic | gemini | gh | ollama | openai | vertex | vertex-anthropic
   provider: vertex
   test_commands:
-    .agent/: cd .agent && PYTHONPATH=src ../.venv/bin/python -m pytest tests/ -q --tb=short
+    # Preflight scope: agent framework only (tests/agent, tests/core, tests/commands, etc.)
+    # Excluded dirs (run in their own CI pipelines, not here):
+    #   tests/voice       - voice product tests; import torch (~2GB) at module level → OOM
+    #   tests/backend     - backend service tests; same heavy import problem
+    #   tests/integration - requires live services (DB, APIs)
+    #   tests/e2e         - requires full stack deployed
+    .agent/: cd .agent && AGENT_SKIP_KEYRING=1 PYTHONPATH=src ../.venv/bin/python -m pytest tests/ -q --tb=short --timeout=60 --ignore=tests/voice --ignore=tests/backend --ignore=tests/integration --ignore=tests/e2e
   models:
     gemini: models/gemini-3.1-pro-preview
     vertex: gemini-2.5-pro

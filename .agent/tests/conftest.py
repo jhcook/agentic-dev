@@ -15,6 +15,11 @@
 import pytest
 import os
 
+# Suppress macOS keychain dialogs during all test runs (including subprocesses).
+# This prevents `agent.core.secrets.get_secret_manager()` from calling
+# keyring.get_password() which triggers a blocking system dialog on macOS.
+os.environ.setdefault("AGENT_SKIP_KEYRING", "1")
+
 @pytest.fixture(autouse=True)
 def set_terminal_width():
     """Force rich/typer to use a wide terminal so output assertions don't break due to word wrapping."""
