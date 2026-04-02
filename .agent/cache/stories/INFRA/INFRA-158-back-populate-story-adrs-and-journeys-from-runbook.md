@@ -70,6 +70,8 @@ As a **Platform Developer**, I want **`agent new-runbook` to extract ADR and Jou
 - **INFRA-094 and others**: Multiple tests and files modified/added in this branch (`.agent/tests/journeys/test_jrn_*.py`, `.agent/tests/commands/test_runbook_split_request.py`, `.agent/tests/governance/test_syntax_validation.py`, `.agent/src/agent/commands/check.py`, etc.) are explicitly noted as out-of-scope but co-committed to finalize the branch preflight.
 - **CI configuration update**: Added `--ignore` flags for `tests/voice`, `tests/backend`, `tests/integration`, and `tests/e2e` to the preflight test command in `agent.yaml`. These directories import torch/FastAPI at module level causing OOM kills when combined with agent framework tests in a single pytest process. The rationale is documented inline in `agent.yaml`. No ADR required — this is an operational CI scoping decision, not an architectural one.
 - **Runbook Parser & Credentials**: A refactor of the runbook parser, AI provider engine (`ai_provider.py`), and credential handling systems (`credentials.py`) was also co-committed as an out-of-scope improvement.
+- **`.agent/src/agent/tools/context.py`**: Whitespace-only cleanup (trailing spaces removed from two blank lines inside the `checkpoint()` function). No behavioural change.
+- **`.agent/src/agent/tools/custom/test_override.py`**: Accidentally committed scratch file (contained `os.system('ls')`). **Deleted in this branch** — it should never have been committed.
 
 **Workflows affected:** `agent new-runbook` — purely additive post-processing step after successful generation.
 
