@@ -63,6 +63,7 @@ As a **Platform Developer**, I want **`agent new-runbook` to extract ADR and Jou
 - `CHANGELOG.md` — **[MODIFY]** add INFRA-158 entry under Unreleased
 - `INFRA-156-preflight-finding-verification-gate.md` — **[MODIFY]** AC-6 and AC-7 added documenting the `agent implement` silent S/R mismatch failure mode discovered during INFRA-158 investigation
 - `.agent/tests/commands/test_runbook.py` — **[MODIFY]** Update integration tests and mock behaviors to align with the new pipeline, fixing legacy assertions.
+- `.agent/pyproject.toml` — **[MODIFY]** add new production dependencies `beautifulsoup4==4.14.3` and `markdownify==1.12.2` (required by `merge_story_links` HTML→markdown conversion); add new dev dependency `pytest-timeout` (prevents keychain-blocking test hangs in CI)
 
 **Out-of-scope but co-committed changes:**
 - **INFRA-094 and others**: Multiple tests and files modified/added in this branch (`.agent/tests/journeys/test_jrn_*.py`, `.agent/tests/commands/test_runbook_split_request.py`, `.agent/tests/governance/test_syntax_validation.py`, `.agent/src/agent/commands/check.py`, etc.) are explicitly noted as out-of-scope but co-committed to finalize the branch preflight.
