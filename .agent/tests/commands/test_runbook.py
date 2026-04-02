@@ -191,3 +191,42 @@ def test_new_runbook_no_file_on_failure(mock_fs, app):
 
         assert result.exit_code == 1
         assert not (mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md").exists()
+
+
+def test_story_links_updated_event_emitted(mock_fs, app):
+    """story_links_updated structured log event is emitted after successful back-population (AC-7).
+
+    Verifies that when the generated runbook content contains ADR or Journey references,
+    the _write_and_sync path emits a ``story_links_updated`` structured log event with
+    the correct story_id, adrs, and journeys fields per the Observability NFR.
+    """
+    story_id = "INFRA-008"
+    story_file = mock_fs / "stories" / "INFRA" / f"{story_id}.md"
+    story_file.write_text("## State\nCOMMITTED\n## Linked ADRs\n## Linked Journeys\n")
+
+    with patch("agent.core.ai.ai_service.complete", return_value=VALID_RUNBOOK_CONTENT), \
+         patch("agent.commands.runbook.upsert_artifact"), \
+         patch("agent.commands.runbook.extract_adr_refs", return_value={"ADR-001"}), \
+         patch("agent.commands.runbook.extract_journey_refs", return_value={"JRN-001"}), \
+         patch("agent.commands.runbook.merge_story_links") as mock_merge, \
+         patch("agent.commands.runbook.logger") as mock_logger:
+
+        runner.invoke(app, [story_id, "--legacy-gen"])
+
+    # merge_story_links must have been called (AC-3 / AC-5)
+    mock_merge.assert_called_once()
+
+    # The story_links_updated structured log event must be emitted (AC-7 / Observability NFR)
+    info_calls = [c for c in mock_logger.info.call_args_list if c[0][0] == "story_links_updated"]
+    assert info_calls, (
+        "Expected logger.info('story_links_updated', ...) to be called but it was not. "
+        f"Actual info calls: {[c[0][0] for c in mock_logger.info.call_args_list]}"
+    )
+    _, kwargs = info_calls[0]
+    extra = kwargs.get("extra", {})
+    assert extra.get("story_id") == story_id
+    assert "ADR-001" in extra.get("adrs", [])
+    assert "JRN-001" in extra.get("journeys", [])
+
+
+
