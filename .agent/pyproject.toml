@@ -51,7 +51,7 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "mistune>=3.0.0",
     "beautifulsoup4==4.14.3",
-    "markdownify==1.12.2",
+    "markdownify==1.2.2",
 ]
 
 [project.optional-dependencies]
