@@ -186,6 +186,14 @@ def _write_and_sync(
         journeys = extract_journey_refs(content)
         if adrs or journeys:
             merge_story_links(story_file, adrs, journeys)
+            logger.info(
+                "story_links_updated",
+                extra={
+                    "story_id": story_id,
+                    "adrs": sorted(adrs),
+                    "journeys": sorted(journeys),
+                },
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning("story_links_update_failed story=%s error=%s", story_id, exc)
 
