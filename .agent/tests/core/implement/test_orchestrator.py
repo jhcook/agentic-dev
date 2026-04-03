@@ -113,7 +113,9 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_apply_chunk_new_file(self, tmp_path, monkeypatch):
         """New-file blocks are written and step_loc is non-zero."""
+        import agent.core.config as _cfg
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(_cfg.config, "repo_root", tmp_path)
         orch = Orchestrator("INFRA-001", yes=True)
         chunk = (
             'File: new_module.py\n'
@@ -128,7 +130,9 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_apply_chunk_docstring_violation_warned_not_rejected(self, tmp_path, monkeypatch):
         """Files missing docstrings produce warnings but are still written."""
+        import agent.core.config as _cfg
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(_cfg.config, "repo_root", tmp_path)
         orch = Orchestrator("INFRA-001", yes=True)
         chunk = "File: bad_module.py\n```python\ndef foo():\n    pass\n```"
         _, modified = await orch.apply_chunk(chunk, step_index=1)
