@@ -690,31 +690,43 @@ def preflight(
         if _ref_metrics.get("total_refs", 0) > 0 or _roles_data:
             _print_reference_summary(console, _roles_data, _ref_metrics, _fv_metrics)
 
+        # Detect when all agents failed (e.g. auth expired) — all findings
+        # were filtered with 0 validated, meaning no agent actually reviewed.
+        # Must be computed BEFORE writing .preflight_result so a false PASS
+        # is never cached when credentials have lapsed.
+        _fv_check = result.get("json_report", {}).get("finding_validation", {})
+        _total_ai = _fv_check.get("total_ai_findings", 0)
+        _validated = _fv_check.get("validated", 0)
+        _filtered = _fv_check.get("filtered_false_positives", 0)
+        _is_inconclusive = _total_ai > 0 and _validated == 0 and _filtered == _total_ai
+
         # Persist per-role verdicts to .preflight_result immediately after the council
         # runs (PASS *and* BLOCK). The next run reads this to inject previous verdicts
         # into the prompt so agents cannot oscillate on already-resolved findings.
-        try:
-            import json as _json
-            import time as _time
-            _marker_path = config.cache_dir / ".preflight_result"
-            _head_sha = subprocess.run(
-                ["git", "rev-parse", "HEAD"], capture_output=True, text=True
-            ).stdout.strip()
-            _overall = result.get("json_report", {}).get("overall_verdict", "UNKNOWN")
-            _role_verdicts = {
-                r["name"]: {"verdict": r.get("verdict", "UNKNOWN"), "summary": r.get("summary", "")}
-                for r in _roles_data
-                if "name" in r
-            }
-            _marker_path.write_text(_json.dumps({
-                "story_id": story_id,
-                "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "commit": _head_sha,
-                "verdict": _overall,
-                "role_verdicts": _role_verdicts,
-            }, indent=2))
-        except Exception:
-            pass  # Best-effort, non-critical
+        # Skip the write when inconclusive — preserve the previous cache entry intact.
+        if not _is_inconclusive:
+            try:
+                import json as _json
+                import time as _time
+                _marker_path = config.cache_dir / ".preflight_result"
+                _head_sha = subprocess.run(
+                    ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+                ).stdout.strip()
+                _overall = result.get("json_report", {}).get("overall_verdict", "UNKNOWN")
+                _role_verdicts = {
+                    r["name"]: {"verdict": r.get("verdict", "UNKNOWN"), "summary": r.get("summary", "")}
+                    for r in _roles_data
+                    if "name" in r
+                }
+                _marker_path.write_text(_json.dumps({
+                    "story_id": story_id,
+                    "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "commit": _head_sha,
+                    "verdict": _overall,
+                    "role_verdicts": _role_verdicts,
+                }, indent=2))
+            except Exception:
+                pass  # Best-effort, non-critical
 
         if not governance_passed:
             if report_file:
@@ -725,13 +737,7 @@ def preflight(
 
             raise typer.Exit(code=1)
 
-        # Detect when all agents failed (e.g. auth expired) — all findings
-        # were filtered with 0 validated, meaning no agent actually reviewed
-        _fv_check = result.get("json_report", {}).get("finding_validation", {})
-        _total_ai = _fv_check.get("total_ai_findings", 0)
-        _validated = _fv_check.get("validated", 0)
-        _filtered = _fv_check.get("filtered_false_positives", 0)
-        if _total_ai > 0 and _validated == 0 and _filtered == _total_ai:
+        if _is_inconclusive:
             _obs_logger = get_logger(__name__)
             from agent.core.ai import ai_service as _ai_svc
             _provider = getattr(_ai_svc, "provider", None) or "unknown"
@@ -740,10 +746,10 @@ def preflight(
                 extra={"provider": _provider, "total_findings": _total_ai},
             )
             console.print(
-                "[bold yellow]⚠️  Preflight INCONCLUSIVE — all governance agents failed "
-                "(likely due to expired credentials). No checks were actually performed.[/bold yellow]"
+                "[bold yellow]? Preflight INCONCLUSIVE[/bold yellow] — governance council produced no "
+                "validated findings (likely expired credentials). "
+                "Previous preflight result preserved; no action taken."
             )
-            # Provider-aware credential hint
             _auth_hints = {
                 "gemini": "Run [bold]agent secret set GEMINI_API_KEY[/bold] or check your API key.",
                 "vertex": "Run [bold]gcloud auth application-default login[/bold] to reauthenticate.",
@@ -753,15 +759,15 @@ def preflight(
                 "gh": "Run [bold]gh auth login[/bold] to reauthenticate.",
             }
             _hint = _auth_hints.get(_provider, "Check your AI provider credentials.")
-            console.print(
-                f"[yellow]{_hint} Then re-run [bold]agent preflight[/bold].[/yellow]"
-            )
+            console.print(f"[dim]{_hint} Then re-run [bold]agent preflight[/bold].[/dim]")
             if report_file:
                 json_report["overall_verdict"] = "INCONCLUSIVE"
                 json_report["error"] = "All governance agents failed — no checks performed."
                 import json
                 report_file.write_text(json.dumps(json_report, indent=2))
+            # .preflight_result was not written above — previous result preserved.
             raise typer.Exit(code=1)
+
     
     _preflight_duration_ms = int((_pf_time.time() - _preflight_start) * 1000)
     logger.info(
@@ -789,9 +795,5 @@ def preflight(
              json_report["overall_verdict"] = "PASS"
              
          report_file.write_text(json.dumps(json_report, indent=2))
-
-
-
-
 
 # nolint: loc-ceiling
