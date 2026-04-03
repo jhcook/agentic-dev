@@ -59,21 +59,29 @@ As a **Platform Developer**, I want **`agent new-runbook` to verify that every `
 ## Impact Analysis Summary
 
 **Components touched:**
-- `agent/commands/runbook.py` — **[MODIFY]** import `validate_sr_blocks` and `generate_sr_correction_prompt`; replace TODO stub with full self-healing S/R validation loop (AC-1, AC-2, AC-4, AC-6, AC-7)
-- `agent/commands/utils.py` — **[MODIFY]** add `_lines_match`, `validate_sr_blocks`, and `generate_sr_correction_prompt` helpers; add `List` import and `scrub_sensitive_data` import from `agent.core.utils`
-- `CHANGELOG.md` — **[MODIFY]** add INFRA-159 S/R pre-validation entry under Unreleased
+- `agent/core/implement/sr_validation.py` — **[MODIFY]** add `_dedent_normalize_match` helper and wire it as Layer 1.5 inside `validate_and_correct_sr_blocks`, between the exact-match check and the fuzzy/AI re-anchor path. This module is the shared S/R validation engine already invoked by `agent new-runbook` at generation time (via `runbook.py`) and also at apply time (via `guards.py`). The logic correctly lives here rather than in `commands/utils.py` to avoid duplication.
+- `CHANGELOG.md` — **[MODIFY]** add INFRA-159 entry under Unreleased
 
-**Workflows affected:** `agent new-runbook` — S/R validation gate inserted between AI generation and file save. When mismatches are found, a self-healing re-prompt is issued up to `max_attempts - 1` times before hard failure.
+**Workflows affected:** `agent new-runbook` — indentation-shift mismatches (e.g. AI omitting class-level indentation on method SEARCH blocks) are now auto-corrected without an AI call, before falling through to fuzzy matching or AI re-anchoring.
 
 **Risks identified:**
+- `_dedent_normalize_match` requires a 100% content match after stripping per-line leading whitespace. Over-correction is not possible — if the dedented strings don't match exactly, the layer is a no-op.
 - Correction re-prompting adds latency (one extra AI call per retry) — bounded by the 2-retry limit.
 - Stringent verbatim matching may reject valid blocks where the AI uses equivalent whitespace — the match should normalise trailing whitespace per line but require exact content otherwise.
+
+**Co-committed housekeeping (out-of-scope but bundled):**
+- `agent/tests/commands/test_create_tool.py` — **[MODIFY]** fixed `test_security_scan_allows_override` cleanup to use `_get_custom_tools_dir()` for the absolute output path (was using a wrong relative path, leaving `test_override.py` on disk after the test run); removed duplicate copyright header
+- `agent/tests/journeys/test_jrn_001.py` — **[MODIFY]** skip gracefully when running on the `main` branch where no feature story is present (prevents false failures from interactive prompt abort)
+- `agent/tests/journeys/test_jrn_002.py` — **[MODIFY]** accept `"Aborted"` as a valid graceful-failure outcome when running on `main` branch without a feature story
 
 ## Test Strategy
 
 - **Unit — `validate_sr_blocks` (all match)**: Given a mock runbook and mock file contents where all SEARCH blocks are present, assert `[]` (no mismatches) is returned.
 - **Unit — `validate_sr_blocks` (one mismatch)**: Given one SEARCH block whose content is not in the target file, assert the mismatch is returned with the correct file and block index.
 - **Unit — new file exempt**: Given a `[NEW]` block, assert it is not validated.
+- **Unit — `_dedent_normalize_match` (successful match)**: Given a SEARCH block where the first line is missing its class-level 4-space indent (the exact AI hallucination pattern), assert the function returns the correctly-indented region from the actual file content verbatim.
+- **Unit — `_dedent_normalize_match` (no match)**: Given a SEARCH block whose content genuinely does not exist in the file even after stripping indentation, assert the function returns `None`.
+- **Integration — indentation error corrected without AI call**: Run `validate_and_correct_sr_blocks` with a runbook containing an indentation-shifted SEARCH block; assert the corrected runbook contains the properly-indented anchor and that no AI service call was made.
 - **Integration — correction loop (success)**: Mock AI to return a bad runbook on first call and a corrected runbook on second call; assert the saved runbook contains the corrected block.
 - **Integration — correction loop (exhausted)**: Mock AI to always return bad SEARCH content; assert exit code `1` and no runbook file written after 2 retries.
 - **Negative test — missing target file**: Assert exit `1` and error message when a `[MODIFY]` block targets a non-existent path.

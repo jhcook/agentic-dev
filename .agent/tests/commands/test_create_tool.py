@@ -13,24 +13,11 @@
 # limitations under the License.
 
 
-# Copyright 2026 Justin Cook
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import pytest
 import os
 import shutil
 from backend.voice.tools.create_tool import create_tool
+from agent.tools.dynamic import _get_custom_tools_dir
 
 # Test Fixture for Cleanup
 @pytest.fixture
@@ -71,10 +58,12 @@ def test_security_scan_rejects_os_system():
 def test_security_scan_allows_override():
     """Test that NOQA override works."""
     code = "import os # NOQA: SECURITY_RISK\nos.system('ls')"
-    # We expect it to try to create file (and fail or succeed depending on fs), but NOT fail at security scan
+    # NOQA override should bypass the security scan and actually write the file.
+    # Use _get_custom_tools_dir() for the absolute path so cleanup is CWD-independent.
+    _output = _get_custom_tools_dir() / "test_override.py"
     try:
         res = create_tool.invoke({"file_path": "test_override.py", "code": code})
         assert "Security Rejection" not in res
     finally:
-         try: os.remove(".agent/src/backend/voice/tools/custom/test_override.py")
-         except: pass
+        _output.unlink(missing_ok=True)
+

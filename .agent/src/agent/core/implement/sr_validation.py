@@ -40,9 +40,21 @@ def validate_and_correct_sr_blocks(
 
     After AI generates a runbook, this function reads each [MODIFY] target
     file from disk and verifies that every <<<SEARCH block matches actual
-    content.  If a SEARCH block is hallucinated (not found in the file),
-    it uses fuzzy matching to find the best matching region and rewrites
-    the SEARCH text to the verified content.
+    content.  Three correction layers are applied in order:
+
+    1. **Exact match** — the SEARCH text appears verbatim in the file.  No
+       action needed; fast-path continue.
+    2. **Dedent-normalised match** (Layer 1.5) — strip per-line leading
+       whitespace from both the SEARCH block and a same-size sliding window
+       over the actual file.  If a window matches at 100 % similarity after
+       stripping, the SEARCH block is rewritten with the correctly-indented
+       real text.  Catches the common AI hallucination of omitting
+       class-level indentation on a method definition (zero AI calls needed).
+    3. **Fuzzy match + AI re-anchor** — similarity-scored sliding window;
+       if the best window score meets *threshold*, its text replaces the
+       SEARCH block.  If not, the AI is prompted to re-anchor the block
+       against the actual file content.  If AI re-anchoring also fails, the
+       block is flagged as unresolvable.
 
     Args:
         runbook_content: Raw runbook markdown string.
@@ -86,6 +98,28 @@ def validate_and_correct_sr_blocks(
 
             if search_text in actual_content:
                 continue  # exact match — no correction needed
+
+            # Layer 1.5: dedent-normalised match
+            # Catches the common case where the AI drops class-level indentation
+            # from a method's SEARCH block (e.g. writes `def foo` instead of
+            # `    def foo`).  Stripping per-line leading whitespace and then
+            # sliding a window over the file at 100 % normalised similarity
+            # gives a reliable, zero-AI correction.
+            dedent_match = _dedent_normalize_match(search_text, actual_content)
+            if dedent_match is not None:
+                old_block = f"<<<SEARCH\n{search_text}\n===\n{replace_text}\n>>>"
+                new_block = f"<<<SEARCH\n{dedent_match}\n===\n{replace_text}\n>>>"
+                corrected_content = corrected_content.replace(old_block, new_block, 1)
+                corrected_count += 1
+                _console.print(
+                    f"[green]🔧 Dedent-corrected S/R in {filepath} "
+                    f"(indentation shift)[/green]"
+                )
+                logging.info(
+                    "sr_validation_dedent_corrected",
+                    extra={"file": filepath},
+                )
+                continue
 
             # Fuzzy match: find best matching region
             search_lines = search_text.splitlines(keepends=True)
@@ -158,6 +192,50 @@ def validate_and_correct_sr_blocks(
                     )
 
     return corrected_content, total_blocks, corrected_count
+
+
+def _dedent_normalize_match(
+    search_text: str,
+    actual_content: str,
+) -> Optional[str]:
+    """Return the correctly-indented version of search_text if a dedent match exists.
+
+    Strips per-line leading whitespace from both the SEARCH block and every
+    same-sized window in the actual file.  If any window matches the dedented
+    SEARCH at 100%, that window is the correct anchor — returned verbatim so
+    the caller can swap it into the runbook.
+
+    Args:
+        search_text: The AI-generated SEARCH block (may have wrong indentation).
+        actual_content: The real on-disk file content.
+
+    Returns:
+        The exact matching region from actual_content, or None.
+    """
+    def _strip_indent(text: str) -> str:
+        lines = text.splitlines()
+        return "\n".join(line.lstrip() for line in lines)
+
+    normalised_search = _strip_indent(search_text)
+    if not normalised_search.strip():
+        return None
+
+    actual_lines = actual_content.splitlines(keepends=True)
+    search_line_count = len(search_text.splitlines())
+    window_size = search_line_count
+
+    for start in range(len(actual_lines) - window_size + 1):
+        window = actual_lines[start : start + window_size]
+        window_text = "".join(window)
+        # Strip trailing newline for comparison parity
+        if window_text.endswith("\n"):
+            window_text_cmp = window_text[:-1]
+        else:
+            window_text_cmp = window_text
+        if _strip_indent(window_text_cmp) == normalised_search:
+            return window_text_cmp
+
+    return None
 
 
 def _ai_reanchor_search(
