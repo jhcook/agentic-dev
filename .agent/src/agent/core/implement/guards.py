@@ -25,6 +25,7 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
+import ast
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 # INFRA-177: check_projected_loc lives in loc_guard.py (guards.py LOC budget).
 # Re-exported here so existing callers that import from guards continue to work.
 from agent.core.implement.loc_guard import check_projected_loc  # noqa: E402,F401
+from agent.utils.validation_formatter import format_projected_syntax_error  # noqa: E402
+from agent.utils.path_utils import validate_path_integrity  # noqa: E402
 
 meter = metrics.get_meter("agent.guardrails")
 
@@ -756,6 +759,47 @@ def apply_search_replace_to_file(
             span_ctx.set_attribute("success", False)
             span_ctx.end()
         return False, original_content
+
+
+
+def check_projected_syntax(
+    filepath: Path, search: str, replace: str, root_dir: Optional[Path] = None
+) -> Optional[str]:
+    """Validate Python syntax after projecting a [MODIFY] S/R block in-memory.
+
+    Covers AC-1 to AC-6. AC-7 (NameError detection) is deferred to INFRA-178.
+    Pass ``root_dir`` (the repo root) to enable path-traversal prevention (AC-6).
+    Only runs for .py files; all projection is done in-memory (no disk side effects).
+    """
+    if filepath.suffix != ".py":
+        return None
+
+    _root = root_dir if root_dir is not None else filepath.parent
+    if not validate_path_integrity(str(filepath), _root):
+        return f"Gate 3.5: '{filepath.name}' resolves outside the project root — skipped."
+
+    try:
+        if not filepath.exists():
+            return None
+
+        content = filepath.read_text(encoding="utf-8")
+
+        # AC-5: search absent → S/R gate owns that check; this gate is a no-op.
+        if search not in content:
+            return None
+
+        projected_content = content.replace(search, replace, 1)
+        ast.parse(projected_content)
+        return None
+
+    except SyntaxError as e:
+        logger.warning(
+            "projected_syntax_gate_fail",
+            extra={"file": filepath.name, "error": str(e.msg), "line": e.lineno},
+        )
+        return format_projected_syntax_error(filepath, str(e.msg), e.lineno)
+    except Exception as exc:
+        return f"Warning: Could not project syntax for {filepath.name}: {exc}"
 
 
 def apply_change_to_file(

@@ -21,7 +21,7 @@ plus the retry/correction logic that sends combined fixes back to the AI.
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import typer
 from opentelemetry import trace
@@ -47,13 +47,14 @@ from agent.commands.utils import (
 )
 from agent.core.implement.guards import (
     check_projected_loc,
+    check_projected_syntax,
     validate_code_block,
     check_impact_analysis_completeness,
     check_adr_refs,
     check_stub_implementations,
 )
 from agent.core.implement.orchestrator import validate_runbook_schema
-from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks
+from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks, parse_search_replace_blocks
 from agent.utils.validation_formatter import format_runbook_errors
 
 logger = get_logger(__name__)
@@ -161,6 +162,21 @@ def run_generation_gates(
 
         span.set_attribute("validation.passed", not bool(code_errors))
         span.set_attribute("validation.error_count", len(code_errors))
+
+    # Gate 3.5: Projected Syntax Validation for [MODIFY] S/R blocks (AC-1 to AC-6)
+    with tracer.start_as_current_span("validate_projected_syntax_gate") as syn_span:
+        sr_blocks: List[Dict[str, str]] = parse_search_replace_blocks(content)
+        syn_span.set_attribute("gate35.block_count", len(sr_blocks))
+        for block in sr_blocks:
+            syntax_err: Optional[str] = check_projected_syntax(
+                config.repo_root / block["file"],
+                block.get("search", ""),
+                block.get("replace", ""),
+                root_dir=config.repo_root,
+            )
+            if syntax_err:
+                correction_parts.append(syntax_err)
+        syn_span.set_attribute("gate35.corrections", len(correction_parts))
 
     if code_errors:
         logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})
