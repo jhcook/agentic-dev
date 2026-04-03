@@ -55,7 +55,8 @@ def new_story(
         story_id = get_next_id(scope_dir, prefix)
         console.print(f"🛈 Auto-assigning ID: [bold cyan]{story_id}[/bold cyan]")
     
-    # Determine scope from ID
+    # Reject unrecognised prefixes rather than silently mkdir-ing a MISC/ dir.
+    known_scopes = {"INFRA", "WEB", "MOBILE", "BACKEND"}
     scope = "MISC"
     if story_id.startswith("INFRA-"):
         scope = "INFRA"
@@ -65,9 +66,14 @@ def new_story(
         scope = "MOBILE"
     elif story_id.startswith("BACKEND-"):
         scope = "BACKEND"
-    
+
+    if scope not in known_scopes:
+        console.print(f"[bold red]❌ Unrecognised story ID prefix in '{story_id}'. Use INFRA-, WEB-, MOBILE-, or BACKEND-.[/bold red]")
+        raise typer.Exit(code=1)
+
     scope_dir = config.stories_dir / scope
     scope_dir.mkdir(parents=True, exist_ok=True)
+
     
     title = Prompt.ask("Enter Story Title")
     safe_title = sanitize_title(title)

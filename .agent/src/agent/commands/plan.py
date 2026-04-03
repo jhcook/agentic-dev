@@ -53,7 +53,8 @@ def new_plan(
         plan_id = get_next_id(scope_dir, prefix)
         console.print(f"🛈 Auto-assigning ID: [bold cyan]{plan_id}[/bold cyan]")
     
-    # Determine scope from ID
+    # Reject unrecognised prefixes rather than silently mkdir-ing a MISC/ dir.
+    known_scopes = {"INFRA", "WEB", "MOBILE", "BACKEND"}
     scope = "MISC"
     if plan_id.startswith("INFRA-"):
         scope = "INFRA"
@@ -63,7 +64,11 @@ def new_plan(
         scope = "MOBILE"
     elif plan_id.startswith("BACKEND-"):
         scope = "BACKEND"
-    
+
+    if scope not in known_scopes:
+        console.print(f"[bold red]❌ Unrecognised plan ID prefix in '{plan_id}'. Use INFRA-, WEB-, MOBILE-, or BACKEND-.[/bold red]")
+        raise typer.Exit(code=1)
+
     scope_dir = config.plans_dir / scope
     scope_dir.mkdir(parents=True, exist_ok=True)
     

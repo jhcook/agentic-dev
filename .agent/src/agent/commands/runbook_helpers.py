@@ -107,7 +107,15 @@ def generate_decomposition_plan(story_id: str, story_content: str) -> str:
     from agent.core.ai import ai_service  # ADR-025: lazy init
 
     scope_match = re.match(r"([A-Z]+)-\d+", story_id)
-    scope = scope_match.group(1) if scope_match else "MISC"
+    scope = scope_match.group(1) if scope_match else None
+    known_scopes = {"INFRA", "WEB", "MOBILE", "BACKEND"}
+    if scope not in known_scopes:
+        from agent.core.logger import get_logger as _gl
+        _gl(__name__).warning(
+            "generate_plan_from_story: unrecognised scope %r for story %r — skipping plan dir creation",
+            scope, story_id,
+        )
+        raise ValueError(f"Cannot generate plan: unrecognised story ID prefix in '{story_id}'")
     plan_dir = config.plans_dir / scope
     plan_dir.mkdir(parents=True, exist_ok=True)
     plan_path = plan_dir / f"{story_id}-plan.md"
