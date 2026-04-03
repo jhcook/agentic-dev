@@ -46,13 +46,14 @@ from agent.commands.utils import (
     validate_sr_blocks,
 )
 from agent.core.implement.guards import (
+    check_projected_loc,
     validate_code_block,
     check_impact_analysis_completeness,
     check_adr_refs,
     check_stub_implementations,
 )
 from agent.core.implement.orchestrator import validate_runbook_schema
-from agent.core.implement.parser import parse_code_blocks
+from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks
 from agent.utils.validation_formatter import format_runbook_errors
 
 logger = get_logger(__name__)
@@ -98,6 +99,20 @@ def run_generation_gates(
     correction_parts: List[str] = []
     attempt_delta = 0
 
+    # 0. Projected LOC gate (INFRA-177) — runs before schema for fast feedback.
+    # check_projected_loc parses NEW + MODIFY blocks from content internally.
+    with tracer.start_as_current_span("projected_loc_gate") as loc_span:
+        loc_errors = check_projected_loc(content, config.repo_root)
+        loc_span.set_attribute("validation.passed", not bool(loc_errors))
+        loc_span.set_attribute("validation.error_count", len(loc_errors))
+
+    if loc_errors:
+        logger.warning("projected_loc_gate_fail", extra={"story_id": story_id, "errors": loc_errors})
+        correction_parts.append(
+            "LOC GATE VIOLATIONS (Gate 0):\n"
+            + "\n".join(f"- {e}" for e in loc_errors)
+        )
+
     # 1. Schema validation
     with tracer.start_as_current_span("validate_runbook_schema") as span:
         schema_violations = validate_runbook_schema(content)
@@ -110,13 +125,36 @@ def run_generation_gates(
             format_runbook_errors(schema_violations) + "\nPlease fix these schema errors."
         )
 
+    # 1b. Malformed [MODIFY] block detection (AC-6 — INFRA-177)
+    # detect_malformed_modify_blocks finds [MODIFY] headers that have a fenced
+    # code block but are missing <<<SEARCH/===/>>> markers — these are silently
+    # unreachable and indicate the AI forgot the S/R syntax.
+    with tracer.start_as_current_span("malformed_modify_gate") as mal_span:
+        malformed_paths = detect_malformed_modify_blocks(content)
+        mal_span.set_attribute("validation.passed", not bool(malformed_paths))
+        mal_span.set_attribute("validation.malformed_count", len(malformed_paths))
+
+    if malformed_paths:
+        logger.warning(
+            "malformed_modify_block_gate",
+            extra={"story_id": story_id, "files": malformed_paths},
+        )
+        detail = "\n".join(f"  - {p}" for p in malformed_paths)
+        correction_parts.append(
+            "MALFORMED [MODIFY] BLOCKS (Gate 1b):\n"
+            f"{detail}\n"
+            "Each listed [MODIFY] block has a fenced code block but is missing "
+            "<<<SEARCH/===/>>> markers. Replace the fenced block with a proper "
+            "<<<SEARCH ... === ... >>> diff."
+        )
+
     # 2. Code Gate Self-Healing (INFRA-155 AC-1)
     code_errors: List[str] = []
     code_warnings: List[str] = []
 
     with tracer.start_as_current_span("validate_code_gates") as span:
-        blocks = parse_code_blocks(content)
-        for b in blocks:
+        parsed_blocks = parse_code_blocks(content)
+        for b in parsed_blocks:
             res = validate_code_block(b["file"], b["content"])
             code_errors.extend(res.errors)
             code_warnings.extend(res.warnings)

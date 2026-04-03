@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 **Added**
+- INFRA-177: Gate 0 projected LOC check at runbook generation time — blocks [MODIFY]/[NEW] that would push a file past `config.max_file_loc`. Gate 1b: wires `detect_malformed_modify_blocks` into the correction loop so bare fenced-block [MODIFY]s surface as actionable prompts instead of silent log warnings.
 - INFRA-180: REPLACE-side semantic validation in `validate_sr_blocks` — projected syntax, import existence, signature stability, stub regression guard.
 
 ### Added
