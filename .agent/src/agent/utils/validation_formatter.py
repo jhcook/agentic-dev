@@ -23,7 +23,8 @@ errors, Pydantic ``ErrorDict`` structures (with ``loc`` / ``msg`` fields),
 and gracefully falls back for unexpected types.
 """
 
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from rich.panel import Panel
 
@@ -53,6 +54,26 @@ def format_runbook_errors(errors: List[Dict[str, Any]]) -> str:
             lines.append(f"{i}. {str(err)}")
 
     return "\n".join(lines)
+
+def format_projected_syntax_error(
+    file_path: Path,
+    error_msg: str,
+    line: Optional[int],
+) -> str:
+    """
+    Format a projected SyntaxError for the AI correction prompt.
+
+    Sanitizes paths to protect sensitive metadata and provides explicit tips.
+    """
+    rel_file = file_path.name
+    line_info = f" at line {line}" if line is not None else ""
+    return (
+        f"Gate 3.5 Failure: Your [MODIFY] block for {rel_file} produces invalid Python "
+        f"syntax{line_info}. Error: {error_msg}. "
+        "Re-emit the complete, syntactically valid REPLACE block with correct indentation "
+        "and balanced brackets."
+    )
+
 
 def format_implementation_summary(
     applied_files: List[str],

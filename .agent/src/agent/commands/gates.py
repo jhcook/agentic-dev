@@ -31,6 +31,14 @@ from typing import List, Optional
 from opentelemetry import trace
 from agent.core.logger import get_logger
 
+
+# Re-exported from agent.utils.path_utils so both the commands layer and any
+# legacy tests that patch "agent.commands.gates.validate_path_integrity" continue
+# to work.  The canonical implementation lives in utils/ to allow core modules to
+# import it without creating a downward architectural dependency.
+from agent.utils.path_utils import validate_path_integrity  # noqa: F401 (re-export)
+
+
 class GateStatus(Enum):
     """Status of a gate check."""
     SUCCESS = "success"
