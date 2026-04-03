@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Added**
+- INFRA-180: REPLACE-side semantic validation in `validate_sr_blocks` — projected syntax, import existence, signature stability, stub regression guard.
+
 ### Added
 - **INFRA-158**: Added ADR and Journey back-population from runbook generation to the parent story file, ensuring accurate architectural relationships. Fixed critical test sandbox memory exhaustion in integration tests.
 - Defined structured interfaces and git-stash checkpointing strategy for INFRA-144 tool domains.
