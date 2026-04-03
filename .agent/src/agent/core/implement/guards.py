@@ -34,6 +34,10 @@ from rich.syntax import Syntax
 
 logger = logging.getLogger(__name__)
 
+# INFRA-177: check_projected_loc lives in loc_guard.py (guards.py LOC budget).
+# Re-exported here so existing callers that import from guards continue to work.
+from agent.core.implement.loc_guard import check_projected_loc  # noqa: E402,F401
+
 meter = metrics.get_meter("agent.guardrails")
 
 intervention_counter = meter.create_counter(
