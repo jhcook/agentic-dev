@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+
 id: JRN-023
 title: Voice Logic Orchestration
 state: COMMITTED
@@ -74,21 +75,24 @@ implementation:
   routes: []
   files:
   - .agent/docs/architecture/infra-143-domain-isolation.md
+  - .agent/docs/features/sr-replace-validation.md
   - .agent/docs/tools.md
   - .agent/src/agent/cli.py
   - .agent/src/agent/commands/audit.py
+  - .agent/src/agent/commands/utils.py
   - .agent/src/agent/tools/__init__.py
   - .agent/src/agent/tools/knowledge.py
   - .agent/src/agent/tools/project.py
   - .agent/src/agent/tools/telemetry.py
-  - .agent/tests/tools/__init__.py
-  - .agent/tests/tools/test_registry.py
   - .agent/src/agent/utils/rollback_infra_143.py
   - .agent/src/agent/utils/tool_security.py
   - .agent/tests/agent/tools/test_knowledge.py
   - .agent/tests/agent/tools/test_project.py
   - .agent/tests/agent/tools/test_telemetry.py
   - .agent/tests/agent/utils/test_tool_security.py
+  - .agent/tests/commands/test_sr_semantic_infra_180.py
+  - .agent/tests/tools/__init__.py
+  - .agent/tests/tools/test_registry.py
   - CHANGELOG.md
   tests:
   - .agent/tests/journeys/test_jrn_023.py

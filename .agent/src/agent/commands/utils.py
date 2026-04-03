@@ -14,10 +14,11 @@
 
 """CLI-layer utility functions for agent commands."""
 
+import ast
 import logging
 import re
 from pathlib import Path
-from typing import List, TypedDict
+from typing import Dict, List, NotRequired, Optional, Set, TypedDict
 
 import yaml
 from opentelemetry import trace
@@ -312,6 +313,171 @@ class SRMismatch(TypedDict):
     """True when a [MODIFY] block targets a file that does not yet exist on disk."""
     replace: str
     """The REPLACE content from the S/R block (useful for autohealing to [NEW])."""
+    # INFRA-180: optional keys populated by REPLACE-side semantic validation.
+    replace_syntax_error: NotRequired[str]
+    replace_import_error: NotRequired[str]
+    replace_signature_error: NotRequired[str]
+    replace_regression_warning: NotRequired[str]
+
+# ---------------------------------------------------------------------------
+# INFRA-180: REPLACE-side semantic validation helpers
+# ---------------------------------------------------------------------------
+
+_SR_MAX_FILE_BYTES = 5 * 1024 * 1024  # 5 MB — skip AST on oversized files
+
+
+def _sr_check_replace_syntax(
+    file_text: str, search_text: str, replace_text: str
+) -> Optional[str]:
+    """AC-1: Check that applying the REPLACE produces valid Python syntax.
+
+    Only called for .py files. Operates entirely in-memory.
+    """
+    projected = file_text.replace(search_text, replace_text, 1)
+    if len(projected.encode("utf-8")) > _SR_MAX_FILE_BYTES:
+        return None  # Too large to parse safely — skip silently
+    try:
+        ast.parse(projected)
+    except SyntaxError as e:
+        logger.warning(
+            "sr_replace_syntax_fail",
+            extra={"error": e.msg, "line": e.lineno},
+        )
+        return f"Gate REPLACE-syntax: applying REPLACE to produces SyntaxError: {e.msg} at line {e.lineno}."
+    return None
+
+
+def _sr_check_replace_imports(
+    replace_text: str, workspace_root: Path, other_defs: Set[str]
+) -> Optional[str]:
+    """AC-2: Verify that new 'from agent.X import Y' statements in REPLACE
+    resolve to real symbols on disk or symbols defined in other runbook blocks.
+
+    Only checks internal agent.* imports to avoid third-party false positives.
+    """
+    try:
+        tree = ast.parse(replace_text)
+    except SyntaxError:
+        return None  # Syntax failures handled by AC-1
+
+    unresolved: List[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        module = node.module or ""
+        if not module.startswith("agent."):
+            continue  # Only validate internal imports
+        # Map module path to filesystem path under workspace src/
+        rel_path = Path(module.replace(".", "/") + ".py")
+        candidate = workspace_root / ".agent" / "src" / rel_path
+        for name_alias in node.names:
+            sym = name_alias.name
+            if sym in other_defs:
+                continue  # Defined in a sibling runbook block
+            if candidate.exists():
+                try:
+                    src = candidate.read_text(encoding="utf-8")
+                    mod_tree = ast.parse(src)
+                    defined = {
+                        n.name
+                        for n in ast.walk(mod_tree)
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                    }
+                    # Also catch module-level assignments (e.g. SRMismatch = TypedDict(...))
+                    defined |= {
+                        n.targets[0].id
+                        for n in ast.walk(mod_tree)
+                        if isinstance(n, ast.Assign)
+                        and len(n.targets) == 1
+                        and isinstance(n.targets[0], ast.Name)
+                    }
+                    if sym not in defined:
+                        unresolved.append(f"{module}.{sym}")
+                except (OSError, SyntaxError):
+                    pass  # Can't read or parse — skip conservatively
+            else:
+                unresolved.append(f"{module}.{sym}")
+
+    if unresolved:
+        logger.warning("sr_replace_import_fail", extra={"symbols": unresolved})
+        return (
+            f"Gate REPLACE-imports: REPLACE introduces unresolvable import(s): "
+            f"{', '.join(unresolved)}. Verify the symbols exist or are created in another block."
+        )
+    return None
+
+
+def _sr_check_replace_signature(
+    search_text: str, replace_text: str, file_path: str
+) -> Optional[str]:
+    """AC-3: Detect public function/method signature regressions in REPLACE.
+
+    Parses both SEARCH and REPLACE as Python snippets and compares arg lists
+    for public functions (names that do not start with '_').
+    """
+    try:
+        s_tree = ast.parse(search_text)
+        r_tree = ast.parse(replace_text)
+    except SyntaxError:
+        return None  # Syntax failures handled by AC-1
+
+    def _extract_sigs(tree: ast.AST) -> Dict[str, List[str]]:
+        return {
+            node.name: [a.arg for a in node.args.args]
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and not node.name.startswith("_")
+        }
+
+    s_sigs = _extract_sigs(s_tree)
+    r_sigs = _extract_sigs(r_tree)
+
+    for name, s_args in s_sigs.items():
+        if name not in r_sigs:
+            continue  # Function removed — handled by rename gate (INFRA-179)
+        r_args = r_sigs[name]
+        if s_args != r_args:
+            logger.warning(
+                "sr_replace_signature_fail",
+                extra={"file": file_path, "function": name, "old": s_args, "new": r_args},
+            )
+            return (
+                f"Gate REPLACE-signature: '{name}' in '{file_path}' has signature "
+                f"{s_args} in SEARCH but {r_args} in REPLACE. "
+                f"Ensure all callers are updated in this runbook."
+            )
+    return None
+
+
+def _sr_check_replace_regression(
+    search_text: str, replace_text: str, file_path: str
+) -> Optional[str]:
+    """AC-4 / AC-7: Warn when REPLACE is < sr_stub_threshold of SEARCH LOC.
+
+    Intentional full deletions (empty REPLACE) are exempt per AC-7.
+    """
+    if not replace_text.strip():
+        return None  # AC-7: intentional deletion, exempt
+
+    threshold = getattr(config, "sr_stub_threshold", 0.25)
+    if threshold <= 0:
+        return None
+
+    s_loc = sum(1 for ln in search_text.splitlines() if ln.strip())
+    r_loc = sum(1 for ln in replace_text.splitlines() if ln.strip())
+
+    if s_loc > 0 and r_loc < s_loc * threshold:
+        logger.warning(
+            "sr_replace_regression_warn",
+            extra={"file": file_path, "search_loc": s_loc, "replace_loc": r_loc},
+        )
+        return (
+            f"Gate REPLACE-regression: REPLACE for '{file_path}' is {r_loc} LOC "
+            f"versus {s_loc} LOC in SEARCH ({r_loc/s_loc:.0%}). "
+            f"Possible AI stub regression — ensure the full implementation is present."
+        )
+    return None
+
 
 def _lines_match(search_text: str, file_text: str) -> bool:
     """Return True if *search_text* exists as a contiguous block in *file_text*.
@@ -353,6 +519,10 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
     Returns:
         List of :class:`SRMismatch` typed dicts — each has keys ``file``,
         ``search``, ``actual``, and ``index`` (1-based block counter per file).
+        When a SEARCH match is found, REPLACE-side semantic checks (INFRA-180)
+        are applied and failures are reported as optional keys on the same dict:
+        ``replace_syntax_error``, ``replace_import_error``,
+        ``replace_signature_error``, and ``replace_regression_warning``.
 
     Raises:
         FileNotFoundError: If a ``[MODIFY]`` block targets a file that does not
@@ -442,6 +612,7 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
             except OSError:
                 continue  # unreadable — skip silently
 
+            replace_text = block.get("replace", "")
             if not _lines_match(search_text, file_text):
                 mismatches.append(
                     {
@@ -450,9 +621,47 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                         "actual": file_text,
                         "index": idx,
                         "missing_modify": False,
-                        "replace": block.get("replace", ""),
+                        "replace": replace_text,
                     }
                 )
+            else:
+                # SEARCH matched — now validate the REPLACE side (INFRA-180)
+                is_py = file_path_str.endswith(".py")
+                sem_errors: Dict[str, str] = {}
+
+                if is_py and getattr(config, "sr_check_syntax", True):
+                    err = _sr_check_replace_syntax(file_text, search_text, replace_text)
+                    if err:
+                        sem_errors["replace_syntax_error"] = err
+
+                if is_py and not sem_errors and getattr(config, "sr_check_imports", True):
+                    other_defs: Set[str] = set()  # populated from runbook context in future
+                    err = _sr_check_replace_imports(replace_text, config.repo_root, other_defs)
+                    if err:
+                        sem_errors["replace_import_error"] = err
+
+                if is_py and getattr(config, "sr_check_signatures", True):
+                    err = _sr_check_replace_signature(search_text, replace_text, file_path_str)
+                    if err:
+                        sem_errors["replace_signature_error"] = err
+
+                if getattr(config, "sr_stub_threshold", 0.25) > 0:
+                    err = _sr_check_replace_regression(search_text, replace_text, file_path_str)
+                    if err:
+                        sem_errors["replace_regression_warning"] = err
+
+                if sem_errors:
+                    mismatches.append(
+                        {
+                            "file": file_path_str,
+                            "search": search_text,
+                            "actual": file_text,
+                            "index": idx,
+                            "missing_modify": False,
+                            "replace": replace_text,
+                            **sem_errors,
+                        }
+                    )
 
     return malformed_mismatches + mismatches
 
