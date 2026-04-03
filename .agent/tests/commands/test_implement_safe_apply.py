@@ -163,7 +163,9 @@ class TestExtractModifyFiles:
     def test_standard_markers(self):
         """Test 6: Standard [MODIFY] marker extraction."""
         runbook = """
-### Implementation Steps
+## Implementation Steps
+
+### Step 1
 
 #### [MODIFY] .agent/src/agent/commands/implement.py
 
@@ -182,6 +184,10 @@ More instructions.
     def test_deduplication(self):
         """Test 7: Same file referenced twice — only returned once."""
         runbook = """
+## Implementation Steps
+
+### Step 1
+
 #### [MODIFY] .agent/src/agent/commands/implement.py
 Step 1 instructions.
 

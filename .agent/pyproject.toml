@@ -50,6 +50,8 @@ dependencies = [
     "langchain-google-genai>=0.2.0",
     "langchain-openai>=0.2.0",
     "mistune>=3.0.0",
+    "beautifulsoup4==4.14.3",
+    "markdownify==1.2.2",
 ]
 
 [project.optional-dependencies]
@@ -95,6 +97,7 @@ dev = [
     "google-adk>=1.0.0",
     "soundfile>=0.13.1",
     "textual>=0.80.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [project.scripts]
@@ -114,7 +117,9 @@ build-backend = "hatchling.build"
 per-file-ignores = { "src/agent/commands/*" = ["T201"], "src/agent/main.py" = ["T201"] }
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 testpaths = ["tests"]
+timeout = 60
 norecursedirs = [
     ".git", 
     ".venv", 

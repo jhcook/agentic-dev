@@ -122,10 +122,10 @@ implementation:
   - .agent/src/agent/core/dependency_analyzer.py
   - .agent/src/agent/core/governance.py
   - .agent/src/agent/sync/client.py
-  - .agent/src/agent/sync/test_spacing.py
+  - .agent/tests/sync/test_spacing.py
   tests:
-  - .agent/src/agent/core/tests/test_utils_json.py
-  - .agent/src/agent/sync/tests/__init__.py
+  - .agent/tests/core/test_utils_json.py
+  - .agent/tests/sync/__init__.py
   - .agent/tests/backend/voice/test_e2e_console_flow.py
   - .agent/tests/backend/voice/test_mute_behavior.py
   - .agent/tests/commands/test_config_command.py

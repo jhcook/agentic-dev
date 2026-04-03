@@ -41,7 +41,37 @@ def test_implement_updates_journey_yaml(tmp_path, monkeypatch):
     runbook_dir = tmp_path / "runbooks"
     runbook_dir.mkdir()
     runbook_file = runbook_dir / "INFRA-000-runbook.md"
-    runbook_file.write_text("Status: ACCEPTED\n# Runbook Content\n\n## Implementation Steps\n\n1. Do something\n")
+    runbook_file.write_text("""## State ACCEPTED
+# Runbook Content
+
+## Implementation Steps
+
+### Step 1: Mock Step Title
+
+#### [MODIFY] src/new_file.py
+
+```python
+<<<SEARCH
+# empty
+===
+\"\"\"Module docstring\"\"\"
+print('Hello World')
+>>>
+```
+
+#### [MODIFY] tests/test_new_file.py
+
+```python
+<<<SEARCH
+# empty test
+===
+\"\"\"Test module docstring\"\"\"
+def test_hello():
+    \"\"\"Test docstring\"\"\"
+    pass
+>>>
+```
+""")
     
     agent_dir = tmp_path / ".agent"
     agent_dir.mkdir()
@@ -65,24 +95,30 @@ def test_implement_updates_journey_yaml(tmp_path, monkeypatch):
     # Let's mock the AI service to return a simple code block
     mock_llm_response = """
 File: src/new_file.py
-```python
+<<<SEARCH
+# empty
+===
 \"\"\"Module docstring\"\"\"
 print('Hello World')
-```
+>>>
 File: tests/test_new_file.py
-```python
+<<<SEARCH
+# empty test
+===
 \"\"\"Test module docstring\"\"\"
 def test_hello():
     \"\"\"Test docstring\"\"\"
     pass
-```
+>>>
 """
     
     # We will need the paths to exist so `p.exists()` returns True in `files_to_stage`
     src_dir = tmp_path / "src"
     src_dir.mkdir()
+    (src_dir / "new_file.py").write_text("# empty\n")
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
+    (tests_dir / "test_new_file.py").write_text("# empty test\n")
     
     with patch.object(config, "runbooks_dir", runbook_dir), \
          patch.object(config, "agent_dir", agent_dir), \

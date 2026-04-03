@@ -23,7 +23,7 @@ def test_jrn_007_step_1():
     Step 1: Developer runs `agent impact`
     Assertions: Command exits with status 0, Expected output displayed
     """
-    result = subprocess.run(['agent', 'impact'], capture_output=True, text=True)
+    result = subprocess.run(['agent', 'impact'], capture_output=True, text=True, timeout=30)
 
     assert result.returncode == 0, f"Command failed with error: {result.stderr}"
 

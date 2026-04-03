@@ -62,7 +62,10 @@ class TestVertexADCFallback:
         """When google.auth.default() raises, vertex_proj remains falsy (no crash)."""
         import os
 
-        with patch("google.auth.default", side_effect=Exception("no credentials")):
+        with (
+            patch("google.auth.default", side_effect=Exception("no credentials")),
+            patch.dict("os.environ", {}, clear=True),  # ensure GOOGLE_CLOUD_PROJECT absent
+        ):
             vertex_proj = os.getenv("GOOGLE_CLOUD_PROJECT")
             if not vertex_proj:
                 try:

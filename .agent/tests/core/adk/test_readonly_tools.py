@@ -106,7 +106,7 @@ class TestReadFile:
         assert "Error" in result
 
     def test_rejects_path_traversal(self, tools):
-        with pytest.raises(ValueError, match="outside the repository root"):
+        with pytest.raises(ValueError, match="contains forbidden directory traversal tokens"):
             tools["read_file"]("../outside.txt")
 
     def test_directory_returns_error(self, tools):

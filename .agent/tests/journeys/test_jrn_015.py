@@ -15,13 +15,16 @@
 """AI-generated regression tests for JRN-015."""
 import pytest
 import subprocess
+import shutil
 from unittest import mock
 
 @pytest.mark.journey("JRN-015")
 def test_jrn_015_step_1():
     """Developer runs `agent visualize`
     Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['agent', 'visualize'], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(['agent', 'visualize'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 2
     assert "Usage:" in result.stderr
 
@@ -29,7 +32,9 @@ def test_jrn_015_step_1():
 def test_jrn_015_step_2():
     """Developer runs `agent visualize --help`
     Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['agent', 'visualize', '--help'], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(['agent', 'visualize', '--help'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Usage:" in result.stdout
 
@@ -37,7 +42,9 @@ def test_jrn_015_step_2():
 def test_jrn_015_step_3():
     """Developer runs `agent visualize flow NONEXISTENT-STORY`
     Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['agent', 'visualize', 'flow', 'NONEXISTENT-STORY'], capture_output=True, text=True)
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
+    result = subprocess.run(['agent', 'visualize', 'flow', 'NONEXISTENT-STORY'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 1
     assert "NONEXISTENT-STORY" in result.stdout or "NONEXISTENT-STORY" in result.stderr
 
@@ -45,10 +52,12 @@ def test_jrn_015_step_3():
 def test_jrn_015_step_4():
     """Developer runs `agent visualize flow STORY-001`
     Assertions: Command exits with status 0, Expected output displayed"""
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
     with mock.patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "DOT output"
-        result = subprocess.run(['agent', 'visualize', 'flow', 'STORY-001'], capture_output=True, text=True)
+        result = subprocess.run(['agent', 'visualize', 'flow', 'STORY-001'], capture_output=True, text=True, timeout=30)
         assert result.returncode == 0
         # The specific output depends on the story and implementation, so we'll just check for successful execution.
         # A more robust test would involve creating a dummy story and verifying the DOT output.
@@ -57,10 +66,12 @@ def test_jrn_015_step_4():
 def test_jrn_015_step_5():
     """Developer runs `agent visualize graph`
     Assertions: Command exits with status 0, Expected output displayed"""
+    if not shutil.which("agent"):
+        pytest.skip("`agent` not in PATH — run via `uv run agent`")
     with mock.patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "DOT output"
-        result = subprocess.run(['agent', 'visualize', 'graph'], capture_output=True, text=True)
+        result = subprocess.run(['agent', 'visualize', 'graph'], capture_output=True, text=True, timeout=30)
         assert result.returncode == 0
         # The specific output depends on the codebase, so we'll just check for successful execution.
         # A more robust test would involve creating a dummy codebase and verifying the DOT output.

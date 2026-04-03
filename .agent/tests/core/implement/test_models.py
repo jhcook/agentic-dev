@@ -146,9 +146,9 @@ class TestRunbookStep:
                 operations=[NewBlock(path="mod.py", content="x = 1")],
             )
 
-    def test_no_operations_rejected(self):
-        with pytest.raises(ValidationError, match="at least 1 item"):
-            RunbookStep(title="Valid title here", operations=[])
+    def test_empty_operations_allowed(self):
+        step = RunbookStep(title="Valid title here", operations=[])
+        assert len(step.operations) == 0
 
 
 # ── RunbookSchema ────────────────────────────────────────────

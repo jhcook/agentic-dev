@@ -110,7 +110,7 @@ implementation:
   - .agent/src/agent/tools/custom/**init**.py
   - .agent/src/agent/tools/custom/__init__.py
   - .agent/src/agent/tools/dynamic.py
-  - .agent/src/agent/tools/tests/test_dynamic.py
+  - .agent/tests/tools/test_dynamic.py
   - .agent/src/backend/voice/tools/create_tool.py
   - CHANGELOG.md
   tests:

@@ -21,7 +21,7 @@ import subprocess
 def test_jrn_014_step_1():
     """Developer runs `agent onboard`."""
     try:
-        result = subprocess.run(["agent", "onboard"], capture_output=True, text=True, check=True)
+        result = subprocess.run(["agent", "onboard"], capture_output=True, text=True, check=True, timeout=30)
         assert result.returncode == 0, f"Command failed with error: {result.stderr}"
         assert "Choose between MCP and `gh` CLI" in result.stdout or "Onboarding complete!" in result.stdout, "Expected output not found"
     except subprocess.CalledProcessError as e:
@@ -31,7 +31,7 @@ def test_jrn_014_step_1():
 def test_jrn_014_step_2():
     """Developer runs `agent onboard --help`."""
     try:
-        result = subprocess.run(["agent", "onboard", "--help"], capture_output=True, text=True, check=True)
+        result = subprocess.run(["agent", "onboard", "--help"], capture_output=True, text=True, check=True, timeout=30)
         assert result.returncode == 0, f"Command failed with error: {result.stderr}"
         assert "usage: agent onboard" in result.stdout, "Help output not found"
         assert "Interactive onboarding wizard" in result.stdout, "Help output not found"

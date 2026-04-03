@@ -21,7 +21,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from agent.commands.runbook import _parse_split_request, new_runbook
+from agent.commands.runbook_helpers import parse_split_request
+from agent.commands.runbook import new_runbook
 
 runner = CliRunner()
 
@@ -44,6 +45,9 @@ def mock_fs(tmp_path):
     templates_dir.mkdir()
     (templates_dir / "runbook-template.md").write_text(
         "# Runbook Template\n## Plan\n<plan>"
+    )
+    (templates_dir / "license_header.txt").write_text(
+        "Copyright Mock\nLICENSE Mock"
     )
 
     cache_dir = tmp_path / "cache"
@@ -95,7 +99,7 @@ VALID_SPLIT_JSON = json.dumps(
 
 def test_parse_valid_json():
     """Valid SPLIT_REQUEST JSON is parsed correctly."""
-    result = _parse_split_request(VALID_SPLIT_JSON)
+    result = parse_split_request(VALID_SPLIT_JSON)
     assert result is not None
     assert result["SPLIT_REQUEST"] is True
     assert result["reason"] == "Story touches 6 files and requires 12 steps"
@@ -105,7 +109,7 @@ def test_parse_valid_json():
 def test_parse_json_in_markdown_fences():
     """SPLIT_REQUEST JSON embedded in markdown code fences is extracted."""
     content = "Here is my analysis:\n```json\n" + VALID_SPLIT_JSON + "\n```\n"
-    result = _parse_split_request(content)
+    result = parse_split_request(content)
     assert result is not None
     assert result["SPLIT_REQUEST"] is True
     assert len(result["suggestions"]) == 2
@@ -114,7 +118,7 @@ def test_parse_json_in_markdown_fences():
 def test_parse_json_in_fences_no_newline():
     """SPLIT_REQUEST JSON in fences without newlines after opening fence."""
     content = "```json" + VALID_SPLIT_JSON + "```"
-    result = _parse_split_request(content)
+    result = parse_split_request(content)
     assert result is not None
     assert result["SPLIT_REQUEST"] is True
 
@@ -122,21 +126,21 @@ def test_parse_json_in_fences_no_newline():
 def test_parse_malformed_json_returns_none():
     """Malformed JSON with SPLIT_REQUEST marker returns None (graceful fallback)."""
     content = 'This mentions SPLIT_REQUEST but {"broken json'
-    result = _parse_split_request(content)
+    result = parse_split_request(content)
     assert result is None
 
 
 def test_parse_normal_runbook_returns_none():
     """Normal runbook content without SPLIT_REQUEST returns None on direct parse."""
     content = "# INFRA-094: Runbook\n\n## Goal\nImplement the feature."
-    result = _parse_split_request(content)
+    result = parse_split_request(content)
     assert result is None
 
 
 def test_parse_json_without_split_request_key():
     """Valid JSON but without SPLIT_REQUEST key returns None."""
     content = json.dumps({"reason": "test", "suggestions": []})
-    result = _parse_split_request(content)
+    result = parse_split_request(content)
     assert result is None
 
 
@@ -153,7 +157,7 @@ def test_split_request_detected_exits_code_2(mock_fs, app):
         patch("agent.core.ai.ai_service.complete", return_value=VALID_SPLIT_JSON),
         patch("agent.commands.runbook.upsert_artifact"),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 2
         assert "AI recommends splitting" in result.stdout
@@ -176,15 +180,21 @@ def test_normal_runbook_proceeds(mock_fs, app):
         "# INFRA-NORMAL Runbook\n\n## Goal\nDo the thing.\n\n"
         "## Implementation Steps\n\n"
         "### Step 1: Create file\n\n"
-        "#### [NEW] `thing.py`\n\n"
-        "```python\ndef do_thing(): pass\n```\n"
+        "#### [NEW] `thing.md`\n\n"
+        "```markdown\n"
+        "# Thing\n"
+        "```\n"
+        "## Definition of Done\n"
+        "- [ ] Acceptance criteria met.\n"
+        "  - [ ] Yes\n"
+        "- [ ] Test strategy mapped.\n"
     )
 
     with (
         patch("agent.core.ai.ai_service.complete", return_value=normal_content),
         patch("agent.commands.runbook.upsert_artifact"),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 0
         assert "Runbook generated" in result.stdout
@@ -192,7 +202,7 @@ def test_normal_runbook_proceeds(mock_fs, app):
         # Runbook file written, not split_requests
         runbook_file = mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md"
         assert runbook_file.exists()
-        assert runbook_file.read_text() == normal_content
+        assert "Do the thing" in runbook_file.read_text()
 
         # No split request file
         split_file = mock_fs / "cache" / "split_requests" / f"{story_id}.json"
@@ -206,22 +216,31 @@ def test_malformed_split_request_falls_back_to_runbook(mock_fs, app):
     story_file.write_text("## State\nCOMMITTED\n# Story\n- [ ] Step 1")
 
     malformed_content = (
-        "# Runbook with SPLIT_REQUEST mentioned but no valid JSON"
+        "# Runbook with SPLIT_REQUEST mentioned but no valid JSON\n\n"
+        "## Definition of Done\n"
+        "\n"
+        "- [ ] Acceptance criteria met.\n"
+        "  - [ ] Yes\n"
+        "- [ ] Test strategy mapped.\n"
     )
 
     with (
         patch("agent.core.ai.ai_service.complete", return_value=malformed_content),
         patch("agent.commands.runbook.upsert_artifact"),
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 0
         assert "Runbook generated" in result.stdout
 
-        # Runbook file written with the malformed content as-is
+        # Runbook file written with the malformed content as-is (markdownlint may add
+        # blank lines around headings, so check key content rather than exact equality)
         runbook_file = mock_fs / "runbooks" / "INFRA" / f"{story_id}-runbook.md"
         assert runbook_file.exists()
-        assert runbook_file.read_text() == malformed_content
+        file_text = runbook_file.read_text()
+        assert "# Runbook with SPLIT_REQUEST mentioned but no valid JSON" in file_text
+        assert "- [ ] Acceptance criteria met." in file_text
+        assert "- [ ] Test strategy mapped." in file_text
 
 
 def test_split_request_structured_logging(mock_fs, app):
@@ -235,7 +254,7 @@ def test_split_request_structured_logging(mock_fs, app):
         patch("agent.commands.runbook.upsert_artifact"),
         patch("agent.commands.runbook.logger") as mock_logger,
     ):
-        result = runner.invoke(app, [story_id])
+        result = runner.invoke(app, [story_id, "--legacy-gen"])
 
         assert result.exit_code == 2
 

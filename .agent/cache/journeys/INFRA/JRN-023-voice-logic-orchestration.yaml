@@ -81,8 +81,8 @@ implementation:
   - .agent/src/agent/tools/knowledge.py
   - .agent/src/agent/tools/project.py
   - .agent/src/agent/tools/telemetry.py
-  - .agent/src/agent/tools/tests/__init__.py
-  - .agent/src/agent/tools/tests/test_registry.py
+  - .agent/tests/tools/__init__.py
+  - .agent/tests/tools/test_registry.py
   - .agent/src/agent/utils/rollback_infra_143.py
   - .agent/src/agent/utils/tool_security.py
   - .agent/tests/agent/tools/test_knowledge.py

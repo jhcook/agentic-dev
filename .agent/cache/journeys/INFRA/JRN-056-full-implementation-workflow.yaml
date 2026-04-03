@@ -163,7 +163,7 @@ implementation:
   - .agent/src/agent/commands/gates.py
   - .agent/src/agent/commands/implement.py
   - .agent/src/agent/commands/runbook.py
-  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/tests/commands/test_story_link_helpers.py
   - .agent/src/agent/commands/utils.py
   - .agent/workflows/implement.md
   tests:

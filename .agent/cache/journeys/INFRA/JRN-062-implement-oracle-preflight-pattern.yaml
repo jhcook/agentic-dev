@@ -31,8 +31,8 @@ implementation:
   - .agent/src/agent/commands/check.py
   - .agent/src/agent/commands/preflight.py
   - .agent/src/agent/commands/runbook.py
-  - .agent/src/agent/commands/tests/test_dod_verifiers.py
-  - .agent/src/agent/commands/tests/test_preflight_autoheal.py
+  - .agent/tests/commands/test_dod_verifiers.py
+  - .agent/tests/commands/test_preflight_autoheal.py
   - .agent/src/agent/core/adk/agents.py
   - .agent/src/agent/core/context.py
   - .agent/src/agent/core/governance.py
@@ -40,10 +40,10 @@ implementation:
   - .agent/src/agent/core/implement/parser.py
   - .agent/src/agent/core/mcp/client.py
   - .agent/src/agent/core/preflight/healer.py
-  - .agent/src/agent/core/preflight/test_healer.py
+  - .agent/tests/core/preflight/test_healer.py
   - .agent/src/agent/db/journey_index.py
   - .agent/src/agent/sync/notebooklm.py
   tests:
-  - .agent/src/agent/commands/tests/test_preflight_autoheal.py
-  - .agent/src/agent/commands/tests/test_dod_compliance.py
-  - .agent/src/agent/commands/tests/test_dod_gate_orchestration.py
+  - .agent/tests/commands/test_preflight_autoheal.py
+  - .agent/tests/commands/test_dod_compliance.py
+  - .agent/tests/commands/test_dod_gate_orchestration.py

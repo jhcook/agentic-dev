@@ -79,7 +79,7 @@ implementation:
   - .agent/src/agent/commands/admin.py
   - .agent/src/agent/commands/importer.py
   - .agent/src/agent/commands/runbook.py
-  - .agent/src/agent/commands/tests/test_story_link_helpers.py
+  - .agent/tests/commands/test_story_link_helpers.py
   - .agent/src/agent/commands/utils.py
   - .agent/src/agent/main.py
   - .agent/src/agent/tui/app.py

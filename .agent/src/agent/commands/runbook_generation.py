@@ -518,7 +518,13 @@ def generate_runbook_chunked(
             )
 
         try:
+            if "SPLIT_REQUEST" in skeleton_raw:
+                return skeleton_raw
+                
             skeleton_data = _extract_json(skeleton_raw)
+            if skeleton_data.get("SPLIT_REQUEST"):
+                return skeleton_raw
+                
             skeleton = GenerationSkeleton.from_dict(skeleton_data)
             span.set_attribute("section_count", len(skeleton.sections))
             logger.info(
@@ -526,6 +532,9 @@ def generate_runbook_chunked(
                 extra={"story_id": story_id, "size": len(skeleton_raw)},
             )
         except (json.JSONDecodeError, ValueError) as exc:
+            if "SPLIT_REQUEST" in skeleton_raw:
+                return skeleton_raw
+                
             error_console.print(
                 f"[bold red]\u274c Failed to parse Skeleton JSON: {exc}[/bold red]"
             )

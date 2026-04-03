@@ -227,9 +227,9 @@ class TestFindingsParsing:
 
 class TestCouncilVerdictAggregation:
 
-    @patch("agent.core.governance.load_roles")
-    @patch("agent.core.governance.ai_service")
-    @patch("agent.core.governance.config")
+    @patch("agent.core._governance_legacy.load_roles")
+    @patch("agent.core._governance_legacy.ai_service")
+    @patch("agent.core._governance_legacy.config")
     def test_all_pass_returns_pass(self, mock_config, mock_ai, mock_load_roles):
         """When all roles return PASS, overall verdict should be PASS."""
         mock_load_roles.return_value = [
@@ -254,9 +254,9 @@ class TestCouncilVerdictAggregation:
 
         assert result["verdict"] == "PASS"
 
-    @patch("agent.core.governance.load_roles")
-    @patch("agent.core.governance.ai_service")
-    @patch("agent.core.governance.config")
+    @patch("agent.core._governance_legacy.load_roles")
+    @patch("agent.core._governance_legacy.ai_service")
+    @patch("agent.core._governance_legacy.config")
     def test_one_block_returns_block(self, mock_config, mock_ai, mock_load_roles):
         """When any role returns BLOCK, overall verdict should be BLOCK."""
         mock_load_roles.return_value = [
@@ -281,9 +281,9 @@ class TestCouncilVerdictAggregation:
 
         assert result["verdict"] == "BLOCK"
 
-    @patch("agent.core.governance.load_roles")
-    @patch("agent.core.governance.ai_service")
-    @patch("agent.core.governance.config")
+    @patch("agent.core._governance_legacy.load_roles")
+    @patch("agent.core._governance_legacy.ai_service")
+    @patch("agent.core._governance_legacy.config")
     def test_consultative_mode_ignores_block(self, mock_config, mock_ai, mock_load_roles):
         """In consultative mode, BLOCK verdicts from AI should NOT trigger overall BLOCK."""
         mock_load_roles.return_value = [
@@ -318,9 +318,9 @@ class TestADRCompliance:
     governance context, are available to the council prompt.
     """
 
-    @patch("agent.core.governance.load_roles")
-    @patch("agent.core.governance.ai_service")
-    @patch("agent.core.governance.config")
+    @patch("agent.core._governance_legacy.load_roles")
+    @patch("agent.core._governance_legacy.ai_service")
+    @patch("agent.core._governance_legacy.config")
     def test_adr_content_passed_to_prompt(self, mock_config, mock_ai, mock_load_roles):
         """ADR summaries should appear in the prompt sent to each role."""
         mock_load_roles.return_value = [

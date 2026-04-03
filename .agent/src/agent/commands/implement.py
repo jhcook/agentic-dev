@@ -452,6 +452,10 @@ def implement(
     """
     console.print(f"\n[bold blue]🚀 Implementing Runbook {story_id}...[/bold blue]\n")
 
+    if provider:
+        from agent.core.ai import ai_service
+        ai_service.set_provider(provider)
+
     # ------------------------------------------------------------------
     # 0. Git hygiene guards (tested by test_implement_branching.py)
     # ------------------------------------------------------------------
@@ -781,10 +785,6 @@ def implement(
     if not implementation_success:
         from agent.core.ai import ai_service
 
-        # Set provider before AI calls so it applies to both full-context and chunks
-        if provider:
-            ai_service.set_provider(provider)
-
         console.print("[dim]Attempting full context execution...[/dim]")
 
         modify_files = extract_modify_files(runbook_content_scrubbed)
@@ -834,6 +834,9 @@ INSTRUCTIONS:
 ADRs:
 {adrs_content}
 """
+        _approved = extract_approved_files(runbook_content)
+        _cross_cutting = extract_cross_cutting_files(runbook_content)
+        
         fallback_needed = False
         try:
             console.print("[bold green]🤖 AI coding (Full Context)...[/bold green]")
@@ -862,8 +865,6 @@ ADRs:
                 ai_service.reset_provider()
 
             completed_steps = 0
-            _approved = extract_approved_files(runbook_content)
-            _cross_cutting = extract_cross_cutting_files(runbook_content)
             orchestrator = Orchestrator(
                 story_id, yes=yes, legacy_apply=legacy_apply,
                 approved_files=_approved, cross_cutting_files=_cross_cutting,

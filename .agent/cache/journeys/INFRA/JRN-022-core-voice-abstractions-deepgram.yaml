@@ -75,7 +75,7 @@ implementation:
   - .agent/pyproject.toml
   - .agent/src/agent/core/config.py
   - .agent/src/agent/core/implement/verification_orchestrator.py
-  - .agent/src/agent/core/implement/tests/test_verifier.py
+  - .agent/tests/core/implement/test_verifier.py
   - .agent/src/agent/core/implement/verifier.py
   - .agent/src/backend/main.py
   - .agent/src/backend/routers/voice.py

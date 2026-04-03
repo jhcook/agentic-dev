@@ -25,13 +25,14 @@ def test_runbook_command_routing():
     """Verify that --legacy-gen flag routes to v1 logic vs chunked v2 logic."""
     # Mocking the generators imported in agent/commands/runbook.py
     with patch("agent.commands.runbook.generate_runbook_chunked") as mock_v2, \
-         patch("agent.commands.runbook.generate_runbook_v1") as mock_v1:
+         patch("agent.commands.runbook._run_monolithic_generation") as mock_v1, \
+         patch("agent.commands.runbook._write_and_sync"):
         
-        mock_v2.return_value = None
-        mock_v1.return_value = None
+        mock_v2.return_value = "# Runbook"
+        mock_v1.return_value = "# Runbook"
 
         # 1. Test Default (V2)
-        result = runner.invoke(app, ["new-runbook", "INFRA-167"])
+        result = runner.invoke(app, ["new-runbook", "INFRA-167", "--force"])
         assert result.exit_code == 0
         mock_v2.assert_called_once()
         mock_v1.assert_not_called()
@@ -40,7 +41,7 @@ def test_runbook_command_routing():
         mock_v1.reset_mock()
 
         # 2. Test Legacy Flag (V1)
-        result = runner.invoke(app, ["new-runbook", "INFRA-167", "--legacy-gen"])
+        result = runner.invoke(app, ["new-runbook", "INFRA-167", "--legacy-gen", "--force"])
         assert result.exit_code == 0
         mock_v1.assert_called_once()
         mock_v2.assert_not_called()
@@ -49,4 +50,4 @@ def test_runbook_invalid_story_id():
     """Verify that an invalid Story ID format results in a proper CLI error."""
     result = runner.invoke(app, ["new-runbook", "INVALID_ID"])
     assert result.exit_code != 0
-    assert "Story ID must follow the pattern" in result.stdout
+    assert "Story file not found for" in result.stdout

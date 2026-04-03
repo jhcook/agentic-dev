@@ -164,7 +164,7 @@ class Orchestrator:
         from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(
             "chunk_retry", self_ref.story_id, step_index,
-            error=sanitize_error_message(exc), attempt=attempt,
+            error=sanitize_error_message(exc), retry_count=attempt,
         )
 
     @staticmethod
@@ -173,7 +173,7 @@ class Orchestrator:
         from agent.core.implement.security import sanitize_error_message
         emit_chunk_event(
             "chunk_failure", self_ref.story_id, step_index,
-            error=sanitize_error_message(exc), attempt=attempts,
+            error=sanitize_error_message(exc), retry_count=attempts,
         )
 
     @retry_with_backoff(
@@ -265,12 +265,12 @@ class Orchestrator:
             if not self._check_scope(block["file"], step_index):
                 continue
             violations = enforce_docstrings(block["file"], block["content"])
-            if violations:
+            if violations.errors:
                 _console.print(
                     f"[yellow]⚠️  DOCSTRING GATE: {block['file']} "
-                    f"({len(violations)} violation(s)):[/yellow]"
+                    f"({len(violations.errors)} violation(s)):[/yellow]"
                 )
-                for v in violations:
+                for v in violations.errors:
                     _console.print(f"   [yellow]• {v}[/yellow]")
                 _console.print(
                     "[dim]File will be written — fix before preflight.[/dim]"

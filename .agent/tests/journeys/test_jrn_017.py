@@ -25,7 +25,7 @@ def test_jrn_017_step_1():
         mock_run.return_value.stdout = "Audit completed successfully"
         mock_run.return_value.stderr = ""
 
-        result = subprocess.run(["agent", "audit"], capture_output=True, text=True)
+        result = subprocess.run(["agent", "audit"], capture_output=True, text=True, timeout=30)
 
         assert result.returncode == 0
         assert "Audit completed successfully" in result.stdout

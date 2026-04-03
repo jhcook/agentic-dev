@@ -91,7 +91,7 @@ implementation:
   - .agent/src/agent/commands/decompose_story.py
   - .agent/src/agent/commands/implement.py
   - .agent/src/agent/commands/runbook.py
-  - .agent/src/agent/commands/tests/test_dod_verifiers.py
+  - .agent/tests/commands/test_dod_verifiers.py
   - .agent/src/agent/core/implement/guards.py
   - .agent/src/agent/core/implement/models.py
   - .agent/src/agent/core/implement/parser.py

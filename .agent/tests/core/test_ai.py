@@ -181,7 +181,7 @@ def test_ai_service_priority(mock_run, monkeypatch):
             ai_service.reload()
             ai_service._initialized = True
             
-            assert ai_service.provider == "gh"
+            assert ai_service.provider == "gemini"
             assert "gh" in ai_service.clients
             assert "gemini" in ai_service.clients
             assert "openai" in ai_service.clients
@@ -217,18 +217,18 @@ def test_ai_service_manual_switch(mock_run, monkeypatch):
             ai_service.reload()
             ai_service._initialized = True
             
-            # 1. Default GH
-            assert ai_service.provider == "gh"
-        
-            # 2. Switch to Gemini
-            switched = ai_service.try_switch_provider(ai_service.provider)
-            assert switched is True
+            # 1. Default Gemini
             assert ai_service.provider == "gemini"
-            
-            # 3. Switch to OpenAI
+        
+            # 2. Switch to OpenAI
             switched = ai_service.try_switch_provider(ai_service.provider)
             assert switched is True
             assert ai_service.provider == "openai"
+            
+            # 3. Switch to Anthropic
+            switched = ai_service.try_switch_provider(ai_service.provider)
+            assert switched is True
+            assert ai_service.provider == "anthropic"
             
             # 4. No more providers (gh is start, gemini, openai... loop ended)
             switched = ai_service.try_switch_provider(ai_service.provider)
@@ -278,8 +278,8 @@ def test_ai_service_provider_override(mock_run, monkeypatch):
             ai_service.reload()
             ai_service._initialized = True
             
-            # Default is GH
-            assert ai_service.provider == "gh"
+            # Default is Gemini
+            assert ai_service.provider == "gemini"
         
         # Override
         ai_service.set_provider("openai")

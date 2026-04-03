@@ -97,10 +97,10 @@ class TestUpdateStoryStateSuccess:
         with patch("agent.commands.utils.push_safe", create=True):
             # push_safe is imported lazily inside the function
             with patch.dict("sys.modules", {"agent.sync.sync": MagicMock()}):
-                update_story_state("INFRA-001", "IN_PROGRESS", context_prefix="Phase 0")
+                update_story_state("INFRA-001", "READY", context_prefix="Phase 0")
 
         content = story.read_text()
-        assert "IN_PROGRESS" in content
+        assert "READY" in content
         assert "DRAFT" not in content
 
     @patch("agent.commands.utils.find_story_file")

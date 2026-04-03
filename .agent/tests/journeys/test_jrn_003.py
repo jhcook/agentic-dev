@@ -22,6 +22,6 @@ def test_jrn_003_step_1():
     """Developer runs `agent list`
     Assertions: Command exits with status 0, Expected output displayed
     """
-    result = subprocess.run(['agent', 'list'], capture_output=True, text=True)
+    result = subprocess.run(['agent', 'list'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Available agents:" in result.stdout

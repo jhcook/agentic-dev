@@ -21,10 +21,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from agent.commands.runbook import (
-    score_story_complexity,
-    ComplexityMetrics,
-)
+from agent.commands.runbook import score_story_complexity
+from agent.commands.runbook_helpers import ComplexityMetrics
 
 
 # ---------------------------------------------------------------------------
@@ -286,27 +284,27 @@ class TestSplitRequestFallback:
 
     def test_parse_split_request_valid_json(self):
         """Valid SPLIT_REQUEST JSON is parsed correctly."""
-        from agent.commands.runbook import _parse_split_request
+        from agent.commands.runbook_helpers import parse_split_request
 
         content = '{"SPLIT_REQUEST": true, "reason": "Too complex", "suggestions": ["Split A", "Split B"]}'
-        result = _parse_split_request(content)
+        result = parse_split_request(content)
         assert result is not None
         assert result["SPLIT_REQUEST"] is True
         assert len(result["suggestions"]) == 2
 
     def test_parse_split_request_in_code_fence(self):
         """SPLIT_REQUEST in markdown code fence is extracted."""
-        from agent.commands.runbook import _parse_split_request
+        from agent.commands.runbook_helpers import parse_split_request
 
         content = '```json\n{"SPLIT_REQUEST": true, "reason": "Big", "suggestions": ["A"]}\n```'
-        result = _parse_split_request(content)
+        result = parse_split_request(content)
         assert result is not None
         assert result["SPLIT_REQUEST"] is True
 
     def test_parse_split_request_malformed_returns_none(self):
         """Malformed JSON with SPLIT_REQUEST marker falls back gracefully."""
-        from agent.commands.runbook import _parse_split_request
+        from agent.commands.runbook_helpers import parse_split_request
 
         content = "SPLIT_REQUEST but not valid json at all"
-        result = _parse_split_request(content)
+        result = parse_split_request(content)
         assert result is None

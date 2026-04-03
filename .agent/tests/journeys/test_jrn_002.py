@@ -20,7 +20,7 @@ import subprocess
 def test_jrn_002_step_1():
     """1. Developer runs `agent commit`
      Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['uv', 'run', 'agent', 'commit', '--offline', '--yes'], capture_output=True, text=True)
+    result = subprocess.run(['uv', 'run', 'agent', 'commit', '--offline', '--yes'], capture_output=True, text=True, timeout=30)
     assert result.returncode != 0
     assert "required" in result.stdout or "required" in result.stderr
 
@@ -28,7 +28,7 @@ def test_jrn_002_step_1():
 def test_jrn_002_step_2():
     """2. Developer runs `agent commit --help`
      Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['uv', 'run', 'agent', 'commit', '--help'], capture_output=True, text=True)
+    result = subprocess.run(['uv', 'run', 'agent', 'commit', '--help'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Usage: agent commit" in result.stdout
     assert "Commit changes with a governed message" in result.stdout
@@ -37,7 +37,7 @@ def test_jrn_002_step_2():
 def test_jrn_002_step_3():
     """3. Developer runs `agent commit -m`
      Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['uv', 'run', 'agent', 'commit', '-m'], capture_output=True, text=True)
+    result = subprocess.run(['uv', 'run', 'agent', 'commit', '-m'], capture_output=True, text=True, timeout=30)
     assert result.returncode != 0
     assert "requires an argument" in result.stderr
 
@@ -45,7 +45,7 @@ def test_jrn_002_step_3():
 def test_jrn_002_step_4():
     """4. Developer runs `agent new-runbook`
      Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['uv', 'run', 'agent', 'new-runbook', '--offline'], capture_output=True, text=True)
+    result = subprocess.run(['uv', 'run', 'agent', 'new-runbook', '--offline'], capture_output=True, text=True, timeout=30)
     assert result.returncode != 0
     assert "Usage: agent new-runbook" in result.stderr or "Usage: agent new-runbook" in result.stdout
 
@@ -53,7 +53,7 @@ def test_jrn_002_step_4():
 def test_jrn_002_step_5():
     """5. Developer runs `agent new-runbook --help`
      Assertions: Command exits with status 0, Expected output displayed"""
-    result = subprocess.run(['uv', 'run', 'agent', 'new-runbook', '--help'], capture_output=True, text=True)
+    result = subprocess.run(['uv', 'run', 'agent', 'new-runbook', '--help'], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert "Usage: agent new-runbook" in result.stdout
     assert "Generate an implementation runbook" in result.stdout

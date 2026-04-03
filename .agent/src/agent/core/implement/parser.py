@@ -21,7 +21,7 @@ import re
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Set, Tuple, Union, Optional
+from typing import Dict, Any, List, Set, Tuple, TypedDict, Union, Optional
 
 import mistune
 
@@ -48,9 +48,38 @@ except ImportError:
 _logger = get_logger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Typed structures returned by the AST parser
+# ---------------------------------------------------------------------------
+
+class RunbookOperationDict(TypedDict, total=False):
+    """A single [MODIFY], [NEW], or [DELETE] operation parsed from a runbook step."""
+
+    path: str
+    """Repo-relative file path declared in the operation header."""
+    blocks: List[Dict[str, str]]
+    """For MODIFY — list of {'search': str, 'replace': str} pairs."""
+    content: str
+    """For NEW — full file content to write."""
+    rationale: str
+    """For DELETE — human-readable reason for deletion."""
+    malformed: bool
+    """True when the operation header is present but its body is invalid."""
+
+
+class RunbookStepDict(TypedDict):
+    """A structured implementation step from a runbook's ## Implementation Steps section."""
+
+    title: str
+    """Step title with the 'Step N: ' prefix stripped."""
+    operations: List[RunbookOperationDict]
+    """Ordered list of file operations belonging to this step."""
+
+
 class InvalidTemplateError(Exception):
     """Raised when a runbook skeleton is malformed or lacks addressable blocks."""
     pass
+
 
 
 def validate_path_safety(path_str: str) -> str:
@@ -118,9 +147,16 @@ def _unescape_path(path: str) -> str:
         return ""
     # Remove bold/italic and backticks from the edges only
     path = path.strip().strip('`')
-    # Safety net: if mistune rendered __ as ** anywhere in the path, restore it
-    path = re.sub(r'\*\*(.*?)\*\*', r'__\1__', path)
-    path = re.sub(r'\*(.*?)\*', r'_\1_', path)
+    # Strip bold (**) or (__) from the entire path string
+    path = re.sub(r'^\*\*(.*?)\*\*$', r'\1', path)
+    path = re.sub(r'^__(.*?)__$', r'\1', path)
+    # Strip italic (*) or (_) from the entire path string
+    path = re.sub(r'^\*(.*?)\*$', r'\1', path)
+    path = re.sub(r'^_(.*?)_$', r'\1', path)
+    # Mistune sometimes translates __ into ** or vice versa when dealing with dunder init
+    # We must only restore dunder if it was converted into ** natively inside the string, but
+    # it's usually better to just rely on the strict matching.
+    path = re.sub(r'\*\*', '__', path)
     # Remove backslash escapes for markdown characters: _ * [ ] ( ) # + - . !
     clean_path = re.sub(r'\\([_*[\]()#+\-.!])', r'\1', path)
     return validate_path_safety(clean_path)
@@ -259,7 +295,11 @@ def extract_modify_files(runbook_content: str) -> List[str]:
         return result
 
     # AST implementation
-    steps = _extract_runbook_data_ast(runbook_content)
+    try:
+        steps = _extract_runbook_data_ast(runbook_content)
+    except ValueError:
+        return []
+        
     paths = []
     seen = set()
     for step in steps:
@@ -292,7 +332,11 @@ def extract_approved_files(runbook_content: str) -> Set[str]:
         return paths
 
     # AST implementation
-    steps = _extract_runbook_data_ast(runbook_content)
+    try:
+        steps = _extract_runbook_data_ast(runbook_content)
+    except ValueError:
+        return set()
+        
     approved_paths = set()
     for step in steps:
         for op in step["operations"]:
@@ -430,7 +474,7 @@ def _extract_fenced_content(block_body: str) -> str:
     return ""
 
 
-def _extract_runbook_data_ast(content: str) -> List[dict]:
+def _extract_runbook_data_ast(content: str) -> List[RunbookStepDict]:
     """Extract implementation steps using an AST parser.
 
     Uses mistune to parse markdown into tokens and walks the tree to identify
@@ -446,6 +490,18 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
         ValueError: If Implementation Steps section is missing.
         ParsingError: If operation blocks are malformed.
     """
+    # Pre-process content to protect SEARCH/REPLACE blocks.
+    # Mistune 3 splits text with blank lines into separate paragraph tokens, which
+    # destroys the structural integrity of <<<SEARCH/REPLACE blocks that contain blank lines.
+    # We wrap them in HTML comments so Mistune parses them as a single `block_html` token,
+    # perfectly preserving their exact internal newlines and whitespace.
+    def _protect_sr(m: re.Match) -> str:
+        return f"<!--XYZ_SEARCH_START\n{m.group(1)}\n===\n{m.group(2)}\nXYZ_SEARCH_END-->"
+    content = re.sub(
+        r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$',
+        _protect_sr, content, flags=re.DOTALL
+    )
+    
     markdown = mistune.create_markdown(renderer=None)
     tokens = markdown(content)
 
@@ -471,9 +527,11 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
             elif ttype == 'emphasis':
                 inner = _children_text(t)
                 parts.append(f'_{inner}_')
+            elif ttype in ('softbreak', 'hardbreak'):
+                parts.append('\n')
         return ''.join(parts).strip()
 
-    steps: List[dict] = []
+    steps: List[RunbookStepDict] = []
     current_step: Optional[dict] = None
     current_op: Optional[dict] = None
     in_impl_steps = False
@@ -520,7 +578,7 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
             continue
 
         # 4. Extract content for the current operation
-        if current_op and token['type'] in ('paragraph', 'block_code', 'text'):
+        if current_op and token['type'] in ('paragraph', 'block_code', 'text', 'block_html'):
             # Text content extraction from various token structures
             text_parts = []
             if 'raw' in token:
@@ -533,8 +591,8 @@ def _extract_runbook_data_ast(content: str) -> List[dict]:
                 continue
 
             if current_op["action"] == "MODIFY":
-                # Look for SEARCH/REPLACE blocks
-                sr_pattern = r'(?m)^<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>[ \t]*$'
+                # Look for SEARCH/REPLACE blocks using the protected sentinel
+                sr_pattern = r'(?m)^<!--XYZ_SEARCH_START\n(.*?)\n===\n(.*?)\nXYZ_SEARCH_END-->'
                 for sr in re.finditer(sr_pattern, body_text, re.DOTALL):
                     current_op["blocks"].append({"search": sr.group(1), "replace": sr.group(2)})
             

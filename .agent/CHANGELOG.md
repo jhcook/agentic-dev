@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **INFRA-158 — Story Link Back-Population**: `agent new-runbook` now extracts all `ADR-NNN` and `JRN-NNN` references from the generated runbook and writes them back to the parent story's `## Linked ADRs` and `## Linked Journeys` sections. Updates are idempotent (no duplicates on re-run), atomic (write-then-rename), and best-effort (runbook generation still succeeds if the story file is unwritable). Emits structured log event `story_links_updated`.
 - **Polyglot QA Gate** (`gates.py`, `implement.py`): `run_qa_gate` now accepts a
   `test_commands` dict keyed by repo-relative directory prefix. The implement pipeline
   accumulates all modified files across steps and runs only the test suite(s) whose

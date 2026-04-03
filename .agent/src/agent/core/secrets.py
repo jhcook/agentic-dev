@@ -575,7 +575,10 @@ def get_secret_manager() -> SecretManager:
         _secret_manager = SecretManager()
         
         # 1. Try Keyring (Secure Local)
-        if _secret_manager.is_initialized():
+        # AGENT_SKIP_KEYRING=1 disables keychain access in tests/CI to prevent
+        # macOS keychain dialogs that block unattended runs.
+        _skip_keyring = os.getenv("AGENT_SKIP_KEYRING", "").strip() in ("1", "true", "yes")
+        if _secret_manager.is_initialized() and not _skip_keyring:
             try:
                 import keyring
                 # Use 'agent-cli' as service name, 'master_key' as username

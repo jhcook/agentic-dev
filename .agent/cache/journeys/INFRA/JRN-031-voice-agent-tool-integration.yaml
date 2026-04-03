@@ -69,7 +69,7 @@ implementation:
   - .agent/src/agent/tools/custom/**init**.py
   - .agent/src/agent/tools/custom/__init__.py
   - .agent/src/agent/tools/dynamic.py
-  - .agent/src/agent/tools/tests/test_dynamic.py
+  - .agent/tests/tools/test_dynamic.py
   - .agent/src/backend/main.py
   - .agent/src/backend/routers/governance.py
   - .agent/src/backend/routers/voice.py

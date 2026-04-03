@@ -42,35 +42,43 @@ def loader() -> ContextLoader:
     return ContextLoader()
 
 
-def test_load_targeted_context_happy_path(loader: ContextLoader, tmp_path: Path) -> None:
+def test_load_targeted_context_happy_path(loader: ContextLoader, tmp_path: Path, monkeypatch) -> None:
     """Given a story with a [MODIFY] file annotation, _load_targeted_context returns actual signatures."""
-    with patch("agent.core.context.config") as mock_config:
-        mock_config.agent_dir = tmp_path
-        mock_config.repo_root = tmp_path
+    import agent.core.context as ctx_module
+    import agent.core.implement.resolver as resolver_module
 
-        # Create a dummy file at the canonical src/ path
-        src_dir = tmp_path / "src" / "core" / "ai"
-        src_dir.mkdir(parents=True)
-        test_file = src_dir / "service.py"
-        test_file.write_text("import os\n\ndef my_func():\n    pass\n")
+    monkeypatch.setattr(ctx_module.config, "repo_root", tmp_path)
+    monkeypatch.setattr(ctx_module.config, "agent_dir", tmp_path)
+    # Prevent the fuzzy resolver from hitting the real repo
+    monkeypatch.setattr(resolver_module, "resolve_path", lambda p: None)
 
-        story = "#### [MODIFY] core/ai/service.py"
-        result = loader._load_targeted_context(story)
+    # Create the file at the exact path the loader will try: tmp_path / 'core/ai/service.py'
+    src_dir = tmp_path / "core" / "ai"
+    src_dir.mkdir(parents=True)
+    test_file = src_dir / "service.py"
+    test_file.write_text("import os\n\ndef my_func():\n    pass\n")
 
-        assert "TARGETED FILE CONTENTS" in result
-        assert "core/ai/service.py" in result
-        assert "def my_func()" in result
-        assert "import os" in result
+    story = "#### [MODIFY] core/ai/service.py"
+    result = loader._load_targeted_context(story)
+
+    assert "TARGETED FILE CONTENTS" in result
+    assert "core/ai/service.py" in result
+    assert "def my_func()" in result
+    assert "import os" in result
 
 
-def test_load_targeted_context_file_not_found(loader: ContextLoader, tmp_path: Path) -> None:
+def test_load_targeted_context_file_not_found(loader: ContextLoader, tmp_path: Path, monkeypatch) -> None:
     """Given a story referencing a nonexistent file, _load_targeted_context emits FILE NOT FOUND."""
-    with patch("agent.core.context.config") as mock_config:
-        mock_config.agent_dir = tmp_path
-        mock_config.repo_root = tmp_path
-        story = "#### [MODIFY] non_existent.py"
-        result = loader._load_targeted_context(story)
-        assert "FILE NOT FOUND" in result
+    import agent.core.context as ctx_module
+    import agent.core.implement.resolver as resolver_module
+
+    monkeypatch.setattr(ctx_module.config, "repo_root", tmp_path)
+    monkeypatch.setattr(ctx_module.config, "agent_dir", tmp_path)
+    monkeypatch.setattr(resolver_module, "resolve_path", lambda p: None)
+
+    story = "#### [MODIFY] non_existent/file.py"
+    result = loader._load_targeted_context(story)
+    assert "FILE NOT FOUND" in result
 
 
 def test_load_targeted_context_empty_story(loader: ContextLoader) -> None:
@@ -124,18 +132,22 @@ def test_load_behavioral_contracts_extracts_defaults(loader: ContextLoader, tmp_
         assert "default_val=10" in result
 
 
-def test_load_targeted_context_truncates_large_files(loader: ContextLoader, tmp_path: Path) -> None:
+def test_load_targeted_context_truncates_large_files(loader: ContextLoader, tmp_path: Path, monkeypatch) -> None:
     """Given a file larger than 30k characters, it truncates the middle."""
-    with patch("agent.core.context.config") as mock_config:
-        mock_config.agent_dir = tmp_path
-        mock_config.repo_root = tmp_path
+    import agent.core.context as ctx_module
+    import agent.core.implement.resolver as resolver_module
 
-        src_dir = tmp_path / "src" / "core"
-        src_dir.mkdir(parents=True)
-        test_file = src_dir / "large.py"
-        test_file.write_text("A\\n" * 31000)
+    monkeypatch.setattr(ctx_module.config, "repo_root", tmp_path)
+    monkeypatch.setattr(ctx_module.config, "agent_dir", tmp_path)
+    monkeypatch.setattr(resolver_module, "resolve_path", lambda p: None)
 
-        story = "#### [MODIFY] core/large.py"
-        result = loader._load_targeted_context(story)
+    # 'core/large.py' → tmp_path / 'core/large.py'
+    src_dir = tmp_path / "core"
+    src_dir.mkdir(parents=True)
+    test_file = src_dir / "large.py"
+    test_file.write_text("A\n" * 31000)
 
-        assert "lines omitted) ..." in result
+    story = "#### [MODIFY] core/large.py"
+    result = loader._load_targeted_context(story)
+
+    assert "lines omitted) ..." in result

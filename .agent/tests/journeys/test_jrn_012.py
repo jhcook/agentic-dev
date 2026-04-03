@@ -30,7 +30,7 @@ def test_jrn_012_step_1():
         mock_run.return_value.stdout = "Sync completed successfully"
         mock_run.return_value.stderr = ""
 
-        result = subprocess.run(["agent", "sync"], capture_output=True, text=True)
+        result = subprocess.run(["agent", "sync"], capture_output=True, text=True, timeout=30)
 
         assert result.returncode == 0
         assert "Sync completed successfully" in result.stdout

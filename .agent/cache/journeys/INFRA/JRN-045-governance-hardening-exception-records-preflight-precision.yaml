@@ -93,8 +93,8 @@ implementation:
   - .agent/src/agent/core/utils.py
   - .agent/src/agent/main.py
   tests:
-  - .agent/src/agent/core/ai/tests/test_service.py
-  - .agent/src/agent/core/auth/tests/test_validate_credentials.py
+  - .agent/tests/core/ai/test_service.py
+  - .agent/tests/core/auth/test_validate_credentials.py
   - .agent/tests/core/test_fixer.py
   - .agent/tests/admin/test_cli.py
   - .agent/tests/commands/test_check_commands.py

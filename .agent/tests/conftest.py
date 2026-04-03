@@ -15,6 +15,11 @@
 import pytest
 import os
 
+# Suppress macOS keychain dialogs during all test runs (including subprocesses).
+# This prevents `agent.core.secrets.get_secret_manager()` from calling
+# keyring.get_password() which triggers a blocking system dialog on macOS.
+os.environ.setdefault("AGENT_SKIP_KEYRING", "1")
+
 @pytest.fixture(autouse=True)
 def set_terminal_width():
     """Force rich/typer to use a wide terminal so output assertions don't break due to word wrapping."""
@@ -32,14 +37,29 @@ def run_cli_command():
 def isolate_secrets_dir(tmp_path, monkeypatch):
     """Ensure no tests touch the live .agent/secrets directory by default."""
     import agent.core.secrets
-    secrets_dir = tmp_path / "secrets"
+    isolation_dir = tmp_path / "secrets"
     # Overwrite the default constructor
     original_init = agent.core.secrets.SecretManager.__init__
     
-    def mock_init(self, dir_path=None):
-        original_init(self, secrets_dir)
+    def mock_init(self, secrets_dir=None):
+        original_init(self, secrets_dir if secrets_dir is not None else isolation_dir)
         
     monkeypatch.setattr(agent.core.secrets.SecretManager, "__init__", mock_init)
     
     # Reset singleton to force recreation using the mocked init
     monkeypatch.setattr(agent.core.secrets, "_secret_manager", None)
+
+@pytest.fixture(autouse=True)
+def check_memory_leak():
+    """Fail the test suite if memory exceeds a critical limit due to a memory leak."""
+    yield
+    import resource
+    import sys
+    usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    
+    # On macOS, ru_maxrss is in bytes. On Linux, it's in kilobytes.
+    max_bytes = usage if sys.platform == "darwin" else usage * 1024
+    
+    limit_bytes = 2 * 1024 * 1024 * 1024  # 2 GB limit
+    if max_bytes > limit_bytes:
+        pytest.exit(f"Memory limit exceeded: {max_bytes / (1024*1024):.2f} MB used (max 2048 MB). Aborting to prevent OOM!")

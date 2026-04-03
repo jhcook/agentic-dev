@@ -15,7 +15,7 @@
 import pytest
 import os
 from typer.testing import CliRunner
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from agent.main import app
 
 @pytest.fixture
@@ -57,19 +57,23 @@ def test_interactive_preflight_typer_e2e(temp_repo):
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
          patch("agent.sync.notion.NotionSync"), \
+         patch("agent.sync.notebooklm.ensure_notebooklm_sync", new_callable=AsyncMock, return_value="SUCCESS"), \
+         patch("agent.commands.check.convene_council_full") as mock_council, \
          patch("subprocess.run") as mock_run:
-             
+
         # Configure CWD to match temp_repo
         mock_cwd.return_value = repo_root
-        mock_cwd.side_effect = None 
-        
+        mock_cwd.side_effect = None
+
         mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = "Tests Passed" 
-        
-        # Verify Path usage in fixer.py: `path = Path(file_path).resolve()`
-        # `repo_root = Path.cwd().resolve()`
-        # repo_root is a real Path object, so .resolve() returns itself. No need to mock.
-             
+        mock_run.return_value.stdout = "Tests Passed"
+
+        # Governance council mock — returns PASS to avoid needing a live AI call
+        mock_council.return_value = {
+            "verdict": "PASS",
+            "json_report": {"roles": []},
+        }
+
         # Setup Mock AI Response for Fixer
         mock_fixer_ai.get_completion.return_value = """
         [
@@ -80,20 +84,18 @@ def test_interactive_preflight_typer_e2e(temp_repo):
             }
         ]
         """
-        
-        # We need to ensure `validate_story` finds the file in our temp structure
-        # The `validate_story` uses `config.stories_dir.rglob`.
+
+        # We need to ensure `validate_story` finds the file in our temp structure.
         # We patched `config.stories_dir` to `tmp_path/.agent/cache/stories`.
-        # rglob(INFRA-E2E...) should find it.
-        
+
         # Input: "1" to select option, "y" to confirm apply
         result = runner.invoke(app, ["preflight", "--interactive", "--story", "INFRA-E2E-001"], input="1\ny\n")
-        
+
         # Output Debugging
         print(result.stdout)
-        
+
         # Assertions
-        assert result.exit_code == 0
+        assert result.exit_code == 0, f"Expected exit 0 but got {result.exit_code}: {result.stdout}"
         assert "Story schema validation failed" in result.stdout
         assert "Fix Options" in result.stdout
         assert "Applied fix" in result.stdout
@@ -111,6 +113,7 @@ def test_interactive_preflight_empty_ai_response(temp_repo):
          patch("agent.core.ai.ai_service") as mock_ai, \
          patch("agent.core.fixer.ai_service") as mock_fixer_ai, \
          patch("agent.sync.notion.NotionSync"), \
+         patch("agent.sync.notebooklm.ensure_notebooklm_sync", new_callable=AsyncMock, return_value="SUCCESS"), \
          patch("agent.core.fixer.Path.cwd") as mock_cwd:
              
         mock_cwd.return_value = repo_root
@@ -129,8 +132,12 @@ def test_interactive_preflight_empty_ai_response(temp_repo):
         # check.py returns False on failure
         # The key is that it doesn't raise Unhandled Exception
         
+        # Assertions
+        assert result.exit_code == 1 # Exits 1 because it defaults to '1', which expects open_editor but no file exists since test_repo is broken setup
         assert "Story schema validation failed" in result.stdout
-        assert "Manual Fix (Open in Editor)" in result.stdout
+        # `rich` strips out rich markup like `[bold]` except when styled with colors which might leak as ansi codes in testing unless isolated, but Typer test runner usually catches it bare. But Prompt.ask might render `1` separately. So search for parts.
+        assert "Manual Fix" in result.stdout
+        assert "Open in Editor" in result.stdout
         assert "AI generation failed" in result.stdout
 
 def test_interactive_preflight_voice_mode(temp_repo):
@@ -146,14 +153,22 @@ def test_interactive_preflight_voice_mode(temp_repo):
          patch("agent.core.fixer.Path.cwd") as mock_cwd, \
          patch("subprocess.run") as mock_run, \
          patch("agent.sync.notion.NotionSync"), \
+         patch("agent.sync.notebooklm.ensure_notebooklm_sync", new_callable=AsyncMock, return_value="SUCCESS"), \
+         patch("agent.commands.check.convene_council_full") as mock_council, \
          patch.dict(os.environ, {"AGENT_VOICE_MODE": "1"}):
-             
+
         mock_cwd.return_value = repo_root
-        
+
         # Mock subprocess run to simulate successful test execution
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "Tests Passed"
-        
+
+        # Governance council mock — returns PASS to avoid needing a live AI call
+        mock_council.return_value = {
+            "verdict": "PASS",
+            "json_report": {"roles": []},
+        }
+
         # Valid Fix Options
         mock_fixer_ai.get_completion.return_value = """
         [
@@ -178,7 +193,7 @@ def test_interactive_preflight_voice_mode(temp_repo):
         # 2. "Option 1: Voice Fix. Voice friendly description" (Single line)
         assert "Option 1: Voice Fix. Voice friendly description" in result.stdout
         
-        # 3. "Select an option (or say quit):" instead of "Select an option (or 'q' to quit)"
+        # 3. "Select an option (or say quit):"
         assert "Select an option (or say quit):" in result.stdout
         
         assert result.exit_code == 0
