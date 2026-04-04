@@ -321,15 +321,42 @@ def _fix_changelog_sr_headings(content: str) -> str:
     The AI consistently uses ``# Changelog`` as the SEARCH anchor, which
     is a top-level heading inside the runbook and triggers MD025 (multiple
     H1s) and MD024 (duplicate headings).  This pass rewrites the SEARCH
-    side to use the first sub-heading inside the file (``## [Unreleased]``)
-    instead, which is equally unique but doesn't violate heading rules.
+    side to use the first sub-heading inside the file (``## [Unreleased]``
+    or its suffixed form) instead, which is equally unique but doesn't
+    violate heading rules.
+
+    Also fixes the case where the AI uses bare ``## [Unreleased]`` but
+    the actual CHANGELOG.md on disk has ``## [Unreleased] (Updated by story)``
+    from a prior run.
     """
-    # Pattern: inside a fenced block, a <<<SEARCH that anchors on # Changelog
-    return re.sub(
+    # Case 1: AI anchored on # Changelog (H1) — rewrite to ## [Unreleased]
+    content = re.sub(
         r'<<<SEARCH\n# Changelog\n===\n# Changelog',
         '<<<SEARCH\n## [Unreleased]\n===\n## [Unreleased] (Updated by story)',
         content,
     )
+
+    # Case 2: AI used bare ## [Unreleased] but file may have a suffix.
+    # Read the actual line from CHANGELOG.md on disk.
+    try:
+        from pathlib import Path as _Path
+        from agent.core.config import config as _config
+        changelog_path = _config.repo_root / "CHANGELOG.md"
+        if changelog_path.exists():
+            for line in changelog_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("## [Unreleased]"):
+                    actual_line = line.strip()
+                    if actual_line != "## [Unreleased]":
+                        # Replace bare SEARCH anchor with the actual line
+                        content = content.replace(
+                            "<<<SEARCH\n## [Unreleased]\n===",
+                            f"<<<SEARCH\n{actual_line}\n===",
+                        )
+                    break
+    except Exception:
+        pass
+
+    return content
 
 
 def _ensure_blank_lines_around_fences(content: str) -> str:
@@ -1212,14 +1239,15 @@ def generate_runbook_chunked(
                 },
             )
             if _final_fixed:
-                _console.print(
+                console.print(
                     f"[green]✅ Generation-time S/R verification: "
                     f"{_final_fixed}/{_final_total} block(s) corrected to verbatim.[/green]"
                 )
     except Exception as _sr_err:
+        import traceback as _tb
         logger.warning(
             "sr_final_pass_error",
-            extra={"error": str(_sr_err), "story_id": story_id},
+            extra={"error": str(_sr_err), "traceback": _tb.format_exc(), "story_id": story_id},
         )
 
     if tracker is not None:

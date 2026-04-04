@@ -263,7 +263,12 @@ def parse_search_replace_blocks(content: str) -> List[Dict[str, str]]:
         content, flags=re.IGNORECASE,
     )
     for i in range(1, len(file_sections), 2):
-        filepath = _unescape_path(file_sections[i].strip())
+        try:
+            filepath = _unescape_path(file_sections[i].strip())
+        except ParsingError as _pe:
+            import logging as _log
+            _log.debug("parse_search_replace_blocks: skipping invalid path %r: %s", file_sections[i].strip(), _pe)
+            continue
         body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
         for match in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', body, re.DOTALL):
             blocks.append({"file": filepath, "search": match.group(1), "replace": match.group(2)})
