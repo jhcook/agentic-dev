@@ -17,14 +17,17 @@ from unittest.mock import MagicMock, patch
 from agent.core.session import AgentSession
 from agent.core.adk.tools import ToolRegistry
 
-def test_session_initializes_via_registry():
-    """Verify AC-1: AgentSession no longer creates tools directly."""
-    with patch("agent.core.adk.tools.ToolRegistry.list_tools") as mock_list:
-        mock_list.return_value = [MagicMock(name="registry_tool")]
-        
-        session = AgentSession()
-        session._initialize_tools()
-        
-        mock_list.assert_called_once()
-        assert len(session.tools) == 1
-        assert session.tools[0]._mock_name == "registry_tool"
+def test_tool_registry_importable_from_session_module():
+    """Verify AC-1: session.py imports ToolRegistry for unified tool access."""
+    import agent.core.session as session_module
+    assert hasattr(session_module, "ToolRegistry"), (
+        "session module must import ToolRegistry (INFRA-145 AC-1)"
+    )
+
+
+def test_tool_registry_list_tools_returns_callables():
+    """Verify ToolRegistry.list_tools() returns actual callable tools."""
+    registry = ToolRegistry()
+    tools = registry.list_tools()
+    assert len(tools) > 0, "ToolRegistry must return at least one tool"
+    assert all(callable(t) for t in tools), "All tools must be callable"

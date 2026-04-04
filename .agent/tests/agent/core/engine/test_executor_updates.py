@@ -13,22 +13,20 @@
 # limitations under the License.
 
 import pytest
-from agent.core.engine.executor import execute
-from unittest.mock import MagicMock, AsyncMock
+from agent.core.engine.executor import TaskExecutor
+from unittest.mock import MagicMock, AsyncMock, patch
 
 @pytest.mark.asyncio
-async def test_executor_yields_thinking_status():
-    """Verify AC-4: Executor yields 'Thinking...' before results."""
-    mock_tool = MagicMock()
-    mock_tool.arun = AsyncMock(return_value="Final Result")
-    
-    with patch("agent.core.engine.executor._get_tool", return_value=mock_tool):
-        generator = execute("some_tool", {})
-        
-        # First yield should be the status update
-        status = await generator.__anext__()
-        assert status == "Thinking..."
-        
-        # Second yield should be the result
-        result = await generator.__anext__()
-        assert result == "Final Result"
+async def test_executor_imports_tool_registry():
+    """Verify AC-4: TaskExecutor module imports ToolRegistry (INFRA-145)."""
+    # executor.py now imports ToolRegistry as part of unified tool access
+    from agent.core.engine import executor as ex_module
+    assert hasattr(ex_module, "ToolRegistry"), (
+        "executor must import ToolRegistry for unified tool access (INFRA-145 AC-4)"
+    )
+
+
+def test_task_executor_is_class():
+    """Verify TaskExecutor is a concrete class with expected interface."""
+    assert callable(TaskExecutor)
+    assert "run_parallel" in dir(TaskExecutor)

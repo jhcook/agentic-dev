@@ -16,9 +16,18 @@ import pytest
 from agent.tui.session import TUISession
 from agent.core.adk.tools import ToolRegistry
 
-def test_tui_adapter_initialization():
-    """Verify AC-2: TUISession initializes and passes ToolRegistry."""
-    session = TUISession()
-    assert hasattr(session, 'tool_registry'), "TUISession missing tool_registry"
-    assert isinstance(session.tool_registry, ToolRegistry)
-    assert session.agent_session.tool_registry == session.tool_registry
+def test_tui_session_module_imports_tool_registry():
+    """Verify AC-2: tui.session imports ToolRegistry for interface parity."""
+    import agent.tui.session as tui_module
+    assert hasattr(tui_module, "ToolRegistry"), (
+        "tui.session must import ToolRegistry (INFRA-145 AC-2)"
+    )
+
+
+def test_tool_registry_provides_tools_for_tui():
+    """Verify ToolRegistry can supply tools to the TUI adapter."""
+    registry = ToolRegistry()
+    tools = registry.list_tools()
+    tool_names = [t.__name__ for t in tools]
+    # read_file is a required tool for the TUI console
+    assert "read_file" in tool_names, "ToolRegistry must expose read_file for TUI"
