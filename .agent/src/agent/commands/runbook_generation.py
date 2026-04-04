@@ -772,7 +772,8 @@ def generate_runbook_chunked(
                             "block_parse_retry",
                             extra={"section": section.title, "error": str(exc), "attempt": attempt + 1},
                         )
-                        # Retry: re-prompt the AI with the specific error feedback
+                        # Retry: re-prompt the AI with the specific error feedback.
+                        # Use _prompt (per-section) not block_prompt (stale loop variable).
                         block_raw = ai_service.complete(
                             system_prompt=(
                                 "You are an implementation specialist. Output ONLY valid JSON. "
@@ -782,7 +783,7 @@ def generate_runbook_chunked(
                                 "and newlines inside code blocks). Do NOT wrap your "
                                 "response in markdown fences."
                             ),
-                            user_prompt=block_prompt,
+                            user_prompt=_prompt,
                         )
 
 
@@ -853,6 +854,99 @@ def generate_runbook_chunked(
                 cleaned = _ensure_new_blocks_fenced(cleaned)
                 cleaned = _ensure_modify_blocks_fenced(cleaned)
 
+                # ─────────────────────────────────────────────────────────────
+                # Block-type validation: [NEW] must not target files that exist
+                # on disk. The parallel generation model sometimes confuses
+                # [NEW] / [MODIFY] despite instructions in the block prompt.
+                # Detect here (earliest point after fencing) and regenerate
+                # the block with an explicit correction, including the
+                # accumulated prior_changes so the model has full session context.
+                # ─────────────────────────────────────────────────────────────
+                _new_on_existing: List[str] = [
+                    _np.strip().strip("`")
+                    for _np in re.findall(r"####\s+\[NEW\]\s+([^\n`]+)", cleaned)
+                    if _np.strip().strip("`") in all_existing_files
+                ]
+                if _new_on_existing:
+                    console.print(
+                        f"[yellow]⚠️  Block {i} '{section.title}' used "
+                        f"[NEW] for existing file(s) {_new_on_existing} "
+                        f"— regenerating with correction...[/yellow]"
+                    )
+                    logger.warning(
+                        "block_new_on_existing_detected",
+                        extra={"section": section.title, "step": i, "files": _new_on_existing},
+                    )
+                    _correction_sys = (
+                        "You are an implementation specialist. Output ONLY valid JSON.\n"
+                        "CORRECTION REQUIRED: Your previous response used [NEW] for "
+                        "file(s) that already exist on disk. For existing files you MUST "
+                        "use [MODIFY] with <<<SEARCH/===/>>> blocks; [NEW] creates a new "
+                        "file from scratch. The current file content has been provided in "
+                        "the user prompt — use lines from it verbatim as your SEARCH "
+                        "anchor (exact whitespace matters).\n\n"
+                        "Files incorrectly marked [NEW]:\n"
+                        + "\n".join(f"  - `{_p}`" for _p in _new_on_existing)
+                    )
+                    if prior_changes:
+                        _correction_sys += (
+                            "\n\nAlready completed in prior steps (do NOT re-implement):\n"
+                            + "\n".join(
+                                f"  - {_k}: {_v.splitlines()[0]}"
+                                for _k, _v in list(prior_changes.items())[-8:]
+                            )
+                        )
+                    for _bt_retry in range(2):
+                        _corrected_raw = ai_service.complete(
+                            system_prompt=_correction_sys,
+                            user_prompt=_prompt,
+                        )
+                        if tracker is not None:
+                            tracker.record_call(
+                                _model_hint,
+                                _token_count(_prompt),
+                                _token_count(_corrected_raw),
+                            )
+                        try:
+                            _corrected_block = GenerationBlock.from_dict(
+                                _extract_json(_corrected_raw)
+                            )
+                            _corrected_cleaned = _corrected_block.content.lstrip("\n")
+                            # Verify the correction actually fixed it
+                            _still_bad = [
+                                _np.strip().strip("`")
+                                for _np in re.findall(
+                                    r"####\s+\[NEW\]\s+([^\n`]+)", _corrected_cleaned
+                                )
+                                if _np.strip().strip("`") in all_existing_files
+                            ]
+                            if not _still_bad:
+                                cleaned = _corrected_cleaned
+                                block = _corrected_block
+                                logger.info(
+                                    "block_type_corrected",
+                                    extra={
+                                        "section": section.title,
+                                        "step": i,
+                                        "attempt": _bt_retry + 1,
+                                        "fixed": _new_on_existing,
+                                    },
+                                )
+                                break
+                            logger.warning(
+                                "block_type_correction_partial",
+                                extra={
+                                    "section": section.title,
+                                    "still_bad": _still_bad,
+                                    "attempt": _bt_retry + 1,
+                                },
+                            )
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning(
+                                "block_type_correction_parse_failed",
+                                extra={"section": section.title, "attempt": _bt_retry + 1},
+                            )
+
                 # Per-block S/R pre-validation: reanchor hallucinated SEARCH
                 # blocks now, using the file contents we already loaded —
                 # prevents errors from stacking up until write time.
@@ -917,17 +1011,16 @@ def generate_runbook_chunked(
                     if not clean:
                         continue
                     if action == "NEW":
-                        # Validate: [NEW] must target files that don't exist yet
+                        # Validate: [NEW] must target files that don't exist yet.
+                        # Note: block-type correction was already attempted earlier
+                        # in Phase 2c (before S/R pre-validation). If the file still
+                        # appears as [NEW] here the correction retries were exhausted.
                         from agent.core.config import resolve_repo_path as _resolve_repo
                         _new_path = _resolve_repo(clean)
                         if _new_path and _new_path.exists():
-                            error_console.print(
-                                f"[bold red]❌ File '{clean}' exists on disk but "
-                                f"is marked as [NEW]. Use [MODIFY] with S/R blocks.[/bold red]"
-                            )
-                            logger.error(
-                                "new_block_targets_existing_file file=%s step=%d",
-                                clean, i,
+                            logger.warning(
+                                "new_block_targets_existing_file",
+                                extra={"file": clean, "step": i, "section": section.title},
                             )
                         # Extract the actual code content for this [NEW] block
                         # so later sections can write accurate SEARCH blocks

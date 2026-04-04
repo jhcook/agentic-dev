@@ -391,6 +391,12 @@ def _sr_check_replace_imports(
                         and len(n.targets) == 1
                         and isinstance(n.targets[0], ast.Name)
                     }
+                    # Also catch re-exported symbols: `from X import Y` makes Y a public
+                    # name in the module (e.g. check_projected_loc re-exported from loc_guard).
+                    for imp_node in ast.walk(mod_tree):
+                        if isinstance(imp_node, ast.ImportFrom):
+                            for alias in imp_node.names:
+                                defined.add(alias.asname or alias.name)
                     if sym not in defined:
                         unresolved.append(f"{module}.{sym}")
                 except (OSError, SyntaxError):
@@ -569,6 +575,23 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
     # All S/R blocks (MODIFY + NEW that contain <<<SEARCH blocks).
     sr_blocks = parse_search_replace_blocks(content)
 
+    # Build cross-block symbol index so _sr_check_replace_imports can skip symbols
+    # that are defined in sibling [NEW]/[MODIFY] blocks of this runbook.
+    #
+    # Strategy: scan the ENTIRE content string once with a regex. This is simpler
+    # and more robust than trying to extract individual "replace" fields from SR
+    # block dicts — those fields can be empty when multiple SR blocks live in separate
+    # fenced code fences under the same [MODIFY] header (a parser edge case).
+    # Scanning the full content is intentionally broad (includes SEARCH text), but
+    # false positives in an allowlist are harmless; false negatives break generation.
+    _session_other_defs: Set[str] = set(
+        re.findall(
+            r"^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            content,
+            re.MULTILINE,
+        )
+    )
+
     mismatches: List[SRMismatch] = []
     # Track per-file block index (1-based).
     block_counters: dict[str, int] = {}
@@ -635,8 +658,7 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
                         sem_errors["replace_syntax_error"] = err
 
                 if is_py and not sem_errors and getattr(config, "sr_check_imports", True):
-                    other_defs: Set[str] = set()  # populated from runbook context in future
-                    err = _sr_check_replace_imports(replace_text, config.repo_root, other_defs)
+                    err = _sr_check_replace_imports(replace_text, config.repo_root, _session_other_defs)
                     if err:
                         sem_errors["replace_import_error"] = err
 
