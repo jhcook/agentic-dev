@@ -223,7 +223,6 @@ def log_sr_malformation_event(file_path: str, reason: str, action: str) -> None:
         }
     )
 >>>
->>>
 
 ```
 
@@ -327,32 +326,23 @@ def test_sr_gate_returns_none_on_empty_search():
 
 #### [MODIFY] .agent/tests/core/implement/test_parser.py
 
-```
-
+```python
 <<<SEARCH
+assert blocks[0].replace_text == "print('hello world')\n"
+===
 assert blocks[0].replace_text == "print('hello world')\n"
 
 def test_parse_sr_blocks_rejects_empty_search(caplog):
     """AC-4: Verify parser skips blocks with whitespace-only SEARCH sections and logs it."""
+    import logging
     from agent.core.implement.parser import parse_sr_blocks
     from pathlib import Path
-    
-    content = """
-#### [MODIFY] src/dummy.py
 
-```
+    # Runbook content with a deliberate empty SEARCH block
+    content = 'fake S/R with empty search'
+    with caplog.at_level(logging.WARNING):
+        blocks = list(parse_sr_blocks(content, Path("src/dummy.py")))
 
-<<<SEARCH
-
-===
-new_code()
->>>
-
-```
-
-"""
-    blocks = list(parse_sr_blocks(content, Path("src/dummy.py")))
-    
     assert len(blocks) == 0
     assert "sr_replace_malformed_empty_search" in caplog.text
 >>>
@@ -396,3 +386,21 @@ def test_regression_infra_146_zero_syntax_advisories():
 ```
 
 ### Step 7: Deployment & Rollback Strategy
+
+#### [MODIFY] CHANGELOG.md
+
+```
+
+<<<SEARCH
+**Changed**
+- Hardened implementation pipeline to automatically reject malformed empty S/R blocks and auto-correct schema violations (INFRA-184).
+===
+**Changed**
+- Hardened runbook S/R pipeline: empty SEARCH blocks stripped at postprocessor level; parser emits structured log events; prompt guard added to generation prompt; function-after schema autocorrection added (INFRA-184).
+>>>
+
+```
+
+## Copyright
+
+Copyright 2026 Justin Cook
