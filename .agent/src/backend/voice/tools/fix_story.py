@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 import subprocess
@@ -28,7 +27,6 @@ try:
 except ImportError:
     pass
 
-@tool
 def interactive_fix_story(
     story_id: str, 
     apply_idx: Optional[int] = None, 

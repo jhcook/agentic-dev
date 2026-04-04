@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import os
 import glob
 
-@tool
 def list_docs() -> str:
     """
     List all general documentation files.
@@ -30,7 +28,6 @@ def list_docs() -> str:
     
     return "\n".join([os.path.basename(f) for f in files])
 
-@tool
 def read_doc(filename: str) -> str:
     """
     Read the content of a specific documentation file.
@@ -56,7 +53,6 @@ def read_doc(filename: str) -> str:
     except Exception as e:
         return f"Error reading file: {e}"
 
-@tool
 def search_docs(query: str) -> str:
     """
     Search for a specific term within all documentation files.

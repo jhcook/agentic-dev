@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import importlib.metadata
 
-@tool
 def get_installed_packages() -> str:
     """Returns a list of installed Python packages and their versions."""
     try:

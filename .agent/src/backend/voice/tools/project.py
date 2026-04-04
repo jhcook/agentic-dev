@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import os
 import glob
 import subprocess
 from agent.core.config import config
 from agent.core.utils import find_best_matching_story
 
-@tool
 def list_stories(status: str = "OPEN") -> str:
     """
     List user stories filtered by status.
@@ -52,7 +50,6 @@ def list_stories(status: str = "OPEN") -> str:
         return f"No stories found with status '{status}'."
     return "\n".join(matches[:20]) # Limit to 20
 
-@tool
 def get_project_info() -> str:
     """
     Get high-level project information (name, version, key deps).
@@ -67,13 +64,11 @@ def get_project_info() -> str:
          
     return "\n".join(info)
 
-@tool
 def list_runbooks() -> str:
     """List all implementation runbooks."""
     files = glob.glob(str(config.repo_root / ".agent/cache/runbooks/**/*.md"), recursive=True)
     return "\n".join([os.path.basename(f) for f in files])
 
-@tool
 def match_current_changes_to_story() -> str:
     """
     Analyze currently staged git changes and identify the most relevant User Story.
@@ -112,7 +107,6 @@ def _is_safe_path(path: str) -> bool:
     except Exception:
         return False
 
-@tool
 def read_file(path: str) -> str:
     """
     Read the content of any file in the repository.
@@ -146,7 +140,6 @@ def read_file(path: str) -> str:
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             return f"Error reading file: {e}"
 
-@tool
 def write_file(path: str, content: str) -> str:
     """
     Write or overwrite a file in the repository.
@@ -176,7 +169,6 @@ def write_file(path: str, content: str) -> str:
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             return f"Error writing file: {e}"
 
-@tool
 def apply_license_headers(path: str = ".") -> str:
     """
     Recursively apply Apache 2.0 license headers to all .py, .ts, and .tsx files

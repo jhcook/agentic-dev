@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-from langchain_core.tools import tool
 import subprocess
 import threading
 import time
@@ -25,7 +24,6 @@ from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
-@tool
 def start_interactive_shell(command: str, session_id: str = None, config: RunnableConfig = None) -> str:
     """
     Start a long-running interactive shell command (e.g., 'npm init', 'python3').
@@ -74,7 +72,6 @@ def start_interactive_shell(command: str, session_id: str = None, config: Runnab
     except Exception as e:
         return f"Failed to start process: {e}"
 
-@tool
 def send_shell_input(process_id: str, input_text: str) -> str:
     """
     Send text input to a running interactive process.

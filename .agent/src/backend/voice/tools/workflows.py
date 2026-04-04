@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
@@ -75,7 +74,6 @@ def _run_interactive_command(command: str, alias_prefix: str, config: RunnableCo
     except Exception as e:
         return f"Failed to start {alias_prefix}: {e}"
 
-@tool
 def run_new_story(story_id: str = None, config: RunnableConfig = None) -> str:
     """
     Create a new user story.
@@ -88,7 +86,6 @@ def run_new_story(story_id: str = None, config: RunnableConfig = None) -> str:
         cmd += f" {clean_id}"
     return _run_interactive_command(cmd, "story", config, "Story creation started. Follow along below.")
 
-@tool
 def run_new_runbook(story_id: str, config: RunnableConfig = None) -> str:
     """
     Generate an implementation runbook for a story.
@@ -99,7 +96,6 @@ def run_new_runbook(story_id: str, config: RunnableConfig = None) -> str:
     cmd = f"agent new-runbook {clean_id}"
     return _run_interactive_command(cmd, "runbook", config, "Runbook generation started. Follow along below.")
 
-@tool
 def run_implement(runbook_id: str, config: RunnableConfig = None) -> str:
     """
     Implement a feature from an accepted runbook.
@@ -111,7 +107,6 @@ def run_implement(runbook_id: str, config: RunnableConfig = None) -> str:
     cmd = f"agent implement {clean_id} --apply"
     return _run_interactive_command(cmd, "implement", config, "Implementation started (with --apply). Follow along below.")
 
-@tool
 def run_impact(files: str = None, config: RunnableConfig = None) -> str:
     """
     Run impact analysis on files.
@@ -126,7 +121,6 @@ def run_impact(files: str = None, config: RunnableConfig = None) -> str:
         
     return _run_interactive_command(cmd, "impact", config, "Impact analysis started. Follow along below.")
 
-@tool
 def run_panel(question: str, apply_advice: bool = False, config: RunnableConfig = None) -> str:
     """
     Consult the AI Governance Panel.
@@ -141,7 +135,6 @@ def run_panel(question: str, apply_advice: bool = False, config: RunnableConfig 
         cmd += " --apply"
     return _run_interactive_command(cmd, "panel", config, "Governance panel convened. Follow along below.")
 
-@tool
 def run_review_voice(session_id: str = None, config: RunnableConfig = None) -> str:
     """
     Review a voice session for UX improvements.

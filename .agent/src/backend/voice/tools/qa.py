@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import subprocess
 import os
 import threading
@@ -27,7 +26,6 @@ from agent.core.config import config as agent_config
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-@tool
 def run_backend_tests(path: str = ".agent/tests/") -> str:
     """
     Run pytest on the backend codebase.
@@ -103,7 +101,6 @@ def run_backend_tests(path: str = ".agent/tests/") -> str:
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             return f"failed to run tests: {e}"
 
-@tool
 def run_frontend_lint() -> str:
     """
     Run linting on the frontend.
@@ -128,7 +125,6 @@ def run_frontend_lint() -> str:
     except Exception as e:
         return f"Error: {e}"
 
-@tool
 def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -> str:
     """
     Execute a shell command from the project root or a specific directory.
@@ -199,7 +195,6 @@ def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -
             EventBus.publish(session_id, "console", f"\n[ERROR] Exception: {e}\n")
             return f"Error executing shell command: {e}"
 
-@tool
 def run_preflight(story_id: str = None, interactive: bool = True, config: RunnableConfig = None) -> str:
     """
     Run the Agent preflight governance checks with AI analysis.

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import os
 import logging
 
@@ -66,7 +65,6 @@ def get_comment_style(ext):
     }
     return style_map.get(ext, "#")
 
-@tool
 def add_license(file_path: str) -> str:
     """
     Adds the Apache 2.0 license header to a file if it doesn't already have one.

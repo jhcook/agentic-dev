@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import subprocess
 import json
 import logging
@@ -22,7 +21,6 @@ from agent.core.config import config as agent_config
 
 logger = logging.getLogger(__name__)
 
-@tool
 def get_git_status(config: RunnableConfig = None) -> str:
     """
     Get the current git status of the repository, categorized by Staged and Unstaged changes.
@@ -83,7 +81,6 @@ def get_git_status(config: RunnableConfig = None) -> str:
     except subprocess.CalledProcessError as e:
         return json.dumps({"error": str(e)})
 
-@tool
 def get_git_diff(config: RunnableConfig = None) -> str:
     """
     Get the staged git diff. 
@@ -113,7 +110,6 @@ def get_git_diff(config: RunnableConfig = None) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error checking git diff: {e}"
 
-@tool
 def get_git_log(limit: int = 5) -> str:
     """
     Get the recent git log history.
@@ -131,7 +127,6 @@ def get_git_log(limit: int = 5) -> str:
         return result.stdout
     except subprocess.CalledProcessError as e:
         return f"Error getting git log: {e}"
-@tool
 def get_git_branch() -> str:
     """
     Get the current active git branch name.
@@ -152,7 +147,6 @@ def get_git_branch() -> str:
         logger.error(f"Tool get_git_branch failed: {e}")
         return f"Error getting git branch: {e}"
 
-@tool
 def git_stage_changes(files: list[str] = None) -> str:
     """
     Stage files for commit.
@@ -182,7 +176,6 @@ def git_stage_changes(files: list[str] = None) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error staging changes: {e}"
 
-@tool
 def run_commit(message: str = None, story_id: str = None, config: RunnableConfig = None) -> str:
     """
     Commit staged changes to the repository.
@@ -250,7 +243,6 @@ def run_commit(message: str = None, story_id: str = None, config: RunnableConfig
     except Exception as e:
         return f"Failed to run commit: {e}"
 
-@tool
 def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = None) -> str:
     """
     Create a GitHub Pull Request for the current branch/story.
@@ -346,7 +338,6 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
     except Exception as e:
         return f"Failed to start PR creation: {e}"
 
-@tool
 def git_push_branch(config: RunnableConfig = None) -> str:
     """
     Push the current branch to origin.

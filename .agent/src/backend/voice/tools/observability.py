@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 from agent.core.config import config as agent_config
 import subprocess
 
-@tool
 def get_recent_logs(lines: int = 50) -> str:
     """
     Get the most recent lines from the agent log file (agent.log).
