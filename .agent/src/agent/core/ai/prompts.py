@@ -200,15 +200,17 @@ Ensure all generated tests exactly match the logic, classes, and APIs within thi
             '  "header": "' + section_title + '",\n'
             '  "ops": [\n'
             '    {"op": "new",    "file": "repo-relative-path", "content": "full raw file content — NO markdown fences, raw code only"},\n'
-            '    {"op": "modify", "file": "repo-relative-path", "search": "exact verbatim lines to find", "replace": "replacement lines"},\n'
+            '    {"op": "modify", "file": "repo-relative-path", "replace": "new code — MUST include 1-2 unchanged lines from the file before/after your changes as context"},\n'
             '    {"op": "delete", "file": "repo-relative-path", "rationale": "reason"}\n'
             '  ]\n'
             '}\n\n'
             'CRITICAL JSON RULES FOR ops:\n'
-            '- "content" (new files) and "search"/"replace" (modify) must be RAW CODE — no triple-backtick fences.\n'
+            '- "content" (new files) and "replace" (modify) must be RAW CODE — no triple-backtick fences.\n'
             '- The pipeline injects #### [NEW/MODIFY/DELETE] headers and code fences automatically.\n'
             '- Escape newlines as \\n and backslashes as \\\\ inside JSON string values.\n'
-            '- For "modify": "search" MUST be an exact verbatim copy from TARGETED FILE CONTENTS above — no paraphrasing.\n'
+            '- For "modify": do NOT include a "search" field — it is derived automatically from the actual file.\n'
+            '  Instead, include 1-2 unchanged lines from the file at the TOP and BOTTOM of your "replace" value\n'
+            '  so the pipeline can locate exactly where to apply the change.\n'
             '- Narrative prose and troubleshooting notes go in a top-level "narrative" string field (optional).'
         )
 
@@ -243,8 +245,9 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
 1. Use `#### [NEW] <path>` for files that DO NOT EXIST yet, followed by a fenced code block with the full file content.
 2. Use `#### [MODIFY] <path>` for EXISTING files. A [MODIFY] header MUST be followed by one or more `<<<SEARCH / === / >>>` blocks ONLY.
    NEVER follow a [MODIFY] header with a fenced code block — it will be silently skipped by the parser.
-3. `<<<SEARCH` blocks must contain the EXACT lines from the source file. Do NOT paraphrase, guess, or modify them.
-   Base your SEARCH blocks exactly on the content provided in TARGETED FILE CONTENTS above.
+3. The SEARCH block is derived automatically by the pipeline from the actual file — you do NOT write it.
+   Instead, ensure your `replace` value includes 1-2 unchanged lines from the actual file at the top
+   and bottom, so the pipeline can locate the exact insertion/replacement point via LCS alignment.
 4. Format for search/replace:
    ```
    <<<SEARCH
