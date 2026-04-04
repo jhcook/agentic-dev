@@ -64,15 +64,17 @@ ADR-029 specifies a multi-agent architecture where interfaces are thin adapters.
 ```
 
 <<<SEARCH
-from typing import Any, Dict, List, Optional
+import json
 import logging
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
-from agent.core.config import config
+from agent.core.ai.protocols import AIProvider
 ===
-from typing import Any, Dict, List, Optional
+import json
 import logging
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
-from agent.core.config import config
+from agent.core.ai.protocols import AIProvider
 from agent.core.adk.tools import ToolRegistry
 >>>
 
@@ -85,24 +87,12 @@ from agent.core.adk.tools import ToolRegistry
 ```
 
 <<<SEARCH
-async def execute(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
-        """Execute a tool call."""
-        tool = self._get_tool(tool_name)
-        return await tool.arun(tool_input)
+class AgentExecutor:
 ===
-async def execute(self, tool_name: str, tool_input: Dict[str, Any]):
-        """Execute a tool call and yield status updates.
+from agent.core.adk.tools import ToolRegistry  # AC-2: unified tool registry
 
-        Yields:
-            str: Intermediary status updates (e.g., "Thinking...")
-            Any: The final tool execution result.
-        """
-        tool = self._get_tool(tool_name)
-        yield "Thinking..."
-        result = await tool.arun(tool_input)
-        yield result
+class AgentExecutor:
 >>>
-
 ```
 
 ### Step 3: Interface Adapter Integration
