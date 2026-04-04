@@ -290,6 +290,93 @@ def _ensure_new_blocks_fenced(content: str) -> str:
     return "".join(result)
 
 
+# ---------------------------------------------------------------------------
+# Schema violation auto-correction pass (runs before S/R verification)
+# ---------------------------------------------------------------------------
+
+_PATH_LIKE_RE = re.compile(
+    r"^(?:[\w.\-]+/[\w.\-/]+"
+    r"|[\w.\-]+\.(?:py|md|yaml|yml|json|toml|sh|txt|js|ts|tsx|jsx|go|rs|java|rb|cfg|ini|env))$"
+)
+_PROSE_INDICATORS_RE = re.compile(
+    r"[\\|()\[\]]|\bpattern\b|\bregex\b|\bcompile\b|DOTALL|re\.|\\s\+"
+)
+
+
+def _is_valid_path_header(raw: str) -> bool:
+    """Return True if *raw* looks like a repository-relative file path."""
+    candidate = raw.strip().strip("`").split()[0]
+    if _PROSE_INDICATORS_RE.search(candidate):
+        return False
+    return bool(_PATH_LIKE_RE.match(candidate))
+
+
+def _autocorrect_schema_violations(content: str) -> str:
+    """Deterministic healer for common AI schema violations.
+
+    Three fixes in order:
+    1. Prose [MODIFY/NEW] headers (regex/code leaked out of a fence) → stripped.
+    2. Empty [MODIFY] blocks with no <<<SEARCH → stripped.
+    3. [NEW] blocks containing <<<SEARCH → SEARCH fragment removed.
+    """
+    # ── 1. Prose op headers ──────────────────────────────────────────────────
+    def _check_op_header(m: re.Match) -> str:
+        raw_path = m.group(2)
+        if not _is_valid_path_header(raw_path):
+            logger.warning(
+                "schema_autocorrect_prose_header_stripped",
+                extra={"header": raw_path[:120]},
+            )
+            return f"<!-- schema-autocorrect: stripped prose header: {raw_path[:80]} -->"
+        return m.group(0)
+
+    content = re.sub(
+        r"(?m)^(#### \[(?:MODIFY|NEW)\] )(.+?)$",
+        _check_op_header,
+        content,
+    )
+
+    # ── 2. Empty [MODIFY] blocks (no <<<SEARCH) ──────────────────────────────
+    def _check_modify_body(m: re.Match) -> str:
+        if "<<<SEARCH" not in m.group(0):
+            logger.warning(
+                "schema_autocorrect_empty_modify_stripped",
+                extra={"snippet": m.group(0)[:80]},
+            )
+            return ""
+        return m.group(0)
+
+    content = re.sub(
+        r"(?ms)^#### \[MODIFY\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
+        _check_modify_body,
+        content,
+    )
+
+    # ── 3. [NEW] blocks containing <<<SEARCH → strip the SEARCH fragment ─────
+    def _fix_new_with_search(m: re.Match) -> str:
+        if "<<<SEARCH" not in m.group(0):
+            return m.group(0)
+        cleaned = re.sub(
+            r"<<<SEARCH.*?>>>",
+            "<!-- schema-autocorrect: SEARCH removed from [NEW] block -->",
+            m.group(0),
+            flags=re.DOTALL,
+        )
+        logger.warning(
+            "schema_autocorrect_new_search_stripped",
+            extra={"header": m.group(0)[:80]},
+        )
+        return cleaned
+
+    content = re.sub(
+        r"(?ms)^#### \[NEW\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
+        _fix_new_with_search,
+        content,
+    )
+
+    return content
+
+
 def _normalize_list_markers(content: str) -> str:
     """Normalise bullet and ordered-list markers to satisfy MD004/MD030.
 
@@ -321,15 +408,42 @@ def _fix_changelog_sr_headings(content: str) -> str:
     The AI consistently uses ``# Changelog`` as the SEARCH anchor, which
     is a top-level heading inside the runbook and triggers MD025 (multiple
     H1s) and MD024 (duplicate headings).  This pass rewrites the SEARCH
-    side to use the first sub-heading inside the file (``## [Unreleased]``)
-    instead, which is equally unique but doesn't violate heading rules.
+    side to use the first sub-heading inside the file (``## [Unreleased]``
+    or its suffixed form) instead, which is equally unique but doesn't
+    violate heading rules.
+
+    Also fixes the case where the AI uses bare ``## [Unreleased]`` but
+    the actual CHANGELOG.md on disk has ``## [Unreleased] (Updated by story)``
+    from a prior run.
     """
-    # Pattern: inside a fenced block, a <<<SEARCH that anchors on # Changelog
-    return re.sub(
+    # Case 1: AI anchored on # Changelog (H1) — rewrite to ## [Unreleased]
+    content = re.sub(
         r'<<<SEARCH\n# Changelog\n===\n# Changelog',
         '<<<SEARCH\n## [Unreleased]\n===\n## [Unreleased] (Updated by story)',
         content,
     )
+
+    # Case 2: AI used bare ## [Unreleased] but file may have a suffix.
+    # Read the actual line from CHANGELOG.md on disk.
+    try:
+        from pathlib import Path as _Path
+        from agent.core.config import config as _config
+        changelog_path = _config.repo_root / "CHANGELOG.md"
+        if changelog_path.exists():
+            for line in changelog_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("## [Unreleased]"):
+                    actual_line = line.strip()
+                    if actual_line != "## [Unreleased]":
+                        # Replace bare SEARCH anchor with the actual line
+                        content = content.replace(
+                            "<<<SEARCH\n## [Unreleased]\n===",
+                            f"<<<SEARCH\n{actual_line}\n===",
+                        )
+                    break
+    except Exception:
+        pass
+
+    return content
 
 
 def _ensure_blank_lines_around_fences(content: str) -> str:
@@ -1188,8 +1302,46 @@ def generate_runbook_chunked(
     assembled_content = _fix_changelog_sr_headings(assembled_content)
     # Ensure blank lines surround fenced blocks (MD031)
     assembled_content = _ensure_blank_lines_around_fences(assembled_content)
+    # Heal structural schema violations before hard gates fire:
+    # prose headers, empty MODIFY blocks, [NEW] with <<<SEARCH inside.
+    assembled_content = _autocorrect_schema_violations(assembled_content)
+
+    # INFRA-182: Final generation-time SEARCH block verbatim verification.
+    # Runs after all markdown normalization so we operate on the final text.
+    # Reads each [MODIFY] target from disk (repo_root) and replaces any
+    # approximate AI-generated SEARCH text with the verbatim file content.
+    # This is the definitive fix for the recurring S/R failure pattern.
+    try:
+        from agent.core.implement.sr_validation import (
+            validate_and_correct_sr_blocks as _sr_validate_final,
+        )
+        _repo_root = config.repo_root if hasattr(config, "repo_root") else repo_root
+        assembled_content, _final_total, _final_fixed = _sr_validate_final(
+            assembled_content, repo_root=_repo_root
+        )
+        if _final_total > 0:
+            logger.info(
+                "sr_final_pass_complete",
+                extra={
+                    "total_blocks": _final_total,
+                    "corrected": _final_fixed,
+                    "story_id": story_id,
+                },
+            )
+            if _final_fixed:
+                console.print(
+                    f"[green]✅ Generation-time S/R verification: "
+                    f"{_final_fixed}/{_final_total} block(s) corrected to verbatim.[/green]"
+                )
+    except Exception as _sr_err:
+        import traceback as _tb
+        logger.warning(
+            "sr_final_pass_error",
+            extra={"error": str(_sr_err), "traceback": _tb.format_exc(), "story_id": story_id},
+        )
 
     if tracker is not None:
         tracker.print_summary()
 
     return assembled_content
+

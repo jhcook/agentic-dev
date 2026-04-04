@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+DONE
 
 ## Problem Statement
 
@@ -61,11 +61,15 @@ succeeds on the first attempt without S/R validation failures.
 
 ## Impact Analysis Summary
 
-Components touched: `runbook_generation.py` (new `_verify_search_blocks` post-process step
-between Phase 2 and file write), `agent/commands/utils.py` (expose/reuse `_fuzzy_find_block`).
+Components touched:
+- `.agent/src/agent/commands/runbook_generation.py` — add `_verify_search_blocks` post-process step after Phase 2 assembly, before `return assembled_content`
+- `.agent/src/agent/core/implement/sr_validation.py` — reuse `validate_and_correct_sr_blocks`; no changes needed
+- `.agent/src/agent/commands/utils.py` — referenced for `_fuzzy_find_block` pattern (read-only)
+
 Workflows affected: `agent new-runbook` only.
 Risks identified: False positives if two regions have similar similarity scores — mitigated by
 taking the highest-scoring match (same as existing fuzzy matcher behaviour).
+
 
 ## Test Strategy
 

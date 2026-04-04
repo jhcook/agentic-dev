@@ -488,18 +488,17 @@ def _sr_check_replace_regression(
 def _lines_match(search_text: str, file_text: str) -> bool:
     """Return True if *search_text* exists as a contiguous block in *file_text*.
 
-    Comparison is done line-by-line with trailing whitespace stripped per line
-    to absorb minor AI formatting variance.
+    Each line is fully stripped (leading + trailing whitespace) before
+    comparison to absorb AI indentation drift.
 
     Args:
-        search_text: The block of text to look for (SEARCH block content).
-        file_text: The full content of the target file on disk.
+        search_text: The block of text to look for (SEARCH block content).\n        file_text: The full content of the target file on disk.
 
     Returns:
         True if every line of *search_text* appears contiguously in *file_text*.
     """
-    search_lines = [line.rstrip() for line in search_text.splitlines()]
-    file_lines = [line.rstrip() for line in file_text.splitlines()]
+    search_lines = [line.strip() for line in search_text.splitlines()]
+    file_lines = [line.strip() for line in file_text.splitlines()]
 
     if not search_lines:
         return True
