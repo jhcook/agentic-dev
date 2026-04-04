@@ -64,7 +64,7 @@ completion on the first attempt without requiring manual runbook edits.**
 
 ## Linked Journeys
 
-- None — this story targets internal pipeline hardening with no user-facing journey impact.
+- JRN-009: Enhance Implement Command — this story hardens the S/R parsing pipeline that JRN-009 exercises.
 
 ## Linked ADRs
 
