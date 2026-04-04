@@ -374,6 +374,66 @@ def _autocorrect_schema_violations(content: str) -> str:
         content,
     )
 
+    # ── 4. Oversized SEARCH blocks (whole-file snapshots) ──────────────────
+    # When SEARCH > 100 lines, the fuzzy corrector hits O(n²) overhead and
+    # similarity scores drop below threshold because the file has evolved.
+    # Re-anchor: find a minimal verbatim prefix from the actual file that
+    # uniquely identifies the insertion point (first 15 matching lines).
+    _SEARCH_DELIM = re.compile(r"<<<SEARCH\n(.*?)\n===\n", re.DOTALL)
+    _BLOCK_PATH_RE = re.compile(r"#### \[MODIFY\] ([^\n]+)\n")
+    _ANCHOR_LINES = 15
+    _SEARCH_MAX_LINES = 100
+
+    def _trim_oversized_search(block_text: str, file_path_str: str) -> str:
+        def _replacer(m: re.Match) -> str:
+            search_text = m.group(1)
+            n_search = len(search_text.splitlines())
+            if n_search <= _SEARCH_MAX_LINES:
+                return m.group(0)  # within budget — leave untouched
+
+            # Resolve file
+            from agent.core.implement.resolver import resolve_path  # noqa: PLC0415
+            abs_path = resolve_path(file_path_str)
+            if abs_path is None or not abs_path.exists():
+                return m.group(0)  # NEW or missing — can't trim
+
+            file_lines = abs_path.read_text().splitlines()
+            search_lines = [l.strip() for l in search_text.splitlines()]
+
+            # Find the window in the file that best starts the SEARCH
+            best_offset = -1
+            for off in range(max(1, len(file_lines) - _ANCHOR_LINES + 1)):
+                if [l.strip() for l in file_lines[off : off + _ANCHOR_LINES]] == search_lines[:_ANCHOR_LINES]:
+                    best_offset = off
+                    break
+
+            if best_offset < 0:
+                # Couldn't find exact anchor lines — fall back to actual file head
+                best_offset = 0
+
+            anchor = "\n".join(file_lines[best_offset : best_offset + _ANCHOR_LINES])
+            logger.warning(
+                "schema_autocorrect_oversized_search_trimmed",
+                extra={"file": file_path_str, "original_lines": n_search, "anchor_lines": _ANCHOR_LINES},
+            )
+            # Keep the === and the rest of the replace delimiter intact
+            return f"<<<SEARCH\n{anchor}\n===\n"
+
+        return _SEARCH_DELIM.sub(_replacer, block_text)
+
+    # Apply per [MODIFY] block
+    def _process_modify_block(m: re.Match) -> str:
+        path_match = _BLOCK_PATH_RE.search(m.group(0))
+        if not path_match:
+            return m.group(0)
+        return _trim_oversized_search(m.group(0), path_match.group(1).strip())
+
+    content = re.sub(
+        r"(?ms)^#### \[MODIFY\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
+        _process_modify_block,
+        content,
+    )
+
     return content
 
 

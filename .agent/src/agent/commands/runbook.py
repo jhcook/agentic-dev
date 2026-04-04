@@ -132,7 +132,7 @@ def _write_and_sync(
     from agent.commands.utils import validate_sr_blocks as gate_validate_sr
     remaining_mismatches = gate_validate_sr(content)
     # Filter: only block on true SEARCH mismatches. REPLACE-side semantic errors
-    # (import/syntax/signature) are advisory — SEARCH matched means structurally sound.
+    # (import/syntax/signature/regression) are advisory — SEARCH matched means structurally sound.
     real_failures = [
         m for m in remaining_mismatches
         if not m.get("missing_modify")
@@ -140,17 +140,21 @@ def _write_and_sync(
         and not m.get("replace_syntax_error")
         and not m.get("replace_import_error")
         and not m.get("replace_signature_error")
+        and not m.get("replace_regression_warning")
     ]
     sem_advisory = [
         m for m in remaining_mismatches
         if not m.get("missing_modify") and not m.get("parse_error")
-        and (m.get("replace_syntax_error") or m.get("replace_import_error") or m.get("replace_signature_error"))
+        and (m.get("replace_syntax_error") or m.get("replace_import_error")
+             or m.get("replace_signature_error") or m.get("replace_regression_warning"))
     ]
     for m in sem_advisory:
         if m.get("replace_import_error"):
             console.print(f"[dim]⚠️  {m['file']}: REPLACE imports unresolved symbol (may be created in another block)[/dim]")
         if m.get("replace_syntax_error"):
             console.print(f"[dim]⚠️  {m['file']}: REPLACE produces syntax advisory — review manually[/dim]")
+        if m.get("replace_regression_warning"):
+            console.print(f"[dim]⚠️  {m['file']}: REPLACE regression advisory — stub may be incomplete[/dim]")
     if real_failures:
         console.print(
             f"[bold red]❌ {len(real_failures)} S/R block(s) still failed after "
