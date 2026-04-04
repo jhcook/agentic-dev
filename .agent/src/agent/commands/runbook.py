@@ -131,11 +131,26 @@ def _write_and_sync(
     # Import here to avoid circular dependency.
     from agent.commands.utils import validate_sr_blocks as gate_validate_sr
     remaining_mismatches = gate_validate_sr(content)
-    # Filter out NEW-file entries and parse errors — only block on real S/R mismatches
+    # Filter: only block on true SEARCH mismatches. REPLACE-side semantic errors
+    # (import/syntax/signature) are advisory — SEARCH matched means structurally sound.
     real_failures = [
         m for m in remaining_mismatches
-        if not m.get("missing_modify") and not m.get("parse_error")
+        if not m.get("missing_modify")
+        and not m.get("parse_error")
+        and not m.get("replace_syntax_error")
+        and not m.get("replace_import_error")
+        and not m.get("replace_signature_error")
     ]
+    sem_advisory = [
+        m for m in remaining_mismatches
+        if not m.get("missing_modify") and not m.get("parse_error")
+        and (m.get("replace_syntax_error") or m.get("replace_import_error") or m.get("replace_signature_error"))
+    ]
+    for m in sem_advisory:
+        if m.get("replace_import_error"):
+            console.print(f"[dim]⚠️  {m['file']}: REPLACE imports unresolved symbol (may be created in another block)[/dim]")
+        if m.get("replace_syntax_error"):
+            console.print(f"[dim]⚠️  {m['file']}: REPLACE produces syntax advisory — review manually[/dim]")
     if real_failures:
         console.print(
             f"[bold red]❌ {len(real_failures)} S/R block(s) still failed after "

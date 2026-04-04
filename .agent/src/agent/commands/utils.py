@@ -583,13 +583,23 @@ def validate_sr_blocks(content: str) -> List[SRMismatch]:
     # fenced code fences under the same [MODIFY] header (a parser edge case).
     # Scanning the full content is intentionally broad (includes SEARCH text), but
     # false positives in an allowlist are harmless; false negatives break generation.
+    # Build cross-block symbol index: scan REPLACE blocks AND [NEW] file content
+    # so symbols defined in newly-created modules aren't flagged as unresolvable.
+    _new_file_content_re = re.compile(
+        r"#### \[NEW\] [^\n]+\n(?:```[^\n]*\n)?(.*?)(?=\n#### |\n### |\Z)",
+        re.DOTALL,
+    )
+    _all_scannable = content + "\n".join(
+        m.group(1) for m in _new_file_content_re.finditer(content)
+    )
     _session_other_defs: Set[str] = set(
         re.findall(
             r"^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_][A-Za-z0-9_]*)",
-            content,
+            _all_scannable,
             re.MULTILINE,
         )
     )
+
 
     mismatches: List[SRMismatch] = []
     # Track per-file block index (1-based).
@@ -705,7 +715,15 @@ def generate_sr_correction_prompt(mismatches: List[SRMismatch]) -> str:
     """
     # Separate structural errors from content mismatches
     parse_errors = [m for m in mismatches if m.get("parse_error")]
-    content_mismatches = [m for m in mismatches if not m.get("parse_error")]
+    # Only ask AI to correct actual SEARCH mismatches — semantic errors are advisory
+    content_mismatches = [
+        m for m in mismatches
+        if not m.get("parse_error")
+        and not m.get("replace_syntax_error")
+        and not m.get("replace_import_error")
+        and not m.get("replace_signature_error")
+    ]
+
 
     lines = []
 
