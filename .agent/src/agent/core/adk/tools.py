@@ -632,4 +632,46 @@ for _fn in make_interactive_tools(Path(".")):
         "name": _fn.__name__,
         "description": (_fn.__doc__ or "").strip(),
     }
+
+
+class ToolRegistry:
+    """Unified tool registry for interface parity (INFRA-145 AC-1).
+
+    Both the Console (TUI) and Voice adapters instantiate this registry to
+    obtain a consistent, canonical list of tools.  This ensures that both
+    interfaces expose identical capabilities regardless of their internal
+    runtime differences.
+
+    Usage::
+
+        registry = ToolRegistry()
+        tools = registry.list_tools()          # read-only tools
+        tools = registry.list_tools(all=True)  # read-only + interactive tools
+    """
+
+    def __init__(self, repo_root: Optional[Path] = None) -> None:
+        self._repo_root = repo_root or Path(".")
+
+    def list_tools(
+        self,
+        config: Optional[Dict] = None,  # noqa: ARG002 — reserved for future RunnableConfig injection
+        all: bool = False,
+    ) -> List[Callable]:
+        """Return the canonical tool list for this registry.
+
+        Args:
+            config: Reserved for future RunnableConfig injection (ADR-029 §4.2).
+                    Currently unused; callers may pass a dict for forward-compat.
+            all: If True, include interactive (read-write) tools in addition
+                 to the read-only governance tools.
+
+        Returns:
+            List of callable tool functions.
+        """
+        tools = make_tools(self._repo_root)
+        if all:
+            tools = tools + make_interactive_tools(self._repo_root)
+        return tools
+
+
 # nolint: loc-ceiling

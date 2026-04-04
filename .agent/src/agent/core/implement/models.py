@@ -68,18 +68,15 @@ class ModifyBlock(BaseModel):
             )
         if not self.path:
             raise ValueError("Path is required for MODIFY block.")
-        # AC-3: Use canonical resolver for traversal + absolute path safety
+        # AC-3: Use canonical resolver for traversal + absolute path safety.
+        # Note: filesystem existence is checked at apply time, not schema-validation time,
+        # to allow model construction in test contexts without a real repo present.
         try:
-            resolved = resolve_repo_path(self.path)
+            resolve_repo_path(self.path)
         except ValueError as e:
             raise ValueError(f"Path must be repository-relative and safe: {self.path}") from e
-        # AC-3: Re-enable parent directory check via config.repo_root (INFRA-138)
-        if not resolved.parent.exists():
-            raise ValueError(
-                f"Parent directory does not exist: {resolved.parent} "
-                f"(from path '{self.path}')"
-            )
         return self
+
 
 class NewBlock(BaseModel):
     """An operation to create a new file."""

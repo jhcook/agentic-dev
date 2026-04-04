@@ -90,6 +90,8 @@ agent_validation_recoveries_counter = meter.create_counter(
     description="Counts the number of times the agent successfully recovers from a validation error.",
 )
 
+from agent.core.adk.tools import ToolRegistry  # AC-2: unified tool registry
+
 class AgentExecutor:
     """
     Executes an agent loop (ReAct) using an AIService for reasoning 

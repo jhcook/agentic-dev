@@ -1,18 +1,32 @@
-# Copyright 2026 Justin Cook
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+from typing import Optional, List
+from agent.core.session import AgentSession
+from agent.core.adk.tools import ToolRegistry
 
-"""Conversation session persistence and token budget management (INFRA-087)."""
+class TUISession:
+    """
+    Session adapter for the Terminal User Interface.
+
+    This class acts as a thin adapter that initializes the unified ToolRegistry
+    and passes it to the core agent session to ensure identical tool availability
+    across all interfaces.
+    """
+
+    def __init__(self, story_id: Optional[str] = None):
+        """Initialize the TUI session handler.
+
+        Args:
+            story_id: Optional identifier for the story context.
+        """
+        # AC-2: Initialize unified ToolRegistry and pass to the core session
+        self.tool_registry = ToolRegistry()
+        self.agent_session = AgentSession(
+            story_id=story_id,
+            tool_registry=self.tool_registry
+        )
+
+    def get_available_tools(self) -> List:
+        """AC-5: Retrieve the list of tools from the unified registry."""
+        return self.tool_registry.list_tools()
 
 import logging
 import os

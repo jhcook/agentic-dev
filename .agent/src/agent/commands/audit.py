@@ -23,6 +23,8 @@ from agent.core.governance import run_audit, log_governance_event
 from agent.core.formatters import format_audit_report
 from agent.core.security import scrub_sensitive_data
 from agent.tools.telemetry import get_tool_metrics
+from agent.core.adk.tool_security import secure_config_injection
+from agent.core.adk.tool_security import secure_config_injection
 from typing import List, Optional
 import logging
 import json
