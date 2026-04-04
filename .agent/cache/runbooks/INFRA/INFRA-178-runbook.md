@@ -2,7 +2,7 @@
 
 ## State
 
-PROPOSED
+ACCEPTED
 
 ## Implementation Steps
 
