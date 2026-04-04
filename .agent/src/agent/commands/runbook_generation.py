@@ -200,12 +200,117 @@ def _sanitize_json_values(data: Any) -> Any:
     return data
 
 
-def _assemble_block_from_json(block: "GenerationBlock") -> str:
+def _reanchor_search_text(
+    search: str,
+    file_path: str,
+    modify_contents: Optional[Dict[str, str]],
+    threshold: float = 0.70,
+) -> str:
+    """Verify and re-anchor a hallucinated SEARCH string against the actual file.
+
+    The AI frequently writes SEARCH blocks from memory rather than from the
+    verbatim file content provided in the prompt.  This function catches those
+    cases at assembly time — before the text is written to the runbook — and
+    replaces the hallucinated text with the closest verbatim window from the
+    real file content.
+
+    Args:
+        search: The AI-generated search string (may be hallucinated).
+        file_path: Repo-relative path to the target file.
+        modify_contents: Pre-loaded dict of {path: file_content}.
+        threshold: Minimum similarity ratio to accept a fuzzy match (0-1).
+
+    Returns:
+        The verbatim search string (corrected if necessary), or the original
+        if no file content is available or no match exceeds the threshold.
+    """
+    if not modify_contents or not search.strip():
+        return search
+
+    actual = modify_contents.get(file_path) or modify_contents.get(
+        file_path.lstrip(".")
+    )
+    if not actual:
+        return search
+
+    # Fast path: exact verbatim match (line-level, not substring)
+    search_lines = search.splitlines()
+    actual_lines = actual.splitlines()
+    n = len(search_lines)
+    for start in range(max(1, len(actual_lines) - n + 1)):
+        window = actual_lines[start : start + n]
+        if window == search_lines:
+            return search  # already verbatim
+
+    # Fuzzy path: find the highest-similarity window of the same length
+    import difflib
+    best_ratio = 0.0
+    best_window: Optional[List[str]] = None
+    for start in range(max(1, len(actual_lines) - n + 1)):
+        window = actual_lines[start : start + n]
+        ratio = difflib.SequenceMatcher(None, "\n".join(window), search).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_window = window
+
+    if best_ratio >= threshold and best_window is not None:
+        corrected = "\n".join(best_window)
+        logger.warning(
+            "search_reanchored_at_assembly",
+            extra={
+                "file": file_path,
+                "similarity": round(best_ratio, 3),
+                "original_first_line": search.splitlines()[0][:80] if search else "",
+                "corrected_first_line": best_window[0][:80] if best_window else "",
+            },
+        )
+        return corrected
+
+    # Below window threshold — try first-line anchor for short blocks (≤ 10 lines).
+    # The AI often hallucinates import blocks where the first import line IS close
+    # to a real line. Find the best-matching single line, then take N real lines
+    # starting from there.
+    if n <= 10 and actual_lines:
+        first_line = search_lines[0]
+        best_line_ratio = 0.0
+        best_line_idx = None
+        for idx, aline in enumerate(actual_lines):
+            r = difflib.SequenceMatcher(None, aline, first_line).ratio()
+            if r > best_line_ratio:
+                best_line_ratio = r
+                best_line_idx = idx
+        if best_line_ratio >= 0.65 and best_line_idx is not None:
+            anchored = actual_lines[best_line_idx : best_line_idx + n]
+            corrected = "\n".join(anchored)
+            logger.warning(
+                "search_reanchored_first_line_at_assembly",
+                extra={
+                    "file": file_path,
+                    "first_line_similarity": round(best_line_ratio, 3),
+                    "anchor_line": actual_lines[best_line_idx][:80],
+                },
+            )
+            return corrected
+
+    # Could not re-anchor — return original and let post-generation corrector handle it
+    return search
+
+
+def _assemble_block_from_json(
+    block: "GenerationBlock",
+    modify_contents: Optional[Dict[str, str]] = None,
+) -> str:
     """Convert structured JSON ops into markdown with injected delimiters.
 
     This is the core of INFRA-181: the LLM never writes ``<<<SEARCH``,
     ``===``, ``>>>``, or ``#### [NEW/MODIFY/DELETE]`` — Python does.
     If the block has no ops (legacy ``content`` field), returns content as-is.
+
+    Args:
+        block: The parsed generation block with ops.
+        modify_contents: Pre-loaded actual file contents keyed by repo-relative
+            path.  When provided, MODIFY search strings are validated and
+            re-anchored against the real file to eliminate hallucinations.
     """
     if not block.ops:
         return block.content
@@ -235,6 +340,10 @@ def _assemble_block_from_json(block: "GenerationBlock") -> str:
         elif action == "MODIFY":
             search = op.get("search", "")
             replace = op.get("replace", "")
+            # Re-anchor: verify the search text against the actual file content.
+            # The AI often hallucinates SEARCH text from memory rather than
+            # copying verbatim from the TARGETED FILE CONTENTS in the prompt.
+            search = _reanchor_search_text(search, path, modify_contents)
             parts.append("```")
             parts.append("<<<SEARCH")
             parts.append(search)
@@ -250,6 +359,7 @@ def _assemble_block_from_json(block: "GenerationBlock") -> str:
         parts.append("")  # blank line between ops
 
     return "\n".join(parts).strip()
+
 
 
 def _ensure_new_blocks_fenced(content: str) -> str:
@@ -980,7 +1090,7 @@ def generate_runbook_chunked(
             try:
                 b = GenerationBlock.from_dict(_extract_json(_r["data"]["raw"]))
                 # INFRA-181: assemble from ops when content field is empty
-                b_content = b.content if b.content else _assemble_block_from_json(b)
+                b_content = b.content if b.content else _assemble_block_from_json(b, modify_contents={})
                 pass_1_context.append(f"### {b.header}\n\n{b_content}")
             except Exception: pass
         else:
@@ -1076,7 +1186,7 @@ def generate_runbook_chunked(
             if parse_ok:
                 # INFRA-181: assemble markdown from structured ops; falls back
                 # to legacy content string when ops list is empty.
-                cleaned = _assemble_block_from_json(block)
+                cleaned = _assemble_block_from_json(block, modify_contents=modify_contents)
                 # Safety net: strip leading ## or ### headers (legacy path)
                 cleaned = cleaned.lstrip("\n")
                 cleaned = re.sub(
