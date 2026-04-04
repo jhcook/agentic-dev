@@ -33,7 +33,7 @@ def mock_deps(tmp_path):
     (agent_dir / "rules").mkdir()
     
     # Create dummy story in subfolder for correct scoping
-    story_file = agent_dir / "stories" / "INFRA" / "STORY-123-test.md"
+    story_file = agent_dir / "stories" / "INFRA" / "INFRA-123-test.md"
     story_file.write_text("# Test Story\nState: COMMITTED\nContext here.")
     
     # Create dummy rule
@@ -63,7 +63,7 @@ def test_plan_command(mock_agent_dir, mock_complete, mock_deps):
             
 
             # Invoke command
-            result = runner.invoke(app, ["new-plan", "STORY-123"], input="My Plan Title\nMy Context\n")
+            result = runner.invoke(app, ["new-plan", "INFRA-123"], input="My Plan Title\nMy Context\n")
             
             # Verify
             if result.exit_code != 0:
@@ -107,7 +107,7 @@ def test_new_runbook_command(mock_generate, mock_deps):
                     "```python\ndef my_func(): pass\n```\n"
                 )
                 
-                result = runner.invoke(app, ["new-runbook", "STORY-123"])
+                result = runner.invoke(app, ["new-runbook", "INFRA-123"])
                 
                 if result.exit_code != 0:
                     print(result.stdout)
@@ -121,7 +121,7 @@ def test_match_story_command(mock_complete, mock_deps):
           patch("agent.core.utils.subprocess.check_output") as mock_git:
           
         mock_git.return_value = b"file1.py\nfile2.py"
-        mock_complete.return_value = "STORY-123"
+        mock_complete.return_value = "INFRA-123"
         
         # files is an argument, not option
         # Set NO_COLOR to suppress ansi codes for clean matching
@@ -130,4 +130,4 @@ def test_match_story_command(mock_complete, mock_deps):
         if result.exit_code != 0:
             print(result.stdout)
         assert result.exit_code == 0
-        assert "STORY-123" in result.stdout
+        assert "INFRA-123" in result.stdout

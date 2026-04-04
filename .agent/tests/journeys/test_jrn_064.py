@@ -44,7 +44,7 @@ COMMITTED
 """
 
 OVER_BUDGET_STORY_LOC = """\
-# Story: INFRA-BIG
+# Story: INFRA-999
 
 ## State
 COMMITTED
@@ -192,21 +192,21 @@ class TestDecompositionPlanGeneration:
         mock_config.plans_dir = tmp_path / "plans"
 
         plan_content = (
-            "# Plan: INFRA-BIG\n\n"
+            "# Plan: INFRA-999\n\n"
             "## Child Stories\n"
-            "1. INFRA-BIG-a: Auth migration\n"
-            "2. INFRA-BIG-b: Model migration\n"
+            "1. INFRA-999-a: Auth migration\n"
+            "2. INFRA-999-b: Model migration\n"
         )
 
         with patch("agent.core.ai.ai_service") as mock_ai:
             mock_ai.complete.return_value = plan_content
-            plan_path = generate_decomposition_plan("INFRA-BIG", OVER_BUDGET_STORY_LOC)
+            plan_path = generate_decomposition_plan("INFRA-999", OVER_BUDGET_STORY_LOC)
 
         assert Path(plan_path).exists()
         content = Path(plan_path).read_text()
         assert "Child Stories" in content
-        assert "INFRA-BIG-a" in content
-        assert "INFRA-BIG-b" in content
+        assert "INFRA-999-a" in content
+        assert "INFRA-999-b" in content
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +220,7 @@ class TestChildStoryPassesForecast:
     def test_child_story_within_budget(self):
         """A decomposed child story passes forecast gate."""
         child_story = """\
-# Story: INFRA-BIG-a
+# Story: INFRA-999-a
 
 ## State
 COMMITTED
