@@ -191,14 +191,12 @@ def run_linter(
             console.print(f"[red]Error building command for {name}: {e}[/red]")
             return False
 
-        console.print(f"[bold blue]Running {name} on {len(files)} files...[/bold blue]")
-        
+
         try:
-            subprocess.run(cmd, cwd=cwd, check=True)
+            subprocess.run(cmd, cwd=cwd, capture_output=False, check=True)
             span.set_attribute("status", "success")
             return True
         except subprocess.CalledProcessError:
-            console.print(f"[red]❌ {name} found issues.[/red]")
             span.set_attribute("status", "failed")
             return False
         except Exception as e:
@@ -606,18 +604,22 @@ def lint(
     success = True
 
     if py_files:
+        console.print(f"[bold blue]Running ruff on {len(py_files)} file(s)...[/bold blue]")
         if not run_ruff(py_files, fix=fix):
             success = False
 
     if sh_files:
+        console.print(f"[bold blue]Running shellcheck on {len(sh_files)} file(s)...[/bold blue]")
         if not run_shellcheck(sh_files, fix=fix):
             success = False
 
     if js_files:
+        console.print(f"[bold blue]Running eslint on {len(js_files)} file(s)...[/bold blue]")
         if not run_eslint(js_files, fix=fix):
             success = False
 
     if md_files:
+        console.print(f"[bold blue]Running markdownlint on {len(md_files)} file(s)...[/bold blue]")
         if not run_markdownlint(md_files, fix=fix):
             success = False
 

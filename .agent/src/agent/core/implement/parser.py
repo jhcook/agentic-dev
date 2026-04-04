@@ -623,7 +623,7 @@ def _extract_runbook_data_ast(content: str) -> List[RunbookStepDict]:
     for step in steps:
         for op in step["operations"]:
             if op.get("action") == "MODIFY" and not op.get("blocks"):
-                _logger.warning(
+                _logger.debug(
                     "malformed_modify_block",
                     extra={"path": op["path"], "reason": "no SEARCH/REPLACE blocks"},
                 )

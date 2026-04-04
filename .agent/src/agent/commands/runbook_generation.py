@@ -290,6 +290,93 @@ def _ensure_new_blocks_fenced(content: str) -> str:
     return "".join(result)
 
 
+# ---------------------------------------------------------------------------
+# Schema violation auto-correction pass (runs before S/R verification)
+# ---------------------------------------------------------------------------
+
+_PATH_LIKE_RE = re.compile(
+    r"^(?:[\w.\-]+/[\w.\-/]+"
+    r"|[\w.\-]+\.(?:py|md|yaml|yml|json|toml|sh|txt|js|ts|tsx|jsx|go|rs|java|rb|cfg|ini|env))$"
+)
+_PROSE_INDICATORS_RE = re.compile(
+    r"[\\|()\[\]]|\bpattern\b|\bregex\b|\bcompile\b|DOTALL|re\.|\\s\+"
+)
+
+
+def _is_valid_path_header(raw: str) -> bool:
+    """Return True if *raw* looks like a repository-relative file path."""
+    candidate = raw.strip().strip("`").split()[0]
+    if _PROSE_INDICATORS_RE.search(candidate):
+        return False
+    return bool(_PATH_LIKE_RE.match(candidate))
+
+
+def _autocorrect_schema_violations(content: str) -> str:
+    """Deterministic healer for common AI schema violations.
+
+    Three fixes in order:
+    1. Prose [MODIFY/NEW] headers (regex/code leaked out of a fence) → stripped.
+    2. Empty [MODIFY] blocks with no <<<SEARCH → stripped.
+    3. [NEW] blocks containing <<<SEARCH → SEARCH fragment removed.
+    """
+    # ── 1. Prose op headers ──────────────────────────────────────────────────
+    def _check_op_header(m: re.Match) -> str:
+        raw_path = m.group(2)
+        if not _is_valid_path_header(raw_path):
+            logger.warning(
+                "schema_autocorrect_prose_header_stripped",
+                extra={"header": raw_path[:120]},
+            )
+            return f"<!-- schema-autocorrect: stripped prose header: {raw_path[:80]} -->"
+        return m.group(0)
+
+    content = re.sub(
+        r"(?m)^(#### \[(?:MODIFY|NEW)\] )(.+?)$",
+        _check_op_header,
+        content,
+    )
+
+    # ── 2. Empty [MODIFY] blocks (no <<<SEARCH) ──────────────────────────────
+    def _check_modify_body(m: re.Match) -> str:
+        if "<<<SEARCH" not in m.group(0):
+            logger.warning(
+                "schema_autocorrect_empty_modify_stripped",
+                extra={"snippet": m.group(0)[:80]},
+            )
+            return ""
+        return m.group(0)
+
+    content = re.sub(
+        r"(?ms)^#### \[MODIFY\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
+        _check_modify_body,
+        content,
+    )
+
+    # ── 3. [NEW] blocks containing <<<SEARCH → strip the SEARCH fragment ─────
+    def _fix_new_with_search(m: re.Match) -> str:
+        if "<<<SEARCH" not in m.group(0):
+            return m.group(0)
+        cleaned = re.sub(
+            r"<<<SEARCH.*?>>>",
+            "<!-- schema-autocorrect: SEARCH removed from [NEW] block -->",
+            m.group(0),
+            flags=re.DOTALL,
+        )
+        logger.warning(
+            "schema_autocorrect_new_search_stripped",
+            extra={"header": m.group(0)[:80]},
+        )
+        return cleaned
+
+    content = re.sub(
+        r"(?ms)^#### \[NEW\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
+        _fix_new_with_search,
+        content,
+    )
+
+    return content
+
+
 def _normalize_list_markers(content: str) -> str:
     """Normalise bullet and ordered-list markers to satisfy MD004/MD030.
 
@@ -1215,6 +1302,9 @@ def generate_runbook_chunked(
     assembled_content = _fix_changelog_sr_headings(assembled_content)
     # Ensure blank lines surround fenced blocks (MD031)
     assembled_content = _ensure_blank_lines_around_fences(assembled_content)
+    # Heal structural schema violations before hard gates fire:
+    # prose headers, empty MODIFY blocks, [NEW] with <<<SEARCH inside.
+    assembled_content = _autocorrect_schema_violations(assembled_content)
 
     # INFRA-182: Final generation-time SEARCH block verbatim verification.
     # Runs after all markdown normalization so we operate on the final text.
