@@ -54,6 +54,7 @@ from agent.core.implement.guards import (
     check_adr_refs,
     check_stub_implementations,
     check_test_imports_resolvable,
+    check_api_surface_renames,
 )
 from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks, parse_search_replace_blocks
@@ -181,6 +182,23 @@ def run_generation_gates(
             "<<<SEARCH/===/>>> markers. Replace the fenced block with a proper "
             "<<<SEARCH ... === ... >>> diff."
         )
+
+    # Gate 1c: API Surface Rename Detection (INFRA-179)
+    with tracer.start_as_current_span("api_rename_gate") as rename_span:
+        sr_blocks_for_rename: List[Dict[str, str]] = parse_search_replace_blocks(content)
+        rename_span.set_attribute("gate1c.block_count", len(sr_blocks_for_rename))
+        rename_errors = check_api_surface_renames(sr_blocks_for_rename, config.repo_root)
+        rename_span.set_attribute("gate1c.corrections", len(rename_errors))
+        if rename_errors:
+            logger.warning(
+                "api_rename_gate_fail",
+                extra={"story_id": story_id, "errors": rename_errors},
+            )
+            for err in rename_errors:
+                correction_parts.append(
+                    f"API RENAME GATE (Gate 1c):\n{err}\n"
+                    "Add [MODIFY] blocks for all consumer files, or revert the rename."
+                )
 
     # 2. Code Gate Self-Healing (INFRA-155 AC-1)
     code_errors: List[str] = []

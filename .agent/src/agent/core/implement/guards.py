@@ -22,7 +22,9 @@ import difflib
 import hashlib
 import json
 import logging
+import re
 import shutil
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 import ast
@@ -801,6 +803,104 @@ def check_projected_syntax(
     except Exception as exc:
         return f"Warning: Could not project syntax for {filepath.name}: {exc}"
 
+
+def _extract_public_symbols(code: str) -> Set[str]:
+    """Extract public classes and functions from code using AST parsing."""
+    try:
+        tree = ast.parse(code)
+        symbols = set()
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+                if not node.name.startswith('_'):
+                    symbols.add(node.name)
+        return symbols
+    except Exception:
+        return set()
+
+def check_api_surface_renames(blocks: List[Dict[str, str]], repo_root: Path) -> List[str]:
+    """
+    Detect renames or removals of public symbols in [MODIFY] blocks.
+    Ensures all consumers in the codebase are updated within the same runbook.
+    """
+    all_renames: Dict[str, str] = {}
+    all_deletions: Set[str] = set()
+    file_to_removed_symbols: Dict[str, Set[str]] = {}
+
+    # Pass 1: Identify all renames/removals across all blocks
+    for block in blocks:
+        filename = block.get("file", "")
+        search_code = block.get("search", "")
+        replace_code = block.get("replace", "")
+        
+        search_symbols = _extract_public_symbols(search_code)
+        replace_symbols = _extract_public_symbols(replace_code)
+        
+        removed = search_symbols - replace_symbols
+        added = replace_symbols - search_symbols
+        
+        # 1-to-1 change in a block is treated as a rename
+        if len(removed) == 1 and len(added) == 1:
+            old = list(removed)[0]
+            new = list(added)[0]
+            all_renames[old] = new
+        else:
+            all_deletions.update(removed)
+        
+        if removed:
+            if filename not in file_to_removed_symbols:
+                file_to_removed_symbols[filename] = set()
+            file_to_removed_symbols[filename].update(removed)
+
+    errors = []
+    updated_files = {block["file"] for block in blocks}
+    
+    # Pass 2: Check for survivors (consumers not updated)
+    for source_file, symbols in file_to_removed_symbols.items():
+        for symbol in symbols:
+            new_name = all_renames.get(symbol)
+            pattern = rf"\b{re.escape(symbol)}\b"
+            
+            # Grep -r restricted to src/ and tests/
+            # -l: only filenames, -r: recursive
+            cmd = ["grep", "-r", "-l", "--include=*.py", "--exclude-dir=.venv", "--exclude-dir=__pycache__", pattern, "src", "tests"]
+            try:
+                result = subprocess.run(cmd, cwd=repo_root, capture_output=True, text=True, check=False)
+                if result.returncode > 1: # grep returns 2 on true error
+                    continue
+                    
+                consumers = [f for f in result.stdout.splitlines() if not f.endswith(source_file)]
+                if not consumers:
+                    continue
+
+                # Check if each consumer is covered by another block in this runbook
+                orphaned = []
+                for consumer in consumers:
+                    is_handled = False
+                    if consumer in updated_files:
+                        # Ensure the old symbol is actually gone from the replacement code
+                        for b in blocks:
+                            if b["file"] == consumer:
+                                if not re.search(pattern, b.get("replace", "")):
+                                    is_handled = True
+                                    break
+                    if not is_handled:
+                        orphaned.append(consumer)
+
+                if orphaned:
+                    status = f"renamed to '{new_name}'" if new_name else "removed"
+                    msg = f"Public symbol '{symbol}' was {status} in {source_file}, but has live consumers in: {', '.join(orphaned)}"
+                    errors.append(msg)
+                    
+                    log_governance_event("api_rename_gate_fail", {
+                        "symbol": symbol,
+                        "old_name": symbol,
+                        "new_name": new_name,
+                        "consumers": orphaned
+                    })
+            except Exception as e:
+                logger.error(f"Rename check failed for {symbol}: {e}")
+
+    return errors
 
 def check_test_imports_resolvable(
     file_path: "Union[str, Path]", content: str, session_symbols: Set[str]

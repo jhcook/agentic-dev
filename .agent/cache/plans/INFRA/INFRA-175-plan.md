@@ -4,7 +4,7 @@
 APPROVED
 
 ## Related Stories
-INFRA-176, INFRA-177, INFRA-178, INFRA-179, INFRA-180, INFRA-181
+INFRA-176, INFRA-177, INFRA-178, INFRA-179, INFRA-180, INFRA-181, INFRA-182
 
 ## Summary
 The `new-runbook` → `implement --apply` pipeline has a structural validation gap. Three distinct layers fail independently:
@@ -52,6 +52,10 @@ new-runbook generation loop
 │   │               └── Stub regression guard
 │   ├── Gate 3.5: Projected syntax   ← INFRA-176 (outer fallback)
 │   └── Gate 4: DoD                  ← existing
+│
+└── Post-Phase 2: SEARCH verification [INFRA-182]  ← M6 (generation-time root cause fix)
+    └── For every <<<SEARCH block: read target file, fuzzy-match, replace with verbatim content
+        → S/R failure rate at generation time: ~0%
 ```
 
 Gate 3.5 (INFRA-176) remains as an outer fallback. The primary projected syntax check belongs inside `validate_sr_blocks` (INFRA-180) where SEARCH and REPLACE are visible together. INFRA-181 (M0) eliminates the delimiter-malformation class of failures entirely, meaning many of the correction loops in M1–M5 become simpler or removable over time.
@@ -63,6 +67,7 @@ Gate 3.5 (INFRA-176) remains as an outer fallback. The primary projected syntax 
 - M3: INFRA-176 — Gate 3.5: Projected syntax (outer fallback, simplified given M1)
 - M4: INFRA-178 — Gate 2 ext: Test import resolution
 - M5: INFRA-179 — Gate 2 ext: API rename detection
+- M6: INFRA-182 — Generation-time SEARCH block verbatim verification *(eliminates S/R validation failures after generation by replacing LLM-approximated SEARCH text with verbatim file content before the runbook is saved)*
 
 **Note**: M0 (INFRA-181) can ship independently of M1–M5 since it does not change the runbook file format. Once M0 is live, the fence-rebalancer and `_fix_changelog_sr_headings` post-processors in `runbook_generation.py` can be deleted, reducing gate surface area for M1–M5.
 
