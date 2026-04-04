@@ -189,13 +189,24 @@ def _write_and_sync(
         console.print(f"[yellow]⚠️  Runbook written to {runbook_file} (lint errors present — review required)[/yellow]")
         raise typer.Exit(code=1)
 
-    # Normalise to exactly one trailing newline (AI blocks often emit \n\n at EOF)
-    content = content.rstrip("\n") + "\n"
+    # ── In-memory normalization (before write) ───────────────────────────────
+    # Collapse 3+ consecutive blank lines to max 2 (MD012), preserving code
+    # fences verbatim. Then enforce exactly one trailing newline.
+    import re as _re
+    _fence_split = _re.split(r'(^```[^\n]*\n.*?^```)', content, flags=_re.MULTILINE | _re.DOTALL)
+    normalized_parts = []
+    for part in _fence_split:
+        if part.startswith('```'):
+            normalized_parts.append(part)  # Inside fence — never touch
+        else:
+            normalized_parts.append(_re.sub(r'\n{3,}', '\n\n', part))
+    content = ''.join(normalized_parts)
+    content = content.rstrip('\n') + '\n'
 
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
 
-    # Auto-fix common markdown issues (trailing whitespace, blank lines, etc.)
+    # Auto-fix any remaining markdown issues (trailing whitespace etc.)
     from agent.commands.lint import run_markdownlint
     run_markdownlint([str(runbook_file)], fix=True)
 
