@@ -344,17 +344,27 @@ def _sr_check_replace_syntax(
         )
         return None
     projected = file_text.replace(search_text, replace_text, 1)
+    if projected == file_text:
+        # SEARCH text not found in file — no projection happened.
+        # This is either a trimmed anchor that no longer matches or a stale runbook.
+        # Either way: no change was made, so there is nothing to syntax-check.
+        logger.debug(
+            "sr_replace_search_not_found",
+            extra={"hint": "SEARCH text not found in file — syntax check skipped"},
+        )
+        return None
     if len(projected.encode("utf-8")) > _SR_MAX_FILE_BYTES:
         return None  # Too large to parse safely — skip silently
     try:
         ast.parse(projected)
     except SyntaxError as e:
-        logger.warning(
+        logger.debug(
             "sr_replace_syntax_fail",
             extra={"error": e.msg, "line": e.lineno},
         )
         return f"Gate REPLACE-syntax: applying REPLACE to produces SyntaxError: {e.msg} at line {e.lineno}."
     return None
+
 
 
 def _sr_check_replace_imports(
@@ -453,7 +463,7 @@ def _sr_check_replace_signature(
             continue  # Function removed — handled by rename gate (INFRA-179)
         r_args = r_sigs[name]
         if s_args != r_args:
-            logger.warning(
+            logger.debug(
                 "sr_replace_signature_fail",
                 extra={"file": file_path, "function": name, "old": s_args, "new": r_args},
             )

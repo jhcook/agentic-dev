@@ -85,7 +85,7 @@ def _derive_search_from_file(
         return None
 
     derived = "\n".join(search_lines)
-    logger.warning(
+    logger.debug(
         "search_derived_from_file",
         extra={
             "file": file_path,
@@ -94,6 +94,7 @@ def _derive_search_from_file(
         },
     )
     return derived
+
 
 
 def _assemble_block_from_json(

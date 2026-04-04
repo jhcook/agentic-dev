@@ -70,7 +70,18 @@ def score_story_complexity(content: str) -> ComplexityMetrics:
         elif re.search(r"\brefactor\b", content, re.IGNORECASE):
             verb_intensity = 1.5
 
-        file_count = len(re.findall(r"####\s*\[(?:MODIFY|NEW|DELETE|ADD)\]", content))
+        # Count distinct file paths mentioned in the story (paths containing '/' and
+        # a file extension, or backtick-quoted paths). Falls back to AC checkbox count.
+        _path_re = re.compile(
+            r"(?:^|[\s(`'\"])([a-zA-Z0-9_./\-]+/[a-zA-Z0-9_./\-]+\.[a-zA-Z]{1,6})\b",
+            re.MULTILINE,
+        )
+        found_paths = set(_path_re.findall(content))
+        # Filter out obvious non-paths (URLs, version strings, etc.)
+        _skip_prefixes = ("http", "www", "ftp", "//", "0.", "1.", "2.", "3.")
+        found_paths = {p for p in found_paths if not any(p.startswith(s) for s in _skip_prefixes)}
+        file_count = len(found_paths) if found_paths else step_count
+
         estimated_loc = (step_count * 40) * verb_intensity
 
         span.set_attribute("forecast.step_count", step_count)
