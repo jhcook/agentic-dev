@@ -22,6 +22,7 @@ import difflib
 import hashlib
 import json
 import logging
+import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -801,6 +802,7 @@ def check_projected_syntax(
     except Exception as exc:
         return f"Warning: Could not project syntax for {filepath.name}: {exc}"
 
+# check_api_surface_renames and _extract_public_symbols live in rename_guard.py (INFRA-179)
 
 def check_test_imports_resolvable(
     file_path: "Union[str, Path]", content: str, session_symbols: Set[str]

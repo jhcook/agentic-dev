@@ -16,6 +16,7 @@
 
 
 
+
 id: JRN-023
 title: Voice Logic Orchestration
 state: COMMITTED
@@ -77,7 +78,9 @@ implementation:
   routes: []
   files:
   - .agent/docs/architecture/infra-143-domain-isolation.md
+  - .agent/docs/architecture/infra-179-rename-detection.md
   - .agent/docs/features/sr-replace-validation.md
+  - .agent/docs/runbook-gates.md
   - .agent/docs/tools.md
   - .agent/src/agent/cli.py
   - .agent/src/agent/commands/audit.py
@@ -92,16 +95,19 @@ implementation:
   - .agent/src/agent/tools/telemetry.py
   - .agent/src/agent/utils/rollback_infra_143.py
   - .agent/src/agent/utils/rollback_infra_176.py
+  - .agent/src/agent/utils/rollback_infra_179.py
   - .agent/src/agent/utils/tool_security.py
   - .agent/src/agent/utils/validation_formatter.py
   - .agent/tests/agent/tools/test_knowledge.py
   - .agent/tests/agent/tools/test_project.py
   - .agent/tests/agent/tools/test_telemetry.py
   - .agent/tests/agent/utils/test_tool_security.py
+  - .agent/tests/commands/test_runbook_gates_renames.py
   - .agent/tests/commands/test_runbook_gates_syntax.py
   - .agent/tests/commands/test_sr_semantic_infra_180.py
   - .agent/tests/tools/__init__.py
   - .agent/tests/tools/test_registry.py
+  - .agent/tests/unit/test_guards_renames.py
   - .agent/tests/unit/test_guards_syntax.py
   - CHANGELOG.md
   tests:

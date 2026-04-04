@@ -255,6 +255,31 @@ def run_qa_gate(
 # guards.enforce_docstrings() (INFRA-136 AC-10).
 
 
+def run_safe_grep(pattern: str, search_paths: List[str]) -> List[str]:
+    """
+    Executes a recursive grep search safely using list-based arguments.
+    
+    Args:
+        pattern: The sanitized regex pattern to search for.
+        search_paths: List of directory paths to search within.
+        
+    Returns:
+        List of file paths containing matches.
+    """
+    # Restrict search to python files and provided paths only
+    # Using list-based arguments prevents shell injection (no shell=True)
+    cmd = ["grep", "-r", "-l", "--include=*.py", "-E", pattern] + search_paths
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        # returncode 1 means no matches, >1 means grep error
+        return []
+    except Exception as e:
+        get_logger(__name__).error(f"Security Error: Grep execution failed: {e}")
+        return []
+
 def log_skip_audit(gate_name: str, resource_id: str = "") -> None:
     """Log a timestamped audit entry when a governance gate is skipped.
 

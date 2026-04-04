@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import List, Optional
 import typer
 from pathlib import Path
-from typing import Optional
 import logging
 import json
 from datetime import datetime
@@ -23,6 +23,50 @@ from agent.core.governance import run_audit, log_governance_event
 from agent.core.formatters import format_audit_report
 from agent.core.security import scrub_sensitive_data
 from agent.tools.telemetry import get_tool_metrics
+from typing import List, Optional
+import logging
+import json
+from datetime import datetime
+from agent.core.governance import run_audit, log_governance_event
+from agent.core.formatters import format_audit_report
+
+
+def log_api_rename_gate_fail(symbol: str, old_name: str, new_name: Optional[str], consumers: List[str]) -> None:
+    """
+    Emit a structured 'api_rename_gate_fail' event for audit and observability.
+
+    This function complies with ADR-046 by logging the failed rename attempt
+    to both the system logger and the governance event log.
+
+    Args:
+        symbol: The public class or function name being changed.
+        old_name: The original name found in the SEARCH block.
+        new_name: The new name found in the REPLACE block (or None if deleted).
+        consumers: List of file paths where the old symbol is still referenced.
+    """
+    # 1. System Logger Emission
+    logger = logging.getLogger("agent.guards")
+    logger.error(
+        "api_rename_gate_fail",
+        extra={
+            "symbol": symbol,
+            "old_name": old_name,
+            "new_name": new_name,
+            "consumers": consumers,
+            "adr": "ADR-046"
+        }
+    )
+
+    # 2. Governance Audit Logging
+    log_governance_event(
+        event_type="api_rename_gate_fail",
+        payload={
+            "symbol": symbol,
+            "old_name": old_name,
+            "new_name": new_name,
+            "consumers": consumers
+        }
+    )
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
