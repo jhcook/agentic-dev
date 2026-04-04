@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import logging
 from agent.tools import dynamic
 
 logger = logging.getLogger(__name__)
 
-@tool
 def create_tool(file_path: str, code: str) -> str:
     """
     Creates a new tool (Python file) in the core 'custom' tools directory and hot-reloads it.

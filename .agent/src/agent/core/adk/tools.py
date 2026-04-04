@@ -673,5 +673,49 @@ class ToolRegistry:
             tools = tools + make_interactive_tools(self._repo_root)
         return tools
 
+    def get_tool_schemas(self, all: bool = False) -> List[Dict]:
+        """Return OpenAI-compatible JSON schemas for all tools in this registry.
+
+        This is the canonical schema source (INFRA-146 AC-4) so that downstream
+        adapters (voice, console) do not need their own ``_build_schema`` logic.
+
+        Args:
+            all: If True, include schemas for interactive (read-write) tools as
+                 well as the read-only governance tools.
+
+        Returns:
+            List of OpenAI function-call schema dicts, one per tool.
+        """
+        import inspect as _inspect
+
+        schemas: List[Dict] = []
+        for fn in self.list_tools(all=all):
+            try:
+                sig = _inspect.signature(fn)
+                doc = (fn.__doc__ or "").strip()
+                params: Dict = {"type": "object", "properties": {}, "required": []}
+                for name, param in sig.parameters.items():
+                    prop: Dict = {"type": "string"}
+                    if param.annotation is not _inspect.Parameter.empty:
+                        ann = param.annotation
+                        if ann is int:
+                            prop["type"] = "integer"
+                        elif ann is bool:
+                            prop["type"] = "boolean"
+                    params["properties"][name] = prop
+                    if param.default is _inspect.Parameter.empty:
+                        params["required"].append(name)
+                schemas.append({
+                    "type": "function",
+                    "function": {
+                        "name": fn.__name__,
+                        "description": doc,
+                        "parameters": params,
+                    },
+                })
+            except Exception:
+                pass
+        return schemas
+
 
 # nolint: loc-ceiling

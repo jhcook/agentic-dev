@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import re
 import os
 
-@tool
 def scan_file_for_secrets(file_path: str) -> str:
     """
     Scan a specific file for potential secrets (API keys, tokens).
@@ -33,7 +31,6 @@ def scan_file_for_secrets(file_path: str) -> str:
     except Exception as e:
         return f"Error reading file: {e}"
 
-@tool
 def scan_secrets_in_content(content: str) -> str:
     """
     Scan text content for potential secrets (API keys, tokens).

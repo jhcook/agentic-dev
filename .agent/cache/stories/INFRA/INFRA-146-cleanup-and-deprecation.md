@@ -33,8 +33,8 @@ dual-registry divergence and LangChain as a hard runtime dependency for tool dis
       `custom/add_license.py`, `qa.py`, `project.py`, `get_installed_packages.py`, `create_tool.py`,
       `read_tool_source.py`).
 - [ ] **AC-3**: `RunnableConfig` injection pattern replaced in `git.py`, `interactive_shell.py`,
-      `fix_story.py`, `workflows.py`, `qa.py` — context passed via `ToolRegistry` config param
-      (the `config` arg already reserved in `ToolRegistry.list_tools()`).
+      `fix_story.py`, `workflows.py`, `qa.py` — contextual data (`session_id`) injected via
+      `contextvars.ContextVar` as approved in ADR-100, NOT as a named function parameter.
 - [ ] **AC-4**: `backend/voice/tools/registry.py` updated (not deleted) to re-export plain callables
       from `ToolRegistry` so the voice orchestrator needs only a one-line swap.
 - [ ] **AC-5**: `backend/voice/orchestrator.py` binds tools via
@@ -43,7 +43,8 @@ dual-registry divergence and LangChain as a hard runtime dependency for tool dis
 - [ ] **AC-6**: `feature_flags.USE_UNIFIED_REGISTRY` flag removed (no longer needed — migration
       complete and fully committed).
 - [ ] **AC-7**: OpenTelemetry span emitted per tool call (`tool.name`, `tool.duration_ms`,
-      `tool.success`) via `tool_security.py`'s existing tracing scaffolding.
+      `tool.success`) via `AgentSession._dispatch_tool` as defined in ADR-100. Structured log
+      events `tool_dispatch_success` / `tool_dispatch_error` emitted per ADR-046.
 - [ ] **Negative Test**: `from langchain_core.tools import tool` grep across `backend/voice/tools/`
       returns zero results post-migration.
 - [ ] **Negative Test**: Full test suite passes with `langchain-core` removed from
@@ -61,7 +62,9 @@ dual-registry divergence and LangChain as a hard runtime dependency for tool dis
 ## Linked ADRs
 
 - ADR-043: Tool Registry Foundation
-- ADR-046: OpenTelemetry Instrumentation
+- ADR-046: OpenTelemetry Instrumentation & Structured Logging
+- ADR-098: AgentSession Lifecycle
+- ADR-100: Tool-Aware AgentSession — ContextVar Injection & OTel Tracing *(proposed this story)*
 
 ## Linked Journeys
 

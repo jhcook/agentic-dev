@@ -31,7 +31,7 @@ def clean_custom_dir():
 
 def test_create_tool_path_traversal():
     """Test that we cannot write outside custom dir."""
-    res = create_tool.invoke({"file_path": "../../../evil.py", "code": "print('evil')"})
+    res = create_tool(file_path="../../../evil.py", code="print('evil')")
     assert "Security violation" in res
 
 def test_create_tool_valid_relative():
@@ -44,14 +44,14 @@ def test_create_tool_valid_relative():
 def test_security_scan_rejects_subprocess():
     """Test that subprocess is rejected."""
     code = "import subprocess\nsubprocess.run('ls')"
-    res = create_tool.invoke({"file_path": "test.py", "code": code})
+    res = create_tool(file_path="test.py", code=code)
     assert "Security Rejection" in res
     assert "subprocess" in res
 
 def test_security_scan_rejects_os_system():
     """Test that os.system is rejected."""
     code = "import os\nos.system('ls')"
-    res = create_tool.invoke({"file_path": "test.py", "code": code})
+    res = create_tool(file_path="test.py", code=code)
     assert "Security Rejection" in res
     assert "os.system" in res
 
@@ -62,7 +62,7 @@ def test_security_scan_allows_override():
     # Use _get_custom_tools_dir() for the absolute path so cleanup is CWD-independent.
     _output = _get_custom_tools_dir() / "test_override.py"
     try:
-        res = create_tool.invoke({"file_path": "test_override.py", "code": code})
+        res = create_tool(file_path="test_override.py", code=code)
         assert "Security Rejection" not in res
     finally:
         _output.unlink(missing_ok=True)

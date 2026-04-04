@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import os
 import glob
 
-@tool
 def list_adrs() -> str:
     """
     List all Architectural Decision Records (ADRs).
@@ -41,7 +39,6 @@ def list_adrs() -> str:
     
     return "\n".join(sorted([os.path.basename(f) for f in all_files]))
 
-@tool
 def read_adr(filename: str) -> str:
     """
     Read the content of a specific ADR or Rule file.
@@ -65,7 +62,6 @@ def read_adr(filename: str) -> str:
     except Exception as e:
         return f"Error reading file: {e}"
 
-@tool
 def search_rules(query: str) -> str:
     """
     Search for a specific term within all governance rules.

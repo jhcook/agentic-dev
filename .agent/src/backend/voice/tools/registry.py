@@ -12,99 +12,125 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .architect import list_adrs, read_adr, search_rules
-from .project import list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers, match_current_changes_to_story
-from .git import get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr, git_push_branch
-from .qa import run_backend_tests, run_frontend_lint, shell_command, run_preflight
-from .interactive_shell import start_interactive_shell, send_shell_input
-from .security import scan_file_for_secrets
-from .observability import get_recent_logs
-from .create_tool import create_tool
-from .list_capabilities import list_capabilities
-from .read_tool_source import read_tool_source
-from .get_installed_packages import get_installed_packages
-from .docs import list_docs, read_doc, search_docs
-from .workflows import run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice
-from .fix_story import interactive_fix_story
+"""
+Voice tool registry — delegates to ToolRegistry (INFRA-146 AC-4).
 
-import os
-import sys
-import importlib
+This module replaces the previous LangChain BaseTool aggregator with a
+ToolRegistry-backed implementation. All tool functions are plain Python
+callables; schema introspection is delegated to ``ToolRegistry.get_tool_schemas``
+so there is a single source of truth for schema generation.
+"""
+
 import inspect
-from langchain_core.tools import BaseTool
+import logging
+import os
+import importlib
+import sys
+from pathlib import Path
+from typing import Callable, List, Tuple, Dict, Any
 
-def get_all_tools():
+from agent.core.adk.tools import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+def get_all_tools(repo_root: Path | None = None) -> List[Callable]:
+    """Return all voice-layer tools as plain callables via ToolRegistry.
+
+    Falls back to graceful degradation if ToolRegistry is unavailable.
+    Custom tools from the ``custom/`` directory are appended after the
+    canonical registry list.
     """
-    Return a list of all initialized Langchain BaseTools.
-    Includes core tools and dynamically loaded custom tools.
-    """
-    base_tools = [
-        # Architect
-        list_adrs, read_adr, search_rules,
-        # Project
-        list_stories, get_project_info, list_runbooks, read_file, write_file, apply_license_headers, match_current_changes_to_story,
-        # Git
-        get_git_status, get_git_diff, get_git_log, get_git_branch, run_commit, run_pr, git_push_branch,
-        # QA
-        run_backend_tests, run_frontend_lint, shell_command, run_preflight,
-        start_interactive_shell, send_shell_input,
-        # Security
-        scan_file_for_secrets,
-        # Observability
-        get_recent_logs,
-        # Meta
-        create_tool, list_capabilities, read_tool_source, get_installed_packages,
-        # Docs
-        list_docs, read_doc, search_docs,
-        # Workflows
-        run_new_story, run_new_runbook, run_implement, run_impact, run_panel, run_review_voice,
-        interactive_fix_story
-    ]
-    
-    # Dynamic Loading from 'custom' directory
-    custom_dir = os.path.join(os.path.dirname(__file__), "custom")
-    if os.path.exists(custom_dir):
-        for filename in os.listdir(custom_dir):
-            if filename.endswith(".py") and not filename.startswith("__"):
-                module_name = f"backend.voice.tools.custom.{filename[:-3]}"
-                try:
-                    # Clear from sys.modules to ensure fresh load if it was changed
-                    if module_name in sys.modules:
-                        importlib.reload(sys.modules[module_name])
+    registry = ToolRegistry(repo_root=repo_root)
+    tools: List[Callable] = list(registry.list_tools(all=True))
+
+    # Append dynamically-loaded custom tools from this directory.
+    custom_dir = Path(os.path.dirname(__file__)) / "custom"
+    if custom_dir.exists():
+        for filename in sorted(custom_dir.iterdir()):
+            if filename.suffix != ".py" or filename.stem.startswith("__"):
+                continue
+            module_name = f"backend.voice.tools.custom.{filename.stem}"
+            try:
+                if module_name in sys.modules:
+                    module = importlib.reload(sys.modules[module_name])
+                else:
                     module = importlib.import_module(module_name)
-                    
-                    # Find all objects that are LangChain tools
-                    for name, obj in inspect.getmembers(module):
-                        if (isinstance(obj, BaseTool) or getattr(obj, "is_simple_tool", False)) and obj not in base_tools:
-                            base_tools.append(obj)
-                except Exception as e:
-                    print(f"Error loading custom tool {filename}: {e}")
+                for _, obj in inspect.getmembers(module, inspect.isfunction):
+                    if obj not in tools:
+                        tools.append(obj)
+            except Exception as exc:
+                logger.warning("custom_tool_load_error", extra={"file": filename.name, "error": str(exc)})
 
-    return base_tools
+    return tools
 
-def get_unified_tools() -> tuple[list[dict], dict]:
+
+def get_unified_tools(
+    repo_root: Path | None = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Callable]]:
+    """Return (schemas, handlers) for the voice orchestrator.
+
+    Schemas are sourced from ``ToolRegistry.get_tool_schemas`` (INFRA-146 AC-4)
+    to ensure interface parity with the console adapter. Custom tools from the
+    ``custom/`` directory are introspected inline and appended.
+
+    ``schemas`` is a list of OpenAI-compatible function-call JSON schemas.
+    ``handlers`` maps each tool name to its callable for dispatch.
     """
-    Returns tools as JSON Schemas and a handler dictionary for AgentSession.
-    """
-    base_tools = get_all_tools()
-    schemas = []
-    handlers = {}
-    
-    for tool in base_tools:
-        # Convert Langchain BaseTool to JSON schema format
-        schema = {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-            }
-        }
-        
-        if hasattr(tool, "args_schema") and tool.args_schema:
-            schema["function"]["parameters"] = tool.args_schema.schema()
-            
-        schemas.append(schema)
-        # Note: In a real async environment we would wrap `tool.arun` or `tool.run`
-        handlers[tool.name] = tool.run
-        
+    registry = ToolRegistry(repo_root=repo_root)
+
+    # Canonical schemas and handlers from ToolRegistry
+    schemas: List[Dict[str, Any]] = registry.get_tool_schemas(all=True)
+    handlers: Dict[str, Callable] = {
+        fn.__name__: fn for fn in registry.list_tools(all=True)
+    }
+
+    # Append custom tools with inline schema introspection
+    custom_dir = Path(os.path.dirname(__file__)) / "custom"
+    if custom_dir.exists():
+        for filename in sorted(custom_dir.iterdir()):
+            if filename.suffix != ".py" or filename.stem.startswith("__"):
+                continue
+            module_name = f"backend.voice.tools.custom.{filename.stem}"
+            try:
+                if module_name in sys.modules:
+                    module = importlib.reload(sys.modules[module_name])
+                else:
+                    module = importlib.import_module(module_name)
+                for _, fn in inspect.getmembers(module, inspect.isfunction):
+                    if fn.__name__ not in handlers:
+                        try:
+                            # Delegate to registry helper for consistency
+                            tmp = ToolRegistry()
+                            # Build a one-off schema using the same logic
+                            one_shot = tmp.get_tool_schemas.__func__  # type: ignore[attr-defined]
+                            # Fall back to inline inspect for custom tools
+                            sig = inspect.signature(fn)
+                            doc = (fn.__doc__ or "").strip()
+                            params: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+                            for name, param in sig.parameters.items():
+                                prop: Dict[str, Any] = {"type": "string"}
+                                if param.annotation is not inspect.Parameter.empty:
+                                    ann = param.annotation
+                                    if ann is int:
+                                        prop["type"] = "integer"
+                                    elif ann is bool:
+                                        prop["type"] = "boolean"
+                                params["properties"][name] = prop
+                                if param.default is inspect.Parameter.empty:
+                                    params["required"].append(name)
+                            schemas.append({
+                                "type": "function",
+                                "function": {
+                                    "name": fn.__name__,
+                                    "description": doc,
+                                    "parameters": params,
+                                },
+                            })
+                            handlers[fn.__name__] = fn
+                        except Exception as exc:
+                            logger.warning("custom_tool_schema_error", extra={"tool": fn.__name__, "error": str(exc)})
+            except Exception as exc:
+                logger.warning("custom_tool_load_error", extra={"file": filename.name, "error": str(exc)})
+
     return schemas, handlers

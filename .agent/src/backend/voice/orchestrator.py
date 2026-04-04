@@ -221,32 +221,20 @@ def strip_markdown_for_tts(text: str) -> str:
 
 from typing import List, Optional
 from agent.core.adk.tools import ToolRegistry
-from langchain_core.runnables import RunnableConfig
+from agent.core.execution_context import set_session_id
+
 
 class VoiceOrchestrator:
-    """Orchestrator for Voice interactions using ToolRegistry.
+    """Orchestrator for the voice pipeline (STT → AI → TTS).
 
-    This component acts as a thin adapter that consumes tools from the unified
-    registry, supporting context-aware tool lookup for voice logic.
+    Binds tools from ToolRegistry (INFRA-146 AC-5) to ensure interface parity
+    with the TUI console agent.
     """
 
-    def __init__(self):
-        # AC-3: Initialize ToolRegistry instead of manual BaseTool scanning
-        self.registry = ToolRegistry()
-
-    def get_tools(self, config: Optional[RunnableConfig] = None) -> List:
-        """
-        Retrieve available tools for the voice session.
-
-        AC-3: Uses ToolRegistry to ensure parity with the TUI interface.
-        Context from RunnableConfig is passed to the registry for injection.
-        """
-        return self.registry.list_tools(config=config)
-    
     def __init__(self, session_id: str):
         """
         Initialize VoiceOrchestrator with LangGraph conversational agent.
-        
+
         Args:
             session_id: Unique session identifier for conversation tracking
         """
@@ -265,9 +253,14 @@ class VoiceOrchestrator:
         from agent.core.ai.providers import get_provider
         provider = get_provider(provider_name, client=service.clients.get(provider_name), model_name=model_name)
         
-        # Configure tools
+        # Configure tools via ToolRegistry (INFRA-146 AC-5)
+        self.registry = ToolRegistry()
         tools_schema, tool_handlers = get_unified_tools()
-        
+
+        # Bind the session_id into the execution context (ADR-100) so that
+        # tool functions can retrieve it without it appearing in their LLM schema.
+        self._session_token = set_session_id(self.session_id)
+
         # Create unified AgentSession
         self.agent_session = AgentSession(
             provider=provider,

@@ -13,29 +13,25 @@
 # limitations under the License.
 
 
-from langchain_core.tools import tool
 import subprocess
 import threading
 import time
 from backend.voice.process_manager import ProcessLifecycleManager
 from backend.voice.events import EventBus
 from agent.core.config import config as agent_config
-from langchain_core.runnables import RunnableConfig
+from agent.core.execution_context import get_session_id
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
-@tool
-def start_interactive_shell(command: str, session_id: str = None, config: RunnableConfig = None) -> str:
+def start_interactive_shell(command: str) -> str:
     """
     Start a long-running interactive shell command (e.g., 'npm init', 'python3').
     Returns a Process ID that can be used with send_shell_input.
     Output will be streamed to the console.
     """
-    if not session_id and config:
-        session_id = config.get("configurable", {}).get("thread_id", "unknown")
-        
     process_id = f"shell-{int(time.time())}"
+    session_id = get_session_id()
     
     try:
         # Use shell=True and Setsid?
@@ -74,7 +70,6 @@ def start_interactive_shell(command: str, session_id: str = None, config: Runnab
     except Exception as e:
         return f"Failed to start process: {e}"
 
-@tool
 def send_shell_input(process_id: str, input_text: str) -> str:
     """
     Send text input to a running interactive process.

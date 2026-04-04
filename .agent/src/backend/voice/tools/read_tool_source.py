@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import os
 
-@tool
 def read_tool_source(file_path: str) -> str:
     """Reads the source code of a tool from the specified file path.
     Args:

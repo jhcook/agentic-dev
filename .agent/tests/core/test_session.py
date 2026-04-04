@@ -20,7 +20,7 @@ class MockProvider:
     def __init__(self, should_fail=False):
         self.should_fail = should_fail
         
-    async def stream(self, prompt, system_prompt, tools) -> AsyncGenerator[str, None]:
+    async def stream(self, prompt, system_prompt, tools=None, **kwargs) -> AsyncGenerator[str, None]:
         if self.should_fail:
             raise ConnectionError("Mock AI Provider connection failed")
             
@@ -43,8 +43,9 @@ async def test_agent_session_stream_interaction():
         chunks.append(chunk)
         
     assert "".join(chunks) == "Hello World"
-    assert len(session.history) == 1
+    assert len(session.history) == 2
     assert session.history[0] == {"role": "user", "content": "Say hello"}
+    assert session.history[1] == {"role": "assistant", "content": "Hello World"}
 
 @pytest.mark.asyncio
 async def test_agent_session_negative_error_handling():

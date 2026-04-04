@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
-from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
+from agent.core.execution_context import get_session_id
 import subprocess
 import re
 import os
@@ -28,13 +27,10 @@ try:
 except ImportError:
     pass
 
-@tool
 def interactive_fix_story(
-    story_id: str, 
-    apply_idx: Optional[int] = None, 
+    story_id: str,
+    apply_idx: Optional[int] = None,
     instructions: Optional[str] = None,
-    config: RunnableConfig = None
-
 ) -> str:
     """
     Interactively fix a story schema using AI (InteractiveFixer).
@@ -58,8 +54,9 @@ def interactive_fix_story(
         apply_idx: (Optional) The 1-based index of the fix option to apply. If None, runs in ANALYZE mode.
         instructions: (Optional) Natural language instructions to guide the AI generation (e.g. "make it more detailed").
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
-    
+    # Retrieve session context via ContextVar (ADR-100)
+    session_id = get_session_id()
+
     # 0. SECURITY: Input Validation
     # Validate story_id format (alphanumeric+dashes only) to prevent command injection
     if not re.match(r"^[A-Z0-9-]+$", story_id):

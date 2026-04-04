@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.tools import tool
 import inspect
 
-@tool
 def list_capabilities() -> str:
     """
     List all available tools and their detailed functional descriptions.
