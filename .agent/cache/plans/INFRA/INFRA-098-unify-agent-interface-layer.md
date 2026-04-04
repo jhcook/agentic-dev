@@ -11,7 +11,8 @@ This decomposition breaks **INFRA-098** into 8 manageable stories, ensuring each
 5. **INFRA-143: Migration: Project & Knowledge Modules** (Story/Runbook management, Vector search)
 6. **INFRA-144: New Domains: Web, Testing, Deps & Context** (New capability expansion)
 7. **INFRA-145: Interface Integration: Console & Voice Adapters** (Refactor sessions and orchestrator)
-8. **INFRA-146: Cleanup & Deprecation** (Legacy removal, LangChain stripping, Audit logs)
+8. **INFRA-146: Cleanup & Deprecation** (LangChain decorator stripping, orchestrator cutover, audit logs)
+9. **INFRA-183: Tool Registry Cutover — Retire LangChain Decorator Layer** *(Added post-INFRA-145)* (Full `@tool` removal, voice orchestrator cutover, OTel per-call spans)
 
 ---
 
@@ -80,11 +81,27 @@ This decomposition breaks **INFRA-098** into 8 manageable stories, ensuring each
 - Update `.agent/src/agent/core/engine/executor.py` to fix blocking waits with "Thinking..." yields.
 
 ### INFRA-098.8: Cleanup & Deprecation
-**Description**: Remove legacy tool files, strip LangChain dependencies, and finalize audit logging.
-**LOC Estimate**: ~200 lines (excluding deletions).
+**Description**: Strip LangChain `@tool` decorators from voice tools, wire orchestrator to `ToolRegistry`,
+and finalize audit logging. **Note**: `agent/core/adk/tools.py` is NOT deleted — it is the canonical
+`ToolRegistry` implementation (coexistence decision from INFRA-145).
+**LOC Estimate**: ~200 lines (decorator removal + orchestrator swap).
 **AC Coverage**: AC-5, AC-6, Compliance NFR.
 **Tasks**:
-- Delete `.agent/src/agent/core/adk/tools.py`.
-- Delete `.agent/src/backend/voice/tools/` directory.
-- Remove all `langchain_core.tools` imports and `@tool` decorators from migrated logic.
-- Implement standardized OpenTelemetry tracing and structured audit logging for tool execution and elevation.
+- Remove `@tool` decorators and `langchain_core.tools` imports from all `backend/voice/tools/` files.
+- Update `backend/voice/tools/registry.py` to delegate to `ToolRegistry`.
+- Replace `RunnableConfig` injection in `git.py`, `interactive_shell.py`, `fix_story.py`, `workflows.py`, `qa.py`.
+- Implement standardized OpenTelemetry tracing and structured audit logging for tool execution.
+
+### INFRA-098.9: Tool Registry Cutover — Retire LangChain Decorator Layer *(Added post-INFRA-145)*
+**Description**: Debt retirement story added after INFRA-145 chose a coexistence strategy over full
+deletion. Completes the migration of the voice agent's tool dispatch off LangChain `@tool` decorators
+and onto `ToolRegistry`, retiring the remaining 42 decorators across 15 files.
+**Story**: INFRA-183
+**LOC Estimate**: ~50 lines net (mostly deletions).
+**AC Coverage**: Completes original AC-5, AC-6 intent; adds AC-7 (OTel per-call spans).
+**Tasks**:
+- Strip 42 `@tool` decorators and 15 `from langchain_core.tools import tool` imports.
+- Swap `backend/voice/tools/registry.py` to `ToolRegistry` delegation.
+- Wire `backend/voice/orchestrator.py` tool binding to `ToolRegistry`.
+- Remove `USE_UNIFIED_REGISTRY` feature flag from `agent/core/feature_flags.py`.
+- Instrument `tool_security.py` to emit OTel span per tool call.
