@@ -390,7 +390,7 @@ if __name__ == "__main__":
         logger.info("Rollback of INFRA-178 complete.")
     except Exception as e:
         logger.error(f"Rollback failed: {e}")
-"
+
 
 ```
 
