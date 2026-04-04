@@ -206,10 +206,6 @@ def _write_and_sync(
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")
 
-    # Auto-fix any remaining markdown issues (trailing whitespace etc.)
-    from agent.commands.lint import run_markdownlint
-    run_markdownlint([str(runbook_file)], fix=True)
-
     # Back-populate story with identified ADRs and Journeys (INFRA-158)
     try:
         adrs = extract_adr_refs(content)
