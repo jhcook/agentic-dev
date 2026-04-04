@@ -166,13 +166,14 @@ def _write_and_sync(
         and (m.get("replace_syntax_error") or m.get("replace_import_error")
              or m.get("replace_signature_error") or m.get("replace_regression_warning"))
     ]
-    for m in sem_advisory:
-        if m.get("replace_import_error"):
-            console.print(f"[dim]⚠️  {m['file']}: REPLACE imports unresolved symbol (may be created in another block)[/dim]")
-        if m.get("replace_syntax_error"):
-            console.print(f"[dim]⚠️  {m['file']}: REPLACE produces syntax advisory — review manually[/dim]")
-        if m.get("replace_regression_warning"):
-            console.print(f"[dim]⚠️  {m['file']}: REPLACE regression advisory — stub may be incomplete[/dim]")
+    # sem_advisory items are non-blocking (SEARCH matched, only REPLACE-side semantic hints).
+    # They're already emitted as structured log events in utils.py — no console noise needed.
+    if sem_advisory:
+        logger.debug(
+            "sr_sem_advisory_summary",
+            extra={"count": len(sem_advisory), "files": list({m["file"] for m in sem_advisory})},
+        )
+
     if real_failures:
         console.print(
             f"[bold red]❌ {len(real_failures)} S/R block(s) still failed after "

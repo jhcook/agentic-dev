@@ -286,3 +286,29 @@ class TestPathUnescapingInExtraction:
         )
         files = extract_approved_files(content)
         assert "src/__init__.py" in files
+
+
+# ── Empty SEARCH block detection (INFRA-184) ────────────────
+
+
+def test_parse_sr_blocks_rejects_empty_search(caplog):
+    """AC-4: Verify parse_search_replace_blocks skips whitespace-only SEARCH sections
+    and emits the sr_replace_malformed_empty_search structured log event."""
+    import logging
+    from agent.core.implement.parser import parse_search_replace_blocks
+
+    content = (
+        "#### [MODIFY] src/dummy.py\n\n"
+        "```\n"
+        "<<<SEARCH\n"
+        "\n"
+        "===\n"
+        "new_code()\n"
+        ">>>\n"
+        "```\n"
+    )
+    with caplog.at_level(logging.WARNING, logger="agent.core.implement.parser"):
+        blocks = parse_search_replace_blocks(content)
+
+    assert len(blocks) == 0, "Empty SEARCH block must be silently rejected"
+    assert "sr_replace_malformed_empty_search" in caplog.text

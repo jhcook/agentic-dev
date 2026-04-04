@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] (Updated by story)
 
+## [Unreleased]
+
+**Changed**
+- Hardened runbook S/R pipeline: empty SEARCH blocks stripped at postprocessor level; parser emits structured log events; prompt guard added to generation prompt; function-after schema autocorrection added (INFRA-184).
+- Added structured logging for malformed search block rejection events.
+
 ## [Unreleased] - 2026-03-05
 **Changed**
 - Refactored `AgentSession` to delegate tool management to `ToolRegistry` (INFRA-145).

@@ -34,6 +34,27 @@ logger = get_logger(__name__)
 console = Console()
 
 
+def strip_empty_sr_blocks(content: str) -> str:
+    """Remove malformed S/R blocks where the SEARCH section is empty (AC-1).
+
+    The AI occasionally generates blocks with no search text, which the
+    implementation engine would otherwise interpret as 'replace empty string',
+    effectively prepending the content to the start of the file.
+
+    Only strips blocks where the text between <<<SEARCH and === contains
+    no non-whitespace characters (i.e. truly empty or whitespace-only SEARCH).
+    """
+    def _replace_empty(m: re.Match) -> str:
+        search_text = m.group(1)
+        if not search_text.strip():
+            return "<!-- stripped empty SEARCH block (INFRA-184) -->"
+        return m.group(0)  # preserve valid blocks unchanged
+
+    # Capture the text between <<<SEARCH\n and \n=== — non-greedy
+    pattern = re.compile(r'<<<SEARCH\n(.*?)\n===\n.*?\n>>>', re.DOTALL)
+    return pattern.sub(_replace_empty, content)
+
+
 def _fix_changelog_sr_headings(content: str) -> str:
     """Rewrite CHANGELOG S/R SEARCH blocks to avoid MD024/MD025 violations.
 
@@ -314,11 +335,16 @@ def _is_valid_path_header(raw: str) -> bool:
 def _autocorrect_schema_violations(content: str) -> str:
     """Deterministic healer for common AI schema violations.
 
-    Three fixes in order:
+    Six fixes in order:
     1. Prose [MODIFY/NEW] headers (regex/code leaked out of a fence) → stripped.
     2. Empty [MODIFY] blocks with no <<<SEARCH → stripped.
     3. [NEW] blocks containing <<<SEARCH → SEARCH fragment removed.
+    4. Oversized SEARCH blocks → trimmed to identify anchor.
+    5. Empty SEARCH blocks → stripped (AC-1).
+    6. Empty function-after blocks → stripped (AC-3).
     """
+    # Apply AC-1 early
+    content = strip_empty_sr_blocks(content)
     # ── 1. Prose op headers ──────────────────────────────────────────────────
     def _check_op_header(m: re.Match) -> str:
         raw_path = m.group(2)
@@ -432,6 +458,15 @@ def _autocorrect_schema_violations(content: str) -> str:
         r"(?ms)^#### \[MODIFY\] .+?\n(?:(?!^#{3,4}\s).)*(?=^#{3,4}\s|\Z)",
         _process_modify_block,
         content,
+    )
+
+    # ── 6. Empty function-after blocks (AC-3) ────────────────────────────────
+    # Failure Mode 2: schema rejects empty function-after.blocks lists.
+    # We strip these to satisfy validation constraints.
+    content = re.sub(
+        r'"function-after":\s*\{\s*"blocks":\s*\[\s*\]\s*\},?',
+        '/* schema-autocorrect: stripped empty function-after blocks */',
+        content
     )
 
     return content

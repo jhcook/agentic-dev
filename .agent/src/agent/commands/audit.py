@@ -23,19 +23,13 @@ from agent.core.governance import run_audit, log_governance_event
 from agent.core.formatters import format_audit_report
 from agent.core.security import scrub_sensitive_data
 from agent.tools.telemetry import get_tool_metrics
+from agent.core.security import scrub_sensitive_data
+from agent.tools.telemetry import get_tool_metrics
 from agent.core.adk.tool_security import secure_config_injection
-from agent.core.adk.tool_security import secure_config_injection
-from typing import List, Optional
-import logging
-import json
-from datetime import datetime
-from agent.core.governance import run_audit, log_governance_event
-from agent.core.formatters import format_audit_report
 
 
 def log_api_rename_gate_fail(symbol: str, old_name: str, new_name: Optional[str], consumers: List[str]) -> None:
-    """
-    Emit a structured 'api_rename_gate_fail' event for audit and observability.
+    """Emit a structured 'api_rename_gate_fail' event for audit and observability.
 
     This function complies with ADR-046 by logging the failed rename attempt
     to both the system logger and the governance event log.
@@ -47,8 +41,8 @@ def log_api_rename_gate_fail(symbol: str, old_name: str, new_name: Optional[str]
         consumers: List of file paths where the old symbol is still referenced.
     """
     # 1. System Logger Emission
-    logger = logging.getLogger("agent.guards")
-    logger.error(
+    _rename_logger = logging.getLogger("agent.guards")
+    _rename_logger.error(
         "api_rename_gate_fail",
         extra={
             "symbol": symbol,
@@ -67,6 +61,30 @@ def log_api_rename_gate_fail(symbol: str, old_name: str, new_name: Optional[str]
             "old_name": old_name,
             "new_name": new_name,
             "consumers": consumers
+        }
+    )
+
+
+def log_sr_malformation_event(file_path: str, reason: str, action: str) -> None:
+    """Log a malformed S/R block event to the governance audit trail as per ADR-046.
+
+    This event is triggered when the S/R parser or post-processor detects an empty
+    SEARCH block or other schema violations that require automatic intervention.
+
+    Args:
+        file_path: Repo-relative path of the file with the malformed block.
+        reason: Human-readable description of why the block is malformed.
+        action: What was done (e.g. "skipped", "stripped").
+    """
+    log_governance_event(
+        "sr_replace_malformed_empty_search",
+        {
+            "file_path": file_path,
+            "reason": reason,
+            "action": action,
+            "timestamp": datetime.now().isoformat(),
+            "event_code": "INFRA-184",
+            "severity": "WARNING"
         }
     )
 

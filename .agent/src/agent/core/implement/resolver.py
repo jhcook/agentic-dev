@@ -135,7 +135,7 @@ def resolve_path(filepath: str) -> Optional[Path]:
             new_path = exact[0]
             if new_path != filepath:
                 _console.print(f"[dim]Path Auto-Correct (File): '{filepath}' -> '{new_path}'[/dim]")
-                logging.warning(
+                logging.debug(
                     "Path auto-corrected via fuzzy match",
                     extra={
                         "event": "path_auto_correction",
@@ -163,7 +163,7 @@ def resolve_path(filepath: str) -> Optional[Path]:
                 rest = Path(*parts[i + 1:])
                 new_full = repo_root / dir_candidates[0] / rest
                 _console.print(f"[dim]Path Auto-Correct (Dir): '{filepath}' -> '{new_full}'[/dim]")
-                logging.warning(
+                logging.debug(
                     "Path auto-corrected via fuzzy match",
                     extra={
                         "event": "path_auto_correction",

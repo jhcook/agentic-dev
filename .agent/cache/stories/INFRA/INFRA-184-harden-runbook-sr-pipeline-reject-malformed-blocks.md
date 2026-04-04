@@ -62,6 +62,10 @@ completion on the first attempt without requiring manual runbook edits.**
 - No functional regression to valid S/R blocks (non-empty SEARCH, valid Python output).
 - LOC gate: no single file modified exceeds 1000 LOC after changes.
 
+## Linked Journeys
+
+- JRN-009: Enhance Implement Command — this story hardens the S/R parsing pipeline that JRN-009 exercises.
+
 ## Linked ADRs
 
 - ADR-046: Structured Logging & Observability
