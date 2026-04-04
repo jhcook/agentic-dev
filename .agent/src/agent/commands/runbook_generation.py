@@ -84,13 +84,22 @@ class GenerationBlock:
     """A single generated implementation block from Phase 2."""
 
     header: str
-    content: str
+    content: str = ""
+    ops: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GenerationBlock":
-        """Build from the JSON dict returned by the AI."""
+        """Build from the JSON dict returned by the AI.
+
+        Supports both the legacy ``content`` format and the new structured
+        ``ops`` format introduced by INFRA-181.
+        """
+        header = data.get("header", data.get("title", "Untitled"))
+        ops = data.get("ops", [])
+        if ops and isinstance(ops, list):
+            return cls(header=header, ops=_sanitize_json_values(ops))
         return cls(
-            header=data.get("header", data.get("title", "Untitled")),
+            header=header,
             content=data.get("content", data.get("body", "")),
         )
 
@@ -168,6 +177,79 @@ def _extract_json(raw: str) -> Dict[str, Any]:
     return json.loads(text)  # Will raise JSONDecodeError
 
 
+
+
+def _sanitize_json_values(data: Any) -> Any:
+    """Recursively strip spurious markdown fences from LLM-generated JSON values.
+
+    The LLM sometimes wraps ``content``, ``search``, or ``replace`` values in
+    triple-backtick fences even when instructed not to.  This pass removes them
+    from every string value in the ops list so the assembler receives raw code.
+    """
+    if isinstance(data, dict):
+        return {k: _sanitize_json_values(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_sanitize_json_values(item) for item in data]
+    if isinstance(data, str):
+        s = data.strip()
+        # Strip a leading code fence (```python, ```, ~~~, etc.)
+        s = re.sub(r'^(?:```|~~~)\w*\n?', '', s)
+        # Strip a trailing code fence
+        s = re.sub(r'\n?(?:```|~~~)\s*$', '', s)
+        return s
+    return data
+
+
+def _assemble_block_from_json(block: "GenerationBlock") -> str:
+    """Convert structured JSON ops into markdown with injected delimiters.
+
+    This is the core of INFRA-181: the LLM never writes ``<<<SEARCH``,
+    ``===``, ``>>>``, or ``#### [NEW/MODIFY/DELETE]`` — Python does.
+    If the block has no ops (legacy ``content`` field), returns content as-is.
+    """
+    if not block.ops:
+        return block.content
+
+    ext_lang = {
+        ".py": "python", ".yaml": "yaml", ".yml": "yaml",
+        ".json": "json", ".sh": "bash", ".md": "markdown",
+        ".toml": "toml", ".js": "javascript", ".ts": "typescript",
+    }
+
+    parts: List[str] = []
+    for op in block.ops:
+        action = str(op.get("op", "modify")).upper()
+        path = op.get("file", "unknown")
+        parts.append(f"#### [{action}] {path}")
+        parts.append("")  # blank line after header
+
+        if action == "NEW":
+            content = op.get("content", "")
+            # Infer language from file extension for syntax highlighting
+            ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
+            lang = ext_lang.get(ext, "")
+            parts.append(f"```{lang}")
+            parts.append(content)
+            parts.append("```")
+
+        elif action == "MODIFY":
+            search = op.get("search", "")
+            replace = op.get("replace", "")
+            parts.append("```")
+            parts.append("<<<SEARCH")
+            parts.append(search)
+            parts.append("===")
+            parts.append(replace)
+            parts.append(">>>")
+            parts.append("```")
+
+        elif action == "DELETE":
+            rationale = op.get("rationale", "File no longer needed.")
+            parts.append(f"Rationale: {rationale}")
+
+        parts.append("")  # blank line between ops
+
+    return "\n".join(parts).strip()
 
 
 def _ensure_new_blocks_fenced(content: str) -> str:
@@ -644,6 +726,8 @@ def generate_runbook_chunked(
                 },
             )
 
+        # INFRA-181: use structured JSON ops unless legacy mode is active
+        _legacy_mode = os.environ.get("RUNBOOK_GENERATION_LEGACY") == "1"
         block_prompt = generate_block_prompt(
             section.title,
             section.description,
@@ -653,6 +737,7 @@ def generate_runbook_chunked(
             prior_changes=None,  # omitted for parallel; dedup handled in Phase 2c
             modify_file_contents=modify_contents or None,
             existing_files=all_existing_files or None,
+            legacy=_legacy_mode,
         )
         section_inputs.append((i, section, block_prompt, modify_contents))
 
@@ -695,7 +780,9 @@ def generate_runbook_chunked(
             raw_by_step[_r["data"]["step"]] = _r["data"]["raw"]
             try:
                 b = GenerationBlock.from_dict(_extract_json(_r["data"]["raw"]))
-                pass_1_context.append(f"### {b.header}\n\n{b.content}")
+                # INFRA-181: assemble from ops when content field is empty
+                b_content = b.content if b.content else _assemble_block_from_json(b)
+                pass_1_context.append(f"### {b.header}\n\n{b_content}")
             except Exception: pass
         else:
             logger.error("block_parallel_generation_failed", extra={"index": _r["index"], "error": _r.get("error", "")})
@@ -788,9 +875,11 @@ def generate_runbook_chunked(
 
 
             if parse_ok:
-                # Safety net: strip leading ## or ### headers the AI may
-                # have included despite prompt instructions
-                cleaned = block.content.lstrip("\n")
+                # INFRA-181: assemble markdown from structured ops; falls back
+                # to legacy content string when ops list is empty.
+                cleaned = _assemble_block_from_json(block)
+                # Safety net: strip leading ## or ### headers (legacy path)
+                cleaned = cleaned.lstrip("\n")
                 cleaned = re.sub(
                     r'^#{2,3}\s+[^\n]*\n+', '', cleaned, count=1,
                 )
@@ -850,9 +939,11 @@ def generate_runbook_chunked(
                             f"file block(s) from Step {i} (one-file-one-block rule)[/dim]"
                         )
 
-                # Auto-fence: ensure [NEW] blocks have fenced code content
-                cleaned = _ensure_new_blocks_fenced(cleaned)
-                cleaned = _ensure_modify_blocks_fenced(cleaned)
+                # INFRA-181: fences are injected by _assemble_block_from_json;
+                # legacy fallback still runs _ensure_* passes for content-mode blocks.
+                if not block.ops:
+                    cleaned = _ensure_new_blocks_fenced(cleaned)
+                    cleaned = _ensure_modify_blocks_fenced(cleaned)
 
                 # ─────────────────────────────────────────────────────────────
                 # Block-type validation: [NEW] must not target files that exist
@@ -1002,10 +1093,19 @@ def generate_runbook_chunked(
                         pass  # non-fatal — checkpoint is best-effort
 
                 # Extract file changes with summaries for deduplication
-                file_blocks = re.findall(
-                    r'####\s+\[(NEW|MODIFY|DELETE)\]\s+(.+?)(?:\n|$)',
-                    block.content,
-                )
+                # INFRA-181: extract file ops from structured ops list when available;
+                # fall back to regex over assembled markdown for the legacy path.
+                if block.ops:
+                    file_blocks = [
+                        (str(op.get("op", "modify")).upper(), op.get("file", ""))
+                        for op in block.ops
+                        if op.get("file")
+                    ]
+                else:
+                    file_blocks = re.findall(
+                        r'####\s+\[(NEW|MODIFY|DELETE)\]\s+(.+?)(?:\n|$)',
+                        cleaned,
+                    )
                 for action, path in file_blocks:
                     clean = path.strip().strip('`')
                     if not clean:
@@ -1054,6 +1154,8 @@ def generate_runbook_chunked(
                         "size": len(block_raw),
                         "files_touched": len(file_blocks),
                         "total_prior_files": len(prior_changes),
+                        "op_count": len(block.ops),
+                        "structured": bool(block.ops),
                     },
                 )
             else:
@@ -1072,11 +1174,13 @@ def generate_runbook_chunked(
                 )
 
     # Post-generation passes (order matters)
+    # INFRA-181: _ensure_modify_blocks_fenced and _rebalance_fences are no longer
+    # needed when all blocks use the structured ops path (fences are injected by
+    # _assemble_block_from_json). They are retained here only as a safety net for
+    # mixed legacy/structured runs and will be removed in INFRA-181-S4.
     assembled_content = _ensure_modify_blocks_fenced(assembled_content)
     assembled_content = _dedup_modify_blocks(assembled_content)
     assembled_content = _escape_dunder_paths(assembled_content)
-    # Deterministic fence balancer: close any orphaned fences per Step block.
-    # This is a pipeline guarantee — the LLM is not trusted to balance fences.
     assembled_content = _rebalance_fences(assembled_content)
     # Normalise list markers: * → -, double-space → single-space (MD004/MD030)
     assembled_content = _normalize_list_markers(assembled_content)

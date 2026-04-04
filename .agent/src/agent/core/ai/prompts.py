@@ -122,6 +122,7 @@ def generate_block_prompt(
     modify_file_contents: Optional[Dict[str, str]] = None,
     existing_files: Optional[List[str]] = None,
     implementation_context: Optional[str] = None,
+    legacy: bool = False,
 ) -> str:
     """
     Generate a Phase 2 prompt for creating a detailed implementation block.
@@ -181,6 +182,35 @@ IMPLEMENTATION CONTEXT (Created in Pass 1):
 
 Ensure all generated tests exactly match the logic, classes, and APIs within this context.
 """
+
+    # Build output-format block before the f-string so it can be referenced inside it.
+    if legacy:
+        legacy_output_block = (
+            'Return ONLY a JSON object with this structure (no markdown fences, no prose):\n'
+            '{\n'
+            '  "header": "' + section_title + '",\n'
+            '  "content": "... full markdown content (NO leading ## or ### header — '
+            'start with prose or #### blocks) ..."\n'
+            '}'
+        )
+    else:
+        legacy_output_block = (
+            'Return ONLY a JSON object with this structure (no markdown fences, no prose):\n'
+            '{\n'
+            '  "header": "' + section_title + '",\n'
+            '  "ops": [\n'
+            '    {"op": "new",    "file": "repo-relative-path", "content": "full raw file content — NO markdown fences, raw code only"},\n'
+            '    {"op": "modify", "file": "repo-relative-path", "search": "exact verbatim lines to find", "replace": "replacement lines"},\n'
+            '    {"op": "delete", "file": "repo-relative-path", "rationale": "reason"}\n'
+            '  ]\n'
+            '}\n\n'
+            'CRITICAL JSON RULES FOR ops:\n'
+            '- "content" (new files) and "search"/"replace" (modify) must be RAW CODE — no triple-backtick fences.\n'
+            '- The pipeline injects #### [NEW/MODIFY/DELETE] headers and code fences automatically.\n'
+            '- Escape newlines as \\n and backslashes as \\\\ inside JSON string values.\n'
+            '- For "modify": "search" MUST be an exact verbatim copy from TARGETED FILE CONTENTS above — no paraphrasing.\n'
+            '- Narrative prose and troubleshooting notes go in a top-level "narrative" string field (optional).'
+        )
 
     prompt = f"""
 You are the Implementation Specialist in the AI Governance Panel.
@@ -259,15 +289,12 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     if CHANGELOG.md is NOT present in the EXISTING FILES ON DISK list.
 
 OUTPUT FORMAT:
-Return ONLY a JSON object with this structure (no markdown fences, no prose):
-{{
-  "header": "{section_title}",
-  "content": "... full markdown content (NO leading ## or ### header — start with prose or #### blocks) ..."
-}}
+{legacy_output_block}
 
 CRITICAL: Ensure implementation blocks use repository-relative paths starting with `.agent/src/`.
 CRITICAL: Do NOT include credentials, PII, or secrets. Use placeholders if necessary.
 """
+
     return prompt.strip()
 
 
