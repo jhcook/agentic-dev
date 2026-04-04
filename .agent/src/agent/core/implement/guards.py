@@ -802,6 +802,112 @@ def check_projected_syntax(
         return f"Warning: Could not project syntax for {filepath.name}: {exc}"
 
 
+def check_test_imports_resolvable(
+    file_path: "Union[str, Path]", content: str, session_symbols: Set[str]
+) -> Optional[str]:
+    """Verify that all imports in a [NEW] test file are resolvable.
+
+    Validates imports against symbols defined within the current runbook session
+    or resolvable via the environment (stdlib and installed packages).
+    Ignores imports inside TYPE_CHECKING blocks to avoid false positives.
+
+    Args:
+        file_path: Repo-relative path of the file being checked (str or Path).
+        content: The Python source code of the block.
+        session_symbols: Fully-qualified or basename symbols defined in the runbook.
+
+    Returns:
+        A correction prompt naming unresolved symbols, or None if validation passes.
+    """
+    import ast
+    import importlib.util
+    from pathlib import Path as _Path
+
+    # Normalise to str so both str and Path callers work correctly
+    file_path = str(file_path)
+    _p = _Path(file_path)
+    # 1. Exit early if naming pattern does not match tests (AC-5)
+    is_test = (
+        "tests/" in file_path.replace("\\", "/")
+        or _p.name.startswith("test_")
+        or _p.name.endswith("_test.py")
+    )
+    if not is_test:
+        return None
+
+    # 2. Parse content using ast.parse
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        # Syntax issues are handled by Gate 3.5; this gate becomes a no-op.
+        return None
+
+    unresolved = set()
+
+    # 3. Walk the AST to find Import and ImportFrom nodes
+    class ResolutionVisitor(ast.NodeVisitor):
+        def visit_If(self, node: ast.If):
+            # 4. Ignore nodes located within if TYPE_CHECKING: blocks (AC-4)
+            tc_names = ("TYPE_CHECKING",)
+            if isinstance(node.test, ast.Name) and node.test.id in tc_names:
+                return
+            if isinstance(node.test, ast.Attribute) and node.test.attr in tc_names:
+                return
+            self.generic_visit(node)
+
+        def visit_Import(self, node: ast.Import):
+            for alias in node.names:
+                self._check_resolution(alias.name)
+
+        def visit_ImportFrom(self, node: ast.ImportFrom):
+            # Ignore relative imports as they require complex filesystem resolution
+            if (node.level or 0) > 0:
+                return
+            if not node.module:
+                return
+
+            # AC-3: Resolvable via importlib.util.find_spec (Environment check)
+            if importlib.util.find_spec(node.module) is not None:
+                return
+
+            # AC-1/AC-2: Resolve against symbols in the runbook session
+            for alias in node.names:
+                if alias.name not in session_symbols:
+                    unresolved.add(f"from {node.module} import {alias.name}")
+
+        def _check_resolution(self, module_name: str):
+            # Check if module is in runbook or environment
+            if module_name in session_symbols:
+                return
+            if importlib.util.find_spec(module_name) is None:
+                unresolved.add(module_name)
+
+    ResolutionVisitor().visit(tree)
+
+    # 6. Log resolution failures using ADR-046 compliant telemetry
+    if unresolved:
+        unresolved_list = sorted(list(unresolved))
+        logger.warning(
+            "test_import_resolution_fail",
+            extra={"file": file_path, "unresolved_symbols": unresolved_list},
+        )
+        # Format: "from module import name" => "module.name" for readability
+        qualified = [
+            s.replace("from ", "").replace(" import ", ".") if s.startswith("from ") else s
+            for s in unresolved_list
+        ]
+        return (
+            "IMPORT RESOLUTION FAILURE\n"
+            f"UNRESOLVABLE IMPORTS in `{file_path}`:\n"
+            + "\n".join(f"  - {q}" for q in qualified)
+            + "\n\nThe listed symbols/modules do not exist on disk and were not found "
+            "in the current runbook session. If these are internal components, ensure "
+            "they are implemented in a #### [NEW] block before importing them in tests."
+        )
+
+    return None
+
+
 def apply_change_to_file(
     filepath: str,
     content: str,

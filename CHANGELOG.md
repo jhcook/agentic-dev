@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] (Updated by story)
+
+## [unreleased]
+
+**Added**
+- **Gate 3.7**: Static import resolution verification for new test files, checking against runbook symbols and environment packages (INFRA-178).
 - **Infrastructure**: Added Gate 3.5 (Projected Syntax Validation) for `[MODIFY]` S/R blocks — uses in-memory AST projection to detect `SyntaxError` before runbook application, with path-traversal prevention via `validate_path_integrity` (INFRA-176).
 
 **Added**
