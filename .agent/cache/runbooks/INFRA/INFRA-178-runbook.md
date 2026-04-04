@@ -242,24 +242,26 @@ from pathlib import Path
 from agent.commands.runbook_gates import run_generation_gates
 from agent.core.config import config
 
+# Use a variable so no literal triple-backtick appears in the runbook source,
+# which would confuse the runbook parser's fence-extraction logic.
+_FENCE = "` ``" .replace(" ", "")
+
+
 def test_run_generation_gates_detects_bad_test_import(tmp_path):
-    """Integration test: verify that run_generation_gates returns a correction for unresolvable imports."""
+    """Integration test: verify run_generation_gates returns a correction for unresolvable imports."""
     config.repo_root = tmp_path
-    
-    # Runbook content with a test file importing a non-existent symbol
-    runbook_content = """
-#### [NEW] tests/test_failure.py
 
-```python
-from agent.missing_module import MissingClass
-
-def test_nothing():
-    pass
-
-```
-
-"""
-    # Call the orchestration loop gate
+    runbook_content = (
+        "#### [NEW] tests/test_failure.py\n"
+        "\n"
+        f"{_FENCE}python\n"
+        "from agent.missing_module import MissingClass\n"
+        "\n"
+        "def test_nothing():\n"
+        "    pass\n"
+        "\n"
+        f"{_FENCE}\n"
+    )
     _, correction_parts, _, _, _ = run_generation_gates(
         content=runbook_content,
         story_id="INFRA-178",
@@ -270,39 +272,37 @@ def test_nothing():
         attempt=1,
         max_attempts=3,
         gate_corrections=0,
-        max_gate_corrections=5
+        max_gate_corrections=5,
     )
-    
-    # Check that the import resolution error is present in combined corrections
-    assert any("IMPORT RESOLUTION FAILURE" in part for part in correction_parts)
-    assert any("agent.missing_module.MissingClass" in part for part in correction_parts)
+
+    assert any("IMPORT RESOLUTION FAILURE" in p for p in correction_parts)
+    assert any("agent.missing_module.MissingClass" in p for p in correction_parts)
+
 
 def test_run_generation_gates_passes_with_cross_block_dependency(tmp_path):
-    """Integration test: verify that a test file importing a symbol defined in the SAME runbook passes."""
+    """Integration test: verify a test importing a symbol defined in the same runbook passes."""
     config.repo_root = tmp_path
-    
-    # Runbook defines a class in one block and imports it in a test block
-    runbook_content = """
-#### [NEW] agent/core/logic.py
 
-```python
-class NewLogic:
-    def execute(self):
-        return True
-
-```
-
-#### [NEW] tests/test_logic.py
-
-```python
-from agent.core.logic import NewLogic
-
-def test_new_logic():
-    assert NewLogic().execute()
-
-```
-
-"""
+    runbook_content = (
+        "#### [NEW] agent/core/logic.py\n"
+        "\n"
+        f"{_FENCE}python\n"
+        "class NewLogic:\n"
+        "    def execute(self):\n"
+        "        return True\n"
+        "\n"
+        f"{_FENCE}\n"
+        "\n"
+        "#### [NEW] tests/test_logic.py\n"
+        "\n"
+        f"{_FENCE}python\n"
+        "from agent.core.logic import NewLogic\n"
+        "\n"
+        "def test_new_logic():\n"
+        "    assert NewLogic().execute()\n"
+        "\n"
+        f"{_FENCE}\n"
+    )
     _, correction_parts, _, _, _ = run_generation_gates(
         content=runbook_content,
         story_id="INFRA-178",
@@ -313,10 +313,9 @@ def test_new_logic():
         attempt=1,
         max_attempts=3,
         gate_corrections=0,
-        max_gate_corrections=5
+        max_gate_corrections=5,
     )
-    
-    # Filter for Gate 3.7 specific errors
+
     import_failures = [p for p in correction_parts if "IMPORT RESOLUTION FAILURE" in p]
     assert not import_failures, f"Expected no import failures, got: {import_failures}"
 
