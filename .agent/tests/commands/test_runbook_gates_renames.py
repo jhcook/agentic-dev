@@ -23,7 +23,7 @@ journey tests (JRN-023).
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from agent.core.implement.guards import check_api_surface_renames
+from agent.core.implement.rename_guard import check_api_surface_renames
 
 
 def _make_blocks(*pairs):
@@ -40,7 +40,7 @@ def test_rename_with_orphaned_consumer_triggers_correction():
             "class ToolExecutor:\n    pass",
         )
     )
-    with patch("agent.core.implement.guards.subprocess.run") as mock_run:
+    with patch("agent.core.implement.rename_guard.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout="src/runbook_generation.py\n",
@@ -66,7 +66,7 @@ def test_rename_with_covered_consumer_passes():
             "from executor import ToolExecutor",
         ),
     )
-    with patch("agent.core.implement.guards.subprocess.run") as mock_run:
+    with patch("agent.core.implement.rename_guard.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout="src/runbook_generation.py\n",
@@ -85,7 +85,7 @@ def test_rename_with_no_consumers_passes():
             "def modern_func():\n    pass",
         )
     )
-    with patch("agent.core.implement.guards.subprocess.run") as mock_run:
+    with patch("agent.core.implement.rename_guard.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         errors = check_api_surface_renames(blocks, Path("/tmp"))
 

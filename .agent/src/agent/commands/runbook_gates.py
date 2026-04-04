@@ -54,8 +54,8 @@ from agent.core.implement.guards import (
     check_adr_refs,
     check_stub_implementations,
     check_test_imports_resolvable,
-    check_api_surface_renames,
 )
+from agent.core.implement.rename_guard import check_api_surface_renames
 from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks, parse_search_replace_blocks
 from agent.utils.validation_formatter import format_runbook_errors

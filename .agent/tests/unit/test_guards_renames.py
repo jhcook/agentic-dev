@@ -15,7 +15,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from agent.core.implement.guards import check_api_surface_renames
+from agent.core.implement.rename_guard import check_api_surface_renames
 
 def test_check_api_surface_renames_private_ignored():
     """AC-4: Verify that symbols starting with an underscore are ignored."""
