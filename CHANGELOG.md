@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `AgentSession` to delegate tool management to `ToolRegistry` (INFRA-145).
 - Updated `ToolExecutor` to yield 'Thinking...' status updates during tool execution (INFRA-145).
 
+## [Unreleased] - 2026-03-05
+**Changed**
+- Refactored `AgentSession` to delegate tool management to `ToolRegistry` (INFRA-145).
+- Updated `ToolExecutor` to yield 'Thinking...' status updates during tool execution (INFRA-145).
+
 **Added**
 - INFRA-179: Public symbol rename detection gate (Gate 2) — detects when [MODIFY] blocks rename/remove public classes or functions without updating all consumers.
 

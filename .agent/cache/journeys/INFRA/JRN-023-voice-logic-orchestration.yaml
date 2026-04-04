@@ -17,6 +17,7 @@
 
 
 
+
 id: JRN-023
 title: Voice Logic Orchestration
 state: COMMITTED
@@ -80,6 +81,7 @@ implementation:
   - .agent/docs/architecture/infra-143-domain-isolation.md
   - .agent/docs/architecture/infra-179-rename-detection.md
   - .agent/docs/features/sr-replace-validation.md
+  - .agent/docs/infra/tool-registry-integration.md
   - .agent/docs/runbook-gates.md
   - .agent/docs/tools.md
   - .agent/src/agent/cli.py
@@ -87,24 +89,39 @@ implementation:
   - .agent/src/agent/commands/gates.py
   - .agent/src/agent/commands/runbook_gates.py
   - .agent/src/agent/commands/utils.py
+  - .agent/src/agent/core/adk/tool_registry_strategy.md
+  - .agent/src/agent/core/adk/tool_security.py
+  - .agent/src/agent/core/engine/executor.py
+  - .agent/src/agent/core/feature_flags.py
   - .agent/src/agent/core/implement/guards.py
+  - .agent/src/agent/core/session.py
   - .agent/src/agent/core/telemetry.py
   - .agent/src/agent/tools/__init__.py
   - .agent/src/agent/tools/knowledge.py
   - .agent/src/agent/tools/project.py
   - .agent/src/agent/tools/telemetry.py
+  - .agent/src/agent/tui/session.py
   - .agent/src/agent/utils/rollback_infra_143.py
+  - .agent/src/agent/utils/rollback_infra_145.py
   - .agent/src/agent/utils/rollback_infra_176.py
   - .agent/src/agent/utils/rollback_infra_179.py
   - .agent/src/agent/utils/tool_security.py
   - .agent/src/agent/utils/validation_formatter.py
+  - .agent/src/backend/voice/orchestrator.py
+  - .agent/tests/agent/core/adk/test_tool_security.py
+  - .agent/tests/agent/core/engine/test_executor_updates.py
+  - .agent/tests/agent/core/test_session_refactor.py
+  - .agent/tests/agent/core/test_tool_telemetry.py
   - .agent/tests/agent/tools/test_knowledge.py
   - .agent/tests/agent/tools/test_project.py
   - .agent/tests/agent/tools/test_telemetry.py
+  - .agent/tests/agent/tui/test_session_adapter.py
   - .agent/tests/agent/utils/test_tool_security.py
+  - .agent/tests/backend/voice/test_orchestrator_adapter.py
   - .agent/tests/commands/test_runbook_gates_renames.py
   - .agent/tests/commands/test_runbook_gates_syntax.py
   - .agent/tests/commands/test_sr_semantic_infra_180.py
+  - .agent/tests/integration/test_tool_parity.py
   - .agent/tests/tools/__init__.py
   - .agent/tests/tools/test_registry.py
   - .agent/tests/unit/test_guards_renames.py

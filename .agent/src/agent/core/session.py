@@ -24,6 +24,7 @@ import logging
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 from agent.core.ai.protocols import AIProvider
+from agent.core.adk.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
