@@ -17,14 +17,16 @@ import json
 import logging
 from backend.voice.events import EventBus
 from agent.core.config import config as agent_config
+from agent.core.execution_context import get_session_id
 
 logger = logging.getLogger(__name__)
 
-def get_git_status(session_id: str = "unknown") -> str:
+def get_git_status() -> str:
     """
     Get the current git status of the repository, categorized by Staged and Unstaged changes.
     Useful for checking what is ready to commit vs what is work in progress.
     """
+    session_id = get_session_id()  # ADR-100
     try:
         result = subprocess.run(
             ["git", "status", "--short"], 
@@ -66,25 +68,24 @@ def get_git_status(session_id: str = "unknown") -> str:
             if work_status != ' ':
                 status_data["unstaged"].append(f"{work_status} {path}")
 
-        # Stream summary to console if session available
-        if config:
-            # session_id passed as parameter
-            console_summary = "=== Git Status (JSON) ===\n"
-            if status_data["staged"]: console_summary += f"Staged: {len(status_data['staged'])}\n"
-            if status_data["unstaged"]: console_summary += f"Unstaged: {len(status_data['unstaged'])}\n"
-            if status_data["untracked"]: console_summary += f"Untracked: {len(status_data['untracked'])}\n"
-            EventBus.publish(session_id, "console", console_summary)
+        # Stream summary to console
+        console_summary = "=== Git Status (JSON) ===\n"
+        if status_data["staged"]: console_summary += f"Staged: {len(status_data['staged'])}\n"
+        if status_data["unstaged"]: console_summary += f"Unstaged: {len(status_data['unstaged'])}\n"
+        if status_data["untracked"]: console_summary += f"Untracked: {len(status_data['untracked'])}\n"
+        EventBus.publish(session_id, "console", console_summary)
             
         return json.dumps(status_data, indent=2)
         
     except subprocess.CalledProcessError as e:
         return json.dumps({"error": str(e)})
 
-def get_git_diff(session_id: str = "unknown") -> str:
+def get_git_diff() -> str:
     """
-    Get the staged git diff. 
+    Get the staged git diff.
     Use this during preflight checks to see what is about to be committed.
     """
+    session_id = get_session_id()  # ADR-100
     try:
         result = subprocess.run(
             ["git", "diff", "--cached"], 
@@ -97,9 +98,7 @@ def get_git_diff(session_id: str = "unknown") -> str:
             return "No staged changes."
 
         # Stream to console (Full output)
-        if config:
-            # session_id passed as parameter
-            EventBus.publish(session_id, "console", "\n=== Git Diff (Staged) ===\n" + result.stdout)
+        EventBus.publish(session_id, "console", "\n=== Git Diff (Staged) ===\n" + result.stdout)
 
         # Truncate if too long (LLM context limit)
         if len(result.stdout) > 5000:
@@ -175,7 +174,7 @@ def git_stage_changes(files: list[str] = None) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error staging changes: {e}"
 
-def run_commit(message: str = None, story_id: str = None, session_id: str = "unknown") -> str:
+def run_commit(message: str = None, story_id: str = None) -> str:
     """
     Commit staged changes to the repository.
     If no message is provided, AI generation will be used.
@@ -183,8 +182,8 @@ def run_commit(message: str = None, story_id: str = None, session_id: str = "unk
         message: Optional commit message.
         story_id: Optional story ID (e.g., INFRA-042) to link the commit to.
     """
+    session_id = get_session_id()  # ADR-100
     try:
-        # session_id passed as parameter
 
         # Use robust shell activation pattern
         base_cmd = "source .venv/bin/activate && agent commit --yes"
@@ -242,30 +241,24 @@ def run_commit(message: str = None, story_id: str = None, session_id: str = "unk
     except Exception as e:
         return f"Failed to run commit: {e}"
 
-def run_pr(story_id: str = None, draft: bool = False, session_id: str = "unknown") -> str:
+def run_pr(story_id: str = None, draft: bool = False) -> str:
     """
     Create a GitHub Pull Request for the current branch/story.
     Runs preflight checks automatically before creating the PR.
     """
-    # session_id passed as parameter
-    
-    # Generate ID
-    process_id = f"pr-{story_id or 'new'}-{int(subprocess.check_output(['date', '+%s']).decode().strip())}"
-    
+    session_id = get_session_id()  # ADR-100
+    import time as _time
+    process_id = f"pr-{story_id or 'new'}-{int(_time.time())}"
+
     EventBus.publish(session_id, "console", f"> Starting PR Creation (ID: {process_id})...\n")
     
     try:
         # 1. Ensure branch is pushed
-        # Use .func to bypass Tool wrapper overhead/validation for internal call
-        push_result = git_push_branch.func(config=config)
-        # Even if it returns error text, we might want to try PR anyway? 
-        # But user said "ensure if HEAD is not pushed... do a push".
-        # If push failed, PR creation might fail too.
-        # Check output for success?
+        push_result = git_push_branch()
         if "Error" in push_result or "Failed" in push_result:
-             EventBus.publish(session_id, "console", f"⚠️  Push Result: {push_result}\nContinuing with PR...\n")
+            EventBus.publish(session_id, "console", f"⚠️  Push Result: {push_result}\nContinuing with PR...\n")
         else:
-             EventBus.publish(session_id, "console", f"✅ {push_result}\n")
+            EventBus.publish(session_id, "console", f"✅ {push_result}\n")
 
         # 2. Build PR command
         cmd_parts = ["source .venv/bin/activate && agent pr"]
@@ -337,12 +330,12 @@ def run_pr(story_id: str = None, draft: bool = False, session_id: str = "unknown
     except Exception as e:
         return f"Failed to start PR creation: {e}"
 
-def git_push_branch(session_id: str = "unknown") -> str:
+def git_push_branch() -> str:
     """
     Push the current branch to origin.
     Automatically handles setting the upstream branch if it's missing.
     """
-    # session_id passed as parameter
+    session_id = get_session_id()  # ADR-100
     EventBus.publish(session_id, "console", "> Pushing to origin...\n")
 
     try:

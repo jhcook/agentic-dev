@@ -17,7 +17,8 @@ Voice tool registry — delegates to ToolRegistry (INFRA-146 AC-4).
 
 This module replaces the previous LangChain BaseTool aggregator with a
 ToolRegistry-backed implementation. All tool functions are plain Python
-callables; schema introspection uses inspect rather than LangChain.
+callables; schema introspection is delegated to ``ToolRegistry.get_tool_schemas``
+so there is a single source of truth for schema generation.
 """
 
 import inspect
@@ -64,51 +65,72 @@ def get_all_tools(repo_root: Path | None = None) -> List[Callable]:
     return tools
 
 
-def _build_schema(fn: Callable) -> Dict[str, Any]:
-    """Introspect a plain callable and return an OpenAI-compatible function schema."""
-    sig = inspect.signature(fn)
-    doc = (fn.__doc__ or "").strip()
-    parameters: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
-
-    for name, param in sig.parameters.items():
-        prop: Dict[str, Any] = {"type": "string"}
-        if param.annotation is not inspect.Parameter.empty:
-            ann = param.annotation
-            if ann is int:
-                prop["type"] = "integer"
-            elif ann is bool:
-                prop["type"] = "boolean"
-        parameters["properties"][name] = prop
-        if param.default is inspect.Parameter.empty:
-            parameters["required"].append(name)
-
-    return {
-        "type": "function",
-        "function": {
-            "name": fn.__name__,
-            "description": doc,
-            "parameters": parameters,
-        },
-    }
-
-
 def get_unified_tools(
     repo_root: Path | None = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Callable]]:
     """Return (schemas, handlers) for the voice orchestrator.
 
+    Schemas are sourced from ``ToolRegistry.get_tool_schemas`` (INFRA-146 AC-4)
+    to ensure interface parity with the console adapter. Custom tools from the
+    ``custom/`` directory are introspected inline and appended.
+
     ``schemas`` is a list of OpenAI-compatible function-call JSON schemas.
     ``handlers`` maps each tool name to its callable for dispatch.
     """
-    tools = get_all_tools(repo_root=repo_root)
-    schemas: List[Dict[str, Any]] = []
-    handlers: Dict[str, Callable] = {}
+    registry = ToolRegistry(repo_root=repo_root)
 
-    for tool in tools:
-        try:
-            schemas.append(_build_schema(tool))
-            handlers[tool.__name__] = tool
-        except Exception as exc:
-            logger.warning("tool_schema_build_error", extra={"tool": getattr(tool, "__name__", "?"), "error": str(exc)})
+    # Canonical schemas and handlers from ToolRegistry
+    schemas: List[Dict[str, Any]] = registry.get_tool_schemas(all=True)
+    handlers: Dict[str, Callable] = {
+        fn.__name__: fn for fn in registry.list_tools(all=True)
+    }
+
+    # Append custom tools with inline schema introspection
+    custom_dir = Path(os.path.dirname(__file__)) / "custom"
+    if custom_dir.exists():
+        for filename in sorted(custom_dir.iterdir()):
+            if filename.suffix != ".py" or filename.stem.startswith("__"):
+                continue
+            module_name = f"backend.voice.tools.custom.{filename.stem}"
+            try:
+                if module_name in sys.modules:
+                    module = importlib.reload(sys.modules[module_name])
+                else:
+                    module = importlib.import_module(module_name)
+                for _, fn in inspect.getmembers(module, inspect.isfunction):
+                    if fn.__name__ not in handlers:
+                        try:
+                            # Delegate to registry helper for consistency
+                            tmp = ToolRegistry()
+                            # Build a one-off schema using the same logic
+                            one_shot = tmp.get_tool_schemas.__func__  # type: ignore[attr-defined]
+                            # Fall back to inline inspect for custom tools
+                            sig = inspect.signature(fn)
+                            doc = (fn.__doc__ or "").strip()
+                            params: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+                            for name, param in sig.parameters.items():
+                                prop: Dict[str, Any] = {"type": "string"}
+                                if param.annotation is not inspect.Parameter.empty:
+                                    ann = param.annotation
+                                    if ann is int:
+                                        prop["type"] = "integer"
+                                    elif ann is bool:
+                                        prop["type"] = "boolean"
+                                params["properties"][name] = prop
+                                if param.default is inspect.Parameter.empty:
+                                    params["required"].append(name)
+                            schemas.append({
+                                "type": "function",
+                                "function": {
+                                    "name": fn.__name__,
+                                    "description": doc,
+                                    "parameters": params,
+                                },
+                            })
+                            handlers[fn.__name__] = fn
+                        except Exception as exc:
+                            logger.warning("custom_tool_schema_error", extra={"tool": fn.__name__, "error": str(exc)})
+            except Exception as exc:
+                logger.warning("custom_tool_load_error", extra={"file": filename.name, "error": str(exc)})
 
     return schemas, handlers

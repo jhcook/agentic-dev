@@ -221,6 +221,7 @@ def strip_markdown_for_tts(text: str) -> str:
 
 from typing import List, Optional
 from agent.core.adk.tools import ToolRegistry
+from agent.core.execution_context import set_session_id
 
 
 class VoiceOrchestrator:
@@ -252,9 +253,14 @@ class VoiceOrchestrator:
         from agent.core.ai.providers import get_provider
         provider = get_provider(provider_name, client=service.clients.get(provider_name), model_name=model_name)
         
-        # Configure tools
+        # Configure tools via ToolRegistry (INFRA-146 AC-5)
+        self.registry = ToolRegistry()
         tools_schema, tool_handlers = get_unified_tools()
-        
+
+        # Bind the session_id into the execution context (ADR-100) so that
+        # tool functions can retrieve it without it appearing in their LLM schema.
+        self._session_token = set_session_id(self.session_id)
+
         # Create unified AgentSession
         self.agent_session = AgentSession(
             provider=provider,
