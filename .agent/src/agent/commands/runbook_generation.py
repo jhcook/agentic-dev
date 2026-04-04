@@ -314,11 +314,35 @@ def _is_valid_path_header(raw: str) -> bool:
 def _autocorrect_schema_violations(content: str) -> str:
     """Deterministic healer for common AI schema violations.
 
-    Three fixes in order:
+    Fixes in order:
+    0. Bare `agent/` paths in [MODIFY/NEW] headers → `.agent/src/agent/`.
     1. Prose [MODIFY/NEW] headers (regex/code leaked out of a fence) → stripped.
     2. Empty [MODIFY] blocks with no <<<SEARCH → stripped.
     3. [NEW] blocks containing <<<SEARCH → SEARCH fragment removed.
+    4. Oversized SEARCH blocks (> 100 lines) → trimmed to 15-line anchor.
     """
+    # ── 0. Bare agent/ paths in op headers ──────────────────────────────────
+    # AI commonly drops the `.agent/src/` prefix on Python source paths.
+    # Pattern: `#### [MODIFY] agent/` → `#### [MODIFY] .agent/src/agent/`
+    def _fix_bare_agent_path(m: re.Match) -> str:
+        op = m.group(1)      # e.g. "#### [MODIFY] "
+        path = m.group(2)    # e.g. "agent/core/session.py"
+        corrected = f".agent/src/{path}"
+        abs_path = Path.cwd() / corrected
+        if abs_path.parent.exists():
+            logger.warning(
+                "schema_autocorrect_bare_agent_path",
+                extra={"original": path, "corrected": corrected},
+            )
+            return f"{op}{corrected}"
+        return m.group(0)  # parent doesn't exist — leave for prose-header check
+
+    content = re.sub(
+        r"(?m)^(#### \[(?:MODIFY|NEW)\] )(agent/[^\n]+)$",
+        _fix_bare_agent_path,
+        content,
+    )
+
     # ── 1. Prose op headers ──────────────────────────────────────────────────
     def _check_op_header(m: re.Match) -> str:
         raw_path = m.group(2)
