@@ -62,6 +62,10 @@ completion on the first attempt without requiring manual runbook edits.**
 - No functional regression to valid S/R blocks (non-empty SEARCH, valid Python output).
 - LOC gate: no single file modified exceeds 1000 LOC after changes.
 
+## Linked Journeys
+
+- None — this story targets internal pipeline hardening with no user-facing journey impact.
+
 ## Linked ADRs
 
 - ADR-046: Structured Logging & Observability
