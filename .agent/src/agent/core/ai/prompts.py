@@ -290,6 +290,11 @@ CODE CHANGE FORMAT RULES (follow these EXACTLY):
     use `#### [MODIFY] CHANGELOG.md` with a `<<<SEARCH / === / >>>` block that inserts
     the new entry immediately after the `# Changelog` header line. Only use `#### [NEW]`
     if CHANGELOG.md is NOT present in the EXISTING FILES ON DISK list.
+17. EMPTY SEARCH BLOCKS ARE FORBIDDEN: Every `<<<SEARCH` block MUST contain at least one
+    non-whitespace line between `<<<SEARCH` and `===`. A `<<<SEARCH` followed immediately
+    by `===` (or only whitespace) means you have no real anchor and the block will be
+    rejected by the parser. If you cannot find a suitable anchor in the file, use [NEW]
+    instead of [MODIFY], or describe the change in prose. Never emit an empty SEARCH.
 
 OUTPUT FORMAT:
 {legacy_output_block}

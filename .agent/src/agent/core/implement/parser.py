@@ -271,7 +271,19 @@ def parse_search_replace_blocks(content: str) -> List[Dict[str, str]]:
             continue
         body = file_sections[i + 1] if i + 1 < len(file_sections) else ""
         for match in re.finditer(r'<<<SEARCH\n(.*?)\n===\n(.*?)\n>>>', body, re.DOTALL):
-            blocks.append({"file": filepath, "search": match.group(1), "replace": match.group(2)})
+            search_text = match.group(1)
+            if not search_text.strip():
+                # AC-4 (INFRA-184): reject empty/whitespace-only SEARCH blocks
+                _logger.warning(
+                    "sr_replace_malformed_empty_search",
+                    extra={
+                        "file": filepath,
+                        "reason": "empty search block",
+                        "action": "skipped",
+                    },
+                )
+                continue
+            blocks.append({"file": filepath, "search": search_text, "replace": match.group(2)})
     if _tracer:
         span = _tracer.start_span("implement.parse_search_replace")
         span.set_attribute("block_count", len(blocks))

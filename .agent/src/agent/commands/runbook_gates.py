@@ -66,6 +66,32 @@ console = Console()
 error_console = Console(stderr=True)
 
 
+def _display_sr_validation_summary(results: list) -> None:
+    """Display a summary of S/R validation results after a generation attempt.
+
+    AC-5 (INFRA-184): Provides a structured, human-readable summary showing how
+    many blocks were checked, how many were auto-corrected (empty-search stripped),
+    and how many legitimate failures remain.
+
+    Args:
+        results: List of (file_path, event_name, detail) tuples from the gate run.
+    """
+    total = len(results)
+    malformed = [r for r in results if r[1] == "sr_replace_malformed_empty_search"]
+    real_failures = [r for r in results if r[1] not in ("sr_replace_malformed_empty_search",) and r[2] is None]
+
+    console.print(
+        f"[dim]🔍 S/R validation: {total} block(s) checked, "
+        f"{len(malformed)} malformed block(s) stripped to prevent false AST corruption, "
+        f"{total - len(malformed) - len(real_failures)} file(s) failed syntax validation[/dim]"
+    )
+    if malformed:
+        logger.warning(
+            "sr_replace_malformed_empty_search",
+            extra={"count": len(malformed), "files": [r[0] for r in malformed]},
+        )
+
+
 def _build_runbook_symbol_index(content: str) -> Set[str]:
     """Extract a set of top-level symbol names from all [NEW] code blocks in the runbook.
 

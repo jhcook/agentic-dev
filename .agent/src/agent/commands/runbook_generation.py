@@ -248,6 +248,7 @@ from agent.commands.runbook_postprocess import (  # noqa: E402,F401
     _ensure_modify_blocks_fenced,
     _dedup_modify_blocks,
     _escape_dunder_paths,
+    strip_empty_sr_blocks,
 )
 
 def generate_runbook_chunked(
@@ -898,6 +899,8 @@ def generate_runbook_chunked(
     assembled_content = _fix_changelog_sr_headings(assembled_content)
     # Ensure blank lines surround fenced blocks (MD031)
     assembled_content = _ensure_blank_lines_around_fences(assembled_content)
+    # AC-1 (INFRA-184): Strip empty SEARCH blocks before structural corrections
+    assembled_content = strip_empty_sr_blocks(assembled_content)
     # Heal structural schema violations before hard gates fire:
     # prose headers, empty MODIFY blocks, [NEW] with <<<SEARCH inside.
     assembled_content = _autocorrect_schema_violations(assembled_content)
