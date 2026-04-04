@@ -1363,14 +1363,15 @@ def generate_runbook_chunked(
                 },
             )
             if _final_fixed:
-                _console.print(
+                console.print(
                     f"[green]✅ Generation-time S/R verification: "
                     f"{_final_fixed}/{_final_total} block(s) corrected to verbatim.[/green]"
                 )
     except Exception as _sr_err:
+        import traceback as _tb
         logger.warning(
             "sr_final_pass_error",
-            extra={"error": str(_sr_err), "story_id": story_id},
+            extra={"error": str(_sr_err), "traceback": _tb.format_exc(), "story_id": story_id},
         )
 
     if tracker is not None:
