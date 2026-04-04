@@ -16,12 +16,11 @@ import subprocess
 import json
 import logging
 from backend.voice.events import EventBus
-from langchain_core.runnables import RunnableConfig
 from agent.core.config import config as agent_config
 
 logger = logging.getLogger(__name__)
 
-def get_git_status(config: RunnableConfig = None) -> str:
+def get_git_status(session_id: str = "unknown") -> str:
     """
     Get the current git status of the repository, categorized by Staged and Unstaged changes.
     Useful for checking what is ready to commit vs what is work in progress.
@@ -69,7 +68,7 @@ def get_git_status(config: RunnableConfig = None) -> str:
 
         # Stream summary to console if session available
         if config:
-            session_id = config.get("configurable", {}).get("thread_id", "unknown")
+            # session_id passed as parameter
             console_summary = "=== Git Status (JSON) ===\n"
             if status_data["staged"]: console_summary += f"Staged: {len(status_data['staged'])}\n"
             if status_data["unstaged"]: console_summary += f"Unstaged: {len(status_data['unstaged'])}\n"
@@ -81,7 +80,7 @@ def get_git_status(config: RunnableConfig = None) -> str:
     except subprocess.CalledProcessError as e:
         return json.dumps({"error": str(e)})
 
-def get_git_diff(config: RunnableConfig = None) -> str:
+def get_git_diff(session_id: str = "unknown") -> str:
     """
     Get the staged git diff. 
     Use this during preflight checks to see what is about to be committed.
@@ -99,7 +98,7 @@ def get_git_diff(config: RunnableConfig = None) -> str:
 
         # Stream to console (Full output)
         if config:
-            session_id = config.get("configurable", {}).get("thread_id", "unknown")
+            # session_id passed as parameter
             EventBus.publish(session_id, "console", "\n=== Git Diff (Staged) ===\n" + result.stdout)
 
         # Truncate if too long (LLM context limit)
@@ -176,7 +175,7 @@ def git_stage_changes(files: list[str] = None) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error staging changes: {e}"
 
-def run_commit(message: str = None, story_id: str = None, config: RunnableConfig = None) -> str:
+def run_commit(message: str = None, story_id: str = None, session_id: str = "unknown") -> str:
     """
     Commit staged changes to the repository.
     If no message is provided, AI generation will be used.
@@ -185,7 +184,7 @@ def run_commit(message: str = None, story_id: str = None, config: RunnableConfig
         story_id: Optional story ID (e.g., INFRA-042) to link the commit to.
     """
     try:
-        session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+        # session_id passed as parameter
 
         # Use robust shell activation pattern
         base_cmd = "source .venv/bin/activate && agent commit --yes"
@@ -243,12 +242,12 @@ def run_commit(message: str = None, story_id: str = None, config: RunnableConfig
     except Exception as e:
         return f"Failed to run commit: {e}"
 
-def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = None) -> str:
+def run_pr(story_id: str = None, draft: bool = False, session_id: str = "unknown") -> str:
     """
     Create a GitHub Pull Request for the current branch/story.
     Runs preflight checks automatically before creating the PR.
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    # session_id passed as parameter
     
     # Generate ID
     process_id = f"pr-{story_id or 'new'}-{int(subprocess.check_output(['date', '+%s']).decode().strip())}"
@@ -338,12 +337,12 @@ def run_pr(story_id: str = None, draft: bool = False, config: RunnableConfig = N
     except Exception as e:
         return f"Failed to start PR creation: {e}"
 
-def git_push_branch(config: RunnableConfig = None) -> str:
+def git_push_branch(session_id: str = "unknown") -> str:
     """
     Push the current branch to origin.
     Automatically handles setting the upstream branch if it's missing.
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    # session_id passed as parameter
     EventBus.publish(session_id, "console", "> Pushing to origin...\n")
 
     try:

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 import subprocess
 import re
@@ -30,8 +29,7 @@ except ImportError:
 def interactive_fix_story(
     story_id: str, 
     apply_idx: Optional[int] = None, 
-    instructions: Optional[str] = None,
-    config: RunnableConfig = None
+    instructions: Optional[str] = None, session_id: str = "unknown"
 
 ) -> str:
     """
@@ -56,7 +54,7 @@ def interactive_fix_story(
         apply_idx: (Optional) The 1-based index of the fix option to apply. If None, runs in ANALYZE mode.
         instructions: (Optional) Natural language instructions to guide the AI generation (e.g. "make it more detailed").
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    # session_id passed as parameter
     
     # 0. SECURITY: Input Validation
     # Validate story_id format (alphanumeric+dashes only) to prevent command injection

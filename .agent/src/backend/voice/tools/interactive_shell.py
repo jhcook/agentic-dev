@@ -19,20 +19,16 @@ import time
 from backend.voice.process_manager import ProcessLifecycleManager
 from backend.voice.events import EventBus
 from agent.core.config import config as agent_config
-from langchain_core.runnables import RunnableConfig
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
-def start_interactive_shell(command: str, session_id: str = None, config: RunnableConfig = None) -> str:
+def start_interactive_shell(command: str, session_id: str = "unknown") -> str:
     """
     Start a long-running interactive shell command (e.g., 'npm init', 'python3').
     Returns a Process ID that can be used with send_shell_input.
     Output will be streamed to the console.
     """
-    if not session_id and config:
-        session_id = config.get("configurable", {}).get("thread_id", "unknown")
-        
     process_id = f"shell-{int(time.time())}"
     
     try:

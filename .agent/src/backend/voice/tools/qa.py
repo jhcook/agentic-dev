@@ -18,7 +18,6 @@ import threading
 import time
 import logging
 from opentelemetry import trace
-from langchain_core.runnables import RunnableConfig
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
 
@@ -125,7 +124,7 @@ def run_frontend_lint() -> str:
     except Exception as e:
         return f"Error: {e}"
 
-def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -> str:
+def shell_command(command: str, cwd: str = ".", session_id: str = "unknown") -> str:
     """
     Execute a shell command from the project root or a specific directory.
     Use this for package installation (npm install, pip install) or running utilities.
@@ -133,7 +132,7 @@ def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -
         command: The shell command to run (e.g. 'ls -la', 'pip install requests')
         cwd: Working directory relative to project root (default: '.')
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    # session_id passed as parameter
     EventBus.publish(session_id, "console", f"> Executing: {command}\n")
 
     with tracer.start_as_current_span("tool.shell_command") as span:
@@ -195,7 +194,7 @@ def shell_command(command: str, cwd: str = ".", config: RunnableConfig = None) -
             EventBus.publish(session_id, "console", f"\n[ERROR] Exception: {e}\n")
             return f"Error executing shell command: {e}"
 
-def run_preflight(story_id: str = None, interactive: bool = True, config: RunnableConfig = None) -> str:
+def run_preflight(story_id: str = None, interactive: bool = True, session_id: str = "unknown") -> str:
     """
     Run the Agent preflight governance checks with AI analysis.
     Use this when a user asks to 'run preflight' or 'check compliance'.
@@ -203,7 +202,7 @@ def run_preflight(story_id: str = None, interactive: bool = True, config: Runnab
         story_id: Optional Story ID (e.g. 'INFRA-015')
         interactive: Whether to enable interactive repair mode (default: True)
     """
-    session_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+    # session_id passed as parameter
     
     # Notify start
     EventBus.publish(session_id, "console", f"> Starting Preflight for {story_id or 'all'} (Interactive: {interactive})...\n")

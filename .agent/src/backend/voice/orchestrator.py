@@ -221,32 +221,19 @@ def strip_markdown_for_tts(text: str) -> str:
 
 from typing import List, Optional
 from agent.core.adk.tools import ToolRegistry
-from langchain_core.runnables import RunnableConfig
+
 
 class VoiceOrchestrator:
-    """Orchestrator for Voice interactions using ToolRegistry.
+    """Orchestrator for the voice pipeline (STT → AI → TTS).
 
-    This component acts as a thin adapter that consumes tools from the unified
-    registry, supporting context-aware tool lookup for voice logic.
+    Binds tools from ToolRegistry (INFRA-146 AC-5) to ensure interface parity
+    with the TUI console agent.
     """
 
-    def __init__(self):
-        # AC-3: Initialize ToolRegistry instead of manual BaseTool scanning
-        self.registry = ToolRegistry()
-
-    def get_tools(self, config: Optional[RunnableConfig] = None) -> List:
-        """
-        Retrieve available tools for the voice session.
-
-        AC-3: Uses ToolRegistry to ensure parity with the TUI interface.
-        Context from RunnableConfig is passed to the registry for injection.
-        """
-        return self.registry.list_tools(config=config)
-    
     def __init__(self, session_id: str):
         """
         Initialize VoiceOrchestrator with LangGraph conversational agent.
-        
+
         Args:
             session_id: Unique session identifier for conversation tracking
         """
