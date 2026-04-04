@@ -114,18 +114,36 @@ def _write_and_sync(
         story_file: Path to the story file.
         runbook_file: Path to the runbook output file.
     """
+    # ── In-memory normalization — runs before ANY write path ─────────────────
+    # Collapse 3+ consecutive blank lines to max 2 (MD012), preserving code
+    # fences verbatim. Then enforce exactly one trailing newline.
+    import re as _re_norm
+    _fence_split = _re_norm.split(r'(^```[^\n]*\n.*?^```)', content, flags=_re_norm.MULTILINE | _re_norm.DOTALL)
+    _normalized = []
+    for _part in _fence_split:
+        if _part.startswith('```'):
+            _normalized.append(_part)
+        else:
+            _normalized.append(_re_norm.sub(r'\n{3,}', '\n\n', _part))
+    content = ''.join(_normalized)
+    content = content.rstrip('\n') + '\n'
+
+    # Generation-time S/R correction (validate_and_correct_sr_blocks)
+    from agent.core.implement.sr_validation import validate_and_correct_sr_blocks
+    try:
+        content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content)
+        if sr_total > 0:
+            console.print(
+                f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
+                f"{sr_corrected} auto-corrected[/dim]"
+            )
+    except Exception as e:
+        logger.error("sr_validation_failed", error=str(e))
+
     # Post-generation lint: autocorrect then report remaining issues
     content, corrections = autocorrect_runbook_fences(content)
     for fix in corrections:
         console.print(f"[dim]🔧 Auto-fixed: {fix}[/dim]")
-    # Post-generation S/R validation: auto-correct hallucinated SEARCH text
-    # (Layer 1 prevents most hallucinations; Layer 2 AI-reanchors the rest)
-    content, sr_total, sr_corrected = validate_and_correct_sr_blocks(content, threshold=0.80)
-    if sr_total > 0:
-        console.print(
-            f"[dim]🔍 S/R validation: {sr_total} block(s) checked, "
-            f"{sr_corrected} auto-corrected[/dim]"
-        )
 
     # Layer 3 hard gate: if unfixable S/R blocks remain, refuse to write.
     # Import here to avoid circular dependency.
@@ -188,20 +206,6 @@ def _write_and_sync(
         runbook_file.write_text(content)
         console.print(f"[yellow]⚠️  Runbook written to {runbook_file} (lint errors present — review required)[/yellow]")
         raise typer.Exit(code=1)
-
-    # ── In-memory normalization (before write) ───────────────────────────────
-    # Collapse 3+ consecutive blank lines to max 2 (MD012), preserving code
-    # fences verbatim. Then enforce exactly one trailing newline.
-    import re as _re
-    _fence_split = _re.split(r'(^```[^\n]*\n.*?^```)', content, flags=_re.MULTILINE | _re.DOTALL)
-    normalized_parts = []
-    for part in _fence_split:
-        if part.startswith('```'):
-            normalized_parts.append(part)  # Inside fence — never touch
-        else:
-            normalized_parts.append(_re.sub(r'\n{3,}', '\n\n', part))
-    content = ''.join(normalized_parts)
-    content = content.rstrip('\n') + '\n'
 
     runbook_file.write_text(content)
     console.print(f"[bold green]✅ Runbook generated at: {runbook_file}[/bold green]")

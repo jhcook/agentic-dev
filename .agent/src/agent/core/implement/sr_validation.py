@@ -96,8 +96,16 @@ def validate_and_correct_sr_blocks(
             search_text = match.group(1)
             replace_text = match.group(2)
 
-            if search_text in actual_content:
-                continue  # exact match — no correction needed
+            # Exact line-level match: every search line must match a
+            # corresponding file line exactly (not just as a substring).
+            search_lines_exact = search_text.splitlines()
+            actual_lines_exact = actual_content.splitlines()
+            exact_match = any(
+                actual_lines_exact[s : s + len(search_lines_exact)] == search_lines_exact
+                for s in range(max(1, len(actual_lines_exact) - len(search_lines_exact) + 1))
+            )
+            if exact_match:
+                continue  # genuine line-level match — no correction needed
 
             # Layer 1.5: dedent-normalised match
             # Catches the common case where the AI drops class-level indentation
