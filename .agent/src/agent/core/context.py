@@ -217,6 +217,22 @@ class ContextLoader:
             p = m.group(1).strip()
             _read_and_append(p, config.repo_root / p)
 
+        # ── Pass 1b: Bare backtick filenames (no slash) ───────────────────────
+        # Catches patterns like `runbook_generation.py` that were silently
+        # dropped by Pass 1 (slash required) and Pass 2 (also requires slash).
+        # Relies on resolve_path (rglob) to find the unique file in the repo.
+        bare_pattern = _re.compile(
+            r"`([A-Za-z0-9_\-]+\.(?:py|md|yaml|yml|json|txt|sh))`"
+        )
+        for m in bare_pattern.finditer(story_content):
+            p = m.group(1).strip()
+            if p in seen:
+                continue
+            from agent.core.implement.resolver import resolve_path
+            resolved = resolve_path(p)
+            if resolved is not None:
+                _read_and_append(p, resolved)
+
         # ── Pass 2: Broad regex fallback — paths with at least one '/' ───────
         # Bare names (like ``__init__.py``) are excluded; they are too ambiguous
         # for rglob and are captured only when they appear as part of a full path
@@ -230,6 +246,7 @@ class ContextLoader:
             _read_and_append(p, file_path)
 
         return context
+
 
     def _load_test_impact(self, story_content: str) -> str:
         """Extracts and formats test impact files from the story."""
