@@ -19,6 +19,7 @@ Contains the schema, code, S/R, and DoD gates that run after AI generation,
 plus the retry/correction logic that sends combined fixes back to the AI.
 """
 
+import ast
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -52,6 +53,7 @@ from agent.core.implement.guards import (
     check_impact_analysis_completeness,
     check_adr_refs,
     check_stub_implementations,
+    check_test_imports_resolvable,
 )
 from agent.core.implement.orchestrator import validate_runbook_schema
 from agent.core.implement.parser import detect_malformed_modify_blocks, parse_code_blocks, parse_search_replace_blocks
@@ -61,6 +63,37 @@ logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 console = Console()
 error_console = Console(stderr=True)
+
+
+def _build_runbook_symbol_index(content: str) -> Set[str]:
+    """Extract a set of top-level symbol names from all [NEW] code blocks in the runbook.
+
+    Used by Gate 3.7 to resolve cross-block imports so that a test file importing
+    a class defined earlier in the same runbook does not trigger a false positive.
+
+    Args:
+        content: The raw runbook markdown string.
+
+    Returns:
+        A set of symbol names (class names, function names, variable names) defined
+        in any [NEW] block in the runbook.
+    """
+    import ast as _ast
+
+    symbols: Set[str] = set()
+    for block in parse_code_blocks(content):
+        try:
+            tree = _ast.parse(block.get("content", ""))
+        except SyntaxError:
+            continue
+        for node in _ast.walk(tree):
+            if isinstance(node, (_ast.ClassDef, _ast.FunctionDef, _ast.AsyncFunctionDef)):
+                symbols.add(node.name)
+            elif isinstance(node, _ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, _ast.Name):
+                        symbols.add(t.id)
+    return symbols
 
 
 def run_generation_gates(
@@ -177,6 +210,30 @@ def run_generation_gates(
             if syntax_err:
                 correction_parts.append(syntax_err)
         syn_span.set_attribute("gate35.corrections", len(correction_parts))
+
+    # Gate 3.7: Test Import Resolution Guard (INFRA-178)
+    with tracer.start_as_current_span("import_resolution_gate") as import_span:
+        import_span.set_attribute("story_id", story_id)
+        session_symbols = _build_runbook_symbol_index(content)
+        new_blocks = [(b["file"], b["content"]) for b in parse_code_blocks(content)]
+        test_block_count = sum(1 for f, _ in new_blocks if "test" in f or Path(f).name.startswith("test_"))
+        import_span.set_attribute("gate37.test_block_count", test_block_count)
+        for file_path, block_content in new_blocks:
+            import_err = check_test_imports_resolvable(
+                Path(file_path), block_content, session_symbols
+            )
+            if import_err:
+                lookup_key = "IMPORT RESOLUTION FAILURE"
+                correction_parts.append(
+                    f"{lookup_key}\n"
+                    f"Gate 3.7 detected unresolvable imports in `{file_path}`:\n"
+                    f"{import_err}\n"
+                    "Ensure every symbol imported in test files is either:\n"
+                    "  a) A Python standard library module\n"
+                    "  b) An installed package (present in the environment)\n"
+                    "  c) Defined in a #### [NEW] block earlier in THIS runbook"
+                )
+        import_span.set_attribute("gate37.corrections", len(correction_parts))
 
     if code_errors:
         logger.warning("runbook_code_gate_fail", extra={"attempt": attempt, "story_id": story_id, "errors": code_errors})

@@ -106,13 +106,24 @@ def pr(
             console.print(f"[bold blue]🕵️ Running preflight checks for {story_id} (against {target_branch})...[/bold blue]")
             try:
                  preflight(
-                     story_id=story_id, 
-                     base=target_branch, 
-                     offline=True, 
-                     provider=provider, 
+                     story_id=story_id,
+                     base=target_branch,
+                     offline=True,
+                     provider=provider,
                      report_file=None,
                      skip_tests=False,
-                     ignore_tests=False
+                     ignore_tests=False,
+                     # Explicitly pass all remaining params with real Python defaults
+                     # to avoid typer OptionInfo objects leaking through when called
+                     # programmatically rather than via the CLI.
+                     interactive=False,
+                     autoheal=False,
+                     budget=3,
+                     panel_engine=None,
+                     thorough=True,
+                     quick=False,
+                     legacy_context=False,
+                     gate=None,
                  )
             except typer.Exit as e:
                 if e.exit_code != 0:
