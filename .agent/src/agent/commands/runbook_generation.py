@@ -1340,6 +1340,39 @@ def generate_runbook_chunked(
             extra={"error": str(_sr_err), "traceback": _tb.format_exc(), "story_id": story_id},
         )
 
+    # INFRA-182: Final generation-time SEARCH block verbatim verification.
+    # Runs after all markdown normalization so we operate on the final text.
+    # Reads each [MODIFY] target from disk (repo_root) and replaces any
+    # approximate AI-generated SEARCH text with the verbatim file content.
+    # This is the definitive fix for the recurring S/R failure pattern.
+    try:
+        from agent.core.implement.sr_validation import (
+            validate_and_correct_sr_blocks as _sr_validate_final,
+        )
+        _repo_root = config.repo_root if hasattr(config, "repo_root") else repo_root
+        assembled_content, _final_total, _final_fixed = _sr_validate_final(
+            assembled_content, repo_root=_repo_root
+        )
+        if _final_total > 0:
+            logger.info(
+                "sr_final_pass_complete",
+                extra={
+                    "total_blocks": _final_total,
+                    "corrected": _final_fixed,
+                    "story_id": story_id,
+                },
+            )
+            if _final_fixed:
+                _console.print(
+                    f"[green]✅ Generation-time S/R verification: "
+                    f"{_final_fixed}/{_final_total} block(s) corrected to verbatim.[/green]"
+                )
+    except Exception as _sr_err:
+        logger.warning(
+            "sr_final_pass_error",
+            extra={"error": str(_sr_err), "story_id": story_id},
+        )
+
     if tracker is not None:
         tracker.print_summary()
 
