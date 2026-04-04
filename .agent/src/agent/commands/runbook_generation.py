@@ -931,9 +931,10 @@ def generate_runbook_chunked(
 
         if not inputs: return []
         task_exe = TaskExecutor(max_concurrency=3)
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console, transient=True) as prog:
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console, transient=False) as prog:
             pbar = prog.add_task(f"[bold blue]⚡ {pass_name}: Generating {len(inputs)} blocks...", total=len(inputs))
             return await task_exe.run_parallel([(lambda s=step, p=prompt: _gen(s, p)) for step, _, prompt, _ in inputs], on_progress=lambda _: prog.advance(pbar))
+
 
     pass_1_inputs = [i for i in section_inputs if not _is_verification_section(i[1])]
     pass_2_inputs = [i for i in section_inputs if _is_verification_section(i[1])]
@@ -982,10 +983,10 @@ def generate_runbook_chunked(
                 else:
                     logger.error("block_parallel_generation_failed", extra={"index": _r["index"], "error": _r.get("error", "")})
 
-    # ─────────────────────────────────────────────────────────────────────
     # Phase 2c: Sequential assembly — parse, clean, dedup, checkpoint
     # Results are processed in section order for deterministic output.
     # ─────────────────────────────────────────────────────────────────────
+    total_blocks = len(skeleton.sections)
     for i, section, _prompt, modify_contents in section_inputs:
         with tracer.start_as_current_span("runbook.block_assembly") as bspan:
             bspan.set_attribute("section_index", i)
@@ -993,7 +994,7 @@ def generate_runbook_chunked(
 
             console.print(
                 f"[bold green]🔵 Phase 2c: Assembling Block "
-                f"{i}/{len(skeleton.sections)}: {section.title}...[/bold green]"
+                f"{i}/{total_blocks}: {section.title}...[/bold green]"
             )
 
             if i not in raw_by_step:
