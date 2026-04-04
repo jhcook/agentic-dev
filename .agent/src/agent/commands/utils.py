@@ -332,7 +332,17 @@ def _sr_check_replace_syntax(
     """AC-1: Check that applying the REPLACE produces valid Python syntax.
 
     Only called for .py files. Operates entirely in-memory.
+
+    Empty search_text is treated as a malformed block and skipped — calling
+    str.replace("", x, 1) would prepend x to the entire file, producing
+    meaningless AST output and false syntax advisories.
     """
+    if not search_text.strip():
+        logger.warning(
+            "sr_replace_malformed_empty_search",
+            extra={"hint": "SEARCH block is empty — skipping syntax check"},
+        )
+        return None
     projected = file_text.replace(search_text, replace_text, 1)
     if len(projected.encode("utf-8")) > _SR_MAX_FILE_BYTES:
         return None  # Too large to parse safely — skip silently
