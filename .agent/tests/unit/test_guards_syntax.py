@@ -87,7 +87,7 @@ def test_check_projected_syntax_catches_syntax_error(mock_vi, tmp_path):
 
 
 @_BYPASS_PATH_CHECK
-@patch("agent.core.implement.guards.logger")
+@patch("agent.core.implement.guards_apply.logger")
 def test_check_projected_syntax_emits_telemetry(mock_logger, mock_vi, tmp_path):
     """Verify that SyntaxError triggers a structured warning log event."""
     file_path = tmp_path / "fail.py"
