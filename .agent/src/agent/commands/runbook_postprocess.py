@@ -369,7 +369,10 @@ def _autocorrect_schema_violations(content: str) -> str:
                 "schema_autocorrect_empty_modify_stripped",
                 extra={"snippet": m.group(0)[:80]},
             )
-            return ""
+            # Preserve block content — stripping causes massive content loss
+            # when the AI uses non-standard S/R formatting.  The S/R
+            # validator downstream will flag it if it matters.
+            return m.group(0)
         return m.group(0)
 
     content = re.sub(

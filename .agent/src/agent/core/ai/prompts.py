@@ -198,6 +198,10 @@ Ensure all generated tests exactly match the logic, classes, and APIs within thi
             'Return ONLY a JSON object with this structure (no markdown fences, no prose):\n'
             '{\n'
             '  "header": "' + section_title + '",\n'
+            '  "narrative": "Architectural analysis, design rationale, ADR alignment, '
+            'rollback strategy, or other prose that belongs BEFORE the file ops. '
+            'Use markdown formatting (bold, lists, etc). This is REQUIRED for '
+            'Architecture & Design Review and Deployment & Rollback Strategy sections.",\n'
             '  "ops": [\n'
             '    {"op": "new",    "file": "repo-relative-path", "content": "full raw file content — NO markdown fences, raw code only"},\n'
             '    {"op": "modify", "file": "repo-relative-path", "replace": "new code — MUST include 1-2 unchanged lines from the file before/after your changes as context"},\n'
@@ -211,7 +215,9 @@ Ensure all generated tests exactly match the logic, classes, and APIs within thi
             '- For "modify": do NOT include a "search" field — it is derived automatically from the actual file.\n'
             '  Instead, include 1-2 unchanged lines from the file at the TOP and BOTTOM of your "replace" value\n'
             '  so the pipeline can locate exactly where to apply the change.\n'
-            '- Narrative prose and troubleshooting notes go in a top-level "narrative" string field (optional).'
+            '- "narrative" is MANDATORY for Architecture/Design and Deployment/Rollback sections.\n'
+            '  It should contain design principles, ADR alignment analysis, key architectural\n'
+            '  decisions, threshold standards, rollback procedures, and CI/CD integration notes.'
         )
 
     prompt = f"""

@@ -38,10 +38,16 @@ def test_resolve_path_fuzzy_match_non_trusted_ac2():
         with patch("agent.core.implement.resolver.logging") as mock_logging:
             result = resolve_path(path)
             assert result == config.repo_root / expected
-            mock_logging.warning.assert_called_once()
-            _, kwargs = mock_logging.warning.call_args
-            assert kwargs["extra"]["original_path"] == path
-            assert kwargs["extra"]["resolved_path"] == expected
+            mock_logging.debug.assert_called()
+            # Find the call that has our path info in extra
+            found = False
+            for call_args in mock_logging.debug.call_args_list:
+                _, kwargs = call_args
+                if kwargs.get("extra", {}).get("original_path") == path:
+                    assert kwargs["extra"]["resolved_path"] == expected
+                    found = True
+                    break
+            assert found, "Expected debug log with original_path and resolved_path"
 
 def test_resolve_path_no_match_ac2():
     """Ensure non-trusted paths with no match are returned anchored to repo_root."""

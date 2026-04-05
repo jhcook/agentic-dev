@@ -123,6 +123,16 @@ def _assemble_block_from_json(
     }
 
     parts: List[str] = []
+
+    # Emit narrative prose before file ops (Architecture & Design Review, etc.)
+    narrative = getattr(block, "narrative", None) or ""
+    if not narrative and block.raw_json:
+        # Also check the raw parsed JSON for a top-level "narrative" field
+        narrative = block.raw_json.get("narrative", "")
+    if narrative and narrative.strip():
+        parts.append(narrative.strip())
+        parts.append("")  # blank line before ops
+
     for op in block.ops:
         action = str(op.get("op", "modify")).upper()
         path = op.get("file", "unknown")
@@ -203,3 +213,31 @@ def _ensure_new_blocks_fenced(content: str) -> str:
                 parts[idx + 1] = f"\n```{lang}\n{body_stripped}\n```\n"
     return "".join(result)
 
+
+def build_template_footer(story_id: str) -> str:
+    """Return the standard runbook footer sections.
+
+    The monolithic generation path injects these from the template file.
+    The chunked path calls this helper so the output matches.
+    """
+    from agent.core.utils import get_copyright_header
+
+    return (
+        "## Verification Plan\n\n"
+        "### Automated Tests\n\n"
+        "- [ ] All existing tests pass (`pytest`)\n"
+        "- [ ] New tests pass for each new public interface\n\n"
+        "### Manual Verification\n\n"
+        f"- [ ] `agent preflight --story {story_id}` passes\n\n"
+        "## Definition of Done\n\n"
+        "### Documentation\n\n"
+        "- [ ] CHANGELOG.md updated\n"
+        "- [ ] Story `## Impact Analysis Summary` updated to list every touched file\n\n"
+        "### Observability\n\n"
+        "- [ ] Logs are structured and free of PII\n\n"
+        "### Testing\n\n"
+        "- [ ] All existing tests pass\n"
+        "- [ ] New tests added for each new public interface\n\n"
+        "## Copyright\n\n"
+        + get_copyright_header() + "\n"
+    )

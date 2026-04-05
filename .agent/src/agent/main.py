@@ -182,6 +182,48 @@ app.command("new-plan")(plan.new_plan)
 app.command("apply-license")(license_cmd.apply_license)
 
 
+def _assert_env() -> None:
+    """Fail fast if critical runtime dependencies are missing.
+
+    This catches the class of bugs where a package is missing from the active
+    environment and causes silent downstream failures (caught exceptions,
+    degraded behaviour, wrong log levels) rather than an obvious crash.
+
+    Add entries here whenever a new hard dependency is introduced that is
+    imported lazily or inside a try/except in production code paths.
+    """
+    import sys
+
+    REQUIRED: list[tuple[str, str]] = [
+        # (import_name, pip_name)
+        # Only list packages that are:
+        #  a) imported in hot production code paths (not try/except-guarded), AND
+        #  b) not in the standard library.
+        ("mistune", "mistune"),          # runbook S/R post-processing
+        ("rich", "rich"),                # all console output
+        ("typer", "typer"),              # CLI layer
+        ("google.genai", "google-genai"),  # primary LLM backend (new SDK)
+        ("pydantic", "pydantic"),        # model validation everywhere
+        ("yaml", "pyyaml"),              # config + story parsing
+    ]
+
+    missing: list[str] = []
+    for import_name, pip_name in REQUIRED:
+        try:
+            __import__(import_name)
+        except ImportError:
+            pkg = pip_name or import_name
+            missing.append(pkg)
+
+    if missing:
+        typer.echo("❌ Environment check failed — missing required packages:", err=True)
+        for pkg in missing:
+            typer.echo(f"   pip install {pkg}", err=True)
+        typer.echo("", err=True)
+        typer.echo("   Are you running inside the project venv?  source .venv/bin/activate", err=True)
+        sys.exit(1)
+
+
 def main() -> None:
     """CLI entry point with top-level exception handling.
 
@@ -190,6 +232,7 @@ def main() -> None:
     Pass ``-v`` or set ``AGENT_VERBOSE=1`` to see the full traceback.
     """
     import sys as _sys
+    _assert_env()
     try:
         app()
     except SystemExit:

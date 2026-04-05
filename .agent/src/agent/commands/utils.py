@@ -425,7 +425,7 @@ def _sr_check_replace_imports(
                 unresolved.append(f"{module}.{sym}")
 
     if unresolved:
-        logger.warning("sr_replace_import_fail", extra={"symbols": unresolved})
+        logger.debug("sr_replace_import_fail", extra={"symbols": unresolved})
         return (
             f"Gate REPLACE-imports: REPLACE introduces unresolvable import(s): "
             f"{', '.join(unresolved)}. Verify the symbols exist or are created in another block."

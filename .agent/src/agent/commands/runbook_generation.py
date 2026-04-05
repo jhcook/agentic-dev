@@ -86,6 +86,7 @@ class GenerationBlock:
     header: str
     content: str = ""
     ops: List[Dict[str, Any]] = field(default_factory=list)
+    raw_json: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GenerationBlock":
@@ -97,10 +98,11 @@ class GenerationBlock:
         header = data.get("header", data.get("title", "Untitled"))
         ops = data.get("ops", [])
         if ops and isinstance(ops, list):
-            return cls(header=header, ops=_sanitize_json_values(ops))
+            return cls(header=header, ops=_sanitize_json_values(ops), raw_json=data)
         return cls(
             header=header,
             content=data.get("content", data.get("body", "")),
+            raw_json=data,
         )
 
 
@@ -209,6 +211,7 @@ from agent.commands.runbook_assembler import (  # noqa: E402,F401
     _derive_search_from_file,
     _assemble_block_from_json,
     _ensure_new_blocks_fenced,
+    build_template_footer,
 )
 
 
@@ -972,6 +975,9 @@ def generate_runbook_chunked(
             "sr_final_pass_error",
             extra={"error": str(_sr_err), "traceback": _tb.format_exc(), "story_id": story_id},
         )
+
+    # ── Append template footer sections ──────────────────────────────────────
+    assembled_content += build_template_footer(story_id)
 
     if tracker is not None:
         tracker.print_summary()
