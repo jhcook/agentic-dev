@@ -100,6 +100,12 @@ PROVIDERS = {
         "secret_key": None,
         "env_var": "GOOGLE_CLOUD_PROJECT",
     },
+    "claude": {
+        "name": "Claude (Settings/Bedrock)",
+        "service": "claude",
+        "secret_key": None,
+        "env_var": "ANTHROPIC_API_KEY",
+    },
 }
 
 
@@ -122,6 +128,7 @@ class AIService:
             'openai': os.getenv("OPENAI_MODEL", "gpt-4o"),
             'anthropic': 'claude-sonnet-4-5-20250929',
             'vertex-anthropic': 'claude-sonnet-4-5-20250929',
+            'claude': 'claude-sonnet-4-5-20250929',
             'ollama': os.getenv("OLLAMA_MODEL", "llama3"),
         }
         
@@ -513,7 +520,7 @@ class AIService:
         # Chain order: gemini -> vertex -> openai -> anthropic -> vertex-anthropic -> ollama -> gh
         # gh is last: free-tier rate limits make it an absolute last resort
         # (context limits are handled by chunking, not provider selection)
-        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'vertex-anthropic', 'ollama', 'gh']
+        fallback_chain = ['gemini', 'vertex', 'openai', 'anthropic', 'claude', 'vertex-anthropic', 'ollama', 'gh']
         
         current_idx = -1
         try:

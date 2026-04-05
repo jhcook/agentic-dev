@@ -369,10 +369,13 @@ def _autocorrect_schema_violations(content: str) -> str:
                 "schema_autocorrect_empty_modify_stripped",
                 extra={"snippet": m.group(0)[:80]},
             )
-            # Preserve block content — stripping causes massive content loss
-            # when the AI uses non-standard S/R formatting.  The S/R
-            # validator downstream will flag it if it matters.
-            return m.group(0)
+            # Extract path for the comment so developers can trace what was removed
+            path_match = re.search(r"#### \[MODIFY\] (.+?)$", m.group(0), re.MULTILINE)
+            path_hint = path_match.group(1).strip() if path_match else "unknown"
+            return (
+                f"<!-- schema-autocorrect: removed empty MODIFY block for "
+                f"{path_hint} (no SEARCH/REPLACE content) -->\n\n"
+            )
         return m.group(0)
 
     content = re.sub(

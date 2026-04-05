@@ -630,8 +630,10 @@ def _extract_runbook_data_ast(content: str) -> List[RunbookStepDict]:
     elif not in_impl_steps:
         raise ValueError("Missing '## Implementation Steps' section — runbook has no executable steps.")
 
-    # Validation: Flag (but don't crash on) malformed blocks so downstream
-    # consumers can handle them as correctable gate findings.
+    # Validation: Flag malformed blocks so downstream consumers can handle them.
+    # MODIFY blocks with no S/R content are common in AI-generation paths where
+    # the header is just an instruction for the AI. extract_modify_files needs them.
+    # validate_runbook_schema filters them out before Pydantic validation.
     for step in steps:
         for op in step["operations"]:
             if op.get("action") == "MODIFY" and not op.get("blocks"):
@@ -819,6 +821,25 @@ def validate_runbook_schema(content: str) -> List[str]:
     with span_ctx as span:
         try:
             step_data = _extract_runbook_data(content)
+            # Defense-in-depth: record malformed ops as violations AND filter
+            # them before Pydantic validation. This reports what's wrong
+            # without letting empty blocks crash the Pydantic min_length check.
+            for step in step_data:
+                for op in step.get("operations", []):
+                    if op.get("malformed"):
+                        path = op.get("path", "unknown")
+                        if "blocks" in op:
+                            violations.append(
+                                f"[MODIFY {path}]: no SEARCH/REPLACE blocks found"
+                            )
+                        elif "content" in op:
+                            violations.append(
+                                f"[NEW {path}]: no code block content found"
+                            )
+                step["operations"] = [
+                    op for op in step.get("operations", [])
+                    if not op.get("malformed", False)
+                ]
             RunbookSchema(steps=step_data)
         except ValidationError as exc:
             for error in exc.errors():
