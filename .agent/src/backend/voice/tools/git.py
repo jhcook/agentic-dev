@@ -15,16 +15,20 @@
 import subprocess
 import json
 import logging
+from pathlib import Path
 from backend.voice.events import EventBus
-from agent.core.config import config as agent_config
 from agent.core.execution_context import get_session_id
+from agent.core.utils import sanitize_id
 
 logger = logging.getLogger(__name__)
 
-def get_git_status() -> str:
+def get_git_status(repo_root: Path) -> str:
     """
     Get the current git status of the repository, categorized by Staged and Unstaged changes.
     Useful for checking what is ready to commit vs what is work in progress.
+
+    Args:
+        repo_root: Root path of the repository.
     """
     session_id = get_session_id()  # ADR-100
     try:
@@ -33,7 +37,7 @@ def get_git_status() -> str:
             capture_output=True, 
             text=True, 
             check=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         
         status_data = {
@@ -80,10 +84,13 @@ def get_git_status() -> str:
     except subprocess.CalledProcessError as e:
         return json.dumps({"error": str(e)})
 
-def get_git_diff() -> str:
+def get_git_diff(repo_root: Path) -> str:
     """
     Get the staged git diff.
     Use this during preflight checks to see what is about to be committed.
+
+    Args:
+        repo_root: Root path of the repository.
     """
     session_id = get_session_id()  # ADR-100
     try:
@@ -92,7 +99,7 @@ def get_git_diff() -> str:
             capture_output=True, 
             text=True, 
             check=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         if not result.stdout:
             return "No staged changes."
@@ -108,11 +115,13 @@ def get_git_diff() -> str:
     except subprocess.CalledProcessError as e:
         return f"Error checking git diff: {e}"
 
-def get_git_log(limit: int = 5) -> str:
+def get_git_log(repo_root: Path, limit: int = 5) -> str:
     """
     Get the recent git log history.
+
     Args:
-        limit: Number of commits to show (default: 5)
+        repo_root: Root path of the repository.
+        limit: Number of commits to show (default: 5).
     """
     try:
         result = subprocess.run(
@@ -120,15 +129,19 @@ def get_git_log(limit: int = 5) -> str:
             capture_output=True, 
             text=True, 
             check=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
         return f"Error getting git log: {e}"
-def get_git_branch() -> str:
+
+def get_git_branch(repo_root: Path) -> str:
     """
     Get the current active git branch name.
     Useful for inferring the current story or task context.
+
+    Args:
+        repo_root: Root path of the repository.
     """
     try:
         result = subprocess.run(
@@ -136,7 +149,7 @@ def get_git_branch() -> str:
             capture_output=True, 
             text=True, 
             check=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         branch_name = result.stdout.strip() or "HEAD (detached)"
         logger.info(f"Tool get_git_branch returned: {branch_name}")
@@ -145,10 +158,12 @@ def get_git_branch() -> str:
         logger.error(f"Tool get_git_branch failed: {e}")
         return f"Error getting git branch: {e}"
 
-def git_stage_changes(files: list[str] = None) -> str:
+def git_stage_changes(repo_root: Path, files: list[str] = None) -> str:
     """
     Stage files for commit.
+
     Args:
+        repo_root: Root path of the repository.
         files: List of file paths to stage. Defaults to ["."] (all changes).
     """
     targets = files if files else ["."]
@@ -160,7 +175,7 @@ def git_stage_changes(files: list[str] = None) -> str:
             capture_output=True,
             text=True,
             check=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         
         # Summarize for voice
@@ -174,11 +189,13 @@ def git_stage_changes(files: list[str] = None) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error staging changes: {e}"
 
-def run_commit(message: str = None, story_id: str = None) -> str:
+def run_commit(repo_root: Path, message: str = None, story_id: str = None) -> str:
     """
     Commit staged changes to the repository.
     If no message is provided, AI generation will be used.
+
     Args:
+        repo_root: Root path of the repository.
         message: Optional commit message.
         story_id: Optional story ID (e.g., INFRA-042) to link the commit to.
     """
@@ -192,7 +209,8 @@ def run_commit(message: str = None, story_id: str = None) -> str:
         cmd_parts = [base_cmd]
         
         if story_id:
-            cmd_parts.append(f"--story {story_id}")
+            clean_id = sanitize_id(story_id)
+            cmd_parts.append(f"--story {clean_id}")
             
         if message:
             # Escape quotes in message
@@ -212,7 +230,7 @@ def run_commit(message: str = None, story_id: str = None) -> str:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         
         output_buffer = []
@@ -232,7 +250,7 @@ def run_commit(message: str = None, story_id: str = None) -> str:
                 capture_output=True,
                 text=True,
                 check=False,
-                cwd=str(agent_config.repo_root)
+                cwd=str(repo_root)
             )
             return f"Commit successful.\n\n{log_result.stdout}"
         else:
@@ -241,10 +259,15 @@ def run_commit(message: str = None, story_id: str = None) -> str:
     except Exception as e:
         return f"Failed to run commit: {e}"
 
-def run_pr(story_id: str = None, draft: bool = False) -> str:
+def run_pr(repo_root: Path, story_id: str = None, draft: bool = False) -> str:
     """
     Create a GitHub Pull Request for the current branch/story.
     Runs preflight checks automatically before creating the PR.
+
+    Args:
+        repo_root: Root path of the repository.
+        story_id: Optional story ID (e.g., INFRA-042) to link the PR to.
+        draft: If True, create a draft PR.
     """
     session_id = get_session_id()  # ADR-100
     import time as _time
@@ -254,7 +277,7 @@ def run_pr(story_id: str = None, draft: bool = False) -> str:
     
     try:
         # 1. Ensure branch is pushed
-        push_result = git_push_branch()
+        push_result = git_push_branch(repo_root=repo_root)
         if "Error" in push_result or "Failed" in push_result:
             EventBus.publish(session_id, "console", f"⚠️  Push Result: {push_result}\nContinuing with PR...\n")
         else:
@@ -282,7 +305,7 @@ def run_pr(story_id: str = None, draft: bool = False) -> str:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         
         # Register for interaction (e.g. preflight prompts)
@@ -330,10 +353,13 @@ def run_pr(story_id: str = None, draft: bool = False) -> str:
     except Exception as e:
         return f"Failed to start PR creation: {e}"
 
-def git_push_branch() -> str:
+def git_push_branch(repo_root: Path) -> str:
     """
     Push the current branch to origin.
     Automatically handles setting the upstream branch if it's missing.
+
+    Args:
+        repo_root: Root path of the repository.
     """
     session_id = get_session_id()  # ADR-100
     EventBus.publish(session_id, "console", "> Pushing to origin...\n")
@@ -345,7 +371,7 @@ def git_push_branch() -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         stdout, stderr = process.communicate()
         
@@ -362,7 +388,7 @@ def git_push_branch() -> str:
             branch_proc = subprocess.run(
                 ["git", "branch", "--show-current"], 
                 capture_output=True, text=True, check=True,
-                cwd=str(agent_config.repo_root)
+                cwd=str(repo_root)
             )
             current_branch = branch_proc.stdout.strip()
             
@@ -373,7 +399,7 @@ def git_push_branch() -> str:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=str(agent_config.repo_root)
+                cwd=str(repo_root)
             )
             out, err = retry_proc.communicate()
             

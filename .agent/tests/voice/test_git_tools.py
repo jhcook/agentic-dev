@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import pytest
+from pathlib import Path
 from unittest.mock import patch
 from backend.voice.tools.git import git_stage_changes
+
+MOCK_REPO = Path("/mock/root")
 
 @pytest.fixture(autouse=True)
 def mock_otel():
@@ -22,13 +25,10 @@ def mock_otel():
         yield mock_logger
 
 def test_git_stage_all():
-    with patch("subprocess.run") as mock_run, \
-         patch("backend.voice.tools.git.agent_config") as mock_config:
-        
-        mock_config.repo_root = "/mock/root"
+    with patch("subprocess.run") as mock_run:
         mock_run.return_value.stdout = ""
         
-        result = git_stage_changes.invoke(input={"files": ["."]})
+        result = git_stage_changes(repo_root=MOCK_REPO, files=["."])
         
         assert "Staged all changes" in result
         mock_run.assert_called_with(
@@ -36,17 +36,14 @@ def test_git_stage_all():
             capture_output=True, 
             text=True, 
             check=True,
-            cwd="/mock/root"
+            cwd=str(MOCK_REPO)
         )
 
 def test_git_stage_specific_file():
-    with patch("subprocess.run") as mock_run, \
-         patch("backend.voice.tools.git.agent_config") as mock_config:
-         
-        mock_config.repo_root = "/mock/root"
+    with patch("subprocess.run") as mock_run:
         mock_run.return_value.stdout = ""
         
-        result = git_stage_changes.invoke(input={"files": ["file1.py", "file2.py"]})
+        result = git_stage_changes(repo_root=MOCK_REPO, files=["file1.py", "file2.py"])
         
         assert "Staged: file1.py, file2.py" in result
         mock_run.assert_called_with(
@@ -54,5 +51,5 @@ def test_git_stage_specific_file():
             capture_output=True, 
             text=True, 
             check=True,
-            cwd="/mock/root"
+            cwd=str(MOCK_REPO)
         )

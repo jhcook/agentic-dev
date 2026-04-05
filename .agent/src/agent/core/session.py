@@ -21,7 +21,6 @@ and the underlying AI provider.
 
 import json
 import logging
-import time
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 from opentelemetry import trace
@@ -41,7 +40,8 @@ class AgentSession:
         provider: AIProvider,
         system_prompt: str,
         tools: List[Dict[str, Any]],
-        tool_handlers: Dict[str, Callable]
+        tool_handlers: Dict[str, Callable],
+        session_id: str = "",
     ):
         """
         Initialize the session.
@@ -51,17 +51,20 @@ class AgentSession:
             system_prompt: The system prompt defining the agent's persona.
             tools: JSON Schema definitions of available tools.
             tool_handlers: Dictionary mapping tool names to callable functions.
+            session_id: Optional session identifier for audit correlation.
         """
         self.provider = provider
         self.system_prompt = system_prompt
         self.tools = tools
         self.tool_handlers = tool_handlers
+        self.session_id = session_id
         self.history: List[Dict[str, Any]] = []
 
     def _dispatch_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> str:
         """Dispatch a single tool call with an OpenTelemetry span (AC-7).
 
         Emits structured log events on success and failure for ADR-046 compliance.
+        Uses the canonical ``track_tool_usage`` context manager from tool_security.
         """
         handler = self.tool_handlers.get(tool_name)
         if handler is None:
@@ -71,29 +74,15 @@ class AgentSession:
             )
             return f"[Error: unknown tool '{tool_name}']"
 
-        with tracer.start_as_current_span(f"tool.{tool_name}") as span:
-            span.set_attribute("tool.name", tool_name)
-            span.set_attribute("tool.args", json.dumps(tool_args, default=str))
-            start = time.monotonic()
-            try:
+        from agent.core.adk.tool_security import track_tool_usage
+
+        try:
+            with track_tool_usage(tool_name, session_id=self.session_id) as span:
+                span.set_attribute("tool.args", json.dumps(tool_args, default=str))
                 result = handler(**tool_args)
-                elapsed_ms = (time.monotonic() - start) * 1000
-                span.set_attribute("tool.success", True)
-                span.set_attribute("tool.duration_ms", round(elapsed_ms, 2))
-                logger.info(
-                    "tool_dispatch_success",
-                    extra={"tool": tool_name, "duration_ms": round(elapsed_ms, 2)},
-                )
                 return str(result) if result is not None else ""
-            except Exception as exc:
-                elapsed_ms = (time.monotonic() - start) * 1000
-                span.record_exception(exc)
-                span.set_attribute("tool.success", False)
-                logger.error(
-                    "tool_dispatch_error",
-                    extra={"tool": tool_name, "error": str(exc), "duration_ms": round(elapsed_ms, 2)},
-                )
-                return f"[Tool error: {exc}]"
+        except Exception as exc:
+            return f"[Tool error: {exc}]"
 
     async def stream_interaction(self, user_prompt: str) -> AsyncGenerator[str, None]:
         """Stream the agent's response, handling intermediate tool calls.

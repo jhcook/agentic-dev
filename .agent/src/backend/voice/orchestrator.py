@@ -266,7 +266,8 @@ class VoiceOrchestrator:
             provider=provider,
             system_prompt=VOICE_SYSTEM_PROMPT,
             tools=tools_schema,
-            tool_handlers=tool_handlers
+            tool_handlers=tool_handlers,
+            session_id=self.session_id,
         )
         
         # Injected dependencies

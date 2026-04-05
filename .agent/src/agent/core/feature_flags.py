@@ -16,15 +16,19 @@
 
 import os
 
+# USE_UNIFIED_REGISTRY flag retired as part of INFRA-183 cutover.
+# The unified tool registry is now the mandatory canonical path.
+# This function is preserved for API compatibility but always returns True.
+
 def use_unified_registry() -> bool:
     """
     Check if the unified tool registry should be used.
 
-    This function reads the USE_UNIFIED_REGISTRY environment variable.
-    It defaults to True, enabling the unified registry pattern introduced in INFRA-145.
-    Setting this to 'false' allows the system to fall back to legacy direct tool instantiation.
+    .. deprecated:: INFRA-183
+        The unified registry is now mandatory. This function always returns True.
+        The USE_UNIFIED_REGISTRY environment variable is no longer honored.
 
     Returns:
-        bool: True if the unified registry is enabled, False otherwise.
+        bool: Always True.
     """
-    return os.getenv("USE_UNIFIED_REGISTRY", "true").lower() == "true"
+    return True

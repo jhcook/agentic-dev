@@ -13,17 +13,18 @@
 # limitations under the License.
 
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from backend.voice.tools.fix_story import interactive_fix_story
 
+MOCK_REPO = Path("/mock/repo")
+
 @pytest.fixture
-def mock_deps():
-    # Only mock external IO (subprocess, config, AI)
-    # We use the REAL InteractiveFixer to test integration
-    
+def mock_deps(tmp_path):
+    """Set up mocks for fix_story tests using repo_root parameter."""
+
     with patch('backend.voice.tools.fix_story.subprocess.Popen') as mock_popen, \
          patch('backend.voice.tools.fix_story.EventBus') as mock_bus, \
-         patch('backend.voice.tools.fix_story.agent_config') as mock_config, \
          patch('agent.core.fixer.ai_service') as mock_ai, \
          patch('agent.core.fixer.Path') as mock_path_cls, \
          patch('agent.core.fixer.shutil') as mock_shutil, \
@@ -31,19 +32,16 @@ def mock_deps():
          patch('agent.core.fixer.os') as mock_os:
         
         # Bypass security check by mocking Path in fixer module only
-        # We need Path.cwd().resolve() to match Path(file).resolve() prefix
-        
         mock_cwd_path = MagicMock()
         mock_cwd_path.__str__.return_value = "/mock/repo"
         mock_cwd_path.resolve.return_value = mock_cwd_path
         
         mock_file_path = MagicMock()
         mock_file_path.__str__.return_value = "/mock/repo/WEB-001.md"
-        mock_file_path.read_text.return_value = "Old Content" # Default
+        mock_file_path.read_text.return_value = "Old Content"
         mock_file_path.resolve.return_value = mock_file_path
         mock_file_path.exists.return_value = True
         
-        # Configure Path class mock
         def path_side_effect(*args, **kwargs):
             if not args:
                  return MagicMock()
@@ -55,47 +53,44 @@ def mock_deps():
         mock_path_cls.side_effect = path_side_effect
         mock_path_cls.cwd.return_value = mock_cwd_path
         
-        # Mock tempfile
         mock_tempfile.mkstemp.return_value = (123, "/tmp/backup")
-        
-        # Mock os
         mock_os.path.commonpath.return_value = "/mock/repo"
         
-        # KEY FIX: subprocess.Popen(cwd=str(repo_root)) needs a string that isn't a MagicMock repr
-        mock_config.repo_root.__str__.return_value = "/mock/repo"
+        # Create a mock stories_dir with rglob
+        stories_dir = MOCK_REPO / ".agent" / "cache" / "stories"
         
-        yield mock_popen, mock_bus, mock_config, mock_ai
+        yield mock_popen, mock_bus, mock_ai, stories_dir
 
-def test_analyze_mode_integration(mock_deps):
+@pytest.fixture
+def mock_session():
+    with patch('backend.voice.tools.fix_story.get_session_id', return_value='s1'):
+        yield
+
+def test_analyze_mode_integration(mock_deps, mock_session, tmp_path):
     """Test full flow from tool -> fixer -> options (using mocked AI)."""
-    mock_popen, mock_bus, mock_config, mock_ai = mock_deps
+    mock_popen, mock_bus, mock_ai, stories_dir = mock_deps
     
     # 1. Validation fails
-    # Configure the Popen instance
     process_mock = mock_popen.return_value
     process_mock.returncode = 1
     process_mock.communicate.return_value = ("Missing sections: Problem Statement", "")
     
-    # 2. File exists
+    # 2. File exists - mock the rglob on the stories_dir path
     mock_path = MagicMock()
     mock_path.name = "WEB-001-story.md"
-    mock_config.stories_dir.rglob.return_value = [mock_path]
+    with patch.object(Path, 'rglob', return_value=[mock_path]):
+        # 3. AI Returns Valid JSON
+        mock_ai.get_completion.return_value = '[{"title": "Real Fix", "description": "AI generated", "patched_content": "new content"}]'
+        
+        result = interactive_fix_story("WEB-001", repo_root=MOCK_REPO)
     
-    # 3. AI Returns Valid JSON
-    mock_ai.get_completion.return_value = '[{"title": "Real Fix", "description": "AI generated", "patched_content": "new content"}]'
-    
-    # Run Tool
-    result = interactive_fix_story.func("WEB-001", config={"configurable": {"thread_id": "s1"}})
-    
-    # Verify
     assert "Found 1 options" in result
     assert "Real Fix" in result
 
-def test_apply_mode_integration(mock_deps):
+def test_apply_mode_integration(mock_deps, mock_session, tmp_path):
     """Test applying a fix writes to file and verifies."""
-    mock_popen, mock_bus, mock_config, mock_ai = mock_deps
+    mock_popen, mock_bus, mock_ai, stories_dir = mock_deps
     
-    # Setup Mocks for success/fail
     p1 = MagicMock()
     p1.returncode = 1
     p1.communicate.return_value = ("Missing sections: Problem Statement", "")
@@ -104,45 +99,40 @@ def test_apply_mode_integration(mock_deps):
     p2.returncode = 0
     p2.communicate.return_value = ("OK", "")
     
-    # Popen returns p1 then p2
     mock_popen.side_effect = [p1, p2]
 
-    # 2. File Setup
     mock_path = MagicMock()
     mock_path.name = "WEB-001-story.md"
     mock_path.read_text.return_value = "Old Content"
-    mock_config.stories_dir.rglob.return_value = [mock_path]
     
-    # 3. AI Setup
-    mock_ai.get_completion.return_value = '[{"title": "Fix It", "description": "desc", "patched_content": "New Content"}]'
+    with patch.object(Path, 'rglob', return_value=[mock_path]):
+        mock_ai.get_completion.return_value = '[{"title": "Fix It", "description": "desc", "patched_content": "New Content"}]'
+        
+        result = interactive_fix_story("WEB-001", repo_root=MOCK_REPO, apply_idx=1)
     
-    # Run Tool (Apply index 1)
-    result = interactive_fix_story.func("WEB-001", apply_idx=1, config={"configurable": {"thread_id": "s1"}})
-    
-    # Verify Result
     assert "Successfully applied fix" in result
     assert "Fix It" in result
-    
-    # Verify Write
     mock_path.write_text.assert_called_with("New Content")
 
-def test_invalid_index_error(mock_deps):
-    mock_popen, mock_bus, mock_config, mock_ai = mock_deps
+def test_invalid_index_error(mock_deps, mock_session):
+    mock_popen, mock_bus, mock_ai, stories_dir = mock_deps
     
     process_mock = mock_popen.return_value
     process_mock.returncode = 1
     process_mock.communicate.return_value = ("Missing: X", "")
     
-    mock_config.stories_dir.rglob.return_value = [MagicMock()]
-    mock_ai.get_completion.return_value = '[{"title": "Fix", "patched_content": "C"}]'
+    mock_path = MagicMock()
+    mock_path.name = "WEB-001-story.md"
     
-    # Apply index 99
-    result = interactive_fix_story.func("WEB-001", apply_idx=99)
+    with patch.object(Path, 'rglob', return_value=[mock_path]):
+        mock_ai.get_completion.return_value = '[{"title": "Fix", "patched_content": "C"}]'
+        
+        result = interactive_fix_story("WEB-001", repo_root=MOCK_REPO, apply_idx=99)
+    
     assert "Invalid option index" in result
 
-def test_missing_story_file(mock_deps):
-    _, _, mock_config, _ = mock_deps
-    mock_config.stories_dir.rglob.return_value = []
+def test_missing_story_file(mock_session):
+    with patch.object(Path, 'rglob', return_value=[]):
+        result = interactive_fix_story("UNKNOWN-001", repo_root=MOCK_REPO)
     
-    result = interactive_fix_story.func("UNKNOWN-001")
     assert "Could not find story file" in result

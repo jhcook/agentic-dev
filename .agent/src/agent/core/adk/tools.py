@@ -651,6 +651,11 @@ class ToolRegistry:
 
     def __init__(self, repo_root: Optional[Path] = None) -> None:
         self._repo_root = repo_root or Path(".")
+        self._interface_tools: List[Callable] = []
+
+    def register_interface_tools(self, tools: List[Callable]) -> None:
+        """Register interface-specific tools (e.g. Voice-only tools) to the registry."""
+        self._interface_tools.extend(tools)
 
     def list_tools(
         self,
@@ -668,10 +673,34 @@ class ToolRegistry:
         Returns:
             List of callable tool functions.
         """
+        import inspect as _inspect
+        import functools as _functools
+
         tools = make_tools(self._repo_root)
         if all:
             tools = tools + make_interactive_tools(self._repo_root)
-        return tools
+
+        # Combine with interface-specific tools
+        all_tool_set = tools + self._interface_tools
+
+        # Bind repo_root to any tool that accepts it in its signature
+        bound_tools = []
+        for fn in all_tool_set:
+            try:
+                # Extract the real function if it's already a partial
+                target = fn.func if isinstance(fn, _functools.partial) else fn
+                sig = _inspect.signature(target)
+                if "repo_root" in sig.parameters:
+                    # Inject repo_root context at registry level
+                    bound = _functools.partial(fn, repo_root=self._repo_root)
+                    _functools.update_wrapper(bound, target)
+                    bound_tools.append(bound)
+                else:
+                    bound_tools.append(fn)
+            except (ValueError, TypeError):
+                bound_tools.append(fn)
+
+        return bound_tools
 
     def get_tool_schemas(self, all: bool = False) -> List[Dict]:
         """Return OpenAI-compatible JSON schemas for all tools in this registry.

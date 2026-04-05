@@ -85,19 +85,19 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
     
     # 1. Create
     print(f"Creating tool at {abs_path}")
-    res = create_tool.invoke({"file_path": filename, "code": code})
+    res = create_tool(file_path=filename, code=code)
     print(f"Creation Result: {res}")
     assert "Success" in res
     assert os.path.exists(abs_path)
     
     # 2. Read Source (Check Silent Tags)
-    source = read_tool_source.invoke({"file_path": abs_path})
+    source = read_tool_source(file_path=abs_path)
     assert "<silent>" in source
     assert "</silent>" in source
     assert "SYSTEM INSTRUCTION" in source
     
     # 3. Security Scan (Clean)
-    scan_res = scan_file_for_secrets.invoke({"file_path": abs_path})
+    scan_res = scan_file_for_secrets(file_path=abs_path)
     assert "No obvious secrets found" in scan_res
     
     # 4. Security Scan (Dirty)
@@ -106,13 +106,13 @@ def test_full_tool_lifecycle(cleanup_custom_tools):
         f.write("api_key = '[REDACTED_SECRET]'")
         f.write("\nemail = 'test@example.com'")
         
-    scan_res_dirty = scan_file_for_secrets.invoke({"file_path": dirty_path})
+    scan_res_dirty = scan_file_for_secrets(file_path=dirty_path)
     assert "Potential API Key found" in scan_res_dirty
     assert "Potential Email found" in scan_res_dirty
 
 def test_package_listing():
     """Verify package listing works."""
-    res = get_installed_packages.invoke({})
+    res = get_installed_packages()
     assert len(res) > 0
     assert "==" in res
 

@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from backend.voice.tools.git import get_git_status, get_git_diff
+
+MOCK_REPO = Path("/mock/repo")
 
 @pytest.fixture
 def mock_subprocess_run():
@@ -26,15 +29,18 @@ def mock_event_bus():
     with patch('backend.voice.tools.git.EventBus') as mock:
         yield mock
 
-def test_git_status_streaming(mock_subprocess_run, mock_event_bus):
+@pytest.fixture
+def mock_session():
+    with patch('backend.voice.tools.git.get_session_id', return_value='session-1'):
+        yield
+
+def test_git_status_streaming(mock_subprocess_run, mock_event_bus, mock_session):
     """Test that git status publishes output to EventBus."""
     
     mock_subprocess_run.return_value.stdout = "?? untracked.txt\n"
     mock_subprocess_run.return_value.returncode = 0
     
-    config = {"configurable": {"thread_id": "session-1"}}
-    
-    result = get_git_status.func(config=config)
+    result = get_git_status(repo_root=MOCK_REPO)
     
     # Check output format
     import json
@@ -44,11 +50,11 @@ def test_git_status_streaming(mock_subprocess_run, mock_event_bus):
     # Check streaming
     mock_event_bus.publish.assert_called_once()
     args = mock_event_bus.publish.call_args[0]
-    assert args[0] == "session-1" # Session ID
+    assert args[0] == "session-1"  # Session ID
     assert args[1] == "console"
     assert "=== Git Status (JSON) ===" in args[2]
 
-def test_git_diff_streaming_truncation(mock_subprocess_run, mock_event_bus):
+def test_git_diff_streaming_truncation(mock_subprocess_run, mock_event_bus, mock_session):
     """Test that large git diffs are truncated and streamed."""
     
     # Create large output > 5000 chars
@@ -56,9 +62,7 @@ def test_git_diff_streaming_truncation(mock_subprocess_run, mock_event_bus):
     mock_subprocess_run.return_value.stdout = large_diff
     mock_subprocess_run.return_value.returncode = 0
     
-    config = {"configurable": {"thread_id": "session-1"}}
-    
-    result = get_git_diff.func(config=config)
+    result = get_git_diff(repo_root=MOCK_REPO)
     
     # Check truncation return
     assert len(result) < 5100
@@ -66,9 +70,9 @@ def test_git_diff_streaming_truncation(mock_subprocess_run, mock_event_bus):
     
     mock_event_bus.publish.assert_called_once()
     args = mock_event_bus.publish.call_args[0]
-    assert len(args[2]) >= 6000 # Should stream full content
+    assert len(args[2]) >= 6000  # Should stream full content
 
-def test_git_push_upstream_handling(mock_event_bus):
+def test_git_push_upstream_handling(mock_event_bus, mock_session):
     """Test that git_push_branch handles missing upstream automatically."""
     from backend.voice.tools.git import git_push_branch
     
@@ -91,10 +95,8 @@ def test_git_push_upstream_handling(mock_event_bus):
         mock_run.return_value.stdout = "feature/test"
         mock_run.return_value.returncode = 0
         
-        config = {"configurable": {"thread_id": "session-push"}}
-        
         # Run
-        result = git_push_branch.func(config=config)
+        result = git_push_branch(repo_root=MOCK_REPO)
         
         # Verify
         assert "Successfully pushed and set upstream" in result
@@ -102,14 +104,10 @@ def test_git_push_upstream_handling(mock_event_bus):
         
         # Verify 2 popen calls
         assert mock_popen.call_count == 2
-        # First call: git push
         assert mock_popen.call_args_list[0][0][0] == ["git", "push"]
-        # First call: git push
-        assert mock_popen.call_args_list[0][0][0] == ["git", "push"]
-        # Second call: git push --set-upstream origin feature/test
         assert mock_popen.call_args_list[1][0][0] == ["git", "push", "--set-upstream", "origin", "feature/test"]
 
-def test_run_pr_opens_url(mock_event_bus):
+def test_run_pr_opens_url(mock_event_bus, mock_session):
     """Test that run_pr emits open_url event when URL is found."""
     from backend.voice.tools.git import run_pr
     
@@ -119,20 +117,13 @@ def test_run_pr_opens_url(mock_event_bus):
         # Ensure instance().register/unregister works
         mock_plm.instance.return_value = MagicMock()
         
-        # Setup Pass 1: Date (subprocess.check_output uses context manager)
-        proc_date = MagicMock()
-        proc_date.communicate.return_value = (b"1700000000\n", b"")
-        proc_date.returncode = 0
-        proc_date.poll.return_value = 0
-        proc_date.__enter__.return_value = proc_date
-        
-        # Setup Pass 2: Push (git push)
+        # Setup Pass 1: Push (git push)
         proc_push = MagicMock()
         proc_push.communicate.return_value = ("Everything up-to-date", "")
         proc_push.returncode = 0
         proc_push.poll.return_value = 0
         
-        # Setup Pass 3: PR (agent pr)
+        # Setup Pass 2: PR (agent pr)
         proc_pr = MagicMock()
         proc_pr.stdout.readline.side_effect = [
             "Creating PR...\n", 
@@ -144,11 +135,9 @@ def test_run_pr_opens_url(mock_event_bus):
         proc_pr.poll.return_value = 0
         proc_pr.wait.return_value = 0
         
-        mock_popen.side_effect = [proc_date, proc_push, proc_pr]
+        mock_popen.side_effect = [proc_push, proc_pr]
         
-        config = {"configurable": {"thread_id": "session-pr"}}
-        
-        result = run_pr.func(config=config)
+        result = run_pr(repo_root=MOCK_REPO)
         
         assert "PR creation started" in result
         
@@ -157,16 +146,13 @@ def test_run_pr_opens_url(mock_event_bus):
         time.sleep(0.2)
         
         # Verify calls
-        assert mock_popen.call_count == 3
+        assert mock_popen.call_count == 2
         
-        # 1. Date
-        assert "date" in mock_popen.call_args_list[0][0][0]
+        # 1. Push
+        assert mock_popen.call_args_list[0][0][0] == ["git", "push"]
         
-        # 2. Push
-        assert mock_popen.call_args_list[1][0][0] == ["git", "push"]
-        
-        # 3. PR
-        cmd = mock_popen.call_args_list[2][0][0]
+        # 2. PR
+        cmd = mock_popen.call_args_list[1][0][0]
         assert "agent pr" in cmd
         
         # 3. Open URL event
@@ -177,7 +163,7 @@ def test_run_pr_opens_url(mock_event_bus):
         assert len(open_url_calls) == 1
         assert open_url_calls[0][0][2] == {"url": "https://github.com/org/repo/pull/42"}
 
-def test_run_commit_streaming(mock_event_bus):
+def test_run_commit_streaming(mock_event_bus, mock_session):
     """Test that run_commit streams output to EventBus."""
     from backend.voice.tools.git import run_commit
     
@@ -196,15 +182,13 @@ def test_run_commit_streaming(mock_event_bus):
         mock_run.return_value.stdout = "commit 12345"
         mock_run.return_value.returncode = 0
         
-        config = {"configurable": {"thread_id": "session-commit"}}
-        
         # Run
-        result = run_commit.func(config=config)
+        result = run_commit(repo_root=MOCK_REPO)
         
         # Verify Streaming
         assert mock_event_bus.publish.call_count == 2
         args1 = mock_event_bus.publish.call_args_list[0][0]
-        assert args1[0] == "session-commit"
+        assert args1[0] == "session-1"
         assert "Generating message" in args1[2]
         
         assert "Commit successful" in result

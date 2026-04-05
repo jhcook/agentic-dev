@@ -66,7 +66,10 @@ def test_e2e_console_streaming():
     # Execute REAL command
     # Use 'sh -c' to ensure it runs similarly to shell=True
     # We use the tool's logic which does shell=True
-    result = start_interactive_shell.func("echo 'hello world'", config=config)
+    from pathlib import Path
+    from agent.core.execution_context import set_session_id
+    token = set_session_id(session_id)
+    result = start_interactive_shell("echo 'hello world'", repo_root=Path("."))
     
     # Verify tool return
     assert "Started interactive process" in result

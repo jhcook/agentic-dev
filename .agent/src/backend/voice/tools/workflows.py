@@ -14,15 +14,15 @@
 
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
-from agent.core.config import config as agent_config
 from agent.core.execution_context import get_session_id
 from agent.core.utils import sanitize_id
+from pathlib import Path
 import subprocess
 import threading
 import time
 
 
-def _run_interactive_command(command: str, alias_prefix: str, start_message: str) -> str:
+def _run_interactive_command(command: str, alias_prefix: str, start_message: str, repo_root: Path) -> str:
     """Helper to run an interactive shell command with process management and event streaming."""
     session_id = get_session_id()
     process_id = f"{alias_prefix}-{int(time.time())}"
@@ -42,7 +42,7 @@ def _run_interactive_command(command: str, alias_prefix: str, start_message: str
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
 
         ProcessLifecycleManager.instance().register(process, process_id)
@@ -72,45 +72,49 @@ def _run_interactive_command(command: str, alias_prefix: str, start_message: str
         return f"Failed to start {alias_prefix}: {e}"
 
 
-def run_new_story(story_id: str = None) -> str:
+def run_new_story(repo_root: Path, story_id: str = None) -> str:
     """Create a new user story.
 
     Args:
+        repo_root: Root path of the repository.
         story_id: Optional ID (e.g. 'WEB-001'). If not provided, it will be generated.
     """
     cmd = "agent new-story"
     if story_id:
         clean_id = sanitize_id(story_id)
         cmd += f" {clean_id}"
-    return _run_interactive_command(cmd, "story", "Story creation started. Follow along below.")
+    return _run_interactive_command(cmd, "story", "Story creation started. Follow along below.", repo_root)
 
 
-def run_new_runbook(story_id: str) -> str:
+def run_new_runbook(repo_root: Path, story_id: str) -> str:
     """Generate an implementation runbook for a story.
 
     Args:
+        repo_root: Root path of the repository.
         story_id: The ID of the committed story (e.g., 'WEB-001').
     """
     clean_id = sanitize_id(story_id)
     cmd = f"agent new-runbook {clean_id}"
-    return _run_interactive_command(cmd, "runbook", "Runbook generation started. Follow along below.")
+    return _run_interactive_command(cmd, "runbook", "Runbook generation started. Follow along below.", repo_root)
 
 
-def run_implement(runbook_id: str) -> str:
+def run_implement(repo_root: Path, runbook_id: str) -> str:
     """Implement a feature from an accepted runbook.
 
     Args:
+        repo_root: Root path of the repository.
         runbook_id: The ID of the accepted runbook (e.g., 'WEB-001').
     """
     clean_id = sanitize_id(runbook_id)
     cmd = f"agent implement {clean_id} --apply"
-    return _run_interactive_command(cmd, "implement", "Implementation started (with --apply). Follow along below.")
+    return _run_interactive_command(cmd, "implement", "Implementation started (with --apply). Follow along below.", repo_root)
 
 
-def run_impact(files: str = None) -> str:
+def run_impact(repo_root: Path, files: str = None) -> str:
     """Run impact analysis on files.
 
     Args:
+        repo_root: Root path of the repository.
         files: Space-separated list of files to analyze (default: staged changes).
     """
     cmd = "agent impact"
@@ -118,13 +122,14 @@ def run_impact(files: str = None) -> str:
         cmd += f" --files {files}"
     else:
         cmd += " --staged"
-    return _run_interactive_command(cmd, "impact", "Impact analysis started. Follow along below.")
+    return _run_interactive_command(cmd, "impact", "Impact analysis started. Follow along below.", repo_root)
 
 
-def run_panel(question: str, apply_advice: bool = False) -> str:
+def run_panel(repo_root: Path, question: str, apply_advice: bool = False) -> str:
     """Consult the AI Governance Panel.
 
     Args:
+        repo_root: Root path of the repository.
         question: The question or design decision to review.
         apply_advice: If True, automatically updates the Story/Runbook with the panel's advice.
     """
@@ -132,13 +137,17 @@ def run_panel(question: str, apply_advice: bool = False) -> str:
     cmd = f'agent panel "{safe_q}"'
     if apply_advice:
         cmd += " --apply"
-    return _run_interactive_command(cmd, "panel", "Governance panel convened. Follow along below.")
+    return _run_interactive_command(cmd, "panel", "Governance panel convened. Follow along below.", repo_root)
 
 
-def run_review_voice() -> str:
-    """Review a voice session for UX improvements."""
+def run_review_voice(repo_root: Path) -> str:
+    """Review a voice session for UX improvements.
+
+    Args:
+        repo_root: Root path of the repository.
+    """
     session_id = get_session_id()
     cmd = "agent review-voice"
     if session_id and session_id != "unknown":
         cmd += f" {session_id}"
-    return _run_interactive_command(cmd, "review", "Voice review started. Follow along below.")
+    return _run_interactive_command(cmd, "review", "Voice review started. Follow along below.", repo_root)

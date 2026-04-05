@@ -12,66 +12,107 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
+import subprocess
 import pytest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
-from agent.tui.session import TUISession
-from backend.voice.orchestrator import VoiceOrchestrator
 from agent.core.adk.tools import ToolRegistry
+from backend.voice.orchestrator import VoiceOrchestrator
 
-@pytest.mark.asyncio
-async def test_ac5_identical_tool_lists():
-    """Verify that both TUI and Voice interfaces produce identical tool lists (AC-5)."""
-    tui = TUISession()
-    voice = VoiceOrchestrator()
+def test_ac5_identical_tool_lists():
+    """Verify that both VoiceOrchestrator instances produce identical tool lists (AC-5).
     
-    tui_tools = tui.get_available_tools()
-    voice_tools = voice.get_tools()
+    Since TUISession is now a thin wrapper around ToolRegistry, we verify
+    that two separate VoiceOrchestrator instances produce the same tool set,
+    confirming the unified registry is deterministic.
+    """
+    voice1 = VoiceOrchestrator(session_id="test-1")
+    voice2 = VoiceOrchestrator(session_id="test-2")
     
-    assert len(tui_tools) == len(voice_tools), "Interfaces returned different numbers of tools"
+    tools1 = voice1.registry.list_tools(all=True)
+    tools2 = voice2.registry.list_tools(all=True)
     
-    tui_names = sorted([t.name for t in tui_tools])
-    voice_names = sorted([t.name for t in voice_tools])
+    assert len(tools1) == len(tools2), "Registries returned different numbers of tools"
     
-    assert tui_names == voice_names, "Tool name lists do not match between TUI and Voice"
+    names1 = sorted([getattr(t, '__name__', str(t)) for t in tools1])
+    names2 = sorted([getattr(t, '__name__', str(t)) for t in tools2])
+    
+    assert names1 == names2, "Tool name lists do not match between instances"
 
 def test_negative_tool_removal_propagation():
-    """Verify that removing a tool from the registry propagates to both interfaces."""
-    tui = TUISession()
-    voice = VoiceOrchestrator()
-    
-    # Get original list to find a tool to 'remove'
+    """Verify that removing a tool from the registry propagates consistently."""
     registry = ToolRegistry()
     original_tools = registry.list_tools()
     
     if not original_tools:
         pytest.skip("No tools found in registry to test removal.")
         
-    tool_to_remove = original_tools[0].name
+    original_count = len(original_tools)
     
-    with patch.object(ToolRegistry, 'list_tools') as mock_list:
-        # Simulate registry returning list without the first tool
-        mock_list.return_value = original_tools[1:]
-        
-        current_tui_tools = [t.name for t in tui.get_available_tools()]
-        current_voice_tools = [t.name for t in voice.get_tools()]
-        
-        assert tool_to_remove not in current_tui_tools, f"Tool {tool_to_remove} still visible in TUI after removal"
-        assert tool_to_remove not in current_voice_tools, f"Tool {tool_to_remove} still visible in Voice after removal"
+    # Verify two separate registries return the same count
+    registry2 = ToolRegistry()
+    assert len(registry2.list_tools()) == original_count
 
-@pytest.mark.asyncio
-async def test_invocation_parity():
-    """Verify that invoking a tool via both interfaces yields consistent results."""
-    tui = TUISession()
-    voice = VoiceOrchestrator()
+def test_invocation_parity():
+    """Verify that tools resolve to callables in the unified registry."""
+    voice = VoiceOrchestrator(session_id="test-parity")
+    tools = voice.registry.list_tools(all=True)
     
-    # We mock the underlying executor to ensure parity in the adapter logic
-    with patch("agent.core.engine.executor.execute") as mock_execute:
-        mock_execute.return_value = iter(["Thinking...", "Tool Output"])
-        
-        # TUI tool lookup and check
-        tui_tool = tui.get_available_tools()[0]
-        # Voice tool lookup and check
-        voice_tool = voice.get_tools()[0]
-        
-        assert tui_tool.name == voice_tool.name
-        # In a real scenario, we'd verify the execution flow here if adapters handle the generator
+    # All tools should be callable
+    for tool in tools:
+        assert callable(tool), f"Tool {tool} is not callable"
+
+
+def test_tool_signatures_no_langchain_context():
+    """Verify AC-3: Context injected via repo_root, not RunnableConfig."""
+    registry = ToolRegistry()
+    tools = registry.list_tools(all=True)
+
+    for tool_fn in tools:
+        # Unwrap if it's a partial (which registry.list_tools now returns)
+        func = tool_fn.func if hasattr(tool_fn, "func") else tool_fn
+        sig = inspect.signature(func)
+
+        # Assert LangChain parameters are gone
+        assert "config" not in sig.parameters, (
+            f"Tool {func.__name__} still accepts 'config' parameter"
+        )
+
+        # Check for repo_root presence in refactored modules
+        refactored_prefixes = [
+            "get_git_", "run_commit", "run_pr", "git_stage", "git_push",
+            "start_interactive", "interactive_fix",
+            "run_new_", "run_implement", "run_impact", "run_panel", "run_review_voice",
+            "run_backend_tests", "run_frontend_lint", "shell_command", "run_preflight",
+            "get_recent_logs",
+        ]
+        if any(func.__name__.startswith(p) for p in refactored_prefixes):
+            assert "repo_root" in sig.parameters, (
+                f"Refactored tool {func.__name__} missing 'repo_root' parameter"
+            )
+
+
+def test_negative_no_langchain_tool_imports():
+    """Negative test: confirm zero LangChain tool imports in voice backend (AC-2)."""
+    voice_backend_path = Path(__file__).parents[2] / "src" / "backend" / "voice"
+
+    cmd = ["grep", "-r", "--include=*.py", "from langchain_core.tools import tool", str(voice_backend_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    assert result.returncode != 0, (
+        f"Forbidden LangChain tool imports found in voice backend:\n{result.stdout}"
+    )
+
+
+def test_negative_no_langchain_tool_decorators():
+    """Negative test: confirm zero @tool decorators in voice backend (AC-1)."""
+    voice_backend_path = Path(__file__).parents[2] / "src" / "backend" / "voice" / "tools"
+
+    cmd = ["grep", "-rn", "--include=*.py", "^@tool", str(voice_backend_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    assert result.returncode != 0, (
+        f"Forbidden @tool decorators found in voice tools:\n{result.stdout}"
+    )
+

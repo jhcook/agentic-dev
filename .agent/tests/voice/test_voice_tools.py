@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-# Add src to path if needed, though pytest usually handles it if configured correctly
-# Assuming running from repo root
 
 from backend.voice.tools.qa import run_backend_tests, run_frontend_lint
 from backend.voice.tools.security import scan_secrets_in_content
 from backend.voice.tools.observability import get_recent_logs
+
+MOCK_REPO = Path("/mock/repo")
 
 def test_run_backend_tests():
     with patch("backend.voice.tools.qa.subprocess.Popen") as mock_popen, \
@@ -32,8 +32,7 @@ def test_run_backend_tests():
         mock_process.wait.return_value = 0
         mock_popen.return_value = mock_process
         
-        # Use invoke with args dict
-        result = run_backend_tests.invoke({"path": ".agent/tests/"})
+        result = run_backend_tests(repo_root=MOCK_REPO, path=".agent/tests/")
         assert "Test passed" in result
         mock_popen.assert_called_once()
         args = mock_popen.call_args[0][0]
@@ -41,8 +40,7 @@ def test_run_backend_tests():
 
 def test_run_frontend_lint_missing_dir():
     with patch("os.path.exists", side_effect=lambda p: False if ".agent/src/web" in p else True):
-        # Tool call with no args
-        result = run_frontend_lint.invoke({})
+        result = run_frontend_lint(repo_root=MOCK_REPO)
         assert "not found" in result
 
 def test_run_frontend_lint_success():
@@ -50,24 +48,24 @@ def test_run_frontend_lint_success():
         with patch("os.path.exists", return_value=True):
             mock_run.return_value.stdout = "Lint success"
             mock_run.return_value.stderr = ""
-            result = run_frontend_lint.invoke({})
+            result = run_frontend_lint(repo_root=MOCK_REPO)
             assert "Lint success" in result
 
 def test_scan_secrets_clean():
     content = "just some code\nprint('hello')"
-    result = scan_secrets_in_content.invoke({"content": content})
+    result = scan_secrets_in_content(content)
     assert "No obvious secrets found" in result
 
 def test_scan_secrets_detected():
     content = "my_api_key = 'sk-1234567890abcdef12345678'"
-    result = scan_secrets_in_content.invoke({"content": content})
+    result = scan_secrets_in_content(content)
     assert "Potential API Key found" in result
     assert "sk-12345" not in result
 
 def test_get_recent_logs():
-    with patch("subprocess.run") as mock_run:
-        with patch("os.path.exists", return_value=True):
+    with patch("backend.voice.tools.observability.Path.exists", return_value=True):
+        with patch("subprocess.run") as mock_run:
             mock_run.return_value.stdout = "Log entry 1\nLog entry 2"
-            result = get_recent_logs.invoke({"lines": 2})
+            result = get_recent_logs(repo_root=MOCK_REPO, lines=2)
             assert "Log entry 1" in result
             assert "Log entry 2" in result

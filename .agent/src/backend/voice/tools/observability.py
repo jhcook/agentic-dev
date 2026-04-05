@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from agent.core.config import config as agent_config
+from pathlib import Path
 import subprocess
 
-def get_recent_logs(lines: int = 50) -> str:
+def get_recent_logs(repo_root: Path, lines: int = 50) -> str:
     """
     Get the most recent lines from the agent log file (agent.log).
+
+    Args:
+        repo_root: Root path of the repository.
+        lines: Number of log lines to retrieve (default: 50).
     """
     # Use absolute path based on repo_root
     # Check standard locations
+    agent_dir = repo_root / ".agent"
     possible_paths = [
-        agent_config.repo_root / "agent.log",
-        agent_config.agent_dir / "agent.log",
-        agent_config.agent_dir / "logs" / "agent.log"
+        repo_root / "agent.log",
+        agent_dir / "agent.log",
+        agent_dir / "logs" / "agent.log"
     ]
     
     log_file = None
@@ -44,7 +49,7 @@ def get_recent_logs(lines: int = 50) -> str:
             params, 
             capture_output=True, 
             text=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         return res.stdout
     except Exception as e:

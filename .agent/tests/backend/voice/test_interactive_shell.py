@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from backend.voice.tools.interactive_shell import start_interactive_shell, send_shell_input
 
@@ -32,14 +33,16 @@ def mock_subprocess():
         mock_popen.return_value = process
         yield mock_popen
 
-def test_start_interactive_shell(mock_lifecycle, mock_subprocess):
+@pytest.fixture
+def mock_session():
+    with patch('backend.voice.tools.interactive_shell.get_session_id', return_value='test-session'):
+        yield
+
+def test_start_interactive_shell(mock_lifecycle, mock_subprocess, mock_session):
     """Test starting a shell registers the process and returns an ID."""
     
-    config = {"configurable": {"thread_id": "test-session"}}
-    
     with patch('backend.voice.tools.interactive_shell.threading.Thread'):
-        # Use .func to bypass StructuredTool wrapper
-        result = start_interactive_shell.func("ls -la", config=config)
+        result = start_interactive_shell("ls -la", repo_root=Path("/mock/repo"))
     
     # Verify subprocess called
     mock_subprocess.assert_called_once()
@@ -58,8 +61,7 @@ def test_send_shell_input(mock_lifecycle):
     mock_process.poll.return_value = None # Running
     mock_lifecycle.get.return_value = mock_process
     
-    # Use .func
-    result = send_shell_input.func("proc-123", "yes")
+    result = send_shell_input("proc-123", "yes")
     
     mock_lifecycle.get.assert_called_with("proc-123")
     mock_process.stdin.write.assert_called_with("yes\n")
@@ -69,7 +71,7 @@ def test_send_shell_input(mock_lifecycle):
 def test_send_shell_input_not_found(mock_lifecycle):
     """Test error when process not found."""
     mock_lifecycle.get.return_value = None
-    result = send_shell_input.func("proc-missing", "foo")
+    result = send_shell_input("proc-missing", "foo")
     assert "Error: Process proc-missing not found" in result
 
 def test_send_shell_input_exited(mock_lifecycle):
@@ -78,5 +80,5 @@ def test_send_shell_input_exited(mock_lifecycle):
     mock_process.poll.return_value = 0 # Exited
     mock_lifecycle.get.return_value = mock_process
     
-    result = send_shell_input.func("proc-dead", "foo")
+    result = send_shell_input("proc-dead", "foo")
     assert "has already exited" in result

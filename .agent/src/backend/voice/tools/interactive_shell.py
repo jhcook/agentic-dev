@@ -16,19 +16,23 @@
 import subprocess
 import threading
 import time
+from pathlib import Path
 from backend.voice.process_manager import ProcessLifecycleManager
 from backend.voice.events import EventBus
-from agent.core.config import config as agent_config
 from agent.core.execution_context import get_session_id
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
-def start_interactive_shell(command: str) -> str:
+def start_interactive_shell(command: str, repo_root: Path) -> str:
     """
     Start a long-running interactive shell command (e.g., 'npm init', 'python3').
     Returns a Process ID that can be used with send_shell_input.
     Output will be streamed to the console.
+
+    Args:
+        command: The shell command to run.
+        repo_root: Root path of the repository.
     """
     process_id = f"shell-{int(time.time())}"
     session_id = get_session_id()
@@ -45,7 +49,7 @@ def start_interactive_shell(command: str) -> str:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1, # Line buffered
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         
         # Register with ID

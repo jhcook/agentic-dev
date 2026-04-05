@@ -17,20 +17,23 @@ import os
 import threading
 import time
 import logging
+from pathlib import Path
 from opentelemetry import trace
 from backend.voice.events import EventBus
 from backend.voice.process_manager import ProcessLifecycleManager
 from agent.core.execution_context import get_session_id
+from agent.core.utils import sanitize_id
 
-from agent.core.config import config as agent_config
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-def run_backend_tests(path: str = ".agent/tests/") -> str:
+def run_backend_tests(repo_root: Path, path: str = ".agent/tests/") -> str:
     """
     Run pytest on the backend codebase.
+
     Args:
-        path: Test path (default: '.agent/tests/')
+        repo_root: Root path of the repository.
+        path: Test path (default: '.agent/tests/').
     """
     # Validation
     with tracer.start_as_current_span("tool.run_backend_tests") as span:
@@ -56,7 +59,7 @@ def run_backend_tests(path: str = ".agent/tests/") -> str:
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=str(agent_config.repo_root)
+                cwd=str(repo_root)
             )
             
             # Non-blocking read (conceptual - for a tool return we technically wait, 
@@ -101,9 +104,12 @@ def run_backend_tests(path: str = ".agent/tests/") -> str:
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             return f"failed to run tests: {e}"
 
-def run_frontend_lint() -> str:
+def run_frontend_lint(repo_root: Path) -> str:
     """
     Run linting on the frontend.
+
+    Args:
+        repo_root: Root path of the repository.
     """
     try:
         # Repo structure: .agent/src/web
@@ -113,7 +119,7 @@ def run_frontend_lint() -> str:
             
         result = subprocess.run(
             ["npm", "run", "lint"], 
-            cwd=str(agent_config.src_dir / "web"),
+            cwd=str(repo_root / ".agent" / "src" / "web"),
             capture_output=True, 
             text=True,
             check=False
@@ -125,13 +131,15 @@ def run_frontend_lint() -> str:
     except Exception as e:
         return f"Error: {e}"
 
-def shell_command(command: str, cwd: str = ".") -> str:
+def shell_command(command: str, repo_root: Path, cwd: str = ".") -> str:
     """
     Execute a shell command from the project root or a specific directory.
     Use this for package installation (npm install, pip install) or running utilities.
+
     Args:
-        command: The shell command to run (e.g. 'ls -la', 'pip install requests')
-        cwd: Working directory relative to project root (default: '.')
+        command: The shell command to run (e.g. 'ls -la', 'pip install requests').
+        repo_root: Root path of the repository.
+        cwd: Working directory relative to project root (default: '.').
     """
     session_id = get_session_id()  # ADR-100: context injection via ContextVar
     EventBus.publish(session_id, "console", f"> Executing: {command}\n")
@@ -142,11 +150,11 @@ def shell_command(command: str, cwd: str = ".") -> str:
         try:
             # Security: Prevent escaping project root if possible
             if cwd == ".":
-                cwd = str(agent_config.repo_root)
+                cwd = str(repo_root)
             else:
-                cwd = str(agent_config.repo_root / cwd)
+                cwd = str(repo_root / cwd)
             
-            if not str(cwd).startswith(str(agent_config.repo_root)):
+            if not str(cwd).startswith(str(repo_root)):
                 return "Error: Working directory must be within project root."
             
             final_command = command
@@ -195,13 +203,15 @@ def shell_command(command: str, cwd: str = ".") -> str:
             EventBus.publish(session_id, "console", f"\n[ERROR] Exception: {e}\n")
             return f"Error executing shell command: {e}"
 
-def run_preflight(story_id: str = None, interactive: bool = True) -> str:
+def run_preflight(repo_root: Path, story_id: str = None, interactive: bool = True) -> str:
     """
     Run the Agent preflight governance checks with AI analysis.
     Use this when a user asks to 'run preflight' or 'check compliance'.
+
     Args:
-        story_id: Optional Story ID (e.g. 'INFRA-015')
-        interactive: Whether to enable interactive repair mode (default: True)
+        repo_root: Root path of the repository.
+        story_id: Optional Story ID (e.g. 'INFRA-015').
+        interactive: Whether to enable interactive repair mode (default: True).
     """
     session_id = get_session_id()  # ADR-100: context injection via ContextVar
 
@@ -235,7 +245,8 @@ def run_preflight(story_id: str = None, interactive: bool = True) -> str:
     with tracer.start_as_current_span("tool.run_preflight") as span:
         try:
             # Build command string with activation
-            story_arg = f"--story {story_id}" if story_id else ""
+            clean_story_id = sanitize_id(story_id) if story_id else None
+            story_arg = f"--story {clean_story_id}" if clean_story_id else ""
             interactive_arg = "--interactive" if interactive else ""
             
             # Inject Voice Mode for cleaner output and unbuffered IO for real-time streaming
@@ -252,7 +263,7 @@ def run_preflight(story_id: str = None, interactive: bool = True) -> str:
                 command,
                 shell=True,
                 executable='/bin/zsh',
-                cwd=str(agent_config.repo_root),
+                cwd=str(repo_root),
                 stdin=slave_fd,
                 stdout=slave_fd,  # Merge stdout to PTY
                 stderr=slave_fd,  # Merge stderr to PTY

@@ -27,7 +27,7 @@ def scan_file_for_secrets(file_path: str) -> str:
     try:
         with open(file_path, 'r') as f:
             content = f.read()
-        return scan_secrets_in_content.invoke({"content": content})
+        return scan_secrets_in_content(content)
     except Exception as e:
         return f"Error reading file: {e}"
 

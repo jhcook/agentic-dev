@@ -18,17 +18,18 @@ import subprocess
 import re
 import os
 from typing import Optional
+from pathlib import Path
 
 # Try to import internal services. 
 # We assume the agent package is installed in the environment.
 try:
-    from agent.core.config import config as agent_config
     from agent.core.fixer import InteractiveFixer
 except ImportError:
     pass
 
 def interactive_fix_story(
     story_id: str,
+    repo_root: Path,
     apply_idx: Optional[int] = None,
     instructions: Optional[str] = None,
 ) -> str:
@@ -51,6 +52,7 @@ def interactive_fix_story(
     
     Args:
         story_id: The ID of the story to fix (e.g. 'WEB-001').
+        repo_root: Root path of the repository.
         apply_idx: (Optional) The 1-based index of the fix option to apply. If None, runs in ANALYZE mode.
         instructions: (Optional) Natural language instructions to guide the AI generation (e.g. "make it more detailed").
     """
@@ -69,7 +71,8 @@ def interactive_fix_story(
     
     # 1. Find file
     story_file = None
-    for file_path in agent_config.stories_dir.rglob(f"{story_id}*.md"):
+    stories_dir = repo_root / ".agent" / "cache" / "stories"
+    for file_path in stories_dir.rglob(f"{story_id}*.md"):
         if file_path.name.startswith(story_id):
             story_file = file_path
             break
@@ -97,7 +100,7 @@ def interactive_fix_story(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=str(agent_config.repo_root)
+            cwd=str(repo_root)
         )
         stdout, stderr = process.communicate()
         return process, stdout, stderr

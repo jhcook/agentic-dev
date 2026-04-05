@@ -26,13 +26,8 @@ def list_capabilities() -> str:
     descriptions = []
     
     for t in tools:
-        name = t.name
-        # Get docstring, clean it up
-        doc = inspect.getdoc(t.func) if hasattr(t, 'func') else t.description
-        if not doc:
-            doc = "No description available."
-        
-        # Format for readability
+        name = t.__name__
+        doc = inspect.getdoc(t) or "No description available."
         descriptions.append(f"- **{name}**: {doc}")
         
     return "\n\n".join(descriptions)

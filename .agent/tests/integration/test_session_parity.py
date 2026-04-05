@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import pytest
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List, Dict, Any, Optional
 from agent.core.session import AgentSession
 
 class DummyProvider:
-    async def stream(self, prompt, system_prompt, tools) -> AsyncGenerator[str, None]:
+    async def stream(self, prompt, system_prompt, tools, history=None) -> AsyncGenerator[str, None]:
         yield f"Response to {prompt}"
 
 @pytest.mark.asyncio

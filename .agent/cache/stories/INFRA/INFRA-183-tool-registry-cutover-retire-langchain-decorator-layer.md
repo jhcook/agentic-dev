@@ -2,7 +2,7 @@
 
 ## State
 
-DRAFT
+COMMITTED
 
 ## Problem Statement
 
@@ -63,6 +63,7 @@ access across both interfaces, and LangChain is no longer a required dependency 
 
 - ADR-043: Tool Registry Foundation
 - ADR-046: OpenTelemetry Instrumentation
+- ADR-029: ADR-029: ADK Multi-Agent Integration for Governance Panel
 
 ## Linked Journeys
 
@@ -79,6 +80,9 @@ access across both interfaces, and LangChain is no longer a required dependency 
 - **`backend/voice/orchestrator.py`**: 1–2 line swap in tool binding site.
 - **`agent/core/feature_flags.py`**: Delete `USE_UNIFIED_REGISTRY` (7 lines).
 - **`agent/core/adk/tool_security.py`**: Wire OTel span per-call (existing scaffold is in place).
+- **`agent/core/adk/tools.py`**: Canonical `ToolRegistry` implementation — context binding, schema
+  introspection, and `repo_root` auto-injection for all registered tool callables.
+- **`agent/core/session.py`**: `_dispatch_tool` updated to use `track_tool_usage` with `session_id`.
 - **Risk**: `RunnableConfig` removal in 5 files — confirm every caller supplies context via
   `ToolRegistry(repo_root=...)` before cutting. Add integration test covering repo_root injection.
 
