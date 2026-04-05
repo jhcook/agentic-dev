@@ -32,6 +32,7 @@ _PROVIDER_CLASS_MAP: Dict[str, str] = {
     "gemini": "agent.core.ai.providers.vertex.VertexAIProvider",
     "vertex": "agent.core.ai.providers.vertex.VertexAIProvider",
     "anthropic": "agent.core.ai.providers.anthropic.AnthropicProvider",
+    "claude": "agent.core.ai.providers.claude.ClaudeProvider",
     "ollama": "agent.core.ai.providers.ollama.OllamaProvider",
     "gh": "agent.core.ai.providers.gh.GHProvider",
     "mock": "agent.core.ai.providers.mock.MockProvider",
@@ -41,6 +42,7 @@ _PROVIDER_CLASS_MAP: Dict[str, str] = {
 _PREFIX_FALLBACKS: Dict[str, str] = {
     "gpt-": "agent.core.ai.providers.openai.OpenAIProvider",
     "gemini-": "agent.core.ai.providers.vertex.VertexAIProvider",
+    "claude-": "agent.core.ai.providers.claude.ClaudeProvider",
 }
 
 # Runtime cache: provider name -> resolved class
