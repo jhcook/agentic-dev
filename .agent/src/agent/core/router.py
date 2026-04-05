@@ -91,6 +91,13 @@ class SmartRouter:
         # 3. Sort by Priority then Cost
         # Retrieve strict priority list from settings
         priority_list = self.settings.get("provider_priority", ["gemini", "openai", "ollama", "gh"])
+
+        # Promote the user's configured provider (from agent.yaml) to the front
+        configured_provider = getattr(config, "LLM_PROVIDER", None)
+        if configured_provider and configured_provider in priority_list:
+            priority_list = [configured_provider] + [
+                p for p in priority_list if p != configured_provider
+            ]
         
         def sort_key(candidate):
             model_key, model_def = candidate

@@ -146,4 +146,4 @@ models:
 
 settings:
   default_tier: "standard"
-  provider_priority: ["claude", "gemini", "openai", "ollama", "gh"]
+  provider_priority: ["gemini", "openai", "claude", "ollama", "gh"]

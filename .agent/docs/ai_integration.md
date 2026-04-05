@@ -66,9 +66,29 @@ agent --provider gh commit
 
 ### Configuring Routing
 
-Edit `.agent/etc/router.yaml`:
+The Smart Router uses two configuration files:
+
+**1. `agent.yaml` — Your preferred provider**
+
+The `agent.provider` field in `.agent/etc/agent.yaml` sets the default provider. The
+Smart Router **automatically promotes** this provider to the top of the priority list,
+so you don't need to manually edit `router.yaml` when switching providers.
 
 ```yaml
+# .agent/etc/agent.yaml
+agent:
+  provider: vertex   # ← This provider is automatically prioritised by the router
+```
+
+**2. `router.yaml` — Base priority and model definitions**
+
+The `provider_priority` list in `.agent/etc/router.yaml` defines the fallback order.
+At runtime, the router reads your configured provider from `agent.yaml` and moves it
+to the front — so the effective priority is always your configured provider first,
+then the rest in the order listed.
+
+```yaml
+# .agent/etc/router.yaml
 models:
   gemini-2.5-pro:
     provider: gemini
@@ -83,9 +103,13 @@ models:
     cost_per_1k_input: 0.005
 
 settings:
-  provider_priority: ["claude", "gemini", "openai", "ollama", "gh"]
+  provider_priority: ["gemini", "openai", "claude", "ollama", "gh"]
   default_tier: standard
 ```
+
+> **Example:** If `agent.yaml` sets `provider: vertex` and `router.yaml` has
+> `provider_priority: ["gemini", "openai", "claude", "ollama", "gh"]`, the effective
+> runtime priority is `["vertex", "gemini", "openai", "claude", "ollama", "gh"]`.
 
 ## Token Management
 

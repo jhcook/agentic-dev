@@ -15,7 +15,7 @@
 panel:   # native | adk
   engine: adk
   num_retries: 5
-agent:     # anthropic | gemini | gh | ollama | openai | vertex | vertex-anthropic
+agent:     # anthropic | claude | gemini | gh | ollama | openai | vertex | vertex-anthropic
   provider: vertex
   test_commands:
     # Preflight scope: agent framework only (tests/agent, tests/core, tests/commands, etc.)
