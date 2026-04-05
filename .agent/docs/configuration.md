@@ -131,9 +131,15 @@ settings:
   provider_priority:
     - gemini
     - openai
+    - claude
+    - ollama
     - gh
-    - anthropic
 ```
+
+> **Note:** The `provider_priority` list is the *base* order. At runtime, the Smart
+> Router reads the configured provider from `agent.yaml` (e.g. `provider: vertex`) and
+> automatically promotes it to the front. See [AI Integration](ai_integration.md#configuring-routing)
+> for details.
 
 ### Customizing Model Selection
 
@@ -163,38 +169,28 @@ default_tier: tier2  # Changed: use cheaper tier by default
 #### Add Custom Model
 
 ```yaml
-tiers:
-  tier1:
-    models:
-      - "claude-3-opus"  # Anthropic Claude
+models:
+  claude-3-opus:
+    provider: claude
+    deployment_id: "anthropic.claude-3-opus-20240229-v1:0"
+    tier: premium
     context_window: 200000
-    cost_per_1m_tokens: 15.00
-    use_cases:
-      - "complex architectural reviews"
+    cost_per_1k_input: 0.015
+    cost_per_1k_output: 0.075
 ```
 
-Then set up the provider:
-
-```python
-# .agent/src/agent/core/ai/service.py
-from anthropic import Anthropic
-
-class AIService:
-    def _try_complete(self, provider, system, user, model=None):
-        if provider == "anthropic":
-            client = self.clients['anthropic']
-            # ...
-
-```
+See the individual provider docs for setup instructions:
+- [Gemini](providers/gemini.md) | [OpenAI](providers/openai.md) | [Claude](providers/claude.md) | [GitHub CLI](providers/github.md)
 
 ### Routing Logic
 
-The router selects models based on:
+The Smart Router selects models based on:
 
-1. **Context size** - Amount of text to analyze
-2. **Task type** - Defined in `use_cases`
-3. **Provider availability** - API keys set
-4. **Cost optimization** - Lower tier if sufficient
+1. **Configured provider** — `agent.yaml` → `agent.provider` is always tried first
+2. **Provider priority** — Fallback order from `router.yaml` → `provider_priority`
+3. **Context size** — Input must fit within the model's context window
+4. **Tier matching** — Requested tier (light/standard/advanced) must match
+5. **Cost optimization** — Among matching candidates, cheaper models are preferred
 
 Override with `--provider` flag:
 
